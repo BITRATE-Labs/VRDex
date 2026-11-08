@@ -608,8 +608,23 @@ Each session persists a 12-hour maximum deadline on first acquisition. A deploym
 can shorten it with `VRDEX_RESTREAM_MAX_SESSION_SECONDS` (1..86400); replacement
 workers retain the backend deadline. The private operations projection includes
 `runtimeDeadlineAt`, `broadcastMode`, and `epoch`. An expired or rejected lease,
-failed control refresh, renderer failure, cancellation, deadline, or kill-switch
-failure fences publication. Process status from ECS is separate from media status.
+explicitly rejected control refresh, renderer failure, cancellation, deadline, or
+kill-switch false fences publication. Process status from ECS is separate from
+media status.
+
+After startup, a control timeout, network failure, HTTP 408/429, or HTTP 5xx
+allows another tick after one second while the existing lease, session deadline,
+and last successful kill-switch check are still valid. Failed requests never
+extend those windows. The independent watchdog remains active during requests
+and retry delays. Invalid responses, other HTTP errors, explicit authority
+refusals and unexpected local errors remain terminal. Startup failures are not
+retried by this policy.
+
+`event_worker_control_failure` records the fixed operation name, failure category,
+retry decision and remaining authority in milliseconds. It excludes raw exception
+text, response bodies, credentials and URLs. A failure in this control-failure diagnostic cannot
+suppress its publication fence. This source behavior needs a rebuilt image and
+live qualification before being treated as a production recovery guarantee.
 
 The bridge reserves global capacity through `eventMediaWorker.admitDispatch`
 **before** registering/running a task. Set Convex
