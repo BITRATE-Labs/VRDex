@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@convex-generated-api";
@@ -38,9 +38,12 @@ export function EventOperatorView({
   initialStatus: OperatorStatus;
   event?: PublicEvent;
 }) {
-  const status = useQuery(api.events.getEventMediaControlStatus, {
-    currentSlug,
-  });
+  const { isAuthenticated } = useConvexAuth();
+  // Server route authorization can finish before the browser token reaches Convex.
+  const status = useQuery(
+    api.events.getEventMediaControlStatus,
+    isAuthenticated ? { currentSlug } : "skip",
+  );
   const queue = useMutation(api.events.queueEventMediaCommand);
   const start = useMutation(api.events.scheduleEventMediaWorker);
   const stop = useMutation(api.events.stopEventMediaWorker);
@@ -53,7 +56,7 @@ export function EventOperatorView({
   const settings = useMutation(api.eventMediaSettings.configure);
   // A loading/rejected replacement subscription must never restore old authority.
   const current = status;
-  if (!current) return null;
+  if (!isAuthenticated || !current) return null;
   return (
     <>
       <EventOperatorControls
