@@ -21,6 +21,12 @@ its confirmation. Return to auto remains available in schedule gaps; the resulti
 automatic slate is valid. Start retains admission, output reservation, and terminal
 cleanup restrictions. No UI path bypasses the measured allocation map.
 
+A requested Stop closes publication immediately, then the worker claims and
+acknowledges that Stop before its bounded control tick completes. A stopped
+configuration alone does not prove a failed Stop. Event cancellation or authority
+loss still fences publication, and task cleanup confirmation remains separate
+from the command acknowledgement.
+
 Custom sources use `eventMediaSources.create/replace/remove`. The authorized server
 projection supplies `editable`; profile projections and lineup sources cannot be
 edited as custom inputs. Replacing creates a new source identity and revision; it

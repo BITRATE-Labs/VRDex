@@ -2272,3 +2272,42 @@ it("terminal Stop fences publication while ordinary Start acknowledgement is unr
     await f.runtime.stop();
   }
 });
+
+
+for (const stoppedInRefresh of [true, false]) it(`operator Stop settles before exit (refresh stopped=${stoppedInRefresh})`, async () => {
+  const f = await fixture();
+  let publishing = true, stopRequested = false, tickFinished = false;
+  let releaseAck!: () => void;
+  const ackGate = new Promise<void>(resolve => { releaseAck = resolve; });
+  const runtime = createEventWorker({
+    identity: {...f.args},
+    control: async (name: string, args: Record<string, unknown>) => {
+      if (name === "acknowledgeCommand" && args.observedState === "ended") await ackGate;
+      const result = await f.t.mutation(worker(name), args);
+      // A Stop arriving just after refresh is first visible in the claimed batch.
+      if (name === "refreshConfiguration" && stopRequested && !stoppedInRefresh)
+        return {...result, configuration:{...result.configuration, stopped:false}};
+      return result;
+    },
+    renderer: {start:async()=>{},stop:async()=>{},subscribe:()=>()=>{},reconcileSources:async()=>{},getInputs:()=>[],hold:()=>{},getState:()=>({running:true,outputMs:1000})},
+    outputs: {start:async()=>{},stop:async()=>{},stopNow:()=>{publishing=false;},enqueue:()=>{},getState:()=>({publishing})},
+    inputs: syntheticInputs(async()=>undefined), checkEnabled:async()=>true,
+  });
+  try {
+    await runtime.start();
+    await runtime.tick();
+    await drainReceiptCallbacks();
+    const stop = await f.owner.mutation(api.events.stopEventMediaWorker,{currentSlug:f.event.slug,sessionId:f.args.sessionId});
+    stopRequested = true;
+    const tick = runtime.tick().then(() => { tickFinished = true; });
+    await drainReceiptCallbacks();
+    assert.equal(publishing,false);
+    assert.equal(runtime.getState().stopped,true);
+    assert.equal(tickFinished,false);
+    releaseAck();
+    await tick;
+    const state = await f.t.run(async ({db}) => ({session:await db.get(f.args.sessionId),command:await db.get(stop.stopCommandId)}));
+    assert.equal(state.command?.status,'succeeded');
+    assert.equal(state.session?.status,'ended');
+  } finally { releaseAck(); await runtime.stop(); }
+});
