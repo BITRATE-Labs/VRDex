@@ -378,13 +378,25 @@ Missing bitrate is invalid; there is no fallback between 160 and 320 kbps.
 The scheduler resolves the immutable session settings, and the ECS bridge checks
 those same settings against the measured allocation before registration.
 
+The [November 8 evidence](./evidence/twitch-operator-task6/bitrate-320-recovery-capacity.json)
+binds the current allocation to source `89e2811e`, immutable image `e51e2ac`,
+run `task6-bitrate-20261108-320-recovery-v4`, and recording hashes. Independent
+registry-layer reads verified all 134 packaged source files and 1,854 installed
+wheel payload files. The 320-kbps run completed 300 seconds of dual decode with
+no readiness loss, 31.22% CPU P95, full recording decode and clean process/cloud
+teardown.
+
+A separate test of the same image used real media and local HTTP control. A
+3-second request timeout recovered within the unchanged authority window while
+encoded output advanced. Both Stop paths awaited command acknowledgment;
+explicit denial and lease expiry fenced publication. All four recordings passed
+independent hash and full-decode checks. This synthetic authority does not prove
+hosted Convex authorization or live VRCDN delivery.
+
 The [November 7 evidence](./evidence/twitch-operator-task6/bitrate-320-capacity.json)
-binds the accepted synthetic result to its source, immutable image, run and
-recording hashes. Independent registry-layer reads verified all 1,854 locked
-wheel payload files, including the four relocated data files and native libraries. The 320-kbps run completed 300 seconds of dual decode with no
-readiness loss, 30.50% CPU P95 and clean process/cloud teardown. The same-image
-160-kbps run failed with `unknown_competitor`, despite 32.13% CPU P95 and no
-readiness loss. It remains rejected, as do all earlier failed runs.
+remains historical evidence. Its 160-kbps run failed with `unknown_competitor`,
+despite 32.13% CPU P95 and no readiness loss. It remains rejected, as do all
+earlier failed runs.
 
 The accepted inputs are H264 1080p60 **without B-frames**, continuously encoded
 AAC, and two synthetic sources. This is not worst-case capacity for arbitrary
@@ -396,6 +408,43 @@ before merging this admission change, because merging automatically deploys
 Convex. Keep the measured worker image pinned. These admission files are excluded
 from that image, so this change does not alter its measured runtime bytes.
 No deployment is performed by the source PR.
+
+## Reproducing the isolated Stop and recovery proof
+
+The [qualification driver](https://github.com/BITRATE-Labs/VRDex/blob/main/scripts/qualification/stop-recovery-image-proof.mjs)
+is external to the runtime image and excluded from its packaging manifest. It
+imports the packaged modules under `/app` without changing them. It requires ECS
+v4 metadata, checks the actual image digest and worker-file hash, and creates
+only loopback HTTP/RTMP endpoints and synthetic media.
+
+Use a separate one-off ECS task with the same 8 CPU / 16 GiB allocation and the
+immutable image recorded in the evidence JSON. Stage the exact driver at
+`/tmp/stop-recovery-image-proof.mjs` outside `/app`. Export the committed file
+without newline conversion; verify its SHA-256 against
+`controlProof.driverSha256` before executing it. Supply a fresh output directory
+and no provider credentials:
+
+```sh
+PROOF_DIRECTORY=/tmp/stop-recovery-proof \
+  timeout --signal=TERM --kill-after=10s 190s \
+  node /tmp/stop-recovery-image-proof.mjs
+```
+
+Keep an independent outer task bound covering download, execution and upload.
+Collect only `receipt.json` and the four named `.ts` recordings from the output
+directory, with a combined media cap of 128 MiB and a receipt cap of 256 KiB.
+Verify every recording against its receipt hash and decode the complete files.
+Require all four cases to pass: timeout recovery plus configuration Stop,
+ordinary claimed Stop, HTTP denial, and lease expiry during a pending request.
+The driver verifies no post-fence enqueue, waits for Stop acknowledgment, and
+checks process/descendant cleanup in every case. Independently confirm task exit
+0, network-attachment deletion and retirement of the temporary task definition.
+
+The November 8 proof receipt and recordings are retained under the private
+artifact prefix `synthetic-benchmarks/stop-recovery-20261108-e51e2ac/`. The evidence
+JSON records their hashes and the tested driver hash. This proof does not use
+production control authority or publish to a provider; the actual two-source B2
+rehearsal remains a separate gate.
 
 ## Decoder pacing correction awaiting image qualification
 

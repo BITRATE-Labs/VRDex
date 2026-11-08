@@ -57,7 +57,7 @@ for (const videoPreset of Object.keys(VIDEO_PROFILES))
         if (videoPreset === "720p30" && audioBitrateKbps === 320 && !simulcastEnabled) {
           assert.deepEqual(resolveWorkerAllocation(input), {
             cpuUnits: 8192, memoryMiB: 16384,
-            evidenceId: "task6-bitrate-20261107-320-fixed-v3",
+            evidenceId: "task6-bitrate-20261108-320-recovery-v4",
           });
         } else assert.throws(() => resolveWorkerAllocation(input), /unproved/i);
       });

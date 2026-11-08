@@ -1,0 +1,282 @@
+{
+  "schemaVersion": 1,
+  "scope": "B0 synthetic capacity and local HTTP control proof only; actual two-source B2 and live provider rehearsal pending",
+  "sourceRevision": "89e2811e1c534e5cde172e8944528c4ab03eac2b",
+  "imageDigest": "sha256:e51e2ac0708d5bd80583aa235d9c9f63809aca1fa1c2e2840381cec638441194",
+  "workflowRun": 42507519861,
+  "provenanceArtifactId": 13628495536,
+  "sourceFilesVerified": 134,
+  "installedWheelPayloadVerified": true,
+  "wheelInventory": {
+    "verifiedFiles": 1854,
+    "relocatedDataFiles": 4,
+    "platformManifestDigest": "sha256:fc10087470b059d7b6f8755ef578bbf1da7728cddf8aec0f38de427edd2bd926",
+    "packageLayerDigest": "sha256:f8fc0872a7c6b60b3c0a4f217bf23b5b6ddb232cdd6a026a7284855bc4863e35",
+    "inventorySha256": "c25906064050516796a8866c308d19c353f8f5576d6e7d0d32fa971ead3c48d6"
+  },
+  "capacity": {
+    "passed": true,
+    "runId": "task6-bitrate-20261108-320-recovery-v4",
+    "partHashesVerified": 8,
+    "receiptSha256": "e64d8ef3649f311a1a72a05a1a74c9d12e8132fcee520a69dbf8246d05f88147",
+    "terminalSha256": "8c31974ebb68dd5f3ebd972b5559b89666466b87bc53828074c14d8412d9bcb3",
+    "request": {
+      "settings": {
+        "videoPreset": "720p30",
+        "audioBitrateKbps": 320
+      },
+      "cpuUnits": 8192,
+      "memoryMiB": 16384,
+      "durationSeconds": 300,
+      "simulcastEnabled": false,
+      "outputDir": "/tmp/event-capacity-recovery-320"
+    },
+    "actual": {
+      "taskArn": "arn:aws:ecs:us-east-1:079358094174:task/vrdex-restream-worker/de6f2b19fc754e3286f4b8d6f379b7a4",
+      "taskLimits": {
+        "CPU": 8,
+        "Memory": 16384
+      },
+      "containerLimits": {
+        "CPU": 8192,
+        "Memory": 16384
+      },
+      "image": "079358094174.dkr.ecr.us-east-1.amazonaws.com/vrdex-restream-worker@sha256:e51e2ac0708d5bd80583aa235d9c9f63809aca1fa1c2e2840381cec638441194",
+      "imageId": "sha256:e51e2ac0708d5bd80583aa235d9c9f63809aca1fa1c2e2840381cec638441194"
+    },
+    "steady": {
+      "durationMs": 300003.168649,
+      "dualDecodeMs": 300003.177717,
+      "readinessLosses": 0,
+      "samples": 300,
+      "maxSampleGapMs": 1003.0360539999965
+    },
+    "resources": {
+      "cpuP95Percent": 31.219827817794865,
+      "cpuP50Percent": 30.192155665068604,
+      "sampleCoverageMs": 300002.29717599996,
+      "memoryPeakBytes": 737284096,
+      "accounting": "whole-cgroup-including-fixtures-and-receivers"
+    },
+    "cleanup": {
+      "closed": true,
+      "liveChildren": 0,
+      "liveGroups": 0,
+      "children": 16
+    },
+    "outerCleanup": {
+      "closed": true,
+      "liveChildren": 0,
+      "liveGroups": 0,
+      "children": 9
+    },
+    "recordings": [
+      {
+        "name": "program.ts",
+        "bytes": 91443952,
+        "sha256": "f5b1dcbba1bf56761cd4159aae7922c820c0b6e21061b27213e09354f651546f",
+        "complete": true
+      },
+      {
+        "name": "vrcdn.ts",
+        "bytes": 91028472,
+        "sha256": "fac7864a65db55a42f21b4793ae2f513d74ee47d38396ed6128156186241bdf1",
+        "complete": true
+      }
+    ],
+    "fullDecodePassed": true
+  },
+  "controlProof": {
+    "runId": "stop-recovery-20261108-e51e2ac",
+    "scope": "Real packaged worker, renderer, decoder, sender and HTTP transport with a synthetic loopback authority and local RTMP destination; not hosted Convex or VRCDN acceptance",
+    "passed": true,
+    "driverSha256": "9519ac42eb17b1b0f6fac52ffec5428648d7a3623d3b936906a8bb337d0c2da2",
+    "receiptSha256": "937e5b063e9a1e1c033af58de5a340771683e41596f27cccb125dd2aa9e19510",
+    "actual": {
+      "imageId": "sha256:e51e2ac0708d5bd80583aa235d9c9f63809aca1fa1c2e2840381cec638441194",
+      "image": "079358094174.dkr.ecr.us-east-1.amazonaws.com/vrdex-restream-worker@sha256:e51e2ac0708d5bd80583aa235d9c9f63809aca1fa1c2e2840381cec638441194",
+      "taskArn": "arn:aws:ecs:us-east-1:079358094174:task/vrdex-restream-worker/25da082487504b0aae6d620079da9708",
+      "taskLimits": {
+        "CPU": 8,
+        "Memory": 16384
+      },
+      "containerLimits": {
+        "CPU": 8192,
+        "Memory": 16384
+      }
+    },
+    "fullDecodePassed": true,
+    "cases": [
+      {
+        "name": "recovery-config-stop",
+        "passed": true,
+        "wallMs": 10889,
+        "cleanup": {
+          "closed": true,
+          "liveChildren": 0,
+          "liveGroups": 0,
+          "children": 3,
+          "liveDescendants": 0
+        },
+        "recording": {
+          "name": "recovery-config-stop.ts",
+          "bytes": 2095824,
+          "sha256": "457de461a9d3f45dedba7c21a846a12f6de71f5c41492fe6ae54e09dca50dfc7",
+          "maxGap": 0.034000000000000696,
+          "maxGop": 1.0000000000000004
+        },
+        "stop": {
+          "path": "configuration",
+          "acknowledged": {
+            "commandId": "stop-1",
+            "sequence": 1,
+            "outcome": "succeeded",
+            "observedState": "ended"
+          },
+          "waitedForAcknowledgment": true
+        },
+        "recovery": {
+          "retryWaitMs": 1056,
+          "encodedAdvanceMs": 4074.6669999999995,
+          "originalLeaseUnchangedAtFailure": true,
+          "originalKillCheckUnchangedAtFailure": true,
+          "requestTimeoutElapsedMs": 3001
+        }
+      },
+      {
+        "name": "claimed-stop",
+        "passed": true,
+        "wallMs": 6863,
+        "cleanup": {
+          "closed": true,
+          "liveChildren": 0,
+          "liveGroups": 0,
+          "children": 3,
+          "liveDescendants": 0
+        },
+        "recording": {
+          "name": "claimed-stop.ts",
+          "bytes": 1494412,
+          "sha256": "e86792a1942506f0ad6b2826c62b7a411ef6f27fd151f31929d5cbc3ac1c4241",
+          "maxGap": 0.034000000000000696,
+          "maxGop": 1.0000000000000004
+        },
+        "stop": {
+          "path": "command",
+          "acknowledged": {
+            "commandId": "stop-1",
+            "sequence": 1,
+            "outcome": "succeeded",
+            "observedState": "ended"
+          },
+          "waitedForAcknowledgment": true
+        }
+      },
+      {
+        "name": "denial",
+        "passed": true,
+        "wallMs": 6391,
+        "cleanup": {
+          "closed": true,
+          "liveChildren": 0,
+          "liveGroups": 0,
+          "children": 3,
+          "liveDescendants": 0
+        },
+        "recording": {
+          "name": "denial.ts",
+          "bytes": 1480876,
+          "sha256": "b59b14096b3667963619406f61ae95c0637964e9d4a647e65f8acd2eacf55454",
+          "maxGap": 0.034000000000000696,
+          "maxGop": 1.0000000000000004
+        }
+      },
+      {
+        "name": "expiry",
+        "passed": true,
+        "wallMs": 14397,
+        "cleanup": {
+          "closed": true,
+          "liveChildren": 0,
+          "liveGroups": 0,
+          "children": 3,
+          "liveDescendants": 0
+        },
+        "recording": {
+          "name": "expiry.ts",
+          "bytes": 2769992,
+          "sha256": "01200803257c089b8e83ff4b28dcb3e71fa44f3a0128e0ef64dda8f04199ce5e",
+          "maxGap": 0.034000000000000696,
+          "maxGop": 1.0000000000000004
+        },
+        "expiry": {
+          "expiredByMs": 3.954922999997507
+        }
+      }
+    ],
+    "driverSource": "scripts/qualification/stop-recovery-image-proof.mjs"
+  },
+  "cloudCleanup": {
+    "tasks": [
+      {
+        "taskArn": "arn:aws:ecs:us-east-1:079358094174:task/vrdex-restream-worker/de6f2b19fc754e3286f4b8d6f379b7a4",
+        "status": "STOPPED",
+        "stoppedAt": "2026-11-08T18:07:07.040000+00:00",
+        "cpu": "8192",
+        "memory": "16384",
+        "containers": [
+          {
+            "status": "STOPPED",
+            "exitCode": 0,
+            "imageDigest": "sha256:e51e2ac0708d5bd80583aa235d9c9f63809aca1fa1c2e2840381cec638441194",
+            "cpu": "8192",
+            "memory": "16384"
+          }
+        ],
+        "attachments": [
+          {
+            "status": "DELETED"
+          }
+        ]
+      },
+      {
+        "taskArn": "arn:aws:ecs:us-east-1:079358094174:task/vrdex-restream-worker/25da082487504b0aae6d620079da9708",
+        "status": "STOPPED",
+        "stoppedAt": "2026-11-08T18:07:35.618000+00:00",
+        "cpu": "8192",
+        "memory": "16384",
+        "containers": [
+          {
+            "status": "STOPPED",
+            "exitCode": 0,
+            "imageDigest": "sha256:e51e2ac0708d5bd80583aa235d9c9f63809aca1fa1c2e2840381cec638441194",
+            "cpu": "8192",
+            "memory": "16384"
+          }
+        ],
+        "attachments": [
+          {
+            "status": "DELETED"
+          }
+        ]
+      }
+    ],
+    "definitions": [
+      {
+        "family": "vrdex-event-media-worker-capacity-20261108-recovery-320",
+        "status": "INACTIVE"
+      },
+      {
+        "family": "vrdex-event-media-worker-stop-recovery-20261108",
+        "status": "INACTIVE"
+      }
+    ]
+  },
+  "previousEvidence": "bitrate-320-capacity.json",
+  "preservedRestrictions": [
+    "All earlier failed runs remain failed",
+    "720p30/160/primary-only remains blocked",
+    "No other preset or simulcast allocation admitted",
+    "B0 inputs have no B-frames; actual two-source B2 rehearsal remains required"
+  ]
+}
