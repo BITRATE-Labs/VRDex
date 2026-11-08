@@ -138,8 +138,13 @@ real worker, operator controller, input manager, Twitch wrapper, Python HLS
 reader/reservoir/remux, both decoder supervisors, renderer and destination
 senders run together. The fixtures independently probe as H264/AAC 1920x1080/60.
 They include motion/detail, distinct source colors, a visible clock and
-synchronized flash/audio markers. Preencoding finishes before steady sampling;
-replayers, TLS delivery, receivers and every child still count in cgroup usage.
+synchronized flash/audio markers. H264 video without B-frame reordering and lossless PCM intermediates finish
+before steady sampling. This bounds the tested synthetic profile, not every
+possible H264 input. Replayers
+loop those intermediates through one continuous AAC encoder per source; looping
+already encoded AAC would repeat encoder priming/padding at each seam. The actual
+HLS inputs must independently probe as H264/AAC 1080p60. Replayers, AAC encoding,
+TLS delivery, receivers and every child still count in cgroup usage.
 
 Healthy automatic A remains selected while eligible/prewarmed B continues to
 decode. Timetable eligibility alone never promotes B. Every readiness loss in
