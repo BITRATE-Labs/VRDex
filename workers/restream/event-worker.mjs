@@ -14,6 +14,14 @@ import { createInputManager } from "./input-manager.mjs";
 import { createTwitchInput } from "./twitch-input.mjs";
 import { createOperatorControl } from "./operator-control.mjs";
 import { createProgramRenderer } from "./program-renderer.mjs";
+class ControlRequestError extends Error {
+  constructor(operation, category, retryable = false) {
+    super("Worker control request failed");
+    this.operation = operation;
+    this.category = category;
+    this.retryable = retryable;
+  }
+}
 /** Every operation is bounded; watchdog is independent of this promise chain. */
 export async function bounded(operation, timeoutMs = 3000) {
   const controller = new AbortController();
@@ -24,7 +32,7 @@ export async function bounded(operation, timeoutMs = 3000) {
       new Promise((_, reject) => {
         timer = setTimeout(() => {
           controller.abort();
-          reject(new Error("Worker operation timed out"));
+          reject(new DOMException("Worker operation timed out", "TimeoutError"));
         }, timeoutMs);
       }),
     ]);
@@ -66,6 +74,7 @@ export function createEventWorker({
     publicationStopped = false,
     started = false,
     busy = false,
+    retryAt = 0,
     config,
     operator;
   let authorityUntil = -Infinity,
@@ -81,12 +90,19 @@ export function createEventWorker({
     outputProgressAt = 0,
     silenceThresholdDb,
     outputConfiguration;
+  async function controlOperation(name, operation) {
+    try {
+      return await bounded(operation, Math.min(requestTimeoutMs, RESOURCE_REQUEST_ALLOWANCE_MS));
+    } catch (error) {
+      if (error instanceof ControlRequestError) throw error;
+      if (error instanceof DOMException && error.name === "TimeoutError")
+        throw new ControlRequestError(name, "timeout", true);
+      throw new ControlRequestError(name, "unexpected");
+    }
+  }
   const request = (name, args = {}) => {
     const captured = { ...identity, protocolVersion: 2, ...args };
-    return bounded(
-      (signal) => control(name, captured, signal),
-      Math.min(requestTimeoutMs, RESOURCE_REQUEST_ALLOWANCE_MS),
-    );
+    return controlOperation(name, signal => control(name, captured, signal));
   };
   function stopPublication() {
     if (publicationStopped) return;
@@ -160,7 +176,7 @@ export function createEventWorker({
       !Number.isFinite(lease.serverNow) ||
       !Number.isFinite(lease.expiresAt)
     )
-      throw Error("Session authority denied");
+      throw new ControlRequestError("lease", "authority-denied");
     // Subtract the full round trip, conservatively anchoring at request start.
     authorityUntil =
       sentAt + Math.max(0, lease.expiresAt - lease.serverNow - 250);
@@ -189,7 +205,7 @@ export function createEventWorker({
     const destinations = outputs?.getState().destinations;
     if (destinations) {
       const result = await request("observeOutputs", { destinations });
-      if (!result.accepted) throw Error("Output health rejected");
+      if (!result.accepted) throw new ControlRequestError("observeOutputs", "authority-denied");
     }
     const state = actual();
     if (state.error || !state.running) throw Error("Renderer failed");
@@ -219,7 +235,7 @@ export function createEventWorker({
       slotKey: state.renderedSlotKey,
     });
     if (result.kind === "fenced" || (!result.kind && !result.accepted))
-      throw Error("Observation rejected");
+      throw new ControlRequestError("observeProgram", "authority-denied");
   }
   return {
     watchdog,
@@ -228,8 +244,8 @@ export function createEventWorker({
       try {
         if (!outputs && !createOutputs)
           throw Error("Output sender is unavailable");
-        if (!(await bounded(checkEnabled, requestTimeoutMs)))
-          throw Error("Worker disabled");
+        if (!(await controlOperation("checkEnabled", checkEnabled)))
+          throw new ControlRequestError("checkEnabled", "disabled");
         enabledUntil = clock() + 10000;
         const sent = clock();
         const lease = await request("acquireSession");
@@ -299,14 +315,14 @@ export function createEventWorker({
     },
     async tick() {
       watchdog();
-      if (stopped || busy || !started) return;
+      if (stopped || busy || !started || clock() < retryAt) return;
       busy = true;
       try {
         // Refresh halfway through the unchanged 10s authority window. A
         // 1s poll plus bounded 3s request must fit before watchdog expiry.
         if (clock() >= enabledUntil - 5000) {
-          if (!(await bounded(checkEnabled, requestTimeoutMs)))
-            throw Error("Worker disabled");
+          if (!(await controlOperation("checkEnabled", checkEnabled)))
+            throw new ControlRequestError("checkEnabled", "disabled");
           enabledUntil = clock() + 10000;
         }
         if (clock() >= renewAt) {
@@ -315,7 +331,7 @@ export function createEventWorker({
           acceptLease(await request("renewSession", sample ? { sample } : {}), sent);
         }
         const fresh = await request("refreshConfiguration");
-        if (!fresh.granted) throw Error("Configuration authority denied");
+        if (!fresh.granted) throw new ControlRequestError("refreshConfiguration", "authority-denied");
         config = fresh.configuration;
         validateConfiguration(config);
         serverTime = fresh.serverNow;
@@ -324,7 +340,7 @@ export function createEventWorker({
           // Stop publication before the bounded command claim and acknowledgement.
           stopPublication();
           const claims = await request("claimCommands");
-          if (!claims.granted) throw Error("Command authority denied");
+          if (!claims.granted) throw new ControlRequestError("claimCommands", "authority-denied");
           const stop = claims.commands.find((command) => command.commandType === "stop_program");
           if (stop) await acknowledgeStop(stop);
           else fence("event-stopped");
@@ -345,7 +361,7 @@ export function createEventWorker({
         watchdog();
         if (stopped) return;
         const claims = await request("claimCommands");
-        if (!claims.granted) throw Error("Command authority denied");
+        if (!claims.granted) throw new ControlRequestError("claimCommands", "authority-denied");
         let stopAcknowledgement;
         operator.advance({
           epoch: identity.epoch,
@@ -366,8 +382,18 @@ export function createEventWorker({
           outputMs: lastOutput,
           remainingMs: Math.max(0, runtimeUntil - clock()),
         });
-      } catch {
-        fence("control-failed");
+      } catch (error) {
+        watchdog();
+        const retrying = !stopped && error instanceof ControlRequestError && error.retryable;
+        try { metric({
+          event: "event_worker_control_failure",
+          operation: error instanceof ControlRequestError ? error.operation : "worker-tick",
+          category: error instanceof ControlRequestError ? error.category : "rejected",
+          retrying,
+          remainingAuthorityMs: Math.max(0, Math.min(authorityUntil, runtimeUntil, enabledUntil) - clock()),
+        }); } catch {}
+        if (retrying) retryAt = clock() + 1000;
+        else fence("control-failed");
       } finally {
         busy = false;
       }
@@ -392,35 +418,54 @@ export function createHttpControl({ url, token, fetcher = fetch }) {
   )
     throw Error("Invalid control endpoint");
   return async (name, args, signal) => {
-    const response = await fetcher(new URL("/api/mutation", base), {
-      method: "POST",
-      redirect: "error",
-      signal,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        path: `eventMediaWorker:${name}`,
-        args: { ...args, bridgeToken: token },
-        format: "json",
-      }),
-    });
-    if (!response.ok) throw Error("Control request failed");
+    let response;
+    try {
+      response = await fetcher(new URL("/api/mutation", base), {
+        method: "POST",
+        redirect: "error",
+        signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          path: `eventMediaWorker:${name}`,
+          args: { ...args, bridgeToken: token },
+          format: "json",
+        }),
+      });
+    } catch (error) {
+      if (signal?.aborted) throw new ControlRequestError(name, "timeout", true);
+      if (error instanceof TypeError) throw new ControlRequestError(name, "network", true);
+      throw new ControlRequestError(name, "unexpected");
+    }
+    if (!response.ok) {
+      void response.body?.cancel().catch(() => {});
+      if (response.status === 429) throw new ControlRequestError(name, "rate-limit", true);
+      if (response.status === 408) throw new ControlRequestError(name, "timeout", true);
+      if (response.status >= 500 && response.status <= 599) throw new ControlRequestError(name, "server-error", true);
+      throw new ControlRequestError(name, "request-rejected");
+    }
+    if (!response.body) throw new ControlRequestError(name, "invalid-response");
     let text = "",
       bytes = 0;
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     while (true) {
-      const { value, done } = await reader.read();
+      let chunk;
+      try { chunk = await reader.read(); }
+      catch { throw new ControlRequestError(name, signal?.aborted ? "timeout" : "network", true); }
+      const { value, done } = chunk;
       if (done) break;
       bytes += value.length;
       if (bytes > 262144) {
-        await reader.cancel();
-        throw Error("Control response exceeds bound");
+        void reader.cancel().catch(() => {});
+        throw new ControlRequestError(name, "invalid-response");
       }
       text += decoder.decode(value, { stream: true });
     }
     text += decoder.decode();
-    const body = JSON.parse(text);
-    if (body.status !== "success") throw Error("Control mutation failed");
+    let body;
+    try { body = JSON.parse(text); }
+    catch { throw new ControlRequestError(name, "invalid-response"); }
+    if (body?.status !== "success") throw new ControlRequestError(name, "request-rejected");
     return body.value;
   };
 }
