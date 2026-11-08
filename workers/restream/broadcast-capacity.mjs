@@ -9,7 +9,7 @@ const MEASURED_ALLOCATIONS = Object.freeze({
   "720p30:320:false": Object.freeze({
     cpuUnits: 8192,
     memoryMiB: 16384,
-    evidenceId: "task6-bitrate-20261107-320-fixed-v3",
+    evidenceId: "task6-bitrate-20261108-320-recovery-v4",
   }),
 });
 /** Pure fixture seam for unit tests. No environment or client resource authority.
