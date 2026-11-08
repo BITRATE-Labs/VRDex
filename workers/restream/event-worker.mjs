@@ -63,6 +63,7 @@ export function createEventWorker({
     void resourceSampler.sample();
   }
   let stopped = false,
+    publicationStopped = false,
     started = false,
     busy = false,
     config,
@@ -87,13 +88,18 @@ export function createEventWorker({
       Math.min(requestTimeoutMs, RESOURCE_REQUEST_ALLOWANCE_MS),
     );
   };
+  function stopPublication() {
+    if (publicationStopped) return;
+    publicationStopped = true;
+    outputs?.stopNow();
+  }
   function fence(reason) {
     if (stopped) return;
     stopped = true;
     resourceSampler?.reset();
     unsubscribe?.();
     // This MUST precede all awaited cleanup, including renderer decoder shutdown.
-    outputs?.stopNow();
+    stopPublication();
     operator?.stop();
     void Promise.resolve(inputs?.stop()).catch(() => {});
     metric({ event: "event_worker_stopped", reason });
@@ -105,6 +111,19 @@ export function createEventWorker({
       }).catch(() => {});
     void Promise.resolve(renderer?.stop()).catch(() => {});
     void Promise.resolve(outputs?.stop()).catch(() => {});
+  }
+  async function acknowledgeStop(command) {
+    const state = actual();
+    fence("operator-stop");
+    await request("acknowledgeCommand", {
+      commandId: command._id,
+      sequence: command.sequence,
+      outcome: "succeeded",
+      observedState: "ended",
+      observedSourceId: null,
+      observedOutputId: config.outputId,
+      outputMs: state.outputMs,
+    });
   }
   function watchdog() {
     if (!started || stopped) return;
@@ -302,7 +321,13 @@ export function createEventWorker({
         serverTime = fresh.serverNow;
         sampledAt = clock();
         if (config.stopped) {
-          fence("event-stopped");
+          // Stop publication before the bounded command claim and acknowledgement.
+          stopPublication();
+          const claims = await request("claimCommands");
+          if (!claims.granted) throw Error("Command authority denied");
+          const stop = claims.commands.find((command) => command.commandType === "stop_program");
+          if (stop) await acknowledgeStop(stop);
+          else fence("event-stopped");
           return;
         }
         operator.applyConfiguration({
@@ -321,6 +346,7 @@ export function createEventWorker({
         if (stopped) return;
         const claims = await request("claimCommands");
         if (!claims.granted) throw Error("Command authority denied");
+        let stopAcknowledgement;
         operator.advance({
           epoch: identity.epoch,
           sessionId: identity.sessionId,
@@ -329,19 +355,10 @@ export function createEventWorker({
           state: actual(),
           onFence: fence,
           onStop(command) {
-            const state = actual();
-            fence("operator-stop");
-            void request("acknowledgeCommand", {
-              commandId: command._id,
-              sequence: command.sequence,
-              outcome: "succeeded",
-              observedState: "ended",
-              observedSourceId: null,
-              observedOutputId: config.outputId,
-              outputMs: state.outputMs,
-            }).catch(() => {});
+            stopAcknowledgement = acknowledgeStop(command);
           },
         });
+        if (stopAcknowledgement) await stopAcknowledgement;
         watchdog();
         if (!stopped) await report();
         metric({
