@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "scope": "B0 synthetic capacity only; actual two-source B2 rehearsal pending",
+  "sourceRevision": "611443e84c17259086e45e51b8e439245d8296b4",
+  "imageDigest": "sha256:7b61882c09c2f2afedf3fe2ec8d1301bba93b57ff0fc5dcd540a53b13f791aa3",
+  "workflowRun": 42435199110,
+  "provenanceArtifactId": 13599422123,
+  "sourceFilesVerified": 134,
+  "installedWheelPayloadVerified": true,
+  "independent320RecordingPartHashesVerified": true,
+  "independent320FullDecodePassed": true,
+  "cloudCleanup": {
+    "bothTasksStopped": true,
+    "containerExitCodes": {
+      "160": 1,
+      "320": 0
+    },
+    "bothNetworkAttachmentsDeleted": true,
+    "acceptedTaskDefinitionInactive": true
+  },
+  "runs": [
+    {
+      "runId": "task6-bitrate-20261107-160-fixed-v3",
+      "passed": false,
+      "request": {
+        "settings": {
+          "videoPreset": "720p30",
+          "audioBitrateKbps": 160
+        },
+        "cpuUnits": 8192,
+        "memoryMiB": 16384,
+        "durationSeconds": 300,
+        "simulcastEnabled": false
+      },
+      "steady": {
+        "durationMs": 300003.539572,
+        "dualDecodeMs": 300003.547943,
+        "readinessLosses": 0,
+        "samples": 300,
+        "maxSampleGapMs": 1001.7517739999967
+      },
+      "resources": {
+        "cpuP95Percent": 32.12708989960166,
+        "cpuP50Percent": 31.102941107314276,
+        "sampleCoverageMs": 300002.910362,
+        "memoryPeakBytes": 727187456,
+        "accounting": "whole-cgroup-including-fixtures-and-receivers"
+      },
+      "failureCode": "marker_context_failure",
+      "markerFailureReasons": [
+        "unknown_competitor"
+      ],
+      "cleanup": {
+        "closed": true,
+        "liveChildren": 0,
+        "liveGroups": 0,
+        "children": 16
+      },
+      "outerCleanup": {
+        "closed": true,
+        "liveChildren": 0,
+        "liveGroups": 0,
+        "children": 9
+      },
+      "uploadComplete": true,
+      "receiptSha256": "a5c954feb9456181804450e354e1fac134d991af255d5c7d53056ae9ec4135f4",
+      "recordings": []
+    },
+    {
+      "runId": "task6-bitrate-20261107-320-fixed-v3",
+      "passed": true,
+      "request": {
+        "settings": {
+          "videoPreset": "720p30",
+          "audioBitrateKbps": 320
+        },
+        "cpuUnits": 8192,
+        "memoryMiB": 16384,
+        "durationSeconds": 300,
+        "simulcastEnabled": false
+      },
+      "steady": {
+        "durationMs": 300000.761521,
+        "dualDecodeMs": 300000.76984799997,
+        "readinessLosses": 0,
+        "samples": 300,
+        "maxSampleGapMs": 1002.2258119999897
+      },
+      "resources": {
+        "cpuP95Percent": 30.495855813510747,
+        "cpuP50Percent": 29.40800267469821,
+        "sampleCoverageMs": 300000.140943,
+        "memoryPeakBytes": 741347328,
+        "accounting": "whole-cgroup-including-fixtures-and-receivers"
+      },
+      "failureCode": null,
+      "markerFailureReasons": [],
+      "cleanup": {
+        "closed": true,
+        "liveChildren": 0,
+        "liveGroups": 0,
+        "children": 16
+      },
+      "outerCleanup": {
+        "closed": true,
+        "liveChildren": 0,
+        "liveGroups": 0,
+        "children": 9
+      },
+      "uploadComplete": true,
+      "receiptSha256": "71b5c21a4a0f5582cf6a2bf96d9372b346a2eb04e03e4dc7915d4729c29b9931",
+      "recordings": [
+        {
+          "name": "program.ts",
+          "bytes": 92202908,
+          "sha256": "d52813871a60ab99e413d1bb0b2d33d81f05addfed511189892edb7b40f26e28",
+          "complete": true
+        },
+        {
+          "name": "vrcdn.ts",
+          "bytes": 90938044,
+          "sha256": "74f7217fa78141b0131b41bd266d11adc91b1ac779d19693afecad3d952bed8d",
+          "complete": true
+        }
+      ]
+    }
+  ],
+  "wheelInventory": {
+    "verifiedFiles": 1854,
+    "relocatedDataFiles": 4,
+    "platformManifestDigest": "sha256:4426bed42783592c1a26db7bcd105faf248bd110d58b116f23a9b50e981cc6f0",
+    "packageLayerDigest": "sha256:308e7a116c31d6831b57bb856926d4d3b5097546c255bfc40fd16954118c378b",
+    "inventorySha256": "d43ac3a3351c7a4f2bf20eec460d7d40d1ca05b85e1445808c3c0b45ef39cf4d"
+  }
+}

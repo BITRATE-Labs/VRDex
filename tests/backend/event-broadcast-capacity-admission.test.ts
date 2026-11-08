@@ -13,6 +13,7 @@ const schema = "default" in schemaModule && schemaModule.default instanceof Sche
   : schemaModule;
 const modules = {
   "../../convex/_generated/api.ts": () => import("../../convex/_generated/api"),
+  "../../convex/eventMediaSettings.ts": () => import("../../convex/eventMediaSettings"),
   "../../convex/events.ts": () => import("../../convex/events"),
 };
 const priorAccounts = process.env.VRDEX_VRCDN_OUTPUT_ACCOUNTS_JSON;
@@ -47,6 +48,7 @@ async function setupFixture(loadEvents = modules["../../convex/events.ts"]) {
 
 test("production capacity rejects with no scheduling writes", async () => {
   const f = await setupFixture();
+  await f.owner.mutation(api.eventMediaSettings.configure, {currentSlug:f.event.slug,videoPreset:"720p30",audioBitrateKbps:160});
   const before = await f.schedulingState();
   await assert.rejects(f.owner.mutation(api.events.scheduleEventMediaWorker, { currentSlug: f.event.slug }), /Unproved broadcast configuration/);
   assert.deepEqual(await f.schedulingState(), before);
@@ -67,7 +69,7 @@ test("persisted synthetic snapshot cannot authorize production reschedule", asyn
   assert.equal(before.sessions.length, 1);
   assert.equal(before.commands.length, 1);
   assert.deepEqual(before.sessions[0].allocation, { cpuUnits: 4096, memoryMiB: 8192, evidenceId: "fixture-capacity-v1" });
-  await assert.rejects(f.owner.mutation(api.events.scheduleEventMediaWorker, { currentSlug: f.event.slug }), /Unproved broadcast configuration/);
+  await assert.rejects(f.owner.mutation(api.events.scheduleEventMediaWorker, { currentSlug: f.event.slug }), /Unproved allocation snapshot/);
   assert.deepEqual(await f.schedulingState(), before);
 });
 
@@ -80,6 +82,7 @@ test("fixture scheduling does not alter default scheduling", async () => {
   const session = await synthetic.t.run(({ db }) => db.get(scheduled.sessionId));
   assert.deepEqual(session?.allocation, { cpuUnits: 4096, memoryMiB: 8192, evidenceId: "fixture-capacity-v1" });
   production.authorizeOutput();
+  await production.owner.mutation(api.eventMediaSettings.configure, {currentSlug:production.event.slug,videoPreset:"720p30",audioBitrateKbps:160});
   const before = await production.schedulingState();
   await assert.rejects(production.owner.mutation(api.events.scheduleEventMediaWorker, { currentSlug: production.event.slug }), /Unproved broadcast configuration/);
   assert.deepEqual(await production.schedulingState(), before);

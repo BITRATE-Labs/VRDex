@@ -9,6 +9,6 @@ export const syntheticAllocation = Object.freeze({
 });
 export const resolveSyntheticAllocation = createCapacityResolver(Object.freeze(
   Object.fromEntries(Object.keys(VIDEO_PROFILES).flatMap(preset =>
-    [false, true].map(simulcast => [`${preset}:${simulcast}`, syntheticAllocation]),
+    [160, 320].flatMap(audio => [false, true].map(simulcast => [`${preset}:${audio}:${simulcast}`, syntheticAllocation])),
   )),
 ));

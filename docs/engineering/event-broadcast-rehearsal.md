@@ -893,11 +893,11 @@ outcomes are persisted before the outer owner closes the backend group. Failed
 recovery remains failed evidence. Cancellation stays authoritative through final
 generated-file verification, proof writing and native process exit.
 
-CI explicitly selects `run-admission-blocked` while the production measured
-allocation map is intentionally empty. Its driver receipt has scope
+CI explicitly selects `run-admission-blocked` with the unmeasured 160-kbps
+profile, even when the production map admits a different bitrate. Its driver receipt has scope
 `migration-admission-blocked`. It executes the same historical migration assertions,
-then configures the fake output through the acting owner's production handler and
-calls the real `events:scheduleEventMediaWorker`. Passing requires the exact
+then configures the fake output and explicitly selects 720p30/160 through the
+acting owner's production handlers and calls the real `events:scheduleEventMediaWorker`. Passing requires the exact
 `Unproved broadcast configuration` rejection. Unexpected success, a different
 error or any changed admission snapshot fails. The snapshot includes a SHA-256
 digest of complete fixture-owned event, program, output, session, command and audit

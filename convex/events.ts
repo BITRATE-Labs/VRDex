@@ -3959,7 +3959,7 @@ export function createScheduleEventMediaWorker(resolveAllocation: typeof resolve
       return {outputId:o._id,destination,profile:resolveDestinationProfile({settings:mediaSettings,destination})};
     });
     const frozenDestinations = openSession?.destinationProfiles ?? destinationProfiles;
-    const allocation = openSession ? openSession.allocation : resolveAllocation({videoPreset:mediaSettings.videoPreset,simulcastEnabled:frozenDestinations.some(d=>d.destination==='twitch')});
+    const allocation = openSession ? openSession.allocation : resolveAllocation({videoPreset:mediaSettings.videoPreset,audioBitrateKbps:mediaSettings.audioBitrateKbps,simulcastEnabled:frozenDestinations.some(d=>d.destination==='twitch')});
     validateMeasuredSnapshot(validateAllocationSnapshot({mediaSettings,allocation,outputId:output._id,destinationProfiles:frozenDestinations}), resolveAllocation);
     const sessionRecord = {
       allocation,

@@ -83,7 +83,7 @@ no estimate. No invoice, account identifier, credential or secret is returned.
 ## Verification and actual-image handoff
 
 The resource and pricing backend tests use explicit trusted unit allocation
-shapes and fake IO boundaries, without changing the empty production capacity
+shapes and fake IO boundaries, without adding entries to the production capacity
 map. They exercise real Convex renewal/query mutations and the production worker
 controller with fake media. Deferred and rejected counter reads must preserve
 renewal, encoded progress, Cut acknowledgement and terminal Stop. The packaging

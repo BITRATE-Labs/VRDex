@@ -77,7 +77,7 @@ test("settings require media authority, preserve active snapshots, and apply at 
   const lease = await t.mutation(worker("acquireSession"),workerArgs);
   const original = await t.run(ctx => ctx.db.get(scheduled.sessionId));
   assert.equal(original!.controlProtocolVersion,2);
-  assert.deepEqual(original!.allocation, fixtureCapacityResolver({videoPreset:'1080p60',simulcastEnabled:false}));
+  assert.deepEqual(original!.allocation, fixtureCapacityResolver({videoPreset:'1080p60',audioBitrateKbps:320,simulcastEnabled:false}));
   assert.deepEqual(lease.configuration.allocation, original!.allocation);
   assert.deepEqual(original!.mediaSettings,{videoPreset:"1080p60",audioBitrateKbps:320});
   assert.equal(original!.destinationProfiles![0]!.profile.frameRate,60);
@@ -143,7 +143,7 @@ test('configure rejects unknown presets and unsupported audio without modifying 
 });
 
 
-test("synthetic scheduling does not open the production capacity registry", async () => {
+test("synthetic scheduling does not admit the failed production 160-kbps profile", async () => {
   const synthetic = await setupFixture();
   const { scheduled } = await synthetic.schedule();
   const stored = await synthetic.t.run(ctx => ctx.db.get(scheduled.sessionId));
@@ -156,11 +156,12 @@ test("synthetic scheduling does not open the production capacity registry", asyn
     commands: await db.query("eventMediaCommands").collect(),
     program: await db.get(production.output.programId),
   }));
+  await production.owner.mutation(settingsMutation, {currentSlug:production.event.slug,videoPreset:"720p30",audioBitrateKbps:160});
   const before = await snapshot();
   await assert.rejects(production.schedule(), /Unproved broadcast configuration/);
   assert.deepEqual(await snapshot(), before);
   const { resolveWorkerAllocation } = await import("../../workers/restream/broadcast-capacity.mjs");
-  assert.throws(() => resolveWorkerAllocation({ videoPreset: "720p30", simulcastEnabled: false }), /Unproved broadcast configuration/);
+  assert.throws(() => resolveWorkerAllocation({ videoPreset: "720p30", audioBitrateKbps: 160, simulcastEnabled: false }), /Unproved broadcast configuration/);
 });
 
 test("synthetic scheduling still rejects a forged frozen allocation", async () => {
@@ -172,4 +173,24 @@ test("synthetic scheduling still rejects a forged frozen allocation", async () =
     await db.patch(scheduled.sessionId, { allocation: { ...session.allocation, evidenceId: "forged-synthetic-capacity-v1" } });
   });
   await assert.rejects(schedule(), /Unproved allocation snapshot/);
+});
+
+
+test("production admission accepts only measured 320 kbps and rejects a changed frozen bitrate", async () => {
+  const {t, owner, event, output, schedule} = await setupFixture(() => import("../../convex/events"));
+  const {scheduled} = await schedule();
+  const session = await t.run(ctx => ctx.db.get(scheduled.sessionId));
+  assert.deepEqual(session!.allocation, {cpuUnits:8192,memoryMiB:16384,evidenceId:"task6-bitrate-20261107-320-fixed-v3"});
+  assert.deepEqual(session!.mediaSettings, {videoPreset:"720p30",audioBitrateKbps:320});
+  await t.run(async ctx => {
+    const frozen = await ctx.db.get(scheduled.sessionId);
+    assert.ok(frozen?.destinationProfiles);
+    await ctx.db.patch(scheduled.sessionId, {
+      mediaSettings:{videoPreset:"720p30",audioBitrateKbps:160},
+      destinationProfiles:frozen.destinationProfiles.map(row => ({...row,profile:{...row.profile,audioBitrateKbps:160}})),
+    });
+  });
+  const before = await t.run(async ctx => ({session:await ctx.db.get(scheduled.sessionId),commands:await ctx.db.query("eventMediaCommands").collect(),program:await ctx.db.get(output.programId)}));
+  await assert.rejects(owner.mutation(api.events.scheduleEventMediaWorker,{currentSlug:event.slug}), /Unproved broadcast configuration/);
+  assert.deepEqual(await t.run(async ctx => ({session:await ctx.db.get(scheduled.sessionId),commands:await ctx.db.query("eventMediaCommands").collect(),program:await ctx.db.get(output.programId)})),before);
 });

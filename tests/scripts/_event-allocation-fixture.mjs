@@ -4,10 +4,10 @@ import { VIDEO_PROFILES, resolveDestinationProfile } from "../../workers/restrea
 // Synthetic unit-test allocations, never measured production evidence.
 const fixtureEntries = Object.fromEntries(
   Object.keys(VIDEO_PROFILES).flatMap(videoPreset =>
-    [false, true].map(simulcastEnabled => [
-      `${videoPreset}:${simulcastEnabled}`,
+    [160, 320].flatMap(audioBitrateKbps => [false, true].map(simulcastEnabled => [
+      `${videoPreset}:${audioBitrateKbps}:${simulcastEnabled}`,
       { cpuUnits: 4096, memoryMiB: 8192, evidenceId: "fixture-capacity-v1" },
-    ]),
+    ])),
   ),
 );
 /** @type {import("../../workers/restream/broadcast-capacity.mjs").CapacityResolver} */
@@ -28,6 +28,7 @@ export function allocatedSession({
     mediaSettings,
     allocation: fixtureCapacityResolver({
       videoPreset,
+      audioBitrateKbps,
       simulcastEnabled: optional !== undefined,
     }),
     destinationProfiles: [
