@@ -14,7 +14,7 @@ export async function probe(owner, file, {observeRaw,observeCapture,acquisition}
  const raw=await owner.run("ffprobe",["-v","error","-show_streams","-show_format","-of","json",file],{timeoutMs:15000,observeCapture,signal:acquisition?.signal});
  await observeRaw?.(raw);return JSON.parse(raw.toString());
 }
-export async function createFixture(owner, file, id) {
+export async function createFixture(owner, file, id, { replayIntermediate = false } = {}) {
   if (!Object.hasOwn(SOURCE_FREQUENCIES, id)) throw Error("marker_fixture_identity");
   const frequency = SOURCE_FREQUENCIES[id];
   const color = id === "a" ? F.identityColors.a : F.identityColors.b, M = F.marker, A = F.audio, O = F.output, E = F.expected;
@@ -51,21 +51,26 @@ export async function createFixture(owner, file, id) {
       O.bufsize,
       "-g",
       O.gopText,
+      ...(replayIntermediate ? ["-bf", "0"] : []),
       "-pix_fmt",
       O.pixelFormat,
       "-c:a",
-      O.audioCodec,
-      "-b:a",
-      O.audioBitrate,
+      replayIntermediate ? "pcm_s16le" : O.audioCodec,
+      ...(replayIntermediate ? [] : ["-b:a", O.audioBitrate]),
       "-ac",
       O.channelsText,
       "-f",
-      O.mux,
+      replayIntermediate ? "nut" : O.mux,
       "-y",
       file,
     ],
     { timeoutMs: 180000 },
   );
+  return probeFixture(owner, file, replayIntermediate ? "pcm_s16le" : E.audioCodec);
+}
+
+export async function probeFixture(owner, file, audioCodec = F.expected.audioCodec) {
+  const E = F.expected;
   const facts = await probe(owner, file),
     v = facts.streams.find((s) => s.codec_type === "video"),
     a = facts.streams.find((s) => s.codec_type === "audio");
@@ -74,11 +79,11 @@ export async function createFixture(owner, file, id) {
     v.width !== E.width ||
     v.height !== E.height ||
     v.r_frame_rate !== E.frameRateText ||
-    a.codec_name !== E.audioCodec ||
+    a.codec_name !== audioCodec ||
     a.channels !== E.channels ||
     a.sample_rate !== E.sampleRateText
   )
-    throw Error("Input fixture not H264/AAC 1080p60");
+    throw Error("Input fixture format mismatch");
   return {
     videoCodec: v.codec_name,
     width: v.width,
@@ -88,6 +93,19 @@ export async function createFixture(owner, file, id) {
     channels: a.channels,
     sampleRate: Number(a.sample_rate),
   };
+}
+/** Loop lossless PCM before the one continuous AAC encoder. Repeating AAC
+ * packets repeats encoder delay/padding and damages the boundary marker. */
+export function capacityReplayArguments(file, directory) {
+  return [
+    "-hide_banner", "-loglevel", "error", "-re", "-stream_loop", "-1",
+    "-i", file, "-c:v", "copy", "-c:a", F.output.audioCodec,
+    "-b:a", F.output.audioBitrate, "-ar", F.expected.sampleRateText,
+    "-ac", F.output.channelsText, "-f", "hls", "-hls_time", "1",
+    "-hls_list_size", "8", "-hls_flags", "delete_segments+temp_file",
+    "-hls_segment_filename", directory + "/segment%d.ts",
+    directory + "/index.m3u8",
+  ];
 }
 export async function packetFacts(owner, file, audioWindow) {
   const child = owner.start(
