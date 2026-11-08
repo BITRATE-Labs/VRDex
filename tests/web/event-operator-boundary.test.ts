@@ -55,13 +55,14 @@ it('F3 actual route denies anonymous, nonstaff and mismatched paths before fetch
     if (input.token === '') assert.deepEqual(f.calls, []);
   }
 });
-function operatorFixture() {
+function operatorFixture({ isAuthenticated = true, isLoading = false } = {}) {
+  const queries: Array<{ ref: string; args: unknown }> = [];
   const requests: Array<{ ref: string; args: any }> = [];
   const React = webRequire('react');
   const status = { eventTitle: 'Show', eventPath: '/club/events/show', canControl: false, outputConfigurationLocked: false, serverNow: Date.now(), program: null, sessions: [], sources: [], outputs: [], commands: [], twitchAccounts: [] };
   const component = load('app/_components/event-operator-view.tsx', {
     'next/link': { default: (props: any) => React.createElement('a', props) },
-    'convex/react': { useQuery: () => status, useMutation: (ref: string) => async (args: any) => { requests.push({ ref, args }); } },
+    'convex/react': { useConvexAuth: () => ({ isAuthenticated, isLoading }), useQuery: (ref: string, args: unknown) => { queries.push({ ref, args: JSON.parse(JSON.stringify(args)) }); if (args !== 'skip' && !isAuthenticated) throw Error('A signed-in user is required.'); return args === 'skip' ? undefined : status; }, useMutation: (ref: string) => async (args: any) => { requests.push({ ref, args }); } },
     '@convex-generated-api': { api },
     '@/lib/event-broadcast-observation': { eventBroadcastObservationFresh: () => false },
     '@/components/ui/button': { Button: ({ variant, size, ...props }: any) => React.createElement('button', props) },
@@ -69,7 +70,7 @@ function operatorFixture() {
     './viewer-local-event-times': { ViewerLocalEventDateTime: () => null },
     './event-host-view': { EventHostView: () => null },
   });
-  return { component, requests, status, React };
+  return { component, requests, queries, status, React };
 }
 it('F2 actual operator view sends an explicit immediate request without client-clock schedule fields', async () => {
   const f = operatorFixture();
@@ -100,11 +101,28 @@ it('R2F1 terminal reserved output configuration stays disabled independently of 
 it('an unresolved replacement subscription cannot restore initial permissions or private sources',()=>{
  const React=webRequire('react');
  const component=load('app/_components/event-operator-view.tsx',{
-  'convex/react':{useQuery:()=>undefined,useMutation:()=>async()=>{}},'@convex-generated-api':{api},
+  'convex/react':{useConvexAuth:()=>({isAuthenticated:true,isLoading:false}),useQuery:()=>undefined,useMutation:()=>async()=>{}},'@convex-generated-api':{api},
   'next/link':{default:()=>null},'./event-host-view':{EventHostView:()=>null},
   '@/components/ui/button':{Button:()=>null},'@/components/ui/page-shell':{PageContainer:()=>null,PageShell:()=>null},
   './viewer-local-event-times':{ViewerLocalEventDateTime:()=>null},
  });
  const tree=component.EventOperatorView({currentSlug:'new-event',initialStatus:{canControl:true,sources:[{label:'Old private source'}]}});
  assert.equal(tree,null);assert(React);
+});
+
+it('operator skips privileged status reads while Convex establishes or loses authentication', () => {
+  for (const isLoading of [true, false]) {
+    const f = operatorFixture({ isAuthenticated: false, isLoading });
+    const tree = f.component.EventOperatorView({ currentSlug: 'show', initialStatus: { ...f.status, canControl: true } });
+    assert.equal(tree, null);
+    assert.deepEqual(f.queries, [{ ref: 'status', args: 'skip' }]);
+    assert.deepEqual(f.requests, []);
+  }
+});
+
+it('operator subscribes to the exact event only after Convex confirms authentication', () => {
+  const f = operatorFixture();
+  const tree = f.component.EventOperatorView({ currentSlug: 'show', initialStatus: f.status });
+  assert.ok(tree);
+  assert.deepEqual(f.queries, [{ ref: 'status', args: { currentSlug: 'show' } }]);
 });
