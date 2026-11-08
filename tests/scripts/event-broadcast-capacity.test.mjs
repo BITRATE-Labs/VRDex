@@ -50,18 +50,42 @@ for (const p of Object.keys(VIDEO_PROFILES))
       );
     });
 for (const videoPreset of Object.keys(VIDEO_PROFILES))
-  for (const simulcastEnabled of [false, true])
-    test(`production ${videoPreset}/${simulcastEnabled} is unavailable until independently measured evidence lands`, () => {
-      assert.throws(
-        () => resolveWorkerAllocation({ videoPreset, simulcastEnabled }),
-        /unproved/i,
-      );
-    });
+  for (const audioBitrateKbps of [160, 320])
+    for (const simulcastEnabled of [false, true])
+      test(`production ${videoPreset}/${audioBitrateKbps}/${simulcastEnabled} admits only the measured profile`, () => {
+        const input = { videoPreset, audioBitrateKbps, simulcastEnabled };
+        if (videoPreset === "720p30" && audioBitrateKbps === 320 && !simulcastEnabled) {
+          assert.deepEqual(resolveWorkerAllocation(input), {
+            cpuUnits: 8192, memoryMiB: 16384,
+            evidenceId: "task6-bitrate-20261107-320-fixed-v3",
+          });
+        } else assert.throws(() => resolveWorkerAllocation(input), /unproved/i);
+      });
+
+test("capacity distinguishes audio bitrate and rejects omitted bitrate", () => {
+  const only320 = createCapacityResolver({ "720p30:320:false": allocation });
+  assert.deepEqual(only320({ videoPreset: "720p30", audioBitrateKbps: 320, simulcastEnabled: false }), allocation);
+  assert.throws(() => only320({ videoPreset: "720p30", audioBitrateKbps: 160, simulcastEnabled: false }), /Unproved/);
+  assert.throws(() => only320({ videoPreset: "720p30", simulcastEnabled: false }), /Invalid/);
+});
+
+test("production bridge enforces the bitrate-specific allocation snapshot", () => {
+  const session = allocatedSession();
+  session.allocation = resolveWorkerAllocation({videoPreset:"720p30",audioBitrateKbps:320,simulcastEnabled:false});
+  const config = {baseEnvironment:{},secretRefMap:{},familyPrefix:"test",containerName:"worker"};
+  const task = taskDefinitionFor({session,program:{}},config);
+  assert.equal(task.cpu,"8192");
+  assert.equal(task.memory,"16384");
+  const stale = allocatedSession({audioBitrateKbps:160});
+  stale.allocation = session.allocation;
+  assert.throws(() => taskDefinitionFor({session:stale,program:{}},config), /Unproved broadcast configuration/);
+});
+
 test("strict measured map and profile validation", () => {
   for (const input of [
-    { videoPreset: "bogus", simulcastEnabled: false },
-    { videoPreset: "720p30", simulcastEnabled: 0 },
-    { videoPreset: "720p30", simulcastEnabled: false, cpuUnits: 8192 },
+    { videoPreset: "bogus", audioBitrateKbps: 320, simulcastEnabled: false },
+    { videoPreset: "720p30", audioBitrateKbps: 320, simulcastEnabled: 0 },
+    { videoPreset: "720p30", audioBitrateKbps: 320, simulcastEnabled: false, cpuUnits: 8192 },
   ])
     assert.throws(() => resolve(input));
   for (const bad of [
@@ -71,8 +95,9 @@ test("strict measured map and profile validation", () => {
     { ...allocation, foo: 1 },
   ])
     assert.throws(() =>
-      createCapacityResolver({ "720p30:false": bad })({
+      createCapacityResolver({ "720p30:320:false": bad })({
         videoPreset: "720p30",
+        audioBitrateKbps: 320,
         simulcastEnabled: false,
       }),
     );

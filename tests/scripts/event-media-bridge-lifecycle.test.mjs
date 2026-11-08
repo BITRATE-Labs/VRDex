@@ -474,7 +474,7 @@ test('production dispatch refuses synthetic allocation before any provider regis
     if (name === 'eventMediaWorker:admitDispatch') return { granted: true };
     return { accepted: true };
   } };
-  assert.throws(() => bridge.taskDefinitionFor(command, config), /Unproved broadcast configuration/);
+  assert.throws(() => bridge.taskDefinitionFor(command, config), /Unproved allocation snapshot/);
   await bridge.claimAndProcess(client, config, async (_config, args) => { providerCalls.push(args); return {}; });
   assert.deepEqual(providerCalls, []);
   assert.ok(controlCalls.includes('eventMediaWorker:releaseUnlaunchedDispatch'));
