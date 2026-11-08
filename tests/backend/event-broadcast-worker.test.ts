@@ -2349,3 +2349,52 @@ it('a late control response cannot revive publication after watchdog expiry',asy
     complete({accepted:true});await tick;assert.equal(f.worker.getState().stopped,true);assert.equal(f.counts().fenced,1);
   }finally{complete({accepted:true});await f.worker.stop();}
 });
+
+for (const stoppedInRefresh of [true, false]) for (const transientBeforeStop of [false, true]) it(`operator Stop settles before exit (refresh stopped=${stoppedInRefresh}, prior transient=${transientBeforeStop})`, async () => {
+  const f = await fixture();
+  let publishing = true, stopRequested = false, tickFinished = false, injectTimeout = false, elapsed = 0;
+  let releaseAck!: () => void;
+  const ackGate = new Promise<void>(resolve => { releaseAck = resolve; });
+  const runtime = createEventWorker({
+    identity: {...f.args},
+    clock: () => elapsed,
+    control: async (name: string, args: Record<string, unknown>) => {
+      if (name === "observeProgram" && injectTimeout) {
+        injectTimeout = false;
+        throw new DOMException("Worker operation timed out", "TimeoutError");
+      }
+      if (name === "acknowledgeCommand" && args.observedState === "ended") await ackGate;
+      const result = await f.t.mutation(worker(name), args);
+      // A Stop arriving just after refresh is first visible in the claimed batch.
+      if (name === "refreshConfiguration" && stopRequested && !stoppedInRefresh)
+        return {...result, configuration:{...result.configuration, stopped:false}};
+      return result;
+    },
+    renderer: {start:async()=>{},stop:async()=>{},subscribe:()=>()=>{},reconcileSources:async()=>{},getInputs:()=>[],hold:()=>{},getState:()=>({running:true,outputMs:1000})},
+    outputs: {start:async()=>{},stop:async()=>{},stopNow:()=>{publishing=false;},enqueue:()=>{},getState:()=>({publishing})},
+    inputs: syntheticInputs(async()=>undefined), checkEnabled:async()=>true,
+  });
+  try {
+    await runtime.start();
+    await runtime.tick();
+    await drainReceiptCallbacks();
+    if (transientBeforeStop) {
+      injectTimeout = true;
+      await runtime.tick();
+      assert.equal(runtime.getState().stopped,false);
+      elapsed = 1000;
+    }
+    const stop = await f.owner.mutation(api.events.stopEventMediaWorker,{currentSlug:f.event.slug,sessionId:f.args.sessionId});
+    stopRequested = true;
+    const tick = runtime.tick().then(() => { tickFinished = true; });
+    await drainReceiptCallbacks();
+    assert.equal(publishing,false);
+    assert.equal(runtime.getState().stopped,true);
+    assert.equal(tickFinished,false);
+    releaseAck();
+    await tick;
+    const state = await f.t.run(async ({db}) => ({session:await db.get(f.args.sessionId),command:await db.get(stop.stopCommandId)}));
+    assert.equal(state.command?.status,'succeeded');
+    assert.equal(state.session?.status,'ended');
+  } finally { releaseAck(); await runtime.stop(); }
+});
