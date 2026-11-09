@@ -26,7 +26,6 @@ import {
   CURRENT_FRESHNESS_MS,
   assertAutomaticOperationAllowed,
   DEFAULT_PUBLIC_TELEMETRY_SETTINGS,
-  INSTANCE_CLOSE_MISSES,
   MAX_INTERPOLATION_GAP_MS,
   TELEMETRY_ROLLUP_VERSION,
   computePopulationMetrics,
@@ -1679,10 +1678,8 @@ export const ingestAggregatePoll = internalMutation({
       observedAt: args.observedAt,
       ...(args.groupCreatedAt === undefined ? {} : { groupCreatedAt: args.groupCreatedAt }),
     });
-    const seen = new Set<string>();
     const epochStartedAt = integration.telemetryEpochStartedAt ?? integration.createdAt;
     for (const item of detailedInstances) {
-      seen.add(item.providerLocation);
       let session = await ctx.db
         .query("instanceSessions")
         .withIndex("by_integrationId_providerLocation_state_openedAt", (q) =>
@@ -1749,19 +1746,7 @@ export const ingestAggregatePoll = internalMutation({
         fencingToken: args.fencingToken,
       });
     }
-    const openSessions = aggregateOnly ? [] : await ctx.db
-      .query("instanceSessions")
-      .withIndex("by_integrationId_state", (q) => q.eq("integrationId", integration._id).eq("state", "open"))
-      .collect();
-    for (const session of openSessions) {
-      if (seen.has(session.providerLocation)) continue;
-      const misses = session.consecutiveMisses + 1;
-      await ctx.db.patch(session._id, {
-        consecutiveMisses: misses,
-        ...(misses >= INSTANCE_CLOSE_MISSES ? { state: "closed" as const, closedAt: args.observedAt } : {}),
-        updatedAt: args.observedAt,
-      });
-    }
+    // List absence is not closure evidence; session freshness expires independently.
     readCollectionSubject(integration);
     await ctx.db.patch(integration._id, {
       state: "active",

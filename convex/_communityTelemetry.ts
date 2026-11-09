@@ -6,7 +6,6 @@ export const ACTIVE_POLL_MIN_MS = 60_000;
 export const ACTIVE_POLL_MAX_MS = 120_000;
 export const QUIET_POLL_MIN_MS = 180_000;
 export const QUIET_POLL_MAX_MS = 300_000;
-export const INSTANCE_CLOSE_MISSES = 2;
 export { MAX_OBSERVED_GAP_MS as MAX_INTERPOLATION_GAP_MS } from "./_clubAnalyticsMath";
 export const CURRENT_FRESHNESS_MS = 6 * 60_000;
 

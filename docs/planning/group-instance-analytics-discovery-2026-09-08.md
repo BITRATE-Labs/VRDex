@@ -15,7 +15,7 @@ The [telemetry contract](community-group-telemetry.md), [backend documentation](
 Source inspected:
 
 - `workers/group-telemetry/vrchat-client.mjs`: reads group metadata and visible group instances, normalizes member count and per-instance population, strips person identifiers. No group audit-log ingestion exists in this adapter.
-- `convex/_communityTelemetry.ts`: randomized active and quiet cadence, two-miss session closure, five-minute interpolation limit, six-minute current-data freshness, aggregate metrics.
+- `convex/_communityTelemetry.ts`: randomized active and quiet cadence, five-minute interpolation limit, six-minute current-data freshness, aggregate metrics. The two-miss closure observed during this discovery was superseded by [positive closure evidence and retained session continuity](../backend/community-group-telemetry.md#observation-model).
 - `convex/communityTelemetry.ts`: stores snapshots, sessions, membership-count changes, coverage and rollups; private reads and public opt-ins; confirmed event associations.
 - `apps/web/src/app/account/communities/[slug]/telemetry/community-telemetry-dashboard.tsx`: 24-hour, 7-day and 30-day views, population and membership charts, recent instances, instance history, world distribution and event associations.
 

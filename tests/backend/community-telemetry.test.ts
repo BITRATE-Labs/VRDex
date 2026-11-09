@@ -172,6 +172,92 @@ describe("community telemetry control plane", () => {
     assert.equal(discoveredSummary.page[0]!.peak, 6);
   });
 
+  it("retains one long-lived session across missing polls and splits only after confirmed closure", async test => {
+    const t = convexTest({ schema, modules });
+    let now = Date.parse("2026-11-07T23:30:00.000Z");
+    test.mock.method(Date, "now", () => now);
+    await seedCommunity(t);
+    const collectorAccountId = await registerAccount(t);
+    const integrationId = await t.withIdentity(identity).mutation(api.communityTelemetry.connectGroup, {
+      communitySlug: "faceless", vrchatGroupId: "grp_00000000-0000-4000-8000-000000000001", groupVisibility: "public", joinPolicy: "free",
+    });
+    await grantVisibilityOwner(t);
+    const instance = { providerInstanceId: "long-lived", providerLocation: "wrld_example:long-lived", vrchatWorldId: "wrld_example", population: 16 };
+    const openedAt = now;
+    const ingest = async (at: number, instances: Array<typeof instance & { closedAt?: number }>) => {
+      now = at;
+      const [claim] = (await t.mutation(internal.communityTelemetry.claimDueAssignments, {
+        collectorAccountId, workerId: "continuity-worker", now,
+      })).assignments;
+      assert.ok(claim);
+      await t.mutation(internal.communityTelemetry.ingestAggregatePoll, {
+        integrationId, collectorAccountId, workerId: "continuity-worker", fencingToken: claim.fencingToken,
+        pollId: String(at), collectorVersion: "test", source: "first_party", groupMemberCount: 50,
+        observedAt: at, now, nextPollAt: at + 1, instances,
+      });
+      await t.mutation(internal.communityTelemetry.releaseLease, {
+        integrationId, collectorAccountId, workerId: "continuity-worker", fencingToken: claim.fencingToken, now,
+      });
+    };
+    const history = () => t.withIdentity(identity).query(api.clubAnalytics.listInstances, {
+      communitySlug: "faceless", kind: "history", paginationOpts: { numItems: 3, cursor: null },
+    });
+    const live = () => t.withIdentity(identity).query(api.clubAnalytics.listInstances, {
+      communitySlug: "faceless", kind: "live", paginationOpts: { numItems: 10, cursor: null },
+    });
+    await ingest(openedAt, [instance]);
+    const sessionId = (await history()).page[0]!.id;
+    // Repeated group-only success must not renew the missing instance's freshness.
+    for (const minutes of [2, 5, 8]) await ingest(openedAt + minutes * 60_000, []);
+    const missing = (await history()).page;
+    assert.equal(missing.length, 1);
+    assert.equal(missing[0]!.state, "open");
+    assert.equal(missing[0]!.closedAt, null);
+    assert.equal(missing[0]!.lastObservedAt, openedAt);
+    assert.equal(missing[0]!.liveObservedAt, null);
+    assert.deepEqual((await live()).page, []);
+    assert.equal((await t.run(ctx => ctx.db.get(sessionId)))!.updatedAt, openedAt);
+
+    // Six omissions/returns cross local and UTC midnight over a 27-hour lobby.
+    for (const hours of [1, 5, 10, 15, 20, 27]) {
+      const at = openedAt + hours * 60 * 60_000;
+      await ingest(at - 8 * 60_000, []);
+      await ingest(at - 4 * 60_000, []);
+      await ingest(at, [instance]);
+      const rows = (await history()).page;
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0]!.id, sessionId);
+      assert.equal(rows[0]!.openedAt, openedAt);
+      assert.equal(rows[0]!.lastObservedAt, at);
+      assert.equal(rows[0]!.liveObservedAt, at);
+      assert.equal((await live()).page[0]!.id, sessionId);
+    }
+    const series = await t.withIdentity(identity).query(api.clubAnalytics.getInstanceSeries, {
+      communitySlug: "faceless", sessionId, startAt: openedAt, endAt: now + 1,
+      paginationOpts: { numItems: 100, cursor: null },
+    });
+    assert.equal(series.page.length, 7);
+    assert.equal(series.page[0]!.at, openedAt);
+    const summary = await t.withIdentity(identity).query(api.clubAnalytics.getInstanceSummaryPage, {
+      communitySlug: "faceless", sessionId, startAt: openedAt, endAt: now + 1,
+      paginationOpts: { numItems: 100, cursor: null },
+    });
+    assert(summary.page.every(segment => segment.observedDuration === 0));
+
+    const closedAt = now + 60_000;
+    await ingest(closedAt, [{ ...instance, closedAt }]);
+    await ingest(closedAt + 60_000, [{ ...instance, closedAt }]);
+    assert.equal((await history()).page.length, 1);
+    assert.equal((await history()).page[0]!.closedAt, closedAt);
+    await ingest(closedAt + 120_000, [instance]);
+    const reopened = (await history()).page;
+    assert.equal(reopened.length, 2);
+    assert.notEqual(reopened[0]!.id, sessionId);
+    assert.equal(reopened[0]!.openedAt, closedAt + 120_000);
+    assert.equal(reopened[1]!.id, sessionId);
+    assert.equal(reopened[1]!.closedAt, closedAt);
+  });
+
   it("schedules telemetry rollups without scheduling raw-history deletion", () => {
     const crons = (cronsModule as unknown as { default?: typeof cronsModule }).default ?? cronsModule;
     const jobs = JSON.parse(crons.export());
@@ -620,7 +706,7 @@ describe("community telemetry control plane", () => {
     assert.equal((await t.run((ctx) => ctx.db.get(newSession._id)))?.worldId, worldId);
   });
 
-  it("fences workers, deduplicates polls, closes instances, and retains historical observations", async () => {
+  it("fences workers, deduplicates polls, preserves missing instances, and retains historical observations", async () => {
     const t = convexTest({ schema, modules });
     await seedCommunity(t);
     const accountId = await registerAccount(t);
@@ -735,10 +821,10 @@ describe("community telemetry control plane", () => {
     }));
     assert.deepEqual(compacted.population.map((point) => point.totalPopulation), [17, 0, 0, 3]);
     assert.equal(compacted.members.length, 1);
-    assert.equal(compacted.sessions.length, 3);
-    assert.equal(compacted.sessions.filter((session) => session.providerInstanceId.startsWith("12345")).length, 3);
+    assert.equal(compacted.sessions.length, 2);
+    assert.equal(compacted.sessions.filter((session) => session.providerInstanceId.startsWith("12345")).length, 2);
     assert.equal(new Set(compacted.sessions.map((session) => session.providerLocation)).size, 2);
-    assert.equal(compacted.sessions.filter((session) => session.state === "closed").length, 2);
+    assert.equal(compacted.sessions.filter((session) => session.state === "closed").length, 0);
 
     const rollupId = await t.mutation(internal.communityTelemetry.recomputeRollup, {
       communityProfileId: (await t.run((ctx) => ctx.db.query("profiles").withIndex("by_slug", (query) => query.eq("slug", "faceless")).unique()))!._id,

@@ -59,7 +59,7 @@ All v1 rollups use version `community-telemetry-v1` and UTC bucket boundaries. P
 | Active instances | instances, latest poll or maximum observed within a rollup | visible provider instances only; no value is inferred through gaps |
 | Peak concurrency | people, rollup window | maximum summed population at an observed timestamp |
 | Player time | player-minutes/hours, rollup window | trapezoidal integration only across gaps of five minutes or less |
-| Instance duration | milliseconds, session | `openedAt` through `closedAt`; only successful complete enumerations increment misses, and two misses confirm closure |
+| Instance duration | milliseconds, session | `openedAt` through provider-confirmed `closedAt`; list absence preserves identity and leaves the end unknown until confirmed |
 | World distribution | observed samples by immutable world ID | no inference during gaps |
 | Group membership growth | members, observation range | latest minus earliest observed count |
 | Coverage | ratio and windows | measured intervals divided by the requested rollup window; unknown is never zero |
