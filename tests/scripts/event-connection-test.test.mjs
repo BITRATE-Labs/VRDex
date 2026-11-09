@@ -37,3 +37,17 @@ it('ordinary leased worker routes test publication through outputs and reports o
  const worker=createEventWorker({identity:{eventId:'event',sessionId:'session',workerId:'worker',epoch:0},clock:()=>0,checkEnabled:async()=>true,inputs:{stop:async()=>{}},createRenderer:options=>{renderOptions=options;return renderer;},createOutputs:async()=>({start:async()=>{},enqueue:()=>{},stopNow:()=>{fenced=true;},stop:async()=>{},getState:()=>({publishing:true,destinations:[{outputId:'output',status:'publishing'}]})}),readConnectionTest:async request=>{assert.equal(request.marker,marker);return true;},control:async(name,args)=>{calls.push({name,args});if(name==='acquireSession')return {granted:true,epoch:1,serverNow:now,expiresAt:now+10000,renewAfterMs:5000,configuration:config};if(name==='refreshConfiguration')return {granted:true,serverNow:now,configuration:config};return {accepted:true};}});
  await worker.start();assert.equal(renderOptions.connectionTest.marker,marker);await worker.tick();await new Promise(resolve=>setImmediate(resolve));assert.equal(fenced,true);assert.equal(worker.getState().stopped,true);assert.equal(calls.find(call=>call.name==='recordConnectionTestProof')?.args.jobId,'job');assert.equal(calls.some(call=>call.name==='claimCommands'),false);await worker.stop();
 });
+it('canonical Twitch channel readback uses existing bounded acquisition and disposes after decoded proof',async()=>{
+ let acquired,disposed=0,decoderArgs;
+ const launch=(_command,args)=>{decoderArgs=args;const child=new EventEmitter();child.stdout=new PassThrough();child.kill=()=>child.emit('exit',1);queueMicrotask(()=>{child.stdout.end(pixels(marker));child.emit('exit',0);});return child;};
+ const before=Date.now();const passed=await decodeConnectionTest({url:'https://www.twitch.tv/Fixture_DJ/',marker,mediaSettings:{videoPreset:'720p30',audioBitrateKbps:320},timeoutMs:1000,launch,acquireTwitch:options=>{acquired=options;return {transportReady:Promise.resolve({url:'http://127.0.0.1:1234/opaque'}),dispose:async()=>{disposed++;}};},createRelay:()=>{throw Error('Direct relay must not acquire Twitch');}});
+ assert.equal(passed,true);assert.deepEqual(acquired.source,{kind:'twitch',channel:'fixture_dj'});assert.equal(acquired.settings.audioBitrateKbps,320);assert.ok(acquired.preparationExpiresAt<=before+1000);assert.equal(acquired.sessionExpiresAt,acquired.preparationExpiresAt);assert.ok(acquired.signal instanceof AbortSignal);assert.equal(disposed,1);assert.equal(decoderArgs[decoderArgs.indexOf('-f')+1],'mpegts');assert.equal(decoderArgs[decoderArgs.indexOf('-protocol_whitelist')+1],'http,tcp,crypto');
+});
+it('failed Twitch preparation awaits disposal and never falls back to a direct URL',async()=>{
+ let disposed=false,launched=false;
+ await assert.rejects(decodeConnectionTest({url:'https://twitch.tv/fixture_dj',marker,timeoutMs:500,launch:()=>{launched=true;},acquireTwitch:()=>({transportReady:Promise.reject(Error('provider unavailable')),dispose:async()=>{await new Promise(resolve=>setImmediate(resolve));disposed=true;}}),createRelay:()=>{throw Error('Unexpected fallback');}}),/provider unavailable/);
+ assert.equal(disposed,true);assert.equal(launched,false);
+});
+it('reserved Twitch pages, video paths and query strings never acquire a channel',async()=>{
+ for(const path of ['directory','fixture_dj/videos','fixture_dj?filter=clips'])await assert.rejects(decodeConnectionTest({url:`https://twitch.tv/${path}`,marker,acquireTwitch:()=>{throw Error('Acquisition should not run');}}),/Invalid Twitch channel/);
+});

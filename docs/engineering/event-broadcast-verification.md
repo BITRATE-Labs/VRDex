@@ -1123,9 +1123,11 @@ simulcast outputs. Event calendar times do not delay a connection test.
 The worker publishes a random per-job visual marker encoded into a test screen.
 Readback uses the public-address-pinned direct-media relay, a bounded decoder, and
 matching decoded pixels. A socket connection, successful response, output bytes,
-heartbeat or elapsed timer cannot pass a test. A provider watch webpage is not a
-direct playback URL and cannot supply this proof. The supported readback formats
-are the relay's MPEG-TS, HLS, MP4 and WebM inputs. YouTube remains deferred in
+heartbeat or elapsed timer cannot pass a test. Canonical Twitch channel links use
+the existing bounded Twitch acquisition, then decode its loopback MPEG-TS output.
+Acquisition and decoding share the same ten-second attempt budget, and disposal
+is awaited on success and failure. Other provider watch webpages cannot supply
+this proof. Direct readback formats are the relay's MPEG-TS, HLS, MP4 and WebM inputs. YouTube remains deferred in
 [issue 446](https://github.com/BITRATE-Labs/VRDex/issues/446).
 
 Cancellation, timeout and matching proof request publication stop. A job remains

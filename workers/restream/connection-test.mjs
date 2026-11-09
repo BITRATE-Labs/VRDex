@@ -1,3 +1,4 @@
+import { createTwitchInput } from "./twitch-input.mjs";
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { createHash } from 'node:crypto';
@@ -21,19 +22,30 @@ export function createConnectionTestRenderer({connectionTest,mediaSettings,onErr
  return {subscribe(listener){listeners.add(listener);return()=>listeners.delete(listener);},getState:()=>({outputMs,running:!!child&&!stopped&&child.exitCode===null,publishing:bytes>0}),async start(){if(stopped)throw Error('Test stopped');child=launch('ffmpeg',connectionTestEncoderArguments({marker:connectionTest.marker,mediaSettings}),{stdio:['ignore','pipe','ignore','pipe']});createInterface({input:child.stdio[3]}).on('line',line=>{if(line.startsWith('out_time_us='))outputMs=Number(line.slice(12))/1000;});child.stdout.on('data',chunk=>{bytes+=chunk.length;for(const listener of listeners)listener(chunk);});child.on('error',onError);child.on('exit',()=>{if(!stopped)onError();});},async stop(){stopped=true;if(!child||child.exitCode!==null)return;await new Promise(resolve=>{child.once('exit',resolve);child.kill('SIGKILL');});}};
 }
 /** Readback decodes pixels, never treats a response, timer, socket or byte count as success. */
-export async function decodeConnectionTest({url,marker,mediaSettings,timeoutMs=10000,launch=spawn}){
+export async function decodeConnectionTest({url,marker,mediaSettings,timeoutMs=10000,launch=spawn,acquireTwitch=createTwitchInput,createRelay}){
  markerBits(marker);
  const startedAt=Date.now(),profile=VIDEO_PROFILES[parseMediaSettings(mediaSettings).videoPreset];
  const endpoint=new URL(url);
  if(endpoint.protocol!=='https:'||endpoint.username||endpoint.password||endpoint.port||/^(localhost|127\.|10\.|192\.168\.|169\.254\.|\[)/i.test(endpoint.hostname))throw Error('Invalid test playback URL');
- const {createDirectMediaRelay}=await import('./direct-media-input.mjs');
- const relay=await createDirectMediaRelay({limits:{lifetimeMs:timeoutMs,requestMs:timeoutMs,sessionBytes:32*1024*1024,responseBytes:16*1024*1024}});
- let handle;
+ const deadlineAt=startedAt+timeoutMs,signal=AbortSignal.timeout(timeoutMs);
+ const twitchHost=endpoint.hostname.replace(/^www\./,'')==='twitch.tv';
+ const channelParts=endpoint.pathname.split('/').filter(Boolean);
+ const channel=channelParts[0]?.toLowerCase();
+ const reserved=new Set(['directory','downloads','jobs','p','settings','subscriptions','turbo','videos']);
+ if(twitchHost&&(endpoint.search||endpoint.hash||channelParts.length!==1||!channel||!/^[a-z0-9_]{3,25}$/.test(channel)||reserved.has(channel)))throw Error('Invalid Twitch channel');
+ let handle,relay;
  try {
-  handle=relay.createInput({source:{input:{kind:'direct_media',url:endpoint.href}},signal:AbortSignal.timeout(timeoutMs)});
+  if(twitchHost){
+   handle=acquireTwitch({source:{kind:'twitch',channel},settings:parseMediaSettings(mediaSettings),signal,preparationExpiresAt:deadlineAt,sessionExpiresAt:deadlineAt});
+  }else{
+   const factory=createRelay??(await import('./direct-media-input.mjs')).createDirectMediaRelay;
+   relay=await factory({limits:{lifetimeMs:timeoutMs,requestMs:timeoutMs,sessionBytes:32*1024*1024,responseBytes:16*1024*1024}});
+   handle=relay.createInput({source:{input:{kind:'direct_media',url:endpoint.href}},signal});
+  }
   const descriptor=await handle.transportReady;
-  return await decodeMarkerFrame({input:descriptor.url,demuxer:descriptor.demuxer,marker,encodedSize:profile,timeoutMs:Math.max(1,timeoutMs-(Date.now()-startedAt)),launch});
- } finally {await handle?.dispose();relay.stop();}
+  if(Date.now()>=deadlineAt||signal.aborted)return false;
+  return await decodeMarkerFrame({input:descriptor.url,demuxer:twitchHost?'mpegts':descriptor.demuxer,marker,encodedSize:profile,timeoutMs:Math.max(1,deadlineAt-Date.now()),launch});
+ } finally {await handle?.dispose();relay?.stop();}
 }
 export async function decodeMarkerFrame({input,demuxer,marker,encodedSize,timeoutMs=10000,launch=spawn}) {
  if(!Number.isFinite(timeoutMs)||timeoutMs<1||timeoutMs>10000)throw Error('Invalid readback bound');
