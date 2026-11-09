@@ -612,3 +612,19 @@ it("review: background calculations do not exhaust the interactive coverage limi
   assert.equal(corrected, id);
   assert.equal((await t.run((ctx) => ctx.db.get(id)))?.playerMinutes, 0);
 });
+
+
+it("legacy same-window recap jobs restart before adopting a window signature", async () => {
+  const t = convexTest({ schema, modules });
+  const start = Date.UTC(2026, 9, 1), seed = await eventFixture(t, start);
+  await t.mutation(internal.communityTelemetry.recomputeRollup, { integrationId: seed.integrationId, ...eventTarget(start, seed.eventId) });
+  const job = await t.run(ctx => ctx.db.query("communityTelemetryEventRecapJobs").first());
+  assert.ok(job);
+  await t.run(ctx => ctx.db.patch(job._id, { windowSignature: undefined, peakConcurrency: 999, playerMinutes: 999 }));
+  await t.mutation(internal.communityTelemetry.advanceEventRecapPage, { jobId: job._id });
+  const restarted = await t.run(ctx => ctx.db.get(job._id));
+  assert.ok(restarted?.windowSignature, "legacy jobs restart rather than being stranded or resuming mixed arithmetic");
+  assert.equal(restarted?.peakConcurrency, 0, "the first page still carries its partial timestamp");
+  await t.mutation(internal.communityTelemetry.advanceEventRecapPage, { jobId: job._id });
+  assert.equal((await t.run(ctx => ctx.db.query("communityTelemetryRollups").first()))?.peakConcurrency, 101);
+});

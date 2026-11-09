@@ -15,7 +15,7 @@ import type { FunctionReturnType } from "convex/server";
 import { api } from "@convex-generated-api";
 import { Card, SectionTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckboxField, Field, Select } from "@/components/ui/field";
+import { CheckboxField, Field, Input, Select } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
 import { ClubChart, metricNumber, metricTime } from "./club-chart";
 import { ClubAssociationSuggestions } from "./club-association-suggestions";
@@ -41,6 +41,8 @@ import {
 } from "./club-membership";
 
 type Context = FunctionReturnType<typeof api.clubAnalytics.getContext>;
+import { formatZonedDateTimeInput } from "@/lib/calendar/zoned-date-time";
+
 type Bucket = FunctionReturnType<typeof api.clubAnalytics.getBucket>;
 
 function PreferencesEditor({
@@ -264,6 +266,49 @@ function DailyDetail({
   );
 }
 
+type Recap = FunctionReturnType<typeof api.clubAnalytics.listEventRecaps>["page"][number];
+
+function RecapEndEditor({ communitySlug, recap }: { communitySlug: string; recap: Recap }) {
+  const save = useMutation(api.communityTelemetry.setEventRecapEnd);
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+  async function submit(endAt: number | null) {
+    setBusy(true);
+    setError(false);
+    try {
+      await save({ communitySlug, eventId: recap.eventId, endAt });
+      setEditing(false);
+    } catch { setError(true); }
+    finally { setBusy(false); }
+  }
+  if (!editing) return (
+    <Button className="mt-3" onClick={() => {
+      setValue(formatZonedDateTimeInput(recap.recapEndAt ?? recap.effectiveEndAt, Intl.DateTimeFormat().resolvedOptions().timeZone));
+      setError(false);
+      setEditing(true);
+    }}>
+      Recap end
+    </Button>
+  );
+  return (
+    <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={event => {
+      event.preventDefault();
+      void submit(new Date(value).getTime());
+    }}>
+      <Field>
+        Recap end
+        <Input type="datetime-local" required value={value} onChange={event => setValue(event.target.value)} disabled={busy} />
+      </Field>
+      <Button type="submit" disabled={busy}>Save</Button>
+      <Button type="button" disabled={busy} onClick={() => void submit(null)}>Automatic</Button>
+      <Button type="button" disabled={busy} onClick={() => setEditing(false)}>Cancel</Button>
+      {error ? <Notice role="alert" variant="error">Unable to save.</Notice> : null}
+    </form>
+  );
+}
+
 function EventRecaps({
   communitySlug,
   startAt,
@@ -289,7 +334,9 @@ function EventRecaps({
       {query.results.map((recap) => (
         <div key={recap.id} className="mt-4 border-t border-border pt-4">
           <h3 className="font-semibold">{recap.title}</h3>
-          <p className="mt-1 text-xs text-muted">{metricTime(recap.startAt)}</p>
+          <p className="mt-1 text-xs text-muted">{metricTime(recap.startAt)} to {metricTime(recap.endAt)}</p>
+          {recap.startAt !== recap.scheduledStartAt || recap.endAt !== recap.effectiveEndAt ? <p role="status" className="mt-1 text-xs text-muted">Updating</p> : null}
+          {recap.canEdit ? <RecapEndEditor communitySlug={communitySlug} recap={recap} /> : null}
           <div className="mt-3 flex gap-6 text-sm">
             <span>
               <strong>{metricNumber(recap.peak)}</strong> peak
