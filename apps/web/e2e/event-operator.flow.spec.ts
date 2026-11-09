@@ -15,7 +15,7 @@ test("confirmed source changes preserve actual output while preparing, and Cance
  await details(page);await expect(page.getByText("Observed output",{exact:true}).locator("..")).toContainText("Aurora");
  await page.getByRole("group",{name:"Preparation",exact:true}).getByRole("button",{name:"Cancel",exact:true}).click();await confirm(page,"Cancel switch");
  await expect(page.getByText("Preparing",{exact:true})).toHaveCount(0);await expect(page.getByText("Observed output",{exact:true}).locator("..")).toContainText("Aurora");
- await page.screenshot({path:info.outputPath("operator-confirmed-control.png"),fullPage:true});
+ await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:info.outputPath("operator-confirmed-control.png"),fullPage:true});
 });
 test("Stop and Cut remain available during a slow command, all live changes confirm @flow @fixture",async({page})=>{
  await page.goto("/playwright/event-operator");await page.getByRole("button",{name:"Hold request",exact:true}).click();await next(page);
@@ -42,7 +42,7 @@ test("custom source validates links, supports direct video, and removal confirms
  await page.getByLabel("Video or stream link",{exact:true}).fill("https://media.example.com/open-decks.mp4");await page.getByRole("button",{name:"Add source",exact:true}).click();const source=page.getByRole("article",{name:"New source",exact:true});await expect(source.getByRole("link",{name:"Open",exact:true})).toHaveAttribute("href","https://media.example.com/open-decks.mp4");await source.getByRole("button",{name:"Remove New source",exact:true}).click();await confirm(page,"Remove source");await expect(source).toHaveCount(0);
 });
 test.describe("mobile operator",()=>{test.use({viewport:devices["Pixel 7"].viewport,isMobile:true,hasTouch:true,deviceScaleFactor:devices["Pixel 7"].deviceScaleFactor});test("controls and diagnostics fit the viewport @flow @fixture",async({page},info)=>{
- await page.goto("/playwright/event-operator");await page.getByRole("button",{name:"Observe live",exact:true}).click();await details(page);await page.getByText("Diagnostics",{exact:true}).click();await expect(page.getByText("CPU",{exact:true})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:info.outputPath("operator-mobile.png"),fullPage:true});
+ await page.goto("/playwright/event-operator");await page.getByRole("button",{name:"Observe live",exact:true}).click();await details(page);await page.getByText("Diagnostics",{exact:true}).click();await expect(page.getByText("CPU",{exact:true})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:info.outputPath("operator-mobile.png"),fullPage:true});
 });});
 test('editor broadcast inputs preserve legacy VRCDN selection through save, reload and reset @flow @fixture',async({page})=>{
  await page.goto('/playwright/event-lineup?editor');
@@ -66,3 +66,11 @@ test('editor broadcast inputs preserve legacy VRCDN selection through save, relo
  await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('event-lineup-fixture-v1-submission')!).lineup[0].broadcastInput)).toBeNull();
 });
 
+
+test("Quick switch searches people, previews their source and confirms before taking it @flow @fixture",async({page},info)=>{
+ await page.route("https://stream.vrcdn.live/**",route=>route.abort());
+ await page.goto("/playwright/event-operator");await page.getByRole("combobox",{name:"Performer",exact:true}).fill("aur");
+ const results=page.getByRole("listbox",{name:"Performer",exact:true});await expect(results.getByRole("option")).toContainText("Aurora");await page.screenshot({path:info.outputPath("person-lookup.png"),fullPage:true});await results.getByRole("option").click();
+ await page.getByRole("combobox",{name:"Stream",exact:true}).selectOption("https://stream.vrcdn.live/live/aurora.live.ts");await expect(page.getByLabel("Or paste a link",{exact:true})).toHaveValue("https://stream.vrcdn.live/live/aurora.live.ts");
+ await page.getByRole("button",{name:"Check source",exact:true}).click();await expect(page.getByRole("region",{name:"Quick switch preview",exact:true})).toBeVisible();await page.getByRole("button",{name:"Put Aurora on air",exact:true}).click();await expect(page.getByRole("dialog")).toBeVisible();await expect(page.getByLabel("Command count")).toHaveText("0");await page.getByRole("dialog").getByRole("button",{name:"Cancel",exact:true}).click();await expect(page.getByLabel("Command count")).toHaveText("0");
+});
