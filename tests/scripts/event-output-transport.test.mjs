@@ -1,3 +1,5 @@
+import {PassThrough} from 'node:stream';
+import {connect as connectLocal} from 'node:net';
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import { createOutputTunnel } from '../../workers/restream/output-tunnel.mjs';
@@ -22,4 +24,11 @@ it('dispatcher retains exact static mappings and restricts managed references to
   assert.equal(resolveOutputSecretArn('legacy', config), 'old-arn'); assert.equal(resolveOutputSecretArn(ref, config), ref);
   assert.throws(() => resolveOutputSecretArn(ref.replace('123456789012:secret:', '999999999999:secret:'), config), /authorized mapping/);
   assert.throws(() => resolveOutputSecretArn(prefix + 'unrelated-secret', config), /authorized mapping/);
+});
+
+it('custom RTMPS connects to the pinned IP with original TLS identity and RTMP application URL',async()=>{
+ let observed;const upstream=new PassThrough();upstream.setTimeout=()=>upstream;
+ const tunnel=await createOutputTunnel({url:'rtmps://custom.example.test/live',key:'private'},{lookupAddresses:async()=>[{address:'1.1.1.1',family:4}],connectSecure:options=>{observed=options;return upstream;}});
+ const client=connectLocal({host:'127.0.0.1',port:Number(new URL(tunnel.url).port)});
+ try{await new Promise((resolve,reject)=>{client.once('connect',resolve);client.once('error',reject);});assert.equal(observed.host,'1.1.1.1');assert.equal(observed.servername,'custom.example.test');assert.equal(observed.rejectUnauthorized,true);const args=outputArguments('custom',tunnel);assert.equal(args[args.indexOf('-rtmp_tcurl')+1],'rtmps://custom.example.test/live');}finally{client.destroy();tunnel.close();}
 });

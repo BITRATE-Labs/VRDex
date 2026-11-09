@@ -22,5 +22,5 @@ export async function createOutputTunnel(target, { lookupAddresses = lookup, con
   signal?.addEventListener('abort', close, { once: true });
   try { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); }); if (signal?.aborted) throw Error(); }
   catch { close(); throw Error('Output address unavailable'); }
-  return { ...target, url: `rtmp://127.0.0.1:${server.address().port}${url.pathname}`, close() { signal?.removeEventListener('abort', close); close(); } };
+  return { ...target, tcUrl:target.url,url: `rtmp://127.0.0.1:${server.address().port}${url.pathname}`, close() { signal?.removeEventListener('abort', close); close(); } };
 }
