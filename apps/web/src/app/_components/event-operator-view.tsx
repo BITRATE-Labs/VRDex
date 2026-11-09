@@ -321,7 +321,7 @@ export function EventOperatorControls({
           </header>
           <div className="grid items-start gap-8 min-[850px]:grid-cols-[minmax(0,1fr)_310px]">
             <section className="min-w-0" aria-label="Broadcast output">
-              <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-semibold">Output</h2><span className="text-sm text-muted">{active && observationFresh ? actualLabel : "Off air"}</span></div>
+              <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-semibold">Output</h2><span className="text-sm text-muted">{active || status.outputConfigurationLocked ? actualLabel : "Off air"}</span></div>
               {active && observationFresh && outputInput && outputLink ? <EventOperatorPreview source={{label:destination?.label ?? "Output",input:outputInput,publicUrl:outputLink.url}}/> : <div className="flex aspect-video flex-col items-center justify-center gap-3 rounded-control border border-border bg-[#070b12] text-white">
                 <Radio aria-hidden="true" className="size-10 text-accent"/><strong className="text-xl">{active ? actualLabel : "Starting soon"}</strong><span className="text-sm text-slate-400">{active ? workerStatus : title ?? status.eventTitle}</span>
               </div>}
