@@ -25,15 +25,16 @@ export function EventBroadcastSetup({currentSlug,eventPath,eventTitle}:{currentS
 }
 export function EventBroadcastSetupForm({currentSlug,eventPath,eventTitle,state,onStart,onCancel}:{currentSlug:string;eventPath:string;eventTitle:string;state:BroadcastSetupState;onStart:(revision:number)=>Promise<unknown>;onCancel:(jobId:TestId)=>Promise<unknown>}) {
   const connection = state.connection;
+  const initialServer = connection?.serverUrl || broadcastServers[connection?.provider ?? "vrcdn"];
   const [step,setStep] = useState(state.activeTest && state.activeTest.revision === connection?.revision ? 3 : 1), [provider,setProvider] = useState<BroadcastProvider>(connection?.provider ?? "vrcdn");
-  const [server,setServer] = useState(connection?.serverUrl ?? broadcastServers.vrcdn), [key,setKey] = useState(""), [playback,setPlayback] = useState(connection?.playbackLinks.at(-1)?.url ?? "");
+  const [server,setServer] = useState(initialServer), [key,setKey] = useState(""), [playback,setPlayback] = useState(connection?.playbackLinks.at(-1)?.url ?? "");
   const [permissions,setPermissions] = useState(false);
   const [error,setError] = useState(""), [busy,setBusy] = useState(false), [revision,setRevision] = useState(connection?.revision ?? 0);
   const lock = useRef(false), requestId = useRef<string | undefined>(undefined), leaveDialog = useRef<HTMLDialogElement>(null), title = useRef<HTMLHeadingElement>(null);
   const job = state.activeTest?.revision === revision ? state.activeTest : null, running = job && ["queued","running","stopping"].includes(job.state);
   const passed = step === 3 && job?.state === "passed";
   const canReuse = connection?.provider === provider && connection.serverUrl === server;
-  const dirty = step < 3 && (Boolean(key) || playback !== (connection?.playbackLinks.at(-1)?.url ?? "") || server !== (connection?.serverUrl ?? broadcastServers.vrcdn));
+  const dirty = step < 3 && (Boolean(key) || playback !== (connection?.playbackLinks.at(-1)?.url ?? "") || server !== initialServer);
   const returnPath = `${eventPath}/operate`;
   useEffect(()=>{title.current?.focus();},[step,passed]);
   let links: ReturnType<typeof broadcastPlaybackLinks> = [];

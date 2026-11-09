@@ -22,6 +22,14 @@ test("setup cancellation and failure remain retryable @flow @fixture",async({pag
 test("unsaved connection changes can be retained @flow @fixture",async({page})=>{
  await page.goto("/playwright/event-operator/setup");await page.getByLabel("Stream key",{exact:true}).fill("fixture-not-a-secret");await page.getByRole("link",{name:"Back to broadcast",exact:true}).click();await expect(page.getByRole("dialog")).toBeVisible();await page.getByRole("button",{name:"Keep editing",exact:true}).click();await expect(page.getByLabel("Stream key",{exact:true})).toHaveValue("fixture-not-a-secret");
 });
+test("legacy saved destinations use their preset server during setup @flow @fixture",async({page})=>{
+ await page.goto("/playwright/event-operator/setup?legacy=1");
+ await expect(page.getByText("rtmp://ingest.vrcdn.live/live",{exact:true})).toBeVisible();
+ await page.getByLabel("Stream key",{exact:true}).fill("fixture-not-a-secret");
+ await page.getByRole("checkbox").check();
+ await page.getByRole("button",{name:"Continue",exact:true}).click();
+ await expect(page.getByLabel("Playback URL",{exact:true})).toBeVisible();
+});
 
 test("reentering setup during a running test resumes progress and allows cancellation @flow @fixture",async({page})=>{
  await page.goto("/playwright/event-operator/setup?running=1");

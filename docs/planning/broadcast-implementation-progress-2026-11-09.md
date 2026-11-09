@@ -33,7 +33,7 @@ BASIC requested the remaining plan as one delivery on November 9, 2026. YouTube 
 | Web state, authority, preview, adapters and validation | 34 passed |
 | Full web suite after current-main integration | 1164 passed |
 | Credential broker, transport and test-screen suites | 18 passed |
-| Production-component browser flows | 15 passed, including desktop, mobile, lookup, confirmations, setup and refresh recovery |
+| Production-component browser flows | 16 passed across the full 15-case run plus the added legacy-destination case; all five wizard cases passed together |
 | Packaged Linux renderer and timing | 68 passed |
 | Packaged Linux Twitch acquisition/process cleanup | 9 passed |
 | Packaged Linux connection test encoding/readback | 10 passed |
