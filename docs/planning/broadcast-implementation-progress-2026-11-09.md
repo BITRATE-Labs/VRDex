@@ -22,18 +22,18 @@ BASIC requested the remaining plan as one delivery on November 9, 2026. YouTube 
 - Captured live confirmations check session, intent, source identity and revision. Next preserves mode and a durable lineup cursor across recovery and temporary takeovers. Resume uses the last observed source.
 - Community-scoped credential provisioning, immutable running destinations, pinned Custom RTMP/RTMPS transport and preserved deployment-owned bindings.
 - Connection tests use ordinary admission and reservations, a two-minute queue bound, at most 60 seconds of worker runtime, decoded per-job identity proof and actual task cleanup before success. Old, cancelled, replaced and terminal worker proofs cannot pass.
-- Protected direct MP4/WebM/TS/HLS acquisition, bounded nested requests, finite preroll, video-only silence and durable return to hold at EOF.
+- Protected direct MP4/WebM/TS/HLS acquisition, bounded nested requests, finite preroll, video-only silence and durable return to hold at EOF. Worker replacement also returns a selected direct-media input to hold, requiring an explicit take instead of risking replay after a lost completion receipt.
 - Quick-check sources expire after 30 minutes when no active control/session references them. New provisioning grants and tests each have a community limit of ten per ten minutes; exact retries are free. Cleaned terminal test jobs become eligible for bounded hourly deletion after 30 days.
 
 ## Verified locally
 
 | Evidence | Result |
 | --- | --- |
-| Combined backend/control/source/media suites | 332 passed after merging current main; final setup/limit suite 16 passed |
+| Combined backend/control/source/media suites | 335 passed after current-main integration and recovery review fixes |
 | Web state, authority, preview, adapters and validation | 34 passed |
 | Full web suite after current-main integration | 1164 passed |
 | Credential broker, transport and test-screen suites | 18 passed |
-| Production-component browser flows | 16 passed across the full 15-case run plus the added legacy-destination case; all five wizard cases passed together |
+| Production-component browser flows | 17 passed together, including desktop/mobile, legacy metadata, passed-test editing and active-test recovery |
 | Packaged Linux renderer and timing | 68 passed |
 | Packaged Linux Twitch acquisition/process cleanup | 9 passed |
 | Packaged Linux connection test encoding/readback | 10 passed |
@@ -42,6 +42,7 @@ BASIC requested the remaining plan as one delivery on November 9, 2026. YouTube 
 | Offline implementation closure and program-result contracts | 123 passed in Linux with canonical LF source bytes |
 | Backend/web types and edited UI lint | Passed |
 | Terraform | Formatted, initialized without a backend, and validated; no plan or apply |
+| Documentation site | Production build passed after replacing MDX-unsafe preview links |
 
 Desktop/mobile screenshots were inspected with visual review. Browser fixtures use explicit synthetic transports and do not establish signed-in provider delivery. The two Windows-only AWS executable fixtures were repaired portably; native Linux checks cover the process/pipe behavior Windows cannot establish.
 
@@ -53,6 +54,6 @@ The new image/source mix still requires measured Fargate evidence before live ro
 
 Current main was merged before the final PR run. The resolution preserves browser auth waiting for both operator queries and setup, audio-aware allocation, publication stop before awaited acknowledgment, bounded transient-control retries, and the retained/native public playback paths.
 
-The broader Windows backend run stopped at a native process-group cleanup failure; the matching packaged Linux check passed. Normal PR CI independently passed the complete backend suite, types, lint, Terraform and CodeQL. Documentation formatting and generated-declaration drift were identified for correction; remaining CI jobs are tracked on [PR 447](https://github.com/BITRATE-Labs/VRDex/pull/447).
+The broader Windows backend run stopped at a native process-group cleanup failure; the matching packaged Linux check passed. Normal PR CI independently passed the complete backend suite, types, lint, Terraform and CodeQL on the preceding integration head. Documentation syntax, generated declarations and the offline import boundary were corrected. Current-head jobs and review follow-ups are tracked on [PR 447](https://github.com/BITRATE-Labs/VRDex/pull/447).
 
 No real stream, provider publication, credential write or deployment has been performed.

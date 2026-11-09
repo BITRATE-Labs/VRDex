@@ -213,6 +213,8 @@ it("finished direct media durably returns to hold and rejects stale completion",
   await f.promote(take.commandId);
   await f.ack(take.commandId);
   const command = await f.receipt(take.commandId);
+  await f.t.mutation(worker("observeProgram"),{...f.args,intentSequence:command.sequence,state:"hold",outputMs:101,publishing:true,outputId:f.output.outputId});
+  assert.equal((await f.receipt(f.args.sessionId)).currentSourceId,undefined,"the slate can be observed before a delayed EOF receipt succeeds");
   const args = { ...f.args, intentSequence: command.sequence, sourceId: f.sourceId, sourceRevision: 1, slotKey: `manual-${f.sourceId}` };
   assert.equal((await f.t.mutation(worker("completeSource"), { ...args, sourceRevision: 2 })).kind, "superseded");
   const result = await f.t.mutation(worker("completeSource"), args);
@@ -223,6 +225,36 @@ it("finished direct media durably returns to hold and rejects stale completion",
   assert.equal((await f.t.mutation(worker("completeSource"), args)).kind, "superseded");
   const recovered = await f.t.mutation(worker("refreshConfiguration"), f.args);
   assert.deepEqual(recovered.configuration.committedIntent, { kind: "slate" });
+});
+it("automatic direct-media EOF remains consumable after observed output has returned to hold",async()=>{
+ const f=await controlFixture();
+ const slot=await f.t.run(async({db})=>{
+  const now=Date.now();
+  const id=await db.insert("eventSlots",{eventId:f.event.eventId,position:0,startAt:now-1000,endAt:now+60000,displayLabel:"Video",roleLabel:"DJ",sourceType:"manual",sourceLabel:"Owner",confidence:1,reviewState:"confirmed",updatedAt:now});
+  await db.patch(f.sourceId,{eventSlotId:id,type:"hls_url",input:{kind:"direct_media",url:"https://media.example.com/announcement.mp4"},publicUrl:"https://media.example.com/announcement.mp4"});
+  return id;
+ });
+ const next=await f.owner.mutation(api.events.queueEventMediaCommand,{currentSlug:f.event.slug,type:"switch_next",idempotencyKey:crypto.randomUUID()});
+ await f.begin(next.commandId);await f.promote(next.commandId);await f.ack(next.commandId,{slotKey:slot});
+ const command=await f.receipt(next.commandId);
+ await f.t.mutation(worker("observeProgram"),{...f.args,intentSequence:command.sequence,state:"hold",outputMs:101,publishing:true,outputId:f.output.outputId});
+ assert.equal((await f.t.mutation(worker("completeSource"),{...f.args,intentSequence:command.sequence,sourceId:f.sourceId,sourceRevision:1,slotKey:slot})).kind,"ok");
+ assert.deepEqual((await f.receipt(f.args.sessionId)).committedIntent,{kind:"slate"});
+});
+for(const mode of ["manual","automatic"] as const)it(`worker replacement never replays an interrupted ${mode} direct-media selection`,async()=>{
+ const f=await controlFixture();
+ const slot=await f.t.run(async({db})=>{
+  const now=Date.now();
+  const id=mode==="automatic" ? await db.insert("eventSlots",{eventId:f.event.eventId,position:0,startAt:now-1000,endAt:now+60000,displayLabel:"Video",roleLabel:"DJ",sourceType:"manual",sourceLabel:"Owner",confidence:1,reviewState:"confirmed",updatedAt:now}) : undefined;
+  await db.patch(f.sourceId,{eventSlotId:id,type:"hls_url",input:{kind:"direct_media",url:"https://media.example.com/announcement.mp4"},publicUrl:"https://media.example.com/announcement.mp4"});
+  return id;
+ });
+ const take=mode==="manual" ? await f.take() : await f.owner.mutation(api.events.queueEventMediaCommand,{currentSlug:f.event.slug,type:"switch_next",idempotencyKey:crypto.randomUUID()});
+ await f.begin(take.commandId);await f.promote(take.commandId);await f.ack(take.commandId,slot ? {slotKey:slot} : {});
+ await f.t.run(({db})=>db.patch(f.args.sessionId,{leaseExpiresAt:Date.now()-1}));
+ const recovered=await f.t.mutation(worker("acquireSession"),{...f.args,workerId:"replacement-worker"});
+ assert.equal(recovered.granted,true);
+ assert.deepEqual(recovered.configuration.committedIntent,{kind:"slate"},"replacement must not restart a clip whose EOF receipt may have been lost");
 });
 it("scoped idempotency and one pending operation", async () => {
   const f = await controlFixture();

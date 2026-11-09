@@ -17,7 +17,7 @@ export function normalizeConnection(input: { provider: "vrcdn" | "twitch" | "cus
   if (input.provider === "vrcdn" && (!/^(?:[a-z0-9-]+\.)?ingest\.vrcdn\.live$/.test(server.hostname) || server.pathname !== "/live")) throw Error("Enter a VRCDN ingest server URL.");
   if (input.provider === "twitch" && (!/^(?:[a-z0-9-]+\.)?live\.twitch\.tv$/.test(server.hostname) || server.pathname !== "/app")) throw Error("Enter a Twitch ingest server URL.");
   const stream = parseVrcdnStreamLinks(input.playbackUrl);
-  let playback: URL; try { playback = new URL(stream && !stream.directVideoUrl ? stream.hlsUrl : input.playbackUrl); } catch { throw Error("Enter a valid playback URL."); }
+  let playback: URL; try { playback = new URL(stream && !stream.directVideoUrl ? stream.questUrl : input.playbackUrl); } catch { throw Error("Enter a valid playback URL."); }
   if (playback.protocol !== "https:" || playback.username || playback.password || playback.hash || playback.search) throw Error("Enter an HTTPS playback URL.");
   return { serverUrl: server.toString().replace(/\/$/, ""), playbackUrl: playback.toString() };
 }

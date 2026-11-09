@@ -30,8 +30,8 @@ The initial recommendation was to iterate the state-based workspace visually. La
 
 ## Local preview
 
-- Candidate: <http://127.0.0.1:3047/playwright/broadcast-jam>
-- Current production component with synthetic fixture receipts: <http://127.0.0.1:3047/playwright/event-operator>
+- [Candidate preview](http://127.0.0.1:3047/playwright/broadcast-jam)
+- [Current production component with synthetic fixture receipts](http://127.0.0.1:3047/playwright/event-operator)
 - Isolated checkout: `C:/Users/steve/.codex/worktrees/broadcast-design-jam/VRDex`
 - Source: `apps/web/src/app/playwright/broadcast-jam/`
 - Server session at creation: `65821`, port `3047`, loopback only.

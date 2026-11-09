@@ -22,7 +22,7 @@ async function fixture() {
   return { t, owner, event, input };
 }
 it('validates preset servers with friendly errors and exact namespace binding', () => {
-  assert.match(normalizeConnection({provider:'vrcdn',serverUrl:'rtmp://ingest.vrcdn.live/live',playbackUrl:'rtspt://stream.vrcdn.live/live/example'}).playbackUrl,/^https:.*\.m3u8$/);
+  assert.match(normalizeConnection({provider:'vrcdn',serverUrl:'rtmp://ingest.vrcdn.live/live',playbackUrl:'rtspt://stream.vrcdn.live/live/example'}).playbackUrl,/^https:.*\.live\.ts$/);
   assert.throws(() => normalizeConnection({ provider: 'vrcdn', serverUrl: 'bad', playbackUrl: 'https://example.test' }), /Enter a valid stream server URL/);
   assert.equal(managedSecretRefAllowed(prefix + 'vrdex/broadcast/abc/def/12345678-1234-1234-1234-123456789012-AbCd12', 'abc', 'def', '12345678-1234-1234-1234-123456789012'), true);
   assert.equal(managedSecretRefAllowed(prefix + 'vrdex/broadcast/other/def/12345678-1234-1234-1234-123456789012-AbCd12', 'abc', 'def', '12345678-1234-1234-1234-123456789012'), false);

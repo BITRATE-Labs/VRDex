@@ -44,6 +44,12 @@ observation through the fenced completion RPC, commits manual slate and clears
 resume state. Worker recovery uses that committed intent. Live HLS and MPEG-TS
 errors reconnect through the existing bounded supervisor.
 
+Worker replacement returns a selected direct-media source to hold, including
+direct live HLS/TS links. The host must take it again explicitly. This prevents
+replay when the old process dies before its EOF receipt commits. It also
+supersedes unfinished source controls so recovery cannot apply an older take.
+Network reconnects within the same worker keep their existing retry behavior.
+
 ## Local verification
 
 Run the boundary suite with:

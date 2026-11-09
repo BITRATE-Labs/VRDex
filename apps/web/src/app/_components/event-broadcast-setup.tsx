@@ -26,7 +26,7 @@ export function EventBroadcastSetup({currentSlug,eventPath,eventTitle}:{currentS
 export function EventBroadcastSetupForm({currentSlug,eventPath,eventTitle,state,onStart,onCancel}:{currentSlug:string;eventPath:string;eventTitle:string;state:BroadcastSetupState;onStart:(revision:number)=>Promise<unknown>;onCancel:(jobId:TestId)=>Promise<unknown>}) {
   const connection = state.connection;
   const initialServer = connection?.serverUrl || broadcastServers[connection?.provider ?? "vrcdn"];
-  const [step,setStep] = useState(state.activeTest && state.activeTest.revision === connection?.revision ? 3 : 1), [provider,setProvider] = useState<BroadcastProvider>(connection?.provider ?? "vrcdn");
+  const [step,setStep] = useState(state.activeTest && state.activeTest.revision === connection?.revision && ["queued","running","stopping"].includes(state.activeTest.state) ? 3 : 1), [provider,setProvider] = useState<BroadcastProvider>(connection?.provider ?? "vrcdn");
   const [server,setServer] = useState(initialServer), [key,setKey] = useState(""), [playback,setPlayback] = useState(connection?.playbackLinks.at(-1)?.url ?? "");
   const [permissions,setPermissions] = useState(false);
   const [error,setError] = useState(""), [busy,setBusy] = useState(false), [revision,setRevision] = useState(connection?.revision ?? 0);

@@ -9,6 +9,7 @@ test("anonymous operator route redirects before private content @flow @fixture",
 });
 test("confirmed source changes preserve actual output while preparing, and Cancel keeps it @flow @fixture",async({page},info)=>{
  await page.goto("/playwright/event-operator");await expect(page.getByRole("heading",{name:"Broadcast",exact:true})).toBeVisible();
+ await expect(page.getByRole("button",{name:"Copy PC URL",exact:true})).toHaveCount(1);await expect(page.getByRole("button",{name:"Copy Quest URL",exact:true})).toHaveCount(1);await expect(page.getByRole("button",{name:"Copy Playback URL",exact:true})).toHaveCount(0);
  await page.getByRole("button",{name:"Observe live",exact:true}).click();await page.getByRole("button",{name:"Hold preparation",exact:true}).click();
  await page.getByRole("button",{name:"Take Custom",exact:true}).click();await expect(page.getByLabel("Command count")).toHaveText("0");await confirm(page,"Put Custom on air");
  await expect(page.getByText("Preparing",{exact:true})).toBeVisible();await expect(page.getByRole("button",{name:"Cut to slate",exact:true})).toBeEnabled();

@@ -2,7 +2,7 @@ import { internal } from "./_generated/api";
 import { finishConnectionTest } from "./eventBroadcastConnectionTests";
 export { recordConnectionTestProof } from "./eventBroadcastConnectionTests";
 import { recordResourceSnapshot, computeRuntimeValidator, trustedComputeRuntime } from "./_eventBroadcastResources";
-import {assertWorkerProtocol,beginControlPreparation,promoteControlOperation,completeControlOperation,controlFence,coherentEvidence,writeControlObservation,broadcastModeForIntent,isCut,isControl,settleControl} from "./_eventBroadcastControl";
+import {assertWorkerProtocol,beginControlPreparation,promoteControlOperation,completeControlOperation,controlFence,coherentEvidence,writeControlObservation,broadcastModeForIntent,isCut,isControl,settleControl,supersedePending} from "./_eventBroadcastControl";
 import {controlTargetValidator,controlResultValidator,controlFailureValidator} from "./_eventMediaControl";
 import { parseMediaSettings, resolveDestinationProfile } from "../workers/restream/broadcast-profiles.mjs";
 import { eventProfileBroadcastInputChoices, resolveBroadcastInput, broadcastInputPublicUrl, eventMediaSourceWorkerDescriptor } from "./_eventBroadcastSources";
@@ -115,6 +115,16 @@ export const acquireSession = mutation({
                 ctx.db.query("eventMediaSessions").withIndex("by_eventId_status_leaseExpiresAt", q => q.eq("eventId", args.eventId).eq("status", status).gt("leaseExpiresAt", now)).take(2)))).flat();
             if (siblings.some(s => s._id !== session._id)) {
                 return reject(ctx, args, "Another event session has an unexpired owner.");
+            }
+            const selectedId = session.committedIntent?.kind === "manual" ? session.committedIntent.sourceId
+                : session.committedIntent?.kind === "automatic" ? session.lineupCursor?.sourceId : undefined;
+            const interrupted = currentEpoch > 0 && selectedId ? await ctx.db.get(selectedId) : null;
+            if (interrupted?.input?.kind === "direct_media") {
+                // A lost EOF receipt must not turn process recovery into a replay.
+                await supersedePending(ctx.db, session);
+                const sequence = await allocateSessionCommandSequence(ctx.db, session._id);
+                await ctx.db.patch(session._id, {committedIntent:{kind:"slate"},intentSequence:sequence,resumeSource:undefined,updatedAt:now});
+                await ctx.db.insert("eventMediaAuditEvents",{programId:program._id,eventId:event._id,sessionId:session._id,sourceId:interrupted._id,actorSurface:"worker",action:"direct_media_recovery_held",createdAt:now});
             }
             await ctx.db.patch(session._id, { workerId: args.workerId, epoch, acquiredAt, leaseExpiresAt: expiresAt, status: "starting", resourceSnapshot:undefined, resourceObservedAt:undefined, programObservedAt:undefined, observedOutputMs:undefined, observedSourceRevision:undefined, observedSlotKey:undefined, outputHealthObservedAt:undefined, outputHealth:[], updatedAt: now });
             await ctx.db.insert("eventMediaAuditEvents", { programId: program._id, eventId: args.eventId, sessionId: session._id, actorSurface: "worker", action: "worker_session_acquired", privateSummary: `Epoch ${epoch}.`, createdAt: now });
@@ -452,13 +462,14 @@ export const completeSource = mutation({
         if ("result" in found) return found.result;
         const { session } = found;
         const source = await ctx.db.get(args.sourceId);
+        const selected = session.committedIntent?.kind === "manual" ? session.committedIntent
+            : session.committedIntent?.kind === "automatic" ? session.lineupCursor : undefined;
         if (session.pendingControlCommandId || session.intentSequence !== args.intentSequence ||
-            session.currentSourceId !== args.sourceId || session.observedSourceRevision !== args.sourceRevision ||
-            session.observedSlotKey !== args.slotKey || source?.input?.kind !== "direct_media" ||
+            selected?.sourceId !== args.sourceId || selected.revision !== args.sourceRevision ||
+            source?.input?.kind !== "direct_media" || (source.eventSlotId ?? `manual-${source._id}`) !== args.slotKey ||
             source.eventId !== args.eventId || source.programId !== session.programId ||
             (source.revision ?? 1) !== args.sourceRevision || source.state === "disabled" || source.projectionAvailable === false ||
-            session.committedIntent?.kind === "slate" || (session.committedIntent?.kind === "manual" &&
-                (session.committedIntent.sourceId !== args.sourceId || session.committedIntent.revision !== args.sourceRevision)))
+            (session.committedIntent?.kind === "automatic" && session.lineupCursor?.slotKey !== args.slotKey))
             return { kind: "superseded" as const };
         const sequence = await allocateSessionCommandSequence(ctx.db, session._id);
         // Persist the return to hold before acknowledging EOF, so recovery cannot replay the file.

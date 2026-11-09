@@ -3,7 +3,7 @@
 !workers/restream/
 !workers/restream/**
 !scripts/
-!scripts/*.mjs
+!scripts/**
 !tests/
 !tests/backend/
 !tests/backend/*.ts

@@ -125,8 +125,8 @@ export function operatorFixture(): FixtureStatus {
         authorized: true,
         twitchSetup: undefined,
         simulcastEnabled: false,
-        playbackLinks: [{platform:"pc",label:"PC URL",url:"rtspt://example.com/live/afterglow"},{platform:"standalone",label:"Quest URL",url:"https://example.com/live/afterglow"}],
-        playbackLinkCount: 2,
+        playbackLinks: [{platform:"browser",label:"Playback URL",url:"https://example.com/live/afterglow"},{platform:"pc",label:"PC URL",url:"rtspt://example.com/live/afterglow"},{platform:"standalone",label:"Quest URL",url:"https://example.com/live/afterglow"}],
+        playbackLinkCount: 3,
         updatedAt: 1,
       },
       {

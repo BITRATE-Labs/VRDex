@@ -30,6 +30,14 @@ test("legacy saved destinations use their preset server during setup @flow @fixt
  await page.getByRole("button",{name:"Continue",exact:true}).click();
  await expect(page.getByLabel("Playback URL",{exact:true})).toBeVisible();
 });
+test("a previously passed connection opens editable setup instead of trapping the host on success @flow @fixture",async({page})=>{
+ await page.goto("/playwright/event-operator/setup?passed=1");
+ await expect(page.getByRole("heading",{name:"Connect your stream",exact:true})).toBeVisible();
+ await expect(page.getByLabel("Stream key",{exact:true})).toBeEnabled();
+ await page.getByRole("checkbox").check();
+ await page.getByRole("button",{name:"Continue",exact:true}).click();
+ await expect(page.getByLabel("Playback URL",{exact:true})).toBeEditable();
+});
 
 test("reentering setup during a running test resumes progress and allows cancellation @flow @fixture",async({page})=>{
  await page.goto("/playwright/event-operator/setup?running=1");
