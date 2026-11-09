@@ -40,8 +40,10 @@ test("old repaired instance links return to one retained history @storybook-visu
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
-  await page.screenshot({
-    path: `../../.cache/artifacts/repair-history-${isMobile ? "mobile" : "desktop"}.png`,
-    fullPage: true,
-  });
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({
+      path: `../../.cache/artifacts/repair-history-${isMobile ? "mobile" : "desktop"}.png`,
+      fullPage: true,
+    });
+  }
 });
