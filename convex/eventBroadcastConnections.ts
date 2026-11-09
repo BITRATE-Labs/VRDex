@@ -47,7 +47,12 @@ export const prepareConnection = mutation({
     if (old) { if (old.expiresAt < Date.now() && !old.outputId) throw Error("Connection request expired."); if (old.actor !== JSON.stringify(subject) || old.payload !== payload) throw Error("Connection request already used."); return { grantId: old._id, secretName: name, credentialRef: args.replaceKey ? null : output?.credential?.secretRef ?? null, connection: old.outputId ? metadata(await ctx.db.get(old.outputId)) : null }; }
     if ((output?.managedConnection?.revision ?? 0) !== args.expectedRevision) throw Error("Connection changed. Reload and try again.");
     if (!args.replaceKey && (!output?.managedConnection || output.managedConnection.provider !== args.provider || output.managedConnection.serverUrl !== normalized.serverUrl)) throw Error("Enter a stream key for this connection.");
-    const grantId = await ctx.db.insert("eventBroadcastConnectionGrants", { eventId: event._id, programId, communityProfileId: event.communityProfileId, actor: JSON.stringify(subject), requestId: args.requestId, payload, provider: args.provider, ...normalized, replaceKey: args.replaceKey, expectedRevision: args.expectedRevision, expiresAt: Date.now() + 120000 });
+    const now=Date.now();
+    const recentGrants=await ctx.db.query("eventBroadcastConnectionGrants")
+      .withIndex("by_community_createdAt",q=>q.eq("communityProfileId",event.communityProfileId!).gte("createdAt",now-10*60*1000))
+      .take(10);
+    if(recentGrants.length>=10)throw Error("Too many connection requests. Try again in a few minutes.");
+    const grantId = await ctx.db.insert("eventBroadcastConnectionGrants", { eventId: event._id, programId, communityProfileId: event.communityProfileId, actor: JSON.stringify(subject), requestId: args.requestId, payload, provider: args.provider, ...normalized, replaceKey: args.replaceKey, expectedRevision: args.expectedRevision, createdAt:now,expiresAt: now + 120000 });
     return { grantId, secretName: name, credentialRef: args.replaceKey ? null : output?.credential?.secretRef ?? null, connection: null };
   }
 });

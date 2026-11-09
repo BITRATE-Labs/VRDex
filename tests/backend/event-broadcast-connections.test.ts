@@ -61,3 +61,17 @@ for(const provider of ['vrcdn','twitch','custom'] as const)it(`managed ${provide
  assert.equal(session?.destinationProfiles?.[0].destination,provider);assert.equal(session?.destinationProfiles?.[0].outputId,saved.connection.outputId);
  await assert.rejects(f.owner.mutation(ref('prepareConnection'),{...input,expectedRevision:1,requestId:'52345678-1234-1234-1234-123456789012'}),/already active/);
 });
+it('provisioning limits new grants per community while exact retries are free',async()=>{
+ const f=await fixture();const requests=[];
+ for(let i=1;i<=10;i++){
+  const input={...f.input,requestId:`00000000-0000-0000-0000-${String(i).padStart(12,'0')}`};
+  requests.push({input,grant:await f.owner.mutation(ref('prepareConnection'),input)});
+ }
+ assert.deepEqual(await f.owner.mutation(ref('prepareConnection'),requests[0].input),requests[0].grant);
+ await assert.rejects(f.owner.mutation(ref('prepareConnection'),{...f.input,requestId:'00000000-0000-0000-0000-000000000011'}),/Too many connection requests/);
+ const second=await f.owner.mutation(api.events.createCommunityEvent,{title:'Second event',communitySlug:'club',startAt:Date.now()+600000,timezone:'UTC'});
+ await assert.rejects(f.owner.mutation(ref('prepareConnection'),{...f.input,currentSlug:second.slug,requestId:'00000000-0000-0000-0000-000000000012'}),/Too many connection requests/);
+ const count=await f.t.run(({db})=>db.query('eventBroadcastConnectionGrants').collect());assert.equal(count.length,10);
+ await f.t.run(({db})=>db.patch(requests[0].grant.grantId,{createdAt:Date.now()-600001}));
+ await f.owner.mutation(ref('prepareConnection'),{...f.input,requestId:'00000000-0000-0000-0000-000000000013'});
+});
