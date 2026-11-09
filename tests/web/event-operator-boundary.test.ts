@@ -84,7 +84,7 @@ it('F3 rendered read-only controls disable every broadcast mutation', () => {
   const f = operatorFixture();
   const { renderToStaticMarkup } = webRequire('react-dom/server');
   const html: string = renderToStaticMarkup(f.React.createElement(f.component.EventOperatorControls, { status: f.status }));
-  for (const label of ['Next', 'Hold current', 'Cut to slate', 'Return to auto', 'Stop', 'Start', 'Save policy']) {
+  for (const label of ['Next', 'Hold current', 'Cut to slate', 'Return to auto', 'Stop', 'Save policy']) {
     assert.match(html, new RegExp(`<button[^>]*disabled=""[^>]*>${label}</button>`));
   }
   assert.match(html, /<fieldset[^>]*disabled=""/);
@@ -96,7 +96,8 @@ it('R2F1 terminal reserved output configuration stays disabled independently of 
   f.status.outputConfigurationLocked = true;
   const { renderToStaticMarkup } = webRequire('react-dom/server');
   const html: string = renderToStaticMarkup(f.React.createElement(f.component.EventOperatorControls, { status: f.status }));
-  assert.match(html, /<fieldset[^>]*disabled=""/);
+  assert.doesNotMatch(html, />Edit connection</);
+  assert.doesNotMatch(html, />Start<\/button>/);
 });
 
 it('an unresolved replacement subscription cannot restore initial permissions or private sources',()=>{

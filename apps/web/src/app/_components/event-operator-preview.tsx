@@ -13,7 +13,6 @@ export type PreviewSource = Pick<
 type PreviewState = {
   handle: LocalPreviewPlayer;
   sourceKey: string;
-  monitoring: boolean;
   failed: boolean;
 };
 export function EventOperatorPreview({
@@ -21,7 +20,7 @@ export function EventOperatorPreview({
   onClose,
 }: {
   source: PreviewSource;
-  onClose: () => void;
+  onClose?: () => void;
 }) {
   const mount = useRef<HTMLDivElement>(null),
     player = useRef<LocalPreviewPlayer | undefined>(undefined),
@@ -31,10 +30,9 @@ export function EventOperatorPreview({
     url = source.publicUrl,
     label = source.label;
   const kind = input?.kind,
-    name = input?.kind === "twitch" ? input.channel : input?.streamId;
+    name = input?.kind === "twitch" ? input.channel : input?.kind === "vrcdn" ? input.streamId : input?.url;
   const sourceKey = `${kind}:${name}:${url}`;
   const available = view?.sourceKey === sourceKey;
-  const monitoring = available && view.monitoring;
   const failed = available && view.failed;
   useEffect(() => {
     const element = mount.current;
@@ -52,7 +50,9 @@ export function EventOperatorPreview({
     };
     const target = eventDjTarget(url);
     const request: PlaybackRequest | undefined =
-      kind === "twitch"
+      kind === "direct_media"
+        ? { ...identity, kind:"direct_media", src:name, transport:new URL(name).pathname.endsWith(".m3u8") ? "hls" : new URL(name).pathname.endsWith(".ts") ? "mpegts" : "video" }
+        : kind === "twitch"
         ? { ...identity, kind: "twitch", channel: name }
         : target?.questUrl
           ? {
@@ -93,7 +93,6 @@ export function EventOperatorPreview({
         return;
       }
       if (handle) return;
-      blockInteraction();
       let adapterGeneration = 0;
       const candidate = new LocalPreviewPlayer(
         () => {
@@ -112,14 +111,16 @@ export function EventOperatorPreview({
           if (disposed || player.current !== candidate) return;
           blockInteraction();
           setView(current => current?.handle === candidate
-            ? { ...current, monitoring: false }
+            ? { ...current, failed: true }
             : current);
         },
       );
       handle = candidate;
       player.current = candidate;
-      setView({ handle: candidate, sourceKey, monitoring: false, failed: false });
-      if (!candidate.start()) {
+      setView({ handle: candidate, sourceKey, failed: false });
+      element!.inert = false;
+      element!.style.pointerEvents = "auto";
+      if (!candidate.enableControls()) {
         setView(current => current?.handle === candidate ? { ...current, failed: true } : current);
       }
     }
@@ -150,40 +151,26 @@ export function EventOperatorPreview({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-medium">{source.label}</h3>
         <div className="flex gap-2">
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={!available}
-            onClick={() => {
-              const candidate = player.current;
-              if (!candidate || view?.handle !== candidate || !available) return;
-              const started = candidate.monitor();
-              setView(current => current?.handle === candidate
-                ? { ...current, monitoring: started, failed: !started }
-                : current);
-            }}
-          >
-            {monitoring ? "Monitoring" : "Monitor"}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={onClose}>
+          {onClose && <Button size="sm" variant="ghost" onClick={onClose}>
             Close preview
-          </Button>
+          </Button>}
         </div>
       </div>
       <div
         ref={mount}
-        inert={!monitoring}
+        onPointerDownCapture={() => player.current?.acquireAudio()}
+        onFocusCapture={() => player.current?.acquireAudio()}
         aria-label="Local preview player"
         className={
           input?.kind === "twitch"
             ? "min-h-[300px] w-full"
             : "aspect-video w-full"
         }
-        style={{ pointerEvents: monitoring ? "auto" : "none" }}
       />
       {!available || failed ? (
         <div className="flex gap-3 text-sm">
           <span>Unavailable</span>
+          {available && <Button size="sm" variant="secondary" onClick={()=>{const candidate=player.current;if (!candidate) return;const accepted=candidate.enableControls();if (accepted && mount.current) {mount.current.inert=false;mount.current.style.pointerEvents="auto";}setView(current=>current?.handle===candidate ? {...current,failed:!accepted} : current);}}>Retry preview</Button>}
           {url ? (
             <a href={url} target="_blank" rel="noreferrer">
               Open

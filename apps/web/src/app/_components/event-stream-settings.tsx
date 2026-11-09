@@ -11,10 +11,12 @@ export type StreamSettings = Omit<
 >;
 export function EventStreamSettings({
   settings,
+  embedded = false,
   activeSettings,
   canControl,
   onSave,
 }: {
+  embedded?: boolean;
   settings: StreamSettings;
   activeSettings?: StreamSettings;
   canControl: boolean;
@@ -43,7 +45,7 @@ export function EventStreamSettings({
   }
   return (
     <section className="space-y-4">
-      <h2 className="text-xl font-semibold">Stream settings</h2>
+      {!embedded && <h2 className="text-xl font-semibold">Stream settings</h2>}
       <dl className="grid grid-cols-2 gap-4">
         <div>
           <dt className="text-sm text-muted">Active</dt>

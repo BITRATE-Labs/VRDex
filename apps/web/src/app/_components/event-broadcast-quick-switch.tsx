@@ -8,7 +8,7 @@ import { Field, Input } from "@/components/ui/field";
 import type { EventIdentityOption } from "@/lib/event-editor-identity";
 import { eventDjTarget } from "@/lib/event-dj-target";
 import { parseSourceObservations, reportedSourceState } from "@/lib/event-source-observations";
-import { broadcastInputPublicUrl } from "../../../../../convex/_eventBroadcastSources";
+import { parseBroadcastInputUrl, broadcastInputPublicUrl } from "../../../../../convex/_broadcastInputUrl";
 import { EventIdentityPicker } from "../events/event-identity-picker";
 import { EventOperatorPreview } from "./event-operator-preview";
 
@@ -33,8 +33,9 @@ export function EventBroadcastQuickSwitch({eventPath, disabled, canTake, onPrepa
   async function check() {
     if (lock.current || disabled) return;
     const target = eventDjTarget(url);
-    if (!target) {setError("Enter a supported stream link."); return;}
-    const name = person?.title ?? target.label;
+    let input;
+    try {input = parseBroadcastInputUrl(url);} catch {setError("Enter a supported video or stream link."); return;}
+    const name = person?.title ?? target?.label ?? (input.kind === "direct_media" ? new URL(input.url).hostname : "Video source");
     if (request.current?.url !== url || request.current?.name !== name) request.current = {url,name,key:crypto.randomUUID()};
     const current = ++generation.current;
     lock.current = true; setBusy(true); setError(""); setSource(null);
@@ -45,7 +46,7 @@ export function EventBroadcastQuickSwitch({eventPath, disabled, canTake, onPrepa
       const response = await fetch(`${eventPath}/operate/status?ids=${encodeURIComponent(prepared.sourceId)}`, {signal:AbortSignal.timeout(12_000)});
       if (!response.ok) throw Error();
       const observations = parseSourceObservations(await response.json());
-      if (generation.current === current) setAvailability(reportedSourceState(observations[target.key],Date.now()));
+      if (generation.current === current) setAvailability(reportedSourceState(target ? observations[target.key] : undefined,Date.now()));
     } catch {if (generation.current === current) setError("Couldn’t check this source. Try again.");}
     finally {lock.current=false; if (generation.current === current) setBusy(false);}
   }

@@ -125,6 +125,7 @@ export function operatorFixture(): FixtureStatus {
         authorized: true,
         twitchSetup: undefined,
         simulcastEnabled: false,
+        playbackLinks: [],
         playbackLinkCount: 1,
         updatedAt: 1,
       },
@@ -138,6 +139,7 @@ export function operatorFixture(): FixtureStatus {
         authorized: true,
         twitchSetup: undefined,
         simulcastEnabled: true,
+        playbackLinks: [],
         playbackLinkCount: 0,
         updatedAt: 1,
       },
@@ -145,6 +147,7 @@ export function operatorFixture(): FixtureStatus {
     sessions: [
       {
         sessionId,
+        resumeSource: undefined,
         status: "hold",
         broadcastMode: "hold",
         epoch: 2,

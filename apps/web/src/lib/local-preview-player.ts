@@ -29,6 +29,16 @@ export class LocalPreviewPlayer {
     });
     return true;
   }
+  acquireAudio() {
+    if (this.closed || !this.adapter) return false;
+    this.focus.acquire(this, () => this.stop());
+    return true;
+  }
+  enableControls() {
+    if (!this.start()) return false;
+    this.adapter?.enableControls?.(() => this.acquireAudio());
+    return true;
+  }
   monitor() {
     if (!this.start()) return false;
     this.focus.acquire(this, () => this.stop());

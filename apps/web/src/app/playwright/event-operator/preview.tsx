@@ -15,7 +15,7 @@ import {
 import {
   parseBroadcastInputUrl,
   broadcastInputPublicUrl,
-} from "../../../../../../convex/_eventBroadcastSources";
+} from "../../../../../../convex/_broadcastInputUrl";
 const initial = operatorFixture();
 export function EventOperatorFixture() {
   const [status, setStatus] = useState<FixtureStatus>(initial);
@@ -151,7 +151,7 @@ export function EventOperatorFixture() {
             ...fixtureSource(
               `custom${status.sources.length}`,
               input.label,
-              canonical.kind,
+              canonical.kind === "direct_media" ? "vrcdn" : canonical.kind,
             ),
             input: canonical,
             publicUrl: broadcastInputPublicUrl(canonical),
@@ -167,7 +167,7 @@ export function EventOperatorFixture() {
             ...fixtureSource(
               `replacement${status.sources.length}`,
               input.label,
-              canonical.kind,
+              canonical.kind === "direct_media" ? "vrcdn" : canonical.kind,
             ),
             input: canonical,
             publicUrl: broadcastInputPublicUrl(canonical),

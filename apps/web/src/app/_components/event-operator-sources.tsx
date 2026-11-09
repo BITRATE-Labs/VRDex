@@ -124,7 +124,7 @@ export function EventOperatorSources({
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap justify-between gap-3">
-        <h2 className="text-xl font-semibold">Sources</h2>
+        <h2 className="text-xl font-semibold">Inputs</h2>
         {control.canCancel ? (
           <div role="group" aria-label="Preparation">
             <Button variant="secondary" onClick={onCancel}>
@@ -145,7 +145,7 @@ export function EventOperatorSources({
           <article
             key={source.sourceId}
             aria-label={source.label}
-            className="space-y-3 border-b border-border py-3"
+            className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-4"
           >
             <div className="flex flex-wrap justify-between gap-2">
               <div>
@@ -168,7 +168,7 @@ export function EventOperatorSources({
                 aria-label={`Take ${source.label}`}
                 onClick={() => onTake(source)}
               >
-                Take
+                Put on air
               </Button>
               <Button
                 size="sm"
@@ -257,7 +257,7 @@ export function EventOperatorSources({
         />
       ) : null}
       <details open={editing ? true : undefined}>
-        <summary className="cursor-pointer text-sm">Custom source</summary>
+        <summary className="cursor-pointer text-sm">Add input</summary>
         <fieldset
           disabled={!canControl || busy}
           className="mt-4 grid gap-3 sm:grid-cols-2"
@@ -271,7 +271,7 @@ export function EventOperatorSources({
             />
           </Field>
           <Field>
-            Source URL
+            Video or stream link
             <Input
               value={url}
               onChange={(event) => setUrl(event.target.value)}

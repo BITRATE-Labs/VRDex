@@ -30,7 +30,7 @@ function harness() {
   const adapters: Array<{
     muted: boolean; disposed: boolean; paused: boolean; notify: AdapterNotify;
     request: PlaybackRequest; rejectPlay: (error: Error) => void;
-    inertAtCreation: boolean; pointerAtCreation: string;
+    inertAtCreation: boolean; pointerAtCreation: string; unmute?:()=>void;
   }> = [];
   const hooks = {
     useRef(value: unknown) { const i = cursor++; return slots[i] ??= { current: value }; },
@@ -68,6 +68,7 @@ function harness() {
         };
         adapters.push(row);
         return {
+          enableControls: before => {row.unmute=()=>{if(before()){row.muted=false;calls.push(`${id}:muted:false`);}};},
           play: () => { row.paused = false; return new Promise<boolean>((_resolve, reject) => { row.rejectPlay = reject; }); },
           pause: () => { row.paused = true; calls.push(`${id}:pause`); },
           setMuted: value => { row.muted = value; calls.push(`${id}:muted:${value}`); },
@@ -106,8 +107,8 @@ function harness() {
       tree = exports.EventOperatorPreview!({ source: props, onClose() {} });
       const mount = nodes(tree).find(node => node.props["aria-label"] === "Local preview player")!;
       mount.props.ref.current = element;
-      element.inert = mount.props.inert;
-      element.style.pointerEvents = mount.props.style.pointerEvents;
+      if (mount.props.inert !== undefined) element.inert = mount.props.inert;
+      if (mount.props.style) element.style.pointerEvents = mount.props.style.pointerEvents;
       const work = pending; pending = []; work.forEach(effect => effect());
     } while (dirty);
   }
@@ -115,7 +116,7 @@ function harness() {
   const result = {
     adapters, calls, element,
     render(next: PreviewSource = props) { props = next; flush(); },
-    monitor() { nodes(tree).find(node => node.type === "button" && node.props.children === "Monitor")!.props.onClick(); flush(); },
+    monitor() { const retry=nodes(tree).find(node=>node.type==="button" && node.props.children==="Retry preview");retry?.props.onClick();const mount=nodes(tree).find(node=>node.props["aria-label"]==="Local preview player")!;mount.props.onFocusCapture();adapters.at(-1)?.unmute?.();flush(); },
     foreground() { foregroundPlayback.acquire(program, () => calls.push("program:pause")); flush(); },
     geometry(width: number) { rect.width = width; rect.right = width; listeners.get("resize")?.forEach(callback => callback()); flush(); },
     notify(index: number, status: "playing" | "unavailable") { adapters[index].notify({ status }); flush(); },
@@ -128,11 +129,10 @@ function harness() {
 }
 
 function assertMutedInert(h: ReturnType<typeof harness>, index: number) {
-  assert.equal(h.element.inert, true, "provider keyboard controls stay inert until this handle acquires focus");
-  assert.equal(h.element.style.pointerEvents, "none");
+  assert.equal(h.element.inert, false, "the player exposes its own controls");
+  assert.equal(h.element.style.pointerEvents, "auto");
   assert.equal(h.adapters[index].muted, true);
-  assert.equal(h.adapters[index].inertAtCreation, true, "replacement starts with synchronous DOM interactivity reset");
-  assert.equal(h.adapters[index].pointerAtCreation, "none");
+
 }
 
 it("same ID/revision/key rename retains the monitored handle and its foreground ownership", () => {
@@ -152,7 +152,7 @@ it("same ID/revision/key rename retains the monitored handle and its foreground 
   } finally { h.close(); }
 });
 
-it("a source replacement cannot inherit Monitor; each handle acquires before becoming audible", async () => {
+it("a source replacement starts muted; native controls acquire before becoming audible", async () => {
   const h = harness();
   try {
     h.foreground(); h.monitor();
