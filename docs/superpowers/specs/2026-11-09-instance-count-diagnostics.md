@@ -37,3 +37,11 @@ Inspected web screenshots on November 9: [Searchable comparison chart and table]
 ## Deferred and risks
 
 No historical queue reconstruction, count correction, production field-definition switch, recap work, production UI integration or production deployment. Paired future samples are required to determine whether n_users includes queue or is otherwise inconsistent. Old records will remain sparse for these new fields.
+
+## Preview for review
+
+[Open the live closure example](http://127.0.0.1:6019/iframe.html?id=clubs-instance-population-preview--confirmed-closure&viewMode=story). The Sample case control switches between paired counts, historical unknowns, conflicting counts and confirmed closure. This is a local Storybook server and uses synthetic data.
+
+Current recommendation: show Queue by default as a dashed line on the same axis, with an adjacent checkbox. Keep the exact-value table and Diagnostics collapsed initially. That keeps the chart readable while retaining inspectable counts one action away. BASIC should review line contrast, closure-marker wording and default queue visibility before production integration. No recap or population calculation changes are proposed here.
+
+Desktop and mobile browser checks pass for the preview. The mobile closure label was moved above its marker after visual review found clipping. The production instance screen is unchanged.
