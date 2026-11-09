@@ -336,6 +336,8 @@ export async function admitControlOperation(
   const payload = JSON.stringify(command);
   const retry = await findControlRequest(db, s, actor, key, payload);
   if (retry) return (await db.get(retry.commandId))!;
+  if (command.expectedSessionId !== undefined && command.expectedSessionId !== s._id)
+    throw Error("Broadcast session changed. Confirm the action again.");
   if (command.expectedIntentSequence !== undefined && command.expectedIntentSequence !== (s.intentSequence ?? 0))
     throw Error("Broadcast changed. Confirm the action again.");
   if (s.pendingControlCommandId && !isCut(command.type))

@@ -236,6 +236,7 @@ export type SanitizedVrcdnOperatorOwnedOutputSetup = {
 };
 
 export type EventMediaCommandInput = {
+  expectedSessionId?: string;
   expectedSourceRevision?: number;
   expectedIntentSequence?: number;
   type: EventMediaCommandType;
@@ -247,6 +248,7 @@ export type EventMediaCommandInput = {
 };
 
 export type SanitizedEventMediaCommand = {
+  expectedSessionId?: string;
   expectedSourceRevision?: number;
   expectedIntentSequence?: number;
   type: EventMediaCommandType;
@@ -715,6 +717,7 @@ export function sanitizeEventMediaCommandInput(input: EventMediaCommandInput): S
 
   return {
     type: input.type,
+    ...(input.expectedSessionId === undefined ? {} : {expectedSessionId:input.expectedSessionId}),
     ...(input.expectedSourceRevision === undefined ? {} : {expectedSourceRevision:input.expectedSourceRevision}),
     ...(input.expectedIntentSequence === undefined ? {} : {expectedIntentSequence:input.expectedIntentSequence}),
     ...(targetSourceKey === undefined ? {} : { targetSourceKey }),

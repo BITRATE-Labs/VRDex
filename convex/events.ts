@@ -243,6 +243,7 @@ const eventMediaWorkerScheduleArgs = {
 };
 
 const eventMediaCommandArgs = {
+  expectedSessionId:v.optional(v.id("eventMediaSessions")),
   expectedSourceRevision:v.optional(v.number()),
   expectedIntentSequence:v.optional(v.number()),
   idempotencyKey:v.string(),
@@ -2530,6 +2531,7 @@ export const getEventMediaControlStatus = query({
           simulcastEnabled: output.simulcastEnabled ?? false,
           twitchSetup: output.twitchSetup,
           playbackLinkCount: output.playbackLinks.length,
+          playbackLinks: eventOutputIsAuthorized(event,output) ? output.playbackLinks : [],
           updatedAt: output.updatedAt,
         })),
       sessions: await Promise.all(sessions.sort((first, second) => second.updatedAt - first.updatedAt).map(async session => {

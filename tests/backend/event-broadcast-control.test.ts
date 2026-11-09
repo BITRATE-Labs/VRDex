@@ -231,6 +231,16 @@ it("confirmed source revision and intent reject stale submissions without writes
     assert.deepEqual(await f.receipt(f.args.sessionId), before);
   }
 });
+it("confirmation cannot target a replacement session with the same intent sequence", async () => {
+  const f = await controlFixture();
+  const replacement = await f.schedule();
+  const before = await f.receipt(replacement.args.sessionId);
+  await assert.rejects(f.owner.mutation(api.events.queueEventMediaCommand, {
+    currentSlug:f.event.slug,type:"switch_source",targetSourceKey:"source_a",idempotencyKey:"old-session-confirmation",
+    expectedSessionId:f.args.sessionId,expectedIntentSequence:0,expectedSourceRevision:1,
+  }), /session.*changed/i);
+  assert.deepEqual(await f.receipt(replacement.args.sessionId),before);
+});
 it("Resume is unavailable until a real source was observed before slate", async () => {
   const f = await controlFixture();
   await assert.rejects(f.owner.mutation(api.events.queueEventMediaCommand, {currentSlug:f.event.slug,type:"resume_previous",idempotencyKey:"empty-resume"}),/unavailable/i);

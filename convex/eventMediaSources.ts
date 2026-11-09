@@ -14,22 +14,32 @@ function sourceLabel(value: string): string {
   return label;
 }
 
-async function sourceAuthority(ctx: MutationCtx, currentSlug: string, sourceId: Id<"eventMediaSources">) {
+const sourceExpectationArgs = {expectedSourceRevision:v.optional(v.number()),expectedSessionId:v.optional(v.id("eventMediaSessions")),expectedIntentSequence:v.optional(v.number())};
+type SourceExpectation = {expectedSourceRevision?:number; expectedSessionId?:Id<"eventMediaSessions">; expectedIntentSequence?:number};
+async function sourceAuthority(ctx: MutationCtx, currentSlug: string, sourceId: Id<"eventMediaSources">, expected:SourceExpectation = {}) {
   const { subject: actor } = await requireActiveBrowserSessionSubject(ctx);
   const { event } = await getMediaManageableEventBySlug(ctx, currentSlug, actor);
   const source = await ctx.db.get(sourceId);
   if (!source || source.eventId !== event._id) throw new Error("Event source was not found.");
   const program = await ctx.db.get(source.programId);
   if (!program || program.eventId !== event._id || source.profileProjection || source.sourceProfileId || source.eventSlotId) throw new Error("Only custom event sources can be edited.");
+  if (source.state !== "disabled") {
+    if (expected.expectedSourceRevision !== undefined && expected.expectedSourceRevision !== (source.revision ?? 1)) throw Error("Source changed. Confirm the action again.");
+    if (expected.expectedSessionId !== undefined && program.activeSessionId !== expected.expectedSessionId) throw Error("Broadcast session changed. Confirm the action again.");
+    if (expected.expectedIntentSequence !== undefined) {
+      const session = program.activeSessionId ? await ctx.db.get(program.activeSessionId) : null;
+      if (session?.intentSequence !== expected.expectedIntentSequence) throw Error("Broadcast changed. Confirm the action again.");
+    }
+  }
   return { actor, event, source, program };
 }
 
-async function insertSource(ctx: MutationCtx, args: { currentSlug: string; label: string; url: string; sourceId?: Id<"eventMediaSources">; idempotencyKey?:string }) {
+async function insertSource(ctx: MutationCtx, args: { currentSlug: string; label: string; url: string; sourceId?: Id<"eventMediaSources">; idempotencyKey?:string } & SourceExpectation) {
   const { subject: actor } = await requireActiveBrowserSessionSubject(ctx);
   const { event } = await getMediaManageableEventBySlug(ctx, args.currentSlug, actor);
   const input = parseBroadcastInputUrl(args.url);
   const label = sourceLabel(args.label);
-  const previous = args.sourceId === undefined ? undefined : (await sourceAuthority(ctx, args.currentSlug, args.sourceId)).source;
+  const previous = args.sourceId === undefined ? undefined : (await sourceAuthority(ctx, args.currentSlug, args.sourceId, args)).source;
   if (previous?.state === "disabled") throw new Error("Event source is disabled.");
   const now = Date.now();
   const programId = await getOrCreateEventMediaProgram(ctx.db, event, now);
@@ -55,11 +65,11 @@ async function insertSource(ctx: MutationCtx, args: { currentSlug: string; label
 }
 
 export const create = mutation({ args: { currentSlug: v.string(), label: v.string(), url: v.string(), idempotencyKey:v.optional(v.string()) }, handler: insertSource });
-export const replace = mutation({ args: { currentSlug: v.string(), sourceId: v.id("eventMediaSources"), label: v.string(), url: v.string() }, handler: insertSource });
+export const replace = mutation({ args: {...sourceExpectationArgs, currentSlug: v.string(), sourceId: v.id("eventMediaSources"), label: v.string(), url: v.string() }, handler: insertSource });
 export const rename = mutation({
   args: { currentSlug: v.string(), sourceId: v.id("eventMediaSources"), label: v.string() },
   handler: async (ctx, args) => {
-    const { actor, event, source } = await sourceAuthority(ctx, args.currentSlug, args.sourceId);
+    const { actor, event, source } = await sourceAuthority(ctx, args.currentSlug, args.sourceId, args);
     if (source.state === "disabled") throw new Error("Event source is disabled.");
     const now = Date.now();
     await ctx.db.patch(source._id, { label: sourceLabel(args.label), updatedAt: now });
@@ -68,9 +78,9 @@ export const rename = mutation({
 });
 
 export const remove = mutation({
-  args: { currentSlug: v.string(), sourceId: v.id("eventMediaSources") },
+  args: {...sourceExpectationArgs, currentSlug: v.string(), sourceId: v.id("eventMediaSources") },
   handler: async (ctx, args) => {
-    const { actor, event, source, program } = await sourceAuthority(ctx, args.currentSlug, args.sourceId);
+    const { actor, event, source, program } = await sourceAuthority(ctx, args.currentSlug, args.sourceId, args);
     if (source.state === "disabled") return;
     await disableSourceControl(ctx.db,source,program);
     const now = Date.now();

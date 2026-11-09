@@ -19,6 +19,12 @@ test("quick-source retries reuse one authorized source and reject changed payloa
   assert.equal((await t.run(({db})=>db.query("eventMediaSources").collect())).length,1);
   await assert.rejects(owner.mutation(sourceMutation("create"),{...args,url:"vrcdn:other"}),/idempotency/i);
 });
+test("confirmed source removal rejects a stale revision without disabling the source", async () => {
+  const {t,owner,event} = await fixture();
+  const created = await owner.mutation(sourceMutation("create"),{currentSlug:event.slug,label:"Guest",url:"vrcdn:alpha"});
+  await assert.rejects(owner.mutation(sourceMutation("remove"),{currentSlug:event.slug,sourceId:created.sourceId,expectedSourceRevision:2}),/changed/i);
+  assert.equal((await t.run(({db})=>db.get(created.sourceId)))?.state,"ready");
+});
 const startAt = Date.UTC(2027, 9, 15, 18);
 const sourceMutation = (name: string) => makeFunctionReference<"mutation">(`eventMediaSources:${name}`);
 async function fixture() {
