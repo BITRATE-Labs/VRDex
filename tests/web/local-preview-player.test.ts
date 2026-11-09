@@ -80,3 +80,12 @@ it("unavailable local adapter creation never acquires program audio", () => {
   assert.equal(pauses, 0);
   preview.close();
 });
+
+it("native player controls claim foreground before unmute and refuse a disposed handle",()=>{
+ const focus=new ForegroundPlayback(), calls:string[]=[];
+ let unmute:(()=>boolean)|undefined;
+ focus.acquire({},()=>calls.push("program:pause"));
+ const preview=new LocalPreviewPlayer(()=>({play:async()=>true,pause:()=>{},setMuted:()=>{},setVolume:()=>{},update:()=>{},dispose:()=>calls.push("dispose"),enableControls:before=>{unmute=before;}}),()=>{},focus);
+ assert.equal(preview.enableControls(),true);assert.deepEqual(calls,[]);assert.equal(unmute?.(),true);calls.push("native:unmute");assert.deepEqual(calls,["program:pause","native:unmute"]);
+ preview.close();assert.equal(unmute?.(),false);
+});
