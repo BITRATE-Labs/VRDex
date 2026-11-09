@@ -255,7 +255,7 @@ still uses the selected event start plus the reviewed offset, with the existing
 minus-30-minute initial offset; event selection does not change the timing mode.
 Creation linkage remains separate from manual observed-session association.
 
-Telemetry-backed Live and complete Instance history lists retain their category checks and peak/average hierarchy. Home Recent instances also uses complete history. Fresh sessions may appear in both lists. Direct detail and list rows require current per-session evidence for Still open and for telemetry-detail closure. Mounted expiry changes unconfirmed closure to Unknown and removes an open confirmation while retaining metrics and navigation. The management list creates no telemetry sessions or historical observations.
+Telemetry-backed Live and complete Instance history lists retain their category checks and peak/average hierarchy. Home Recent instances also uses complete history. Fresh sessions may appear in both lists. Direct detail and list rows require current per-session evidence for Still open and for telemetry-detail closure. Mounted expiry changes unconfirmed closure to Unknown and removes an open confirmation while retaining metrics and navigation. The management list creates no telemetry sessions or historical observations. Missing telemetry list entries preserve session identity without renewing freshness or confirming closure. The same location resumes its existing session within the connection epoch, including across midnight and long outages. Only positive provider closure evidence ends it; a later active observation then starts a new session.
 
 ```mermaid
 flowchart LR
