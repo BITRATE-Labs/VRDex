@@ -25,7 +25,7 @@ export const getSetup = query({
     const program = await getLatestEventMediaProgram(ctx.db, event._id);
     const output = await primaryOutput(ctx.db, program);
     const test = await ctx.db.query("eventBroadcastConnectionTests").withIndex("by_eventId_createdAt",q=>q.eq("eventId",event._id)).order("desc").first();
-    return { connection: metadata(output), activeTest: test?.outputId === output?._id && test?.revision === output?.managedConnection?.revision ? await connectionTestProjection(ctx,test) : null, canConfigure: !program || !await eventOutputConfigurationLocked(ctx.db, program) };
+    return { connection: metadata(output), activeTest: test && test.outputId === output?._id && test.revision === output?.managedConnection?.revision ? await connectionTestProjection(ctx,test) : null, canConfigure: !program || !await eventOutputConfigurationLocked(ctx.db, program) };
   }
 });
 export const prepareConnection = mutation({

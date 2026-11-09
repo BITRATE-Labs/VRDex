@@ -1569,7 +1569,6 @@ export default defineSchema({
     .index("by_programId_position", ["programId", "position"])
     .index("by_programId_key", ["programId", "key"]),
   eventMediaOutputs: defineTable({
-    managedConnection:v.optional(v.object({communityProfileId:v.id("profiles"),provider:v.union(v.literal("vrcdn"),v.literal("twitch"),v.literal("custom")),serverUrl:v.string(),revision:v.number(),requestId:v.string(),testState:v.union(v.literal("not_tested"),v.literal("passed"),v.literal("failed"))})),
     programId: v.id("eventMediaPrograms"),
     eventId: v.id("events"),
     key: v.string(),

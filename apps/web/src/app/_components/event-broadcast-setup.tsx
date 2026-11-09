@@ -2,27 +2,27 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+import type { FunctionReturnType } from "convex/server";
+import { api } from "@convex-generated-api";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import { CopyValueRow } from "@/components/ui/copy-value-row";
 import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
 import { broadcastPlaybackLinks, broadcastServers, checkBroadcastServer, type BroadcastProvider } from "@/lib/broadcast-connection";
-export type BroadcastSetupState = {
-  connection: {outputId:string;revision:number;provider:BroadcastProvider;serverUrl:string;playbackLinks:{platform:string;label?:string;url:string}[];testState:"not_tested"|"passed"|"failed"} | null;
-  activeTest: {jobId:string;revision:number;state:"queued"|"running"|"stopping"|"passed"|"failed"|"cancelled";deadlineAt:number;failure?:string} | null;
-  canConfigure:boolean;
-};
-export const getBroadcastSetup = makeFunctionReference<"query",{currentSlug:string},BroadcastSetupState>("eventBroadcastConnections:getSetup");
-const startTest = makeFunctionReference<"mutation",{currentSlug:string;expectedRevision:number;idempotencyKey:string},unknown>("eventBroadcastConnectionTests:startConnectionTest");
-const cancelTest = makeFunctionReference<"mutation",{currentSlug:string;jobId:string},unknown>("eventBroadcastConnectionTests:cancelConnectionTest");
+export type BroadcastSetupState = FunctionReturnType<typeof api.eventBroadcastConnections.getSetup>;
+type TestId = NonNullable<BroadcastSetupState["activeTest"]>["jobId"];
+export const getBroadcastSetup = api.eventBroadcastConnections.getSetup;
 export function EventBroadcastSetup({currentSlug,eventPath,eventTitle}:{currentSlug:string;eventPath:string;eventTitle:string}) {
   const state = useQuery(getBroadcastSetup,{currentSlug});
-  const start = useMutation(startTest), cancel = useMutation(cancelTest);
+  const start = useMutation(api.eventBroadcastConnectionTests.startConnectionTest), cancel = useMutation(api.eventBroadcastConnectionTests.cancelConnectionTest);
+  const testRequest = useRef<{revision:number;key:string} | null>(null);
   if (!state) return <PageShell><PageContainer max="3xl"><p role="status">Loading connectionâ€¦</p></PageContainer></PageShell>;
-  return <EventBroadcastSetupForm key={currentSlug} currentSlug={currentSlug} eventPath={eventPath} eventTitle={eventTitle} state={state} onStart={revision=>start({currentSlug,expectedRevision:revision,idempotencyKey:crypto.randomUUID()})} onCancel={jobId=>cancel({currentSlug,jobId})}/>;
+  return <EventBroadcastSetupForm key={currentSlug} currentSlug={currentSlug} eventPath={eventPath} eventTitle={eventTitle} state={state} onStart={revision=>{
+    if(testRequest.current?.revision!==revision || (state.activeTest && ["passed","failed","cancelled"].includes(state.activeTest.state))) testRequest.current={revision,key:crypto.randomUUID()};
+    return start({currentSlug,expectedRevision:revision,idempotencyKey:testRequest.current.key});
+  }} onCancel={jobId=>cancel({currentSlug,jobId})}/>;
 }
-export function EventBroadcastSetupForm({currentSlug,eventPath,eventTitle,state,onStart,onCancel}:{currentSlug:string;eventPath:string;eventTitle:string;state:BroadcastSetupState;onStart:(revision:number)=>Promise<unknown>;onCancel:(jobId:string)=>Promise<unknown>}) {
+export function EventBroadcastSetupForm({currentSlug,eventPath,eventTitle,state,onStart,onCancel}:{currentSlug:string;eventPath:string;eventTitle:string;state:BroadcastSetupState;onStart:(revision:number)=>Promise<unknown>;onCancel:(jobId:TestId)=>Promise<unknown>}) {
   const connection = state.connection;
   const [step,setStep] = useState(1), [provider,setProvider] = useState<BroadcastProvider>(connection?.provider ?? "vrcdn");
   const [server,setServer] = useState(connection?.serverUrl ?? broadcastServers.vrcdn), [key,setKey] = useState(""), [playback,setPlayback] = useState(connection?.playbackLinks.at(-1)?.url ?? "");

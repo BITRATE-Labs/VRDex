@@ -148,6 +148,7 @@ export function operatorFixture(): FixtureStatus {
       {
         sessionId,
         resumeSource: undefined,
+        connectionTest: undefined,
         status: "hold",
         broadcastMode: "hold",
         epoch: 2,

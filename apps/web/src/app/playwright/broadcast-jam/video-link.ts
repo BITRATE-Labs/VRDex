@@ -1,10 +1,10 @@
-import { parseBroadcastInputUrl, broadcastInputKey, broadcastInputPublicUrl } from "../../../../../../convex/_eventBroadcastSources";
+import { parseBroadcastInputUrl, broadcastInputKey, broadcastInputPublicUrl } from "../../../../../../convex/_broadcastInputUrl";
 
 // Prototype URL recognition only. This does not establish worker playback support.
 export function previewVideoLink(value: string) {
   try {
     const input = parseBroadcastInputUrl(value.trim());
-    return { key: broadcastInputKey(input), url: broadcastInputPublicUrl(input), provider: input.kind === "twitch" ? "Twitch" : "VRCDN", title: input.kind === "twitch" ? input.channel : input.streamId };
+    return { key: broadcastInputKey(input), url: broadcastInputPublicUrl(input), provider: input.kind === "twitch" ? "Twitch" : input.kind === "vrcdn" ? "VRCDN" : "Video link", title: input.kind === "twitch" ? input.channel : input.kind === "vrcdn" ? input.streamId : new URL(input.url).hostname };
   } catch {
     const url = new URL(value.trim());
     if (url.protocol !== "https:" || url.username || url.password || url.port) throw Error("Use an HTTPS video link without credentials.");

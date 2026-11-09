@@ -1,0 +1,6 @@
+**
+!workers/
+!workers/restream/
+!workers/restream/**
+!scripts/
+!scripts/*.mjs
