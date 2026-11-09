@@ -1,6 +1,7 @@
 import {disableSourceControl} from "./_eventBroadcastControl";
 import { v } from "convex/values";
-import { mutation, type MutationCtx } from "./_generated/server";
+import { internalMutation, mutation, type MutationCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { requireActiveBrowserSessionSubject } from "./_browserSessionAuthority";
 import { getMediaManageableEventBySlug, getOrCreateEventMediaProgram, recordEventMediaAuditEvent } from "./events";
@@ -34,7 +35,7 @@ async function sourceAuthority(ctx: MutationCtx, currentSlug: string, sourceId: 
   return { actor, event, source, program };
 }
 
-async function insertSource(ctx: MutationCtx, args: { currentSlug: string; label: string; url: string; sourceId?: Id<"eventMediaSources">; idempotencyKey?:string } & SourceExpectation) {
+async function insertSource(ctx: MutationCtx, args: { currentSlug: string; label: string; url: string; sourceId?: Id<"eventMediaSources">; idempotencyKey?:string; temporary?:boolean } & SourceExpectation) {
   const { subject: actor } = await requireActiveBrowserSessionSubject(ctx);
   const { event } = await getMediaManageableEventBySlug(ctx, args.currentSlug, actor);
   const input = parseBroadcastInputUrl(args.url);
@@ -59,12 +60,33 @@ async function insertSource(ctx: MutationCtx, args: { currentSlug: string; label
     programId, eventId: event._id, key, position: sources.reduce((max, source) => Math.max(max, source.position + 1), 0),
     type: input.kind === "vrcdn" ? "vrcdn_link" : input.kind === "twitch" ? "twitch_watch" : "hls_url", purpose: "program", state: "ready", label, input, revision,
     publicUrl: broadcastInputPublicUrl(input), createdAt: now, updatedAt: now,
+    ...(args.temporary ? { temporaryExpiresAt: now + 30 * 60_000 } : {}),
   });
+  if (args.temporary) await ctx.scheduler.runAfter(30 * 60_000, internal.eventMediaSources.expireTemporary, { sourceId });
   await recordEventMediaAuditEvent(ctx.db, { programId, eventId: event._id, sourceId, actor, action: previous ? "source_replaced" : "source_created", privateSummary: previous ? `Replaces ${previous._id}.` : undefined, createdAt: now });
   return { sourceId, revision, key, input, publicUrl:broadcastInputPublicUrl(input), label };
 }
 
-export const create = mutation({ args: { currentSlug: v.string(), label: v.string(), url: v.string(), idempotencyKey:v.optional(v.string()) }, handler: insertSource });
+export const create = mutation({ args: { currentSlug: v.string(), label: v.string(), url: v.string(), idempotencyKey:v.optional(v.string()), temporary:v.optional(v.boolean()) }, handler: insertSource });
+export const expireTemporary = internalMutation({
+  args: { sourceId: v.id("eventMediaSources") },
+  handler: async (ctx, { sourceId }) => {
+    const source = await ctx.db.get(sourceId);
+    if (!source?.temporaryExpiresAt || source.state === "disabled") return;
+    const program = await ctx.db.get(source.programId);
+    const session = program?.activeSessionId ? await ctx.db.get(program.activeSessionId) : null;
+    const pending = session?.pendingControlCommandId ? await ctx.db.get(session.pendingControlCommandId) : null;
+    const protectedSource = session && !["ended", "error"].includes(session.status) && (
+      session.currentSourceId === sourceId || session.resumeSource?.sourceId === sourceId ||
+      (session.committedIntent?.kind === "manual" && session.committedIntent.sourceId === sourceId) ||
+      (pending?.controlTarget?.kind === "source" && pending.controlTarget.source.sourceId === sourceId));
+    if (protectedSource || Date.now() < source.temporaryExpiresAt) {
+      await ctx.scheduler.runAfter(Math.max(5 * 60_000, source.temporaryExpiresAt - Date.now()), internal.eventMediaSources.expireTemporary, { sourceId });
+      return;
+    }
+    await ctx.db.patch(sourceId, { state: "disabled", updatedAt: Date.now() });
+  },
+});
 export const replace = mutation({ args: {...sourceExpectationArgs, currentSlug: v.string(), sourceId: v.id("eventMediaSources"), label: v.string(), url: v.string() }, handler: insertSource });
 export const rename = mutation({
   args: { currentSlug: v.string(), sourceId: v.id("eventMediaSources"), label: v.string() },

@@ -1525,6 +1525,7 @@ export default defineSchema({
     .index("by_communityProfileId_state", ["communityProfileId", "state"])
     .index("by_state_updatedAt", ["state", "updatedAt"]),
   eventMediaSources: defineTable({
+    temporaryExpiresAt: v.optional(v.number()),
     input: v.optional(broadcastInputValidator),
     revision: v.optional(v.number()),
     programId: v.id("eventMediaPrograms"),

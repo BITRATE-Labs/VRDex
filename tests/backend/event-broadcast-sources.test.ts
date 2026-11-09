@@ -25,6 +25,26 @@ test("confirmed source removal rejects a stale revision without disabling the so
   await assert.rejects(owner.mutation(sourceMutation("remove"),{currentSlug:event.slug,sourceId:created.sourceId,expectedSourceRevision:2}),/changed/i);
   assert.equal((await t.run(({db})=>db.get(created.sourceId)))?.state,"ready");
 });
+test("temporary checks expire while preserving a selected source", async (test) => {
+  test.mock.timers.enable({apis:["setTimeout"]});
+  const {t,owner,event} = await fixture();
+  const created = await owner.mutation(sourceMutation("create"), {currentSlug:event.slug,label:"Guest",url:"vrcdn:alpha",temporary:true});
+  await t.run(async ({db}) => {
+    const source = (await db.get(created.sourceId))!;
+    await db.patch(source._id, {temporaryExpiresAt:Date.now()-1});
+    const sessionId = await db.insert("eventMediaSessions", {programId:source.programId,eventId:source.eventId,status:"live",committedIntent:{kind:"manual",sourceId:source._id,revision:1},createdAt:Date.now(),updatedAt:Date.now()});
+    await db.patch(source.programId,{activeSessionId:sessionId});
+  });
+  await t.mutation(sourceMutation("expireTemporary"), {sourceId:created.sourceId});
+  assert.equal((await t.run(({db})=>db.get(created.sourceId)))?.state,"ready");
+  await t.run(async ({db}) => {
+    const source=(await db.get(created.sourceId))!;
+    const program=(await db.get(source.programId))!;
+    await db.patch(program.activeSessionId!,{status:"ended"});
+  });
+  await t.mutation(sourceMutation("expireTemporary"), {sourceId:created.sourceId});
+  assert.equal((await t.run(({db})=>db.get(created.sourceId)))?.state,"disabled");
+});
 const startAt = Date.UTC(2027, 9, 15, 18);
 const sourceMutation = (name: string) => makeFunctionReference<"mutation">(`eventMediaSources:${name}`);
 async function fixture() {
