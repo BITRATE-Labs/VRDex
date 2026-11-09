@@ -1641,6 +1641,7 @@ export default defineSchema({
     .index("by_session_scope_status_sequence", ["sessionId", "eventId", "programId", "status", "sequence", "createdAt"])
     .index("by_program_scope_session_status_createdAt", ["programId", "eventId", "sessionId", "status", "createdAt"]),
   eventMediaSessions: defineTable({
+    resumeSource:v.optional(v.object({sourceId:v.id("eventMediaSources"),revision:v.number(),slotKey:v.string()})),
     resourceSnapshot: v.optional(resourceSnapshotValidator),
     resourceObservedAt: v.optional(v.number()),
     computeRuntime: v.optional(computeRuntimeValidator),

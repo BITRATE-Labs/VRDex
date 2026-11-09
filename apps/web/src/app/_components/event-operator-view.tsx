@@ -5,9 +5,10 @@ import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@convex-generated-api";
+import { EventBroadcastQuickSwitch, type PreparedBroadcastSource } from "./event-broadcast-quick-switch";
 import { eventBroadcastObservationFresh } from "@/lib/event-broadcast-observation";
 import { Button } from "@/components/ui/button";
-import { PageContainer, PageShell } from "@/components/ui/page-shell";
+import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
 import { ViewerLocalEventDateTime } from "./viewer-local-event-times";
 import { operatorViewState } from "@/lib/event-operator-state";
 import {
@@ -26,6 +27,7 @@ export type OperatorStatus = FunctionReturnType<
   typeof api.events.getEventMediaControlStatus
 >;
 type Command =
+  | "resume_previous"
   | "switch_next"
   | "switch_source"
   | "switch_hold"
@@ -41,6 +43,7 @@ export function EventOperatorView({
   const status = useQuery(api.events.getEventMediaControlStatus, {
     currentSlug,
   });
+  const nextSource = useQuery(api.events.getNextEventMediaSource,{currentSlug});
   const queue = useMutation(api.events.queueEventMediaCommand);
   const start = useMutation(api.events.scheduleEventMediaWorker);
   const stop = useMutation(api.events.stopEventMediaWorker);
@@ -59,6 +62,7 @@ export function EventOperatorView({
       <EventOperatorControls
         key={current.eventId}
         status={current}
+        nextSource={nextSource}
         onCancel={(commandId) =>
           cancel({
             currentSlug,
@@ -67,6 +71,7 @@ export function EventOperatorView({
           })
         }
         onCreate={(input) => create({ currentSlug, ...input })}
+        onPrepare={(label,url,idempotencyKey) => create({currentSlug,label,url,idempotencyKey})}
         onReplace={(source, input) =>
           replace({ currentSlug, sourceId: source.sourceId, ...input })
         }
@@ -76,11 +81,12 @@ export function EventOperatorView({
         onSaveSettings={(input) => settings({ currentSlug, ...input })}
         title={current.eventTitle}
         onTwitch={(input) => configureTwitch({ currentSlug, ...input })}
-        onCommand={(type, targetSourceKey) =>
+        onCommand={(type, targetSourceKey, expected) =>
           queue({
             currentSlug,
             type,
             targetSourceKey,
+            ...expected,
             idempotencyKey: crypto.randomUUID(),
           })
         }
@@ -108,10 +114,12 @@ type TwitchInput = {
   rightsClearedMediaAccepted: boolean;
 };
 type ControlsProps = {
+  nextSource?: FunctionReturnType<typeof api.events.getNextEventMediaSource>;
+  onPrepare?: (label:string,url:string,idempotencyKey:string)=>Promise<PreparedBroadcastSource>;
   title?: string;
   onTwitch: (input: TwitchInput) => Promise<unknown>;
   status: OperatorStatus;
-  onCommand: (type: Command, key?: string) => Promise<unknown>;
+  onCommand: (type: Command, key?: string, expected?: {expectedSourceRevision?:number; expectedIntentSequence?:number}) => Promise<unknown>;
   onStart: (key: string) => Promise<unknown>;
   onStop: (
     id: OperatorStatus["sessions"][number]["sessionId"],
@@ -141,6 +149,8 @@ export function EventOperatorControls({
   onReplace,
   onRemove,
   onSaveSettings,
+  onPrepare,
+  nextSource,
 }: ControlsProps) {
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
@@ -155,7 +165,9 @@ export function EventOperatorControls({
   const [simulcast, setSimulcast] = useState(false);
   const [consent, setConsent] = useState(false);
   const [failure, setFailure] = useState(false);
-  const [confirmStop, setConfirmStop] = useState(false);
+  const [change, setChange] = useState<{title:string; message:string; label:string; sessionId:string; epoch?:number; run:()=>Promise<unknown>} | null>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {if (change) dialog.current?.showModal(); else dialog.current?.close();}, [change]);
   const [outputKey, setOutputKey] = useState("");
   const [overrun, setOverrun] = useState(
     status.program?.broadcastPolicy?.maxOverrunMs === undefined
@@ -233,16 +245,16 @@ export function EventOperatorControls({
     } finally {
       stopLock.current = false;
       setStopBusy(false);
-      setConfirmStop(false);
+      setChange(null);
     }
   }
-  async function cut() {
+  async function cut(expected?: {expectedIntentSequence?:number}) {
     if (cutLock.current || stopLock.current || !view.canCut) return;
     cutLock.current = true;
     setCutBusy(true);
     setFailure(false);
     try {
-      await onCommand("switch_hold");
+      await onCommand("switch_hold", undefined, expected);
     } catch {
       setFailure(true);
     } finally {
@@ -268,6 +280,21 @@ export function EventOperatorControls({
       cancelLock.current = false;
     }
   }
+  function requestCommand(type: Command, key?:string, label?:string) {
+    if (!session || !status.canControl) return;
+    const source = type === "switch_next" ? nextSource : key ? status.sources.find(row => row.key === key) : undefined;
+    const expected = {expectedIntentSequence:session.intentSequence ?? 0, ...(source ? {expectedSourceRevision:source.revision} : {})};
+    setChange({title:label ?? "Change broadcast?", label:label ?? "Confirm", sessionId:session.sessionId, epoch:session.epoch,
+      message:type === "switch_next" ? "Advance the lineup. The current automatic or manual mode stays the same." : type === "set_automatic_mode" ? "Resume following the event lineup." : type === "resume_previous" ? "Return to the previous source. Automatic switching stays paused." : type === "switch_source" ? "Put this source on air and pause automatic switching." : "Pause automatic switching and hold this output.",
+      run:() => type === "switch_hold" ? cut(expected) : submit(() => onCommand(type,key,expected)),
+    });
+  }
+  async function confirmChange() {
+    if (!change || !status.canControl || change.sessionId !== session?.sessionId || change.epoch !== session?.epoch) {
+      setChange(null); setFailure(true); return;
+    }
+    const action = change.run; setChange(null); await action();
+  }
   return (
     <PageShell className="py-10">
       <PageContainer max="6xl">
@@ -276,11 +303,11 @@ export function EventOperatorControls({
           data-ph-no-capture
           data-testid="event-operator-controls"
         >
-          <nav className="flex flex-wrap gap-5 text-sm">
+          <PageNav showMyEvents={false}><BrandLink />
             <Link href={status.eventPath}>Event</Link>
             <Link href={`${status.eventPath}/host`}>Host view</Link>
             <Link href={`${status.eventPath}/edit`}>Edit event</Link>
-          </nav>
+          </PageNav>
           <header>
             <p className="text-sm text-muted">Broadcast controls</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight">
@@ -334,30 +361,31 @@ export function EventOperatorControls({
             </div>
           </dl>
           <div className="flex flex-wrap gap-3">
+            {active && session?.status === "hold" && session.resumeSource && <Button disabled={disabled} onClick={()=>requestCommand("resume_previous",status.sources.find(source=>source.sourceId===session.resumeSource?.sourceId)?.key,"Resume previous source")}>Resume previous source</Button>}
             <Button
-              disabled={disabled || !active}
-              onClick={() => submit(() => onCommand("switch_next"))}
+              disabled={disabled || !active || nextSource === null}
+              onClick={() => requestCommand("switch_next", nextSource?.key, nextSource ? `Next DJ: ${nextSource.label}` : "Next DJ") }
             >
-              Next
+              {nextSource ? `Next DJ: ${nextSource.label}` : "Next"}
             </Button>
             <Button
               variant="secondary"
               disabled={disabled || !active}
-              onClick={() => submit(() => onCommand("hold_current"))}
+              onClick={() => requestCommand("hold_current", undefined, "Hold current")}
             >
               Hold current
             </Button>
             <Button
               variant="secondary"
               disabled={!view.canCut || cutBusy}
-              onClick={() => void cut()}
+              onClick={() => requestCommand("switch_hold", undefined, "Hold slate")}
             >
               Cut to slate
             </Button>
             <Button
               variant="secondary"
               disabled={disabled || !active}
-              onClick={() => submit(() => onCommand("set_automatic_mode"))}
+              onClick={() => requestCommand("set_automatic_mode", undefined, "Return to auto")}
             >
               Return to auto
             </Button>
@@ -369,28 +397,14 @@ export function EventOperatorControls({
                 !active ||
                 session?.status === "stopping"
               }
-              onClick={() => setConfirmStop(true)}
+              onClick={() => session && setChange({title:"Stop this broadcast?",message:"The output will stop.",label:"Stop broadcast",sessionId:session.sessionId,epoch:session.epoch,run:confirmAndStop})}
             >
               Stop
             </Button>
           </div>
-          {confirmStop ? (
-            <div
-              role="group"
-              aria-label="Confirm stop"
-              className="flex flex-wrap gap-3"
-            >
-              <Button
-                disabled={stopBusy || !status.canControl}
-                onClick={() => void confirmAndStop()}
-              >
-                Confirm stop
-              </Button>
-              <Button variant="secondary" onClick={() => setConfirmStop(false)}>
-                Cancel
-              </Button>
-            </div>
-          ) : null}
+          {change && <dialog ref={dialog} onCancel={() => setChange(null)} aria-labelledby="broadcast-change-title" className="m-auto w-full max-w-md rounded-control border border-border bg-surface-strong p-6 text-foreground backdrop:bg-black/60">
+            <h2 id="broadcast-change-title" className="text-xl font-semibold">{change?.title}</h2><p className="my-4 text-sm text-muted">{change?.message}</p><div className="flex gap-3"><Button autoFocus onClick={() => setChange(null)}>Cancel</Button><Button variant={change?.label === "Stop broadcast" ? "danger" : "primary"} disabled={!status.canControl} onClick={() => void confirmChange()}>{change?.label}</Button></div>
+          </dialog>}
           <p role="status">
             {failure
               ? "Command failed"
@@ -404,6 +418,11 @@ export function EventOperatorControls({
                       ? "Command pending"
                       : ""}
           </p>
+          {onPrepare && <EventBroadcastQuickSwitch eventPath={status.eventPath} disabled={!status.canControl || stopBusy || session?.status === "stopping"} canTake={view.canTake} onPrepare={onPrepare} onTake={source => {
+            if (!session) return;
+            const expected = {expectedIntentSequence:session.intentSequence ?? 0,expectedSourceRevision:source.revision};
+            setChange({title:`Put ${source.label} on air?`,message:"This replaces the current output and pauses automatic switching.",label:`Put ${source.label} on air`,sessionId:session.sessionId,epoch:session.epoch,run:()=>submit(()=>onCommand("switch_source",source.key,expected))});
+          }} />}
           <EventOperatorSources
             sources={status.sources}
             control={{
@@ -417,7 +436,7 @@ export function EventOperatorControls({
               status.canControl && !stopBusy && session?.status !== "stopping"
             }
             onTake={(source) =>
-              void submit(() => onCommand("switch_source", source.key))
+              requestCommand("switch_source", source.key, `Put ${source.label} on air`)
             }
             onCancel={() => void cancel()}
             onCreate={onCreate}

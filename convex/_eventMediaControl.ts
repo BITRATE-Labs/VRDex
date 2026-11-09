@@ -118,6 +118,7 @@ export type EventMediaCommandType =
   | "switch_next"
   | "switch_previous"
   | "switch_source"
+  | "resume_previous"
   | "hold_current"
   | "show_hold_scene"
   | "publish_fallback_link"
@@ -235,6 +236,8 @@ export type SanitizedVrcdnOperatorOwnedOutputSetup = {
 };
 
 export type EventMediaCommandInput = {
+  expectedSourceRevision?: number;
+  expectedIntentSequence?: number;
   type: EventMediaCommandType;
   targetSourceKey?: string;
   targetSceneKey?: string;
@@ -244,6 +247,8 @@ export type EventMediaCommandInput = {
 };
 
 export type SanitizedEventMediaCommand = {
+  expectedSourceRevision?: number;
+  expectedIntentSequence?: number;
   type: EventMediaCommandType;
   targetSourceKey?: string;
   targetSceneKey?: string;
@@ -377,6 +382,7 @@ export const eventMediaCommandTypeValidator = v.union(
   v.literal("switch_next"),
   v.literal("switch_previous"),
   v.literal("switch_source"),
+  v.literal("resume_previous"),
   v.literal("hold_current"),
   v.literal("show_hold_scene"),
   v.literal("publish_fallback_link"),
@@ -683,6 +689,9 @@ export function sanitizeEventMediaWorkerArtifactLinks(
 }
 
 export function sanitizeEventMediaCommandInput(input: EventMediaCommandInput): SanitizedEventMediaCommand {
+  for (const value of [input.expectedSourceRevision, input.expectedIntentSequence]) {
+    if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) throw Error("Invalid confirmation revision.");
+  }
   const targetSourceKey = sanitizeControlKey(input.targetSourceKey, "Target source key");
   const targetSceneKey = sanitizeControlKey(input.targetSceneKey, "Target scene key");
   const targetOutputKey = sanitizeControlKey(input.targetOutputKey, "Target output key");
@@ -706,6 +715,8 @@ export function sanitizeEventMediaCommandInput(input: EventMediaCommandInput): S
 
   return {
     type: input.type,
+    ...(input.expectedSourceRevision === undefined ? {} : {expectedSourceRevision:input.expectedSourceRevision}),
+    ...(input.expectedIntentSequence === undefined ? {} : {expectedIntentSequence:input.expectedIntentSequence}),
     ...(targetSourceKey === undefined ? {} : { targetSourceKey }),
     ...(targetSceneKey === undefined ? {} : { targetSceneKey }),
     ...(targetOutputKey === undefined ? {} : { targetOutputKey }),

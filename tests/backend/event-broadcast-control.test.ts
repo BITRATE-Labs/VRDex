@@ -220,6 +220,35 @@ it("scoped idempotency and one pending operation", async () => {
   assert.deepEqual(s.committedIntent, { kind: "automatic" });
   assert.equal(s.pendingControlCommandId, a.commandId);
 });
+it("confirmed source revision and intent reject stale submissions without writes", async () => {
+  const f = await controlFixture();
+  const before = await f.receipt(f.args.sessionId);
+  for (const expected of [{expectedSourceRevision:2}, {expectedIntentSequence:1}]) {
+    await assert.rejects(f.owner.mutation(api.events.queueEventMediaCommand, {
+      currentSlug:f.event.slug, type:"switch_source", targetSourceKey:"source_a",
+      idempotencyKey:JSON.stringify(expected), ...expected,
+    }), /changed|stale/i);
+    assert.deepEqual(await f.receipt(f.args.sessionId), before);
+  }
+});
+it("Resume is unavailable until a real source was observed before slate", async () => {
+  const f = await controlFixture();
+  await assert.rejects(f.owner.mutation(api.events.queueEventMediaCommand, {currentSlug:f.event.slug,type:"resume_previous",idempotencyKey:"empty-resume"}),/unavailable/i);
+  const take = await f.take(); await f.begin(take.commandId); await f.promote(take.commandId); await f.ack(take.commandId);
+  const cut = await f.owner.mutation(api.events.queueEventMediaCommand,{currentSlug:f.event.slug,type:"switch_hold",idempotencyKey:"cut-for-resume"});
+  const held = await f.receipt(f.args.sessionId);
+  assert.equal(held.resumeSource.sourceId,f.sourceId);
+  await f.begin(cut.commandId);
+  await f.ack(cut.commandId,{observedSourceId:null,sourceRevision:undefined,slotKey:undefined,observedState:"hold",outputMs:200});
+  const resume = await f.owner.mutation(api.events.queueEventMediaCommand,{currentSlug:f.event.slug,type:"resume_previous",idempotencyKey:"resume"});
+  const operation = await f.receipt(resume.commandId);
+  assert.equal(operation.controlTarget.source.sourceId,f.sourceId);
+  assert.equal(operation.controlTarget.mode,"manual");
+  await f.begin(resume.commandId);
+  await f.t.run(({db})=>db.patch(f.sourceId,{revision:2}));
+  assert.equal((await f.promote(resume.commandId)).kind,"failed");
+  assert.equal((await f.receipt(f.args.sessionId)).committedIntent.kind,"slate");
+});
 it("first automatic slate and fallback observations persist policy mode in public status", async () => {
   const f = await controlFixture();
   assert.equal((await f.receipt(f.args.sessionId)).broadcastMode, undefined);
@@ -914,7 +943,7 @@ it("idempotency scopes stable actors and replacement sessions", async () => {
   assert.notEqual(next.sessionId, f.args.sessionId);
   assert.equal((await f.receipt(next.sessionId)).committedIntent.kind, "slate");
 });
-async function projectedControlFixture() {
+async function projectedControlFixture(mode: "automatic" | "manual" = "automatic") {
   const f = await controlFixture();
   const profile = await f.t.run(async ({ db }) => {
     const person = await db.insert("profiles", {
@@ -960,6 +989,10 @@ async function projectedControlFixture() {
   const source = config.sources.find(
     (s: { eventSlotId: string }) => s.eventSlotId === profile.slot,
   )!;
+  if (mode === "manual") await f.t.run(({db}) => db.patch(f.args.sessionId, {
+    committedIntent: {kind:"manual", sourceId:f.sourceId, revision:1},
+    broadcastMode:"manual",
+  }));
   const c = await f.owner.mutation(api.events.queueEventMediaCommand, {
     currentSlug: f.event.slug,
     type: "switch_next",
@@ -967,6 +1000,35 @@ async function projectedControlFixture() {
   });
   await f.begin(c.commandId);
   return { ...f, profile, projectedSource: source, operation: c };
+}
+for (const mode of ["automatic", "manual"] as const) {
+  it(`Next projects the authoritative ${mode} target for confirmation`, async () => {
+    const f = await projectedControlFixture(mode);
+    const next = await f.owner.query(api.events.getNextEventMediaSource,{currentSlug:f.event.slug});
+    assert.equal(next?.sourceId,f.projectedSource.id);
+    assert.equal(next?.revision,f.projectedSource.revision);
+  });
+  it(`Next preserves ${mode} mode through preparation and promotion`, async () => {
+    const f = await projectedControlFixture(mode);
+    const before = await f.receipt(f.args.sessionId);
+    const command = await f.receipt(f.operation.commandId);
+    assert.equal(command.controlTarget.mode, mode);
+    assert.equal(before.committedIntent.kind, mode);
+    assert.equal((await f.promote(f.operation.commandId)).kind, "ok");
+    const after = await f.receipt(f.args.sessionId);
+    assert.equal(after.committedIntent.kind, mode);
+    assert.equal(after.currentSourceId, before.currentSourceId);
+  });
+  it(`failed Next retains ${mode} intent and current output`, async () => {
+    const f = await projectedControlFixture(mode);
+    const before = await f.receipt(f.args.sessionId);
+    await f.t.run(({db}) => db.patch(f.profile.person, {outboundLinks:[]}));
+    assert.equal((await f.promote(f.operation.commandId)).kind, "failed");
+    const after = await f.receipt(f.args.sessionId);
+    assert.deepEqual(after.committedIntent, before.committedIntent);
+    assert.equal(after.currentSourceId, before.currentSourceId);
+    assert.equal(after.broadcastMode, before.broadcastMode);
+  });
 }
 it("profile link removal during preparation is denied without waiting for projection refresh", async () => {
   const f = await projectedControlFixture();
@@ -1254,7 +1316,7 @@ for (const visibility of ["link", "profile"] as const)
   });
 for (const promoted of [false, true])
   it(`removed and reappeared projection cannot restore ${promoted ? "promoting" : "preparing"} pinned revision on takeover`, async () => {
-    const f = await projectedControlFixture();
+    const f = await projectedControlFixture("manual");
     const original = await f.receipt(f.operation.commandId);
     if (promoted) await f.promote(f.operation.commandId);
     const profile = await f.receipt(f.profile.person);
@@ -1287,7 +1349,7 @@ for (const promoted of [false, true])
     const session = await f.receipt(f.args.sessionId);
     assert.equal(
       session.committedIntent.kind,
-      promoted ? "manual" : "automatic",
+      "manual",
     );
     if (promoted)
       assert.equal(

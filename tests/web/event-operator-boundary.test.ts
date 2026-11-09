@@ -16,6 +16,7 @@ function load(relative: string, dependencies: Record<string, unknown>) {
   const exports: Record<string, any> = {};
   vm.runInNewContext(outputText, { exports, require: (name: string) => {
     if (name in dependencies) return dependencies[name];
+    if (name === "./event-broadcast-quick-switch") return {EventBroadcastQuickSwitch:()=>null};
     if (name.startsWith('@/') || name.startsWith('.')) {
       const target = name.startsWith('@/') ? path.resolve('apps/web/src', name.slice(2)) : path.resolve(path.dirname(filename),name);
       for (const extension of ['', '.ts', '.tsx']) { try { readFileSync(target + extension); } catch { continue; }
@@ -60,12 +61,13 @@ function operatorFixture() {
   const React = webRequire('react');
   const status = { eventTitle: 'Show', eventPath: '/club/events/show', canControl: false, outputConfigurationLocked: false, serverNow: Date.now(), program: null, sessions: [], sources: [], outputs: [], commands: [], twitchAccounts: [] };
   const component = load('app/_components/event-operator-view.tsx', {
+    './event-broadcast-quick-switch': {EventBroadcastQuickSwitch:()=>null},
     'next/link': { default: (props: any) => React.createElement('a', props) },
     'convex/react': { useQuery: () => status, useMutation: (ref: string) => async (args: any) => { requests.push({ ref, args }); } },
     '@convex-generated-api': { api },
     '@/lib/event-broadcast-observation': { eventBroadcastObservationFresh: () => false },
     '@/components/ui/button': { Button: ({ variant, size, ...props }: any) => React.createElement('button', props) },
-    '@/components/ui/page-shell': { PageContainer: ({ max, ...props }: any) => React.createElement('div', props), PageShell: (props: any) => React.createElement('div', props) },
+    '@/components/ui/page-shell': { PageNav: (props: any) => React.createElement('nav', props), BrandLink: () => null, PageContainer: ({ max, ...props }: any) => React.createElement('div', props), PageShell: (props: any) => React.createElement('div', props) },
     './viewer-local-event-times': { ViewerLocalEventDateTime: () => null },
     './event-host-view': { EventHostView: () => null },
   });

@@ -28,6 +28,7 @@ export const isControl = (type: string) =>
     "switch_previous",
     "next_slot",
     "previous_slot",
+    "resume_previous",
     "hold_current",
     "switch_hold",
     "show_hold_scene",
@@ -145,6 +146,13 @@ export async function resolveControlTarget(
   session: Session,
   command: SanitizedEventMediaCommand,
 ): Promise<ControlTarget> {
+  if (command.type === "resume_previous") {
+    const source = session.resumeSource;
+    if (!source) throw Error("Previous source is unavailable.");
+    const target: ControlTarget = {kind:"source",mode:"manual",source};
+    if (!(await availableSource(db,session,target))) throw Error("Previous source is unavailable.");
+    return target;
+  }
   if (isCut(command.type)) {
     if (command.targetSceneKey) {
       const scene = await db
@@ -216,7 +224,9 @@ export async function resolveControlTarget(
   if (!source) throw Error("Event media source is unavailable.");
   const target = sourceTarget(
     source,
-    command.type === "set_automatic_mode" ? "automatic" : "manual",
+    command.type === "set_automatic_mode" ||
+      (["switch_next", "next_slot"].includes(command.type) && session.committedIntent?.kind === "automatic")
+      ? "automatic" : "manual",
   );
   if (!(await availableSource(db, session, target)))
     throw Error("Event media source is unavailable.");
@@ -326,11 +336,21 @@ export async function admitControlOperation(
   const payload = JSON.stringify(command);
   const retry = await findControlRequest(db, s, actor, key, payload);
   if (retry) return (await db.get(retry.commandId))!;
+  if (command.expectedIntentSequence !== undefined && command.expectedIntentSequence !== (s.intentSequence ?? 0))
+    throw Error("Broadcast changed. Confirm the action again.");
   if (s.pendingControlCommandId && !isCut(command.type))
     throw Error("An operation is already pending.");
   const target = await resolveControlTarget(db, s, command);
+  if (command.expectedSourceRevision !== undefined && (target.kind !== "source" || target.source.revision !== command.expectedSourceRevision))
+    throw Error("Source changed. Confirm the action again.");
+  if (["switch_next", "next_slot"].includes(command.type) && command.targetSourceKey !== undefined &&
+    (target.kind !== "source" || (await db.get(target.source.sourceId))?.key !== command.targetSourceKey))
+    throw Error("Next source changed. Confirm the action again.");
   const sequence = (await allocateSessionCommandSequence(db, s._id))!;
   const now = Date.now();
+  const resumeSource = isCut(command.type) && s.currentSourceId && s.observedSourceRevision !== undefined && s.observedSlotKey &&
+    s.programObservedAt !== undefined && now - s.programObservedAt < 15000 && s.programObservedAt <= now && (s.leaseExpiresAt ?? 0) > now
+    ? {sourceId:s.currentSourceId,revision:s.observedSourceRevision,slotKey:s.observedSlotKey} : undefined;
   if (isCut(command.type)) await supersedePending(db, s);
   const commandId = await db.insert("eventMediaCommands", {
     programId: s.programId,
@@ -358,6 +378,7 @@ export async function admitControlOperation(
   });
   await db.patch(s._id, {
     pendingControlCommandId: commandId,
+    ...(resumeSource ? {resumeSource} : {}),
     ...(isCut(command.type)
       ? {
           committedIntent: { kind: "slate" } as const,

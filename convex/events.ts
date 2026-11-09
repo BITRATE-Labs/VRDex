@@ -1,7 +1,7 @@
 import { projectSessionResources } from "./_eventBroadcastResources";
 import { resolveWorkerAllocation, validateMeasuredSnapshot } from '../workers/restream/broadcast-capacity.mjs';
 import { validateAllocationSnapshot } from '../workers/restream/worker-allocation.mjs';
-import {admitControlOperation,cancelControlOperation,isControl,supersedePending,findControlRequest,recordControlRequest} from "./_eventBroadcastControl";
+import {resolveControlTarget,admitControlOperation,cancelControlOperation,isControl,supersedePending,findControlRequest,recordControlRequest} from "./_eventBroadcastControl";
 import {canManageEventMedia} from "./_eventBroadcastAuthority";
 import { NEW_PROGRAM_MEDIA_SETTINGS, parseMediaSettings, resolveDestinationProfile } from "../workers/restream/broadcast-profiles.mjs";
 import { broadcastInputValidator, authoredBroadcastInput, eventProfileBroadcastInputChoices, resolveBroadcastInput, broadcastInputPublicUrl, eventMediaSourceBroadcastInput, eventMediaSourceProjectionAvailable, listUsableEventMediaSources } from "./_eventBroadcastSources";
@@ -243,6 +243,8 @@ const eventMediaWorkerScheduleArgs = {
 };
 
 const eventMediaCommandArgs = {
+  expectedSourceRevision:v.optional(v.number()),
+  expectedIntentSequence:v.optional(v.number()),
   idempotencyKey:v.string(),
   currentSlug: v.string(),
   type: eventMediaCommandTypeValidator,
@@ -1972,6 +1974,7 @@ export async function reconcileEventMediaScheduleChange(
 
 function workerSessionStatus(session: Doc<"eventMediaSessions">) {
   return {
+    resumeSource:session.resumeSource,
     committedIntent:session.committedIntent,intentSequence:session.intentSequence,pendingControlCommandId:session.pendingControlCommandId,
     mediaSettings: parseMediaSettings(session.mediaSettings),
     controlProtocolVersion: session.controlProtocolVersion,
@@ -2383,6 +2386,25 @@ export const getHostBySlug = query({
       return getPublicEventBySlug(ctx.db, event);
     const projection = await getEventForHost(ctx.db, event);
     return projection ? { ...projection, communitySlug: community.slug } : null;
+  },
+});
+
+export const getNextEventMediaSource = query({
+  args:{currentSlug:v.string()},
+  returns:v.union(v.null(),v.object({sourceId:v.id("eventMediaSources"),key:v.string(),label:v.string(),revision:v.number()})),
+  handler:async (ctx,args) => {
+    const subject = await requireAuthenticatedSubject(ctx);
+    const {event} = await getOperationsReadableEventBySlug(ctx,args.currentSlug,subject);
+    const program = await getLatestEventMediaProgram(ctx.db,event._id);
+    if (!program) return null;
+    const session = await getOpenEventMediaSession(ctx.db,program);
+    if (!session || session.controlProtocolVersion !== 2 || session.stopRequestedAt !== undefined || ["stopping","ended","error"].includes(session.status)) return null;
+    try {
+      const target = await resolveControlTarget(ctx.db,session,{type:"switch_next",publicFallbackLinks:[]});
+      if (target.kind !== "source") return null;
+      const source = await ctx.db.get(target.source.sourceId);
+      return source ? {sourceId:source._id,key:source.key,label:source.label,revision:target.source.revision} : null;
+    } catch {return null;}
   },
 });
 

@@ -24,7 +24,7 @@ async function sourceAuthority(ctx: MutationCtx, currentSlug: string, sourceId: 
   return { actor, event, source, program };
 }
 
-async function insertSource(ctx: MutationCtx, args: { currentSlug: string; label: string; url: string; sourceId?: Id<"eventMediaSources"> }) {
+async function insertSource(ctx: MutationCtx, args: { currentSlug: string; label: string; url: string; sourceId?: Id<"eventMediaSources">; idempotencyKey?:string }) {
   const { subject: actor } = await requireActiveBrowserSessionSubject(ctx);
   const { event } = await getMediaManageableEventBySlug(ctx, args.currentSlug, actor);
   const input = parseBroadcastInputUrl(args.url);
@@ -33,20 +33,28 @@ async function insertSource(ctx: MutationCtx, args: { currentSlug: string; label
   if (previous?.state === "disabled") throw new Error("Event source is disabled.");
   const now = Date.now();
   const programId = await getOrCreateEventMediaProgram(ctx.db, event, now);
+  if (args.idempotencyKey !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(args.idempotencyKey))
+    throw Error("Invalid source idempotency key.");
+  const key = `custom-${args.idempotencyKey ?? crypto.randomUUID()}`;
+  const existing = args.idempotencyKey ? await ctx.db.query("eventMediaSources").withIndex("by_programId_key", q=>q.eq("programId",programId).eq("key",key)).unique() : null;
+  if (existing) {
+    if (existing.state === "disabled" || existing.label !== label || existing.publicUrl !== broadcastInputPublicUrl(input)) throw Error("Source idempotency payload changed.");
+    return {sourceId:existing._id,revision:existing.revision ?? 1,key:existing.key,input,publicUrl:broadcastInputPublicUrl(input),label};
+  }
   if (previous && previous.programId !== programId) throw new Error("Event source belongs to an old program.");
   const sources = await listUsableEventMediaSources(ctx.db, programId, EVENT_BROADCAST_MAX_SOURCES + 1);
   if (sources.length >= EVENT_BROADCAST_MAX_SOURCES) throw new Error("Event broadcast source limit reached.");
   const revision = (previous?.revision ?? (previous ? 1 : 0)) + 1;
   const sourceId = await ctx.db.insert("eventMediaSources", {
-    programId, eventId: event._id, key: `custom-${crypto.randomUUID()}`, position: sources.reduce((max, source) => Math.max(max, source.position + 1), 0),
+    programId, eventId: event._id, key, position: sources.reduce((max, source) => Math.max(max, source.position + 1), 0),
     type: input.kind === "vrcdn" ? "vrcdn_link" : "twitch_watch", purpose: "program", state: "ready", label, input, revision,
     publicUrl: broadcastInputPublicUrl(input), createdAt: now, updatedAt: now,
   });
   await recordEventMediaAuditEvent(ctx.db, { programId, eventId: event._id, sourceId, actor, action: previous ? "source_replaced" : "source_created", privateSummary: previous ? `Replaces ${previous._id}.` : undefined, createdAt: now });
-  return { sourceId, revision };
+  return { sourceId, revision, key, input, publicUrl:broadcastInputPublicUrl(input), label };
 }
 
-export const create = mutation({ args: { currentSlug: v.string(), label: v.string(), url: v.string() }, handler: insertSource });
+export const create = mutation({ args: { currentSlug: v.string(), label: v.string(), url: v.string(), idempotencyKey:v.optional(v.string()) }, handler: insertSource });
 export const replace = mutation({ args: { currentSlug: v.string(), sourceId: v.id("eventMediaSources"), label: v.string(), url: v.string() }, handler: insertSource });
 export const rename = mutation({
   args: { currentSlug: v.string(), sourceId: v.id("eventMediaSources"), label: v.string() },

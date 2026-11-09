@@ -10,6 +10,15 @@ import { newClerkUserId } from "./_clerkTestIdentity";
 
 const schema = (schemaModule as unknown as { default?: typeof schemaModule }).default ?? schemaModule;
 const input = { kind: "twitch", channel: "basic_bit" } as const;
+test("quick-source retries reuse one authorized source and reject changed payloads", async () => {
+  const {t,owner,event} = await fixture();
+  const args = {currentSlug:event.slug,label:"Guest",url:"vrcdn:alpha",idempotencyKey:"11111111-1111-4111-8111-111111111111"};
+  const first = await owner.mutation(sourceMutation("create"),args);
+  const retry = await owner.mutation(sourceMutation("create"),args);
+  assert.deepEqual(retry,first);
+  assert.equal((await t.run(({db})=>db.query("eventMediaSources").collect())).length,1);
+  await assert.rejects(owner.mutation(sourceMutation("create"),{...args,url:"vrcdn:other"}),/idempotency/i);
+});
 const startAt = Date.UTC(2027, 9, 15, 18);
 const sourceMutation = (name: string) => makeFunctionReference<"mutation">(`eventMediaSources:${name}`);
 async function fixture() {

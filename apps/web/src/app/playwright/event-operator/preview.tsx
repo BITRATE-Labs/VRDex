@@ -110,7 +110,7 @@ export function EventOperatorFixture() {
                       revision: target.revision,
                     },
             broadcastMode:
-              type === "set_automatic_mode"
+              type === "switch_next" ? session.broadcastMode : type === "set_automatic_mode"
                 ? "automatic"
                 : slate
                   ? "hold"
