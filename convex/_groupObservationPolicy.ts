@@ -64,11 +64,20 @@ export function isManagedIntegrationSession(
   communityProfileId: Id<"profiles">,
   session: Doc<"instanceSessions">,
 ) {
-  if (!integration || session.integrationId !== integration._id ||
+  if (!integration || session.mergedIntoSessionId || session.integrationId !== integration._id ||
     (session.communityProfileId !== undefined && session.communityProfileId !== communityProfileId) ||
     session.openedAt < (integration.telemetryEpochStartedAt ?? integration.createdAt)) return false;
   const subject = readCollectionSubject(integration);
   return subject.kind === "managed" && subject.communityProfileId === communityProfileId;
+}
+
+/** Resolve only one same-scope repair alias; chains and foreign targets fail closed. */
+export async function resolveManagedIntegrationSession(db: DatabaseReader, integration: Doc<"communityVrchatIntegrations"> | null, communityProfileId: Id<"profiles">, id: Id<"instanceSessions">) {
+  const row = await db.get(id);
+  if (!row || !isManagedIntegrationSession(integration, communityProfileId, { ...row, mergedIntoSessionId: undefined })) return null;
+  if (!row.mergedIntoSessionId) return row;
+  const canonical = await db.get(row.mergedIntoSessionId);
+  return canonical && isManagedIntegrationSession(integration, communityProfileId, canonical) && canonical.providerLocation === row.providerLocation && canonical.vrchatWorldId === row.vrchatWorldId ? canonical : null;
 }
 
 export async function saveManagedPublicationChoice(ctx: MutationCtx, communityProfileId: Id<"profiles">) {

@@ -4,7 +4,7 @@
 
 **Current recommendation:** consolidate only the seven reviewed BITRATE fragments into one historical instance, while preserving their observations and old detail links. Fixing ingestion prevents future fragmentation but leaves these existing rows unchanged.
 
-**Locked decision:** BASIC authorized the forward fix, regression coverage and this repair plan on November 9, 2026. Production repair execution remains unapproved. The forward fix is merged and deployed through [PR #442](https://github.com/BITRATE-Labs/VRDex/pull/442). No repair mutation is included in that fix or this proposal.
+**Locked decision:** BASIC authorized the forward fix, regression coverage and this repair plan on November 9, 2026. Production repair execution remains unapproved. The forward fix is merged and deployed through [PR #442](https://github.com/BITRATE-Labs/VRDex/pull/442). The repair is now implemented on PR #443, with internal preview/apply/rollback entry points and no automatic invocation. It has not been deployed or applied to production.
 
 The November 9 read-only inventory contains 523 instance observations across the seven fragments: 299 already belong to the earliest session and 224 would change ownership. It also contains 564 community observations, no event associations, no relevant recap jobs across all five community events and no active same-location session. A fresh post-deployment snapshot confirms these facts and has the same historical fingerprint as the pre-deployment inventory. Refresh it again immediately before any eventual execution.
 
@@ -25,7 +25,7 @@ Keep exact production IDs and row exports in a private execution manifest. Do no
 ## Forward fix and repair order
 
 1. Completed: ship and verify the ingestion correction through the normal release process. PR #442 passed its post-window audit and production deployment; regression coverage preserves explicit closure and confirmed close/reopen.
-2. Implement alias-aware readers and an atomic apply/rollback mutation, then test them against an isolated copy of the seven fragments. The current preparation tools are read-only and cannot execute the repair.
+2. Implement alias-aware readers and an atomic apply/rollback mutation, then test them against an isolated copy of the seven fragments. Implemented: internal preview/apply/rollback functions, canonical-only indexes and one-hop alias resolution. The production dry run bundles only the shared reader through the query sandbox; write functions are not deployed or invoked.
 3. Refresh production evidence and produce an exact manifest, before/after preview, rollback package and validation results.
 4. Obtain BASIC's approval for that concrete repair. Execute only the approved manifest, then verify the signed-in list and detail views.
 
@@ -39,13 +39,13 @@ Add dedicated session-repair tooling rather than repurposing `communityTelemetry
 
 The manifest pins the deployment, integration, epoch, canonical session ID, six source session IDs, exact expected row fields, per-session observation counts and content hashes, association inventory, and affected recap jobs. Use the earliest session as canonical. Record original session rows and original observation-to-session assignments in the rollback package.
 
-Read observations by `by_sessionId_observedAt` in pages of at most 100. Complete every page before declaring the inventory complete. Reject missing rows, duplicate observation idempotency keys, overlapping fragment intervals, different identities/epochs, explicit closure evidence between fragments, alias chains, changed associations or an incomplete page traversal. New evidence of genuine closure blocks consolidation for human review.
+Read observations by `by_sessionId_observedAt` with an overflow sentinel and a total limit of 1,000 rows for this atomic operation. The snapshot and rollback payload each have a 1,000,000-byte encoded budget. These conservative limits cover the reviewed 523-row case and reject larger requests before writes; there is no truncated-success result. Reject missing rows, duplicate observation idempotency keys, overlapping fragment intervals, different identities/epochs, explicit closure evidence between fragments, alias chains, changed associations or an incomplete page traversal. New evidence of genuine closure blocks consolidation for human review.
 
 The preview must show one proposed canonical session, six retained aliases, unchanged observation identities/counts/populations, unchanged community totals and coverage, and the exact dependent records needing updates. Set the canonical first/last observation from the actual data. Clear inferred closure and keep state open with stale freshness, so it reads Unknown rather than Still open. Do not carry forward the final inferred close as a confirmed end.
 
 ### 2. Preserve old links and publish atomically
 
-**Candidate direction:** add optional `mergedIntoSessionId` to `instanceSessions`, populated only by the reviewed repair. The six original rows remain as aliases with their original fields intact. Reads resolve at most one alias hop after the same community, integration, epoch and category checks used for ordinary sessions. Reject cycles and cross-scope aliases. Normal ingestion continues to match only canonical sessions.
+**Implemented for review:** optional `mergedIntoSessionId` to `instanceSessions`, populated only by the reviewed repair. The six original rows remain as aliases with their original fields intact. Reads resolve at most one alias hop after the same community, integration, epoch and category checks used for ordinary sessions. Reject cycles and cross-scope aliases. Normal ingestion continues to match only canonical sessions.
 
 Prepare one internal apply mutation bound to the approved manifest ID and fingerprint. Re-read the seven sessions, all observation ownership and dependent records inside that transaction, then reject any mismatch before writing. Move only the 224 listed observation owners to the canonical ID, patch the canonical session, retain six aliases and write the rollback receipt in the same transaction. Observation IDs and immutable values remain unchanged. A duplicate apply returns the existing receipt without repeating writes. A previously rolled-back manifest must not silently reapply.
 
@@ -53,7 +53,7 @@ The mutation must validate actual transaction headroom, including rollback recei
 
 Exclude aliases from history and live results. Continue bounded pagination through pages containing only aliases, including Home's three-row compact list. Old direct session links resolve to the canonical detail view. Preserve permissions, connection boundaries and explicit-close behavior. Do not expose private repair metadata through public projections.
 
-Test the actual apply and rollback mutations before requesting execution approval. The read-only preparation snapshot, offline preview and its tests are review evidence, not an implemented repair. Do not begin production execution until alias support, the mutation, a fresh manifest and rollback behavior are reviewable.
+The real mutation tests exercise consolidation and rollback of a 523-observation fixture, concurrent replay, a forced failure after writes begin, later-ingestion rollback refusal, complete series/summary pagination, permission and epoch isolation, alias chains, dependency changes, genuine close/reuse and resource bounds. Desktop/mobile component tests cover old-link navigation, one history row and Unknown closure. Production execution still requires review, deployment of this patch, a fresh registered preview and explicit approval of its exact fingerprint.
 
 ### 3. Reconcile dependent calculations
 
@@ -91,7 +91,34 @@ Stop if the deployment or epoch differs, the source rows changed, another repair
 - Investigation: November 9, 2026, chat `01a1c048-3a6c-7cd3-b7ea-597018d107d3`. Private captured evidence includes seven session rows and indexed boundary polls; an assert-based consistency check passed.
 - Release: `9bd54c30753f46405e7ab6b84f098974218b5e02`, [main release run 42625754434](https://github.com/BITRATE-Labs/VRDex/actions/runs/42625754434). Production Convex function deployment and live Vercel commit were independently verified; historical snapshot unchanged afterward.
 - Source baseline: `f6f342a864282100071da2b341eca5dea23fd2e7`.
-- Preparation evidence: the private inventory contains 523 instance observations and 564 community observations. The offline preview preserves all values and records 224 ownership changes plus six retained aliases; its four tests pass. Neither alias-aware readers nor apply/rollback mutations are implemented by this document.
+- Preparation evidence: the private inventory contains 523 instance observations and 564 community observations. The offline preview preserves all values and records 224 ownership changes plus six retained aliases; its four tests pass. The implementation and production read-only dry run are now prepared for review; no production data repair or repair-code deployment has occurred.
 - Forward implementation: `convex/communityTelemetry.ts` removes miss-based closure and the scan of all open sessions. `tests/backend/community-telemetry.test.ts` covers 27-hour continuity, stale/recovered liveness, one-row history and explicit-close reuse.
 - Existing calculation workflow: [Statistics calculation repair](../deployment/group-telemetry-collector.md#statistics-calculation-repair).
 - Owning behavior: [Community group telemetry](../backend/community-group-telemetry.md#observation-model).
+
+## Operator preview and execution boundary
+
+`instanceSessionRepair:preview` is an internal read-only query. Its request pins `deploymentUrl`, `integrationId`, `epoch` and exactly seven `sessionIds`; its returned fingerprint covers the complete scoped session, instance-observation and community-observation snapshot. `apply` requires that fingerprint and re-reads the inventory inside its transaction. The deployment must match Convex's system `CONVEX_CLOUD_URL`. A replay returns the existing receipt; a rolled-back fingerprint is terminal and cannot silently reapply.
+
+Before deploying the write functions, generate a query containing only the shared read-only planner:
+
+```sh
+node scripts/preview-instance-session-repair.mjs reviewed-request.json preview-query.js
+```
+
+Run that generated query with Convex `runOneoffQuery` on the explicit production selector. The tool's query sandbox cannot mutate data. Keep its output and the exact request/fingerprint private for BASIC's review. The same planner backs the registered preview and apply preflight, so this is a dry run of the implementation rather than a second approximation.
+
+After separate merge/deploy authorization, invoke the registered preview again and compare its fingerprint with the reviewed result. Only after explicit data-repair approval may an operator invoke `instanceSessionRepair:apply` with that request plus `expectedFingerprint`. Preserve its `repairId` and `afterFingerprint`. `instanceSessionRepair:rollback` requires both values and refuses to overwrite any later change. None of these mutations is a migration, cron, public API or automatic release step.
+
+### Old links after repair
+
+```mermaid
+flowchart LR
+  A[Old session link] --> B[Sign in and return if needed]
+  B --> C[Authorized canonical detail]
+  D[Recent instances or history] --> C
+  C --> E[Back to instances]
+  E --> D
+```
+
+Existing category permissions and connection boundaries apply to both the alias and target. A foreign alias or multi-hop chain resolves to no instance.

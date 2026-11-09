@@ -1,4 +1,4 @@
-import { isManagedIntegrationSession, readIntegrationRollups, readManagedIntegration } from "./_groupObservationPolicy";
+import { resolveManagedIntegrationSession, isManagedIntegrationSession, readIntegrationRollups, readManagedIntegration } from "./_groupObservationPolicy";
 import { membershipCoverage, readPopulationGaps } from "./_collectionCoverage";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
@@ -624,8 +624,8 @@ export const listInstances = query({
       if (!Number.isFinite(liveness.stoppedAt))
         return { page: [], isDone: true, continueCursor: "" };
       const result = await ctx.db.query("instanceSessions")
-        .withIndex("by_integrationId_state_lastObservedAt", q => q
-          .eq("integrationId", state.integration!._id)
+        .withIndex("by_integration_canonical_state_lastObservedAt", q => q
+          .eq("integrationId", state.integration!._id).eq("mergedIntoSessionId", undefined)
           .eq("state", "open")
           .gte("lastObservedAt", Math.max(now - CURRENT_FRESHNESS_MS, liveness.stoppedAt))
           .lte("lastObservedAt", now))
@@ -644,13 +644,13 @@ export const listInstances = query({
     }
     const sessions = args.kind === "past"
       ? ctx.db.query("instanceSessions")
-          .withIndex("by_integrationId_state_openedAt", q => q
-            .eq("integrationId", state.integration!._id)
+          .withIndex("by_integration_canonical_state_openedAt", q => q
+            .eq("integrationId", state.integration!._id).eq("mergedIntoSessionId", undefined)
             .eq("state", "closed")
             .gte("openedAt", state.epoch))
       : ctx.db.query("instanceSessions")
-          .withIndex("by_integrationId_openedAt", q => q
-            .eq("integrationId", state.integration!._id)
+          .withIndex("by_integration_canonical_openedAt", q => q
+            .eq("integrationId", state.integration!._id).eq("mergedIntoSessionId", undefined)
             .gte("openedAt", state.epoch));
     const result = await sessions
       .order("desc")
@@ -678,11 +678,8 @@ async function requireSession(
 ) {
   const state = await context(ctx, communitySlug);
   requireCategory(state, "instance_history");
-  const session = await ctx.db.get(sessionId);
-  if (
-    !session ||
-    !isManagedIntegrationSession(state.integration, state.community._id, session)
-  )
+  const session = await resolveManagedIntegrationSession(ctx.db, state.integration, state.community._id, sessionId);
+  if (!session)
     throw new Error("Instance not found.");
   return { state, session };
 }
@@ -694,11 +691,8 @@ export const getInstance = query({
     if (!state.allowed("instance_history")) return null;
     const sessionId = ctx.db.normalizeId("instanceSessions", args.sessionId);
     if (!sessionId) return null;
-    const session = await ctx.db.get(sessionId);
-    if (
-      !session ||
-      !isManagedIntegrationSession(state.integration, state.community._id, session)
-    )
+    const session = await resolveManagedIntegrationSession(ctx.db, state.integration, state.community._id, sessionId);
+    if (!session)
       return null;
     const now = Date.now();
     const liveObservedAt = (await sessionLiveness(ctx, state, now)).observedAt;

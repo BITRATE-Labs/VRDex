@@ -328,8 +328,8 @@ export async function getPublicCommunityTelemetry(
     groupMetadata.groupCreatedAt <= latestMember.observedAt ? groupMetadata.groupCreatedAt : undefined;
   const sessions = publicMetrics.instanceHistory
     ? await db.query("instanceSessions")
-      .withIndex("by_integrationId_openedAt", (query) =>
-        query.eq("integrationId", integration._id).gte("openedAt", epochStartedAt),
+      .withIndex("by_integration_canonical_openedAt", (query) =>
+        query.eq("integrationId", integration._id).eq("mergedIntoSessionId", undefined).gte("openedAt", epochStartedAt),
       )
       .order("desc")
       .take(20)
