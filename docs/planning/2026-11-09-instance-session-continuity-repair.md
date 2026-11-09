@@ -4,9 +4,13 @@
 
 **Current recommendation:** consolidate only the seven reviewed BITRATE fragments into one historical instance, while preserving their observations and old detail links. Fixing ingestion prevents future fragmentation but leaves these existing rows unchanged.
 
-**Locked decision:** BASIC authorized the forward fix, regression coverage and this repair plan on November 9, 2026. Production repair execution remains unapproved. No repair mutation or script is included in the forward fix.
+**Locked decision:** BASIC authorized the forward fix, regression coverage and this repair plan on November 9, 2026. Production repair execution remains unapproved. The forward fix is merged and deployed through [PR #442](https://github.com/BITRATE-Labs/VRDex/pull/442). No repair mutation is included in that fix or this proposal.
+
+The November 9 read-only inventory contains 523 instance observations across the seven fragments: 299 already belong to the earliest session and 224 would change ownership. It also contains 564 community observations, no event associations, no relevant recap jobs across all five community events and no active same-location session. A fresh post-deployment snapshot confirms these facts and has the same historical fingerprint as the pre-deployment inventory. Refresh it again immediately before any eventual execution.
 
 The user should see one Recent instances row and one complete detail history. Missing observations remain gaps. The final end time should display Unknown unless new evidence establishes a genuine closure.
+
+**Current recommendation, revised after inventory:** perform one guarded atomic repair for this exact scope rather than staging partial writes. The measured inventory is small enough to rehearse as a single transaction. Reject changed or oversized inventories before writing; do not silently split the operation. This replaces the earlier staged-job proposal and avoids exposing a partially consolidated history.
 
 The main judgment is whether to approve a narrow consolidation with retained aliases. It costs a small schema/read-path change in the later repair implementation, but preserves existing session links and provides an audit trail. Deleting six rows would be simpler initially, but would break those links and discard the original session records. Broad grouping by locator is rejected because a genuine close and later reuse must remain separate.
 
@@ -20,8 +24,8 @@ Keep exact production IDs and row exports in a private execution manifest. Do no
 
 ## Forward fix and repair order
 
-1. Ship and verify the ingestion correction through the normal release process. Missing entries must preserve identity and timestamps; explicit closure and confirmed close/reopen must still work.
-2. Implement and test a bounded repair preview and executor against an isolated copy of the seven fragments.
+1. Completed: ship and verify the ingestion correction through the normal release process. PR #442 passed its post-window audit and production deployment; regression coverage preserves explicit closure and confirmed close/reopen.
+2. Implement alias-aware readers and an atomic apply/rollback mutation, then test them against an isolated copy of the seven fragments. The current preparation tools are read-only and cannot execute the repair.
 3. Refresh production evidence and produce an exact manifest, before/after preview, rollback package and validation results.
 4. Obtain BASIC's approval for that concrete repair. Execute only the approved manifest, then verify the signed-in list and detail views.
 
@@ -43,11 +47,13 @@ The preview must show one proposed canonical session, six retained aliases, unch
 
 **Candidate direction:** add optional `mergedIntoSessionId` to `instanceSessions`, populated only by the reviewed repair. The six original rows remain as aliases with their original fields intact. Reads resolve at most one alias hop after the same community, integration, epoch and category checks used for ordinary sessions. Reject cycles and cross-scope aliases. Normal ingestion continues to match only canonical sessions.
 
-Prepare a repair job with its own approved manifest ID, cursor and progress. Stage bounded observation-ID batches first. Keep the old read view until finalization, then activate the canonical mapping atomically. This avoids exposing a partially merged history while pages are being processed. Canonical detail/summary queries must consume the full approved observation set without duplicating samples or bridging gaps. A replayed batch or finalize call must be a no-op for completed work.
+Prepare one internal apply mutation bound to the approved manifest ID and fingerprint. Re-read the seven sessions, all observation ownership and dependent records inside that transaction, then reject any mismatch before writing. Move only the 224 listed observation owners to the canonical ID, patch the canonical session, retain six aliases and write the rollback receipt in the same transaction. Observation IDs and immutable values remain unchanged. A duplicate apply returns the existing receipt without repeating writes. A previously rolled-back manifest must not silently reapply.
+
+The mutation must validate actual transaction headroom, including rollback receipt size, before writing. Keep indexed reads bounded and reject overflow. A failure or conflict leaves the old view intact through transaction rollback. Canonical detail/summary queries must consume the full approved observation set without duplicating samples or bridging gaps. See [Convex transaction limits](https://docs.convex.dev/production/state/limits#transactions).
 
 Exclude aliases from history and live results. Continue bounded pagination through pages containing only aliases, including Home's three-row compact list. Old direct session links resolve to the canonical detail view. Preserve permissions, connection boundaries and explicit-close behavior. Do not expose private repair metadata through public projections.
 
-Choose the exact staging representation when implementing this task, with tests proving that reads before finalization are unchanged and reads after it are complete. Do not begin production execution until that representation and rollback behavior are reviewable.
+Test the actual apply and rollback mutations before requesting execution approval. The read-only preparation snapshot, offline preview and its tests are review evidence, not an implemented repair. Do not begin production execution until alias support, the mutation, a fresh manifest and rollback behavior are reviewable.
 
 ### 3. Reconcile dependent calculations
 
@@ -66,9 +72,9 @@ Community hour/day rollups derive from `communityPopulationObservations`. Identi
 | Explicit close followed by active reuse | Separate sessions; manifest rejected |
 | Different world, locator, integration or epoch | Manifest rejected |
 | Changed rows/associations after preview | Execution stops before activation |
-| More than 100 observations | Every page staged once, retry/resume safe |
-| Crash before activation | Original read view unchanged |
-| Duplicate batch/finalize call | No duplicate samples or counters |
+| More than 100 observations | Complete bounded reads, one atomic write transaction |
+| Error or conflict before commit | Original read view unchanged |
+| Duplicate apply or replay after rollback | No duplicate writes or silent reapplication |
 | Rollback after activation | Original list/detail view and assignments restored |
 | Staff without category access and public readers | Existing access boundaries preserved |
 
@@ -76,14 +82,16 @@ Run backend lifecycle/repair/analytics tests and typechecking. Use actual-compon
 
 ## Rollback and stop conditions
 
-Keep all seven original session rows and immutable observation values. Rollback deactivates the canonical mapping and restores the original read view using the approved manifest. If a later implementation chooses to move observation ownership, the manifest must also retain each original assignment and rollback must restore it in bounded, resumable batches before publishing the old view.
+Keep all seven original session rows and immutable observation values. Rollback restores the original session fields and all 224 ownership assignments in one guarded transaction using the approved manifest. It must verify the recorded post-repair fingerprint first. Any subsequent ingestion, association change or changed repaired field blocks automatic rollback for review. Observation values and community aggregates stay unchanged.
 
 Stop if the deployment or epoch differs, the source rows changed, another repair owns the same sessions, observation counts/hashes differ, dependencies changed, or a provider-confirmed closure contradicts the proposed continuity. Never bypass a stop with a wider inventory or inferred count replacement. Inspect new ingestion against this historical locator before activation; a newly created session since the snapshot requires a fresh preview.
 
 ## Evidence and delivery reference
 
 - Investigation: November 9, 2026, chat `01a1c048-3a6c-7cd3-b7ea-597018d107d3`. Private captured evidence includes seven session rows and indexed boundary polls; an assert-based consistency check passed.
+- Release: `9bd54c30753f46405e7ab6b84f098974218b5e02`, [main release run 42625754434](https://github.com/BITRATE-Labs/VRDex/actions/runs/42625754434). Production Convex function deployment and live Vercel commit were independently verified; historical snapshot unchanged afterward.
 - Source baseline: `f6f342a864282100071da2b341eca5dea23fd2e7`.
+- Preparation evidence: the private inventory contains 523 instance observations and 564 community observations. The offline preview preserves all values and records 224 ownership changes plus six retained aliases; its four tests pass. Neither alias-aware readers nor apply/rollback mutations are implemented by this document.
 - Forward implementation: `convex/communityTelemetry.ts` removes miss-based closure and the scan of all open sessions. `tests/backend/community-telemetry.test.ts` covers 27-hour continuity, stale/recovered liveness, one-row history and explicit-close reuse.
 - Existing calculation workflow: [Statistics calculation repair](../deployment/group-telemetry-collector.md#statistics-calculation-repair).
 - Owning behavior: [Community group telemetry](../backend/community-group-telemetry.md#observation-model).
