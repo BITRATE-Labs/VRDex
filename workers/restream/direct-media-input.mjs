@@ -68,13 +68,22 @@ export async function createDirectMediaRelay({ resolveAddresses = lookup, reques
       const response = await new Promise((resolve, reject) => {
         const range = req.headers.range;
         if (range && !/^bytes=\d*-\d*$/.test(range)) return reject(Error("Invalid range"));
+        let incoming;
         const upstream = requestSource(url, { method: "GET", agent: false, signal: abort.signal,
           headers: range ? { Range: range } : {},
           lookup: (_host, options, callback) => options.all ? callback(null, [{ address: addresses[0].address, family: 4 }]) : callback(null, addresses[0].address, 4),
-        }, resolve);
+        }, response => { incoming = response; resolve(response); });
         let closed; const closing = new Promise(resolve => { closed = resolve; }); session.sockets.add(closing);
         upstream.once("close", () => { session.sockets.delete(closing); closed(); });
-        upstream.setTimeout(5000, () => upstream.destroy(Error("Source stalled")));
+        upstream.once("socket", socket => {
+          let finish; const closingSocket = new Promise(resolve => { finish = resolve; });
+          session.sockets.add(closingSocket);
+          socket.once("close", () => { session.sockets.delete(closingSocket); finish(); });
+        });
+        upstream.setTimeout(5000, () => {
+          if (incoming?.isPaused()) { upstream.setTimeout(5000); return; }
+          upstream.destroy(Error("Source stalled"));
+        });
         upstream.once("error", reject); upstream.end();
       });
       if ([301, 302, 303, 307, 308].includes(response.statusCode)) {
@@ -88,9 +97,19 @@ export async function createDirectMediaRelay({ resolveAddresses = lookup, reques
     try {
       const { response, url } = await fetchPinned(route.url);
       const contentType = String(response.headers["content-type"] ?? "").split(";")[0].toLowerCase();
-      if (!response.readableLength && !response.readableEnded) await once(response, "readable", { signal: abort.signal });
-      const prefix = response.read(Math.min(1024, response.readableLength));
-      if (prefix) response.unshift(prefix);
+      const declaredBytes = Number(response.headers["content-length"]);
+      if (Number.isFinite(declaredBytes) && declaredBytes > bound.responseBytes) { response.destroy(); throw Error("Media byte limit"); }
+      const prefixChunks = []; let prefixBytes = 0;
+      while (prefixBytes < 1024 && !response.readableEnded) {
+        if (!response.readableLength) await once(response, "readable", { signal: abort.signal });
+        const chunk = response.read(Math.min(1024 - prefixBytes, response.readableLength));
+        if (!chunk) break;
+        prefixChunks.push(chunk); prefixBytes += chunk.length;
+        if (Buffer.concat(prefixChunks).toString("utf8").trimStart().length >= 8) break;
+      }
+      const prefix = Buffer.concat(prefixChunks);
+      if (prefix.length) response.unshift(prefix);
+      if (prefixBytes >= 1024 && !prefix.toString("utf8").trimStart()) { response.destroy(); throw Error("Unsupported media prefix"); }
       const manifest = prefix?.toString("utf8").trimStart().startsWith("#EXTM3U") || /\.m3u8$/i.test(url.pathname) || ["application/vnd.apple.mpegurl", "application/x-mpegurl"].includes(contentType);
       let bytes = 0;
       const meter = new Transform({ transform(chunk, _encoding, callback) {
@@ -105,6 +124,7 @@ export async function createDirectMediaRelay({ resolveAddresses = lookup, reques
         text = text.split(/\r?\n/).map(line => {
           if (!line.trim()) return line;
           if (!line.startsWith("#")) return routeFor(new URL(line.trim(), url).href);
+          if (line.startsWith("#EXT-X-CONTENT-STEERING:")) throw Error("Unsupported playlist steering");
           // Reject URI forms the rewriter cannot prove safe, rather than allowing
           // a demuxer to follow an unvalidated network reference.
           const rewritten = line.replace(/URI="([^"\r\n]+)"/g, (_match, uri) => `URI="${routeFor(new URL(uri, url).href)}"`);
@@ -152,7 +172,7 @@ export async function createDirectMediaRelay({ resolveAddresses = lookup, reques
           const text = await response.text();
           if (text.includes("#EXT-X-ENDLIST")) return true;
           if (!text.includes("#EXT-X-STREAM-INF:")) return false;
-          const children = text.split("\n").filter(line => line.startsWith("http:"));
+          const children = [...new Set(text.split("\n").filter(line => line.startsWith("http:")).concat([...text.matchAll(/#EXT-X-(?:MEDIA|I-FRAME-STREAM-INF):[^\n]*URI="([^"]+)"/g)].map(match => match[1])))];
           if (!children.length) return false;
           for (const child of children) if (!await visit(child, depth + 1)) return false;
           return true;

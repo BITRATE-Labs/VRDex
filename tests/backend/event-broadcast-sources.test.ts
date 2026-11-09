@@ -419,3 +419,17 @@ for (const unavailable of ["flagged", "detached", "private profile", "removed in
   const status = await owner.query(api.events.getEventMediaControlStatus, { currentSlug: event.slug });
   assert.deepEqual(status.sources.map(row => row.sourceId), [current.sourceId]);
 });
+test("direct-media sources persist canonical input and reach the worker descriptor", async () => {
+  const { eventMediaSourceWorkerDescriptor } = await import("../../convex/_eventBroadcastSources");
+  const { t, owner, event } = await fixture();
+  for (const extension of ["mp4", "webm", "ts", "m3u8"]) {
+    const url = `https://media.example.org/clip.${extension}`;
+    const result = await owner.mutation(sourceMutation("create"), { currentSlug: event.slug, label: "Video", url });
+    const row = (await t.run(ctx => ctx.db.get(result.sourceId)))!;
+    assert.deepEqual(row.input, { kind: "direct_media", url });
+    assert.equal(row.publicUrl, url);
+    const descriptor = eventMediaSourceWorkerDescriptor(row);
+    assert.deepEqual(descriptor?.input, { kind: "direct_media", url });
+    assert.equal(descriptor?.publicUrl, url);
+  }
+});

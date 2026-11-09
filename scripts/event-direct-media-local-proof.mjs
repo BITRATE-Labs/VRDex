@@ -10,6 +10,7 @@ import { createInputSupervisor } from "../workers/restream/input-supervisor.mjs"
 
 // Offline synthetic origin only. Production DNS validation still runs before the
 // injected transport connects to this fixture; no provider or hosted claim.
+if (process.platform === "win32") throw Error("Run the direct-media native proof inside the Linux worker image; FFmpeg needs POSIX pipe descriptors.");
 const directory = await mkdtemp(join(tmpdir(), "vrdex-direct-media-"));
 const common = ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=30", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", "4", "-threads", "2"];
 let server, relay;
@@ -32,14 +33,14 @@ try {
     } catch { res.writeHead(404).end(); }
   });
   server.listen(0, "127.0.0.1"); await once(server, "listening");
-  relay = await createDirectMediaRelay({ resolveAddresses: async () => [{ address: "93.184.216.34", family: 4 }], requestSource: (url, options, callback) => request(`http://127.0.0.1:${server.address().port}${url.pathname}`, { signal: options.signal, headers: options.headers }, callback) });
+  relay = await createDirectMediaRelay({ resolveAddresses: async () => [{ address: "93.184.216.34", family: 4 }], requestSource: (url, options, callback) => request(`http://127.0.0.1:${server.address().port}${url.pathname}`, { agent: false, signal: options.signal, headers: options.headers }, callback) });
   execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=30", "-t", "4", "-c:v", "libx264", "-threads", "2", "-y", join(directory, "silent.mp4")]);
   for (const ext of ["mp4", "webm", "ts", "m3u8", "silent.mp4"]) {
     const file = ext === "silent.mp4" ? ext : `fixture.${ext}`;
     const handle = relay.createInput({ source: { input: { kind: "direct_media", url: `https://media.example.org/${file}` } } });
     const transport = await handle.transportReady;
     let ready = false, ended = false, selected = false;
-    const input = createInputSupervisor({ source: { slotKey: "fixture", sourceId: ext, revision: 1, ...transport }, quality: { width: 160, height: 90, frameRate: 30 }, spawnProcess: (command, args, options) => { const child = spawn(command, args, options); let diagnostic = ""; child.stderr.on("data", chunk => { diagnostic = (diagnostic + chunk).slice(-6000); }); child.on("close", code => { if (code) console.error(diagnostic); }); return child; }, onObservation: state => { ready ||= state.ready; ended ||= Boolean(state.ended); } });
+    const input = createInputSupervisor({ source: { slotKey: "fixture", sourceId: ext, revision: 1, ...transport }, quality: { width: 160, height: 90, frameRate: 30 }, spawnProcess: (command, args, options) => { const child = spawn(command, args, options); let diagnostic = ""; child.stderr.on("data", chunk => { diagnostic = (diagnostic + chunk).slice(-6000); }); child.on("close", code => { if (code && !diagnostic.includes("matches no streams")) console.error(diagnostic); }); return child; }, onObservation: state => { ready ||= state.ready; ended ||= Boolean(state.ended); } });
     try {
       input.start(); const deadline = Date.now() + 20000;
       while (!ended && Date.now() < deadline) { const state = input.getObservation(); ready ||= state.ready; ended ||= Boolean(state.ended); if (state.ready && transport.finite && !selected) {

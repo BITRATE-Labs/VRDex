@@ -24,7 +24,7 @@ async function fixture(handler: Parameters<typeof createServer>[0], options: Rec
     requestSource: (url: URL, opts: any, callback: (response: IncomingMessage) => void) => {
       calls.push(url.href);
       opts.lookup(url.hostname, { all: true }, (...args: unknown[]) => pins.push(args));
-      return httpRequest(new URL(url.pathname, `http://127.0.0.1:${(provider.address() as any).port}`), { signal: opts.signal, headers: opts.headers }, callback);
+      return httpRequest(new URL(url.pathname, `http://127.0.0.1:${(provider.address() as any).port}`), { agent: false, signal: opts.signal, headers: opts.headers }, callback);
     }, ...options,
   });
   const handle = relay.createInput({ source: { input: { kind: "direct_media", url: "https://media.example.org/root.m3u8" } } });
@@ -67,7 +67,7 @@ test("mixed DNS answers, malformed playlist references and resource bounds fail 
   const big = await fixture((_req, res) => res.end('#EXTM3U\n' + 'x'.repeat(100)), { limits: { manifestBytes: 32 } });
   try { assert.equal((await fetch(big.url)).status, 502); } finally { await big.close(); }
 });
-test("MP4 byte ranges and acquisition disposal preserve local transport ownership", async () => {
+test("acquisition disposal preserves local transport ownership", async () => {
   const f = await fixture((_req, res) => res.end("unused"));
   const second = f.relay.createInput({ source: { input: { kind: "direct_media", url: "https://media.example.org/video.mp4" } } });
   try {
@@ -94,4 +94,43 @@ test("disposal retains acquisition capacity while physical DNS is pending", asyn
     finish([{ address: "93.184.216.34", family: 4 }]); await disposal; await response;
     assert.equal(closed, true); assert.equal(f.calls.length, 0);
   } finally { await f.close(); }
+});
+test("redirect loops, steering and stalled requests have bounded failure", async () => {
+  const loop = await fixture((_req, res) => res.writeHead(302, { location: "/root.m3u8" }).end());
+  try { assert.equal((await fetch(loop.url)).status, 502); assert.equal(loop.calls.length, 4); } finally { await loop.close(); }
+  const steering = await fixture((_req, res) => res.end('#EXTM3U\n#EXT-X-CONTENT-STEERING:SERVER-URI="steering.json"'));
+  try { assert.equal((await fetch(steering.url)).status, 502); } finally { await steering.close(); }
+  const stalled = await fixture((_req, _res) => {}, { limits: { requestMs: 25 } });
+  try { assert.equal((await fetch(stalled.url)).status, 502); } finally { await stalled.close(); }
+});
+test("chunked HLS disguised as a segment is rewritten at the actual fetch boundary", async () => {
+  const f = await fixture((req, res) => {
+    if (req.url === "/root.m3u8") res.end('#EXTM3U\n#EXTINF:1,\nchild.ts');
+    else { res.write('#'); setTimeout(() => res.end('EXTM3U\nhttps://127.0.0.1/private.ts'), 5); }
+  });
+  try { const root = await (await fetch(f.url)).text(); assert.equal((await fetch(root.split("\n").at(-1)!)).status, 502); } finally { await f.close(); }
+});
+test("finite video-only preroll resumes on selection and never reconnects after completion", async () => {
+  const { createInputSupervisor } = await import("../../workers/restream/input-supervisor.mjs");
+  const { EventEmitter } = await import("node:events");
+  const { PassThrough } = await import("node:stream");
+  let now = 0;
+  const children: any[] = [], signals: string[] = [], argumentsByChild: string[][] = [];
+  const input = createInputSupervisor({ source: { slotKey: "clip", sourceId: "clip", url: "http://127.0.0.1:1234/clip.mp4", transport: "direct_media", demuxer: "mov", finite: true }, quality: { width: 2, height: 2, frameRate: 30 }, clock: () => now, spawnProcess: (_command: string, args: string[]) => {
+    const child = new EventEmitter() as any; children.push(child); argumentsByChild.push(args);
+    child.stdio = [null, null, ...Array.from({ length: 4 }, () => new PassThrough())];
+    child.kill = (signal: string) => { signals.push(signal); if (signal === "SIGKILL") queueMicrotask(() => child.emit("close", null)); return true; };
+    return child;
+  } });
+  try {
+    input.start(); children[0].stdio[2].write("Stream map '0:a:0' matches no streams.\n"); children[0].emit("close", 1);
+    assert.equal(children.length, 2); assert.equal(argumentsByChild[1]!.includes("0:a:0"), false);
+    const frame = (index: number) => { children[1].stdio[2].write(`[Parsed_showinfo_1 @ fixture] n: ${index} pts: ${index * 3000} pts_time:0\n`); children[1].stdio[3].write(Buffer.alloc(6)); };
+    frame(0); now = 34; frame(1); assert.equal(input.getObservation().ready, true); assert.deepEqual(signals, ["SIGSTOP"]);
+    now = 10000; assert.equal(input.getObservation().ready, true); assert.equal(input.getObservation().progressing, false);
+    input.buffer.beginPlayback(); assert.deepEqual(signals, ["SIGSTOP", "SIGCONT"]);
+    now++; frame(2); assert.equal(input.getObservation().progressing, true);
+    children[1].emit("close", 1); assert.equal(input.getObservation().ended, true); assert.equal(input.getObservation().ready, false);
+    input.start(); assert.equal(children.length, 2);
+  } finally { await input.stop(); }
 });

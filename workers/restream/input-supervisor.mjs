@@ -341,6 +341,7 @@ export function createInputSupervisor({
         "1000000",
         "-probesize",
         "1000000",
+        ...(source.transport === "direct_media" ? ["-max_alloc", "67108864", "-max_pixels", "9437184", "-max_samples", "480000", "-max_streams", "16"] : []),
         ...(source.url.startsWith("http://127.0.0.1:")
           ? [...(source.transport === "direct_media" ? ["-f", source.demuxer] : ["-f", "mpegts"]), "-protocol_whitelist", "http,tcp,crypto", "-format_whitelist", "mpegts,hls,mov,matroska,webm,aac", "-rw_timeout", "5000000"]
           : []),

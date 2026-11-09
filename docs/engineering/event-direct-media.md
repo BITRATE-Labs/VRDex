@@ -20,7 +20,9 @@ segments, encryption keys and initialization maps. Mixed public/private DNS
 answers fail. Three redirects are permitted, each with fresh validation.
 HLS references are rewritten to opaque loopback routes. Playlist bodies are
 recognized by content as well as extension, including disguised child playlists.
-The decoder has explicit format and protocol allowlists.
+The decoder has explicit format and protocol allowlists, a 64 MiB single-allocation
+limit, 9,437,184 pixels per decoded frame, 480,000 samples per decoded audio
+frame and 16 input streams.
 
 Each acquisition permits eight concurrent requests, 1024 recent playlist routes,
 1 MiB manifests, 512 MiB per response and 16 GiB total, with a 12-hour lifetime.
