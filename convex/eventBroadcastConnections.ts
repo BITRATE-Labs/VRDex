@@ -6,6 +6,7 @@ import { getMediaManageableEventBySlug, getOrCreateEventMediaProgram, getLatestE
 import { connectionProvider, normalizeConnection, managedSecretName, managedSecretRefAllowed } from "./_eventBroadcastConnections";
 import type { DatabaseReader } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
+import { connectionTestProjection, projection as connectionTestValidator } from "./eventBroadcastConnectionTests";
 const connectionMetadataValidator=v.union(v.null(),v.object({outputId:v.id("eventMediaOutputs"),revision:v.number(),provider:connectionProvider,serverUrl:v.string(),playbackLinks:v.array(eventMediaPublicLinkValidator),testState:v.union(v.literal("not_tested"),v.literal("passed"),v.literal("failed"))}));
 async function primaryOutput(db: DatabaseReader, program: Doc<"eventMediaPrograms"> | null) {
   if (!program) return null;
@@ -18,12 +19,13 @@ function metadata(output: Doc<"eventMediaOutputs"> | null) {
   return { outputId: output._id, revision: output.managedConnection?.revision ?? 0, provider: output.managedConnection?.provider ?? (output.type === "vrcdn" ? "vrcdn" as const : "twitch" as const), serverUrl: output.managedConnection?.serverUrl ?? "", playbackLinks: output.playbackLinks, testState: output.managedConnection?.testState ?? "not_tested" as const };
 }
 export const getSetup = query({
-  args: { currentSlug: v.string() }, returns:v.object({connection:connectionMetadataValidator,activeTest:v.null(),canConfigure:v.boolean()}),handler: async (ctx, args) => {
+  args: { currentSlug: v.string() }, returns:v.object({connection:connectionMetadataValidator,activeTest:v.union(v.null(),connectionTestValidator),canConfigure:v.boolean()}),handler: async (ctx, args) => {
     const { subject } = await requireActiveBrowserSessionSubject(ctx);
     const { event } = await getMediaManageableEventBySlug(ctx, args.currentSlug, subject);
     const program = await getLatestEventMediaProgram(ctx.db, event._id);
     const output = await primaryOutput(ctx.db, program);
-    return { connection: metadata(output), activeTest: null, canConfigure: !program || !await eventOutputConfigurationLocked(ctx.db, program) };
+    const test = await ctx.db.query("eventBroadcastConnectionTests").withIndex("by_eventId_createdAt",q=>q.eq("eventId",event._id)).order("desc").first();
+    return { connection: metadata(output), activeTest: test?.outputId === output?._id && test?.revision === output?.managedConnection?.revision ? await connectionTestProjection(ctx,test) : null, canConfigure: !program || !await eventOutputConfigurationLocked(ctx.db, program) };
   }
 });
 export const prepareConnection = mutation({

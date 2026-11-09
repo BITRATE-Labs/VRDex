@@ -8,7 +8,7 @@ import { getMediaManageableEventBySlug, getLatestEventMediaProgram, requireStopp
 import { requireEventMediaBridgeToken, workerSessionArgs, settleTerminalSessionCommands } from "./_eventBroadcastInputs";
 
 const jobState = v.union(v.literal("queued"),v.literal("running"),v.literal("stopping"),v.literal("passed"),v.literal("failed"),v.literal("cancelled"));
-const projection = v.object({jobId:v.id("eventBroadcastConnectionTests"),revision:v.number(),state:jobState,failure:v.optional(v.string()),deadlineAt:v.number()});
+export const projection = v.object({jobId:v.id("eventBroadcastConnectionTests"),revision:v.number(),state:jobState,failure:v.optional(v.string()),deadlineAt:v.number()});
 export async function connectionTestProjection(ctx: QueryCtx | MutationCtx, job: Doc<"eventBroadcastConnectionTests">) {
  const session=await ctx.db.get(job.sessionId);
  const cleaned=!!session && ((session.dispatchStopConfirmedAt!==undefined && session.workerTaskCleanupPending===false) || (!session.dispatchId && !session.workerTaskId && session.epoch===undefined && ["ended","error"].includes(session.status) && !session.workerTaskCleanupPending));
