@@ -31,4 +31,3 @@ export function broadcastInputPublicUrl(input: BroadcastInputRef): string {
   if (stream === null) throw new Error("Invalid VRCDN stream.");
   return stream.questUrl;
 }
-

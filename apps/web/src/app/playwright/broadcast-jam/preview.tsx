@@ -220,16 +220,3 @@ export function BroadcastJam({ showTools = false }: { showTools?: boolean }) {
     <dialog ref={changeDialog} onCancel={() => setPendingChange(null)} aria-labelledby="change-title" aria-describedby="change-description" className={styles.dialog}><h2 id="change-title">{pendingChange?.title}</h2><p id="change-description">{pendingChange?.message}</p>{pendingChange?.url && <p className={styles.inputUrl}>{pendingChange.url}</p>}<div><Button autoFocus onClick={() => setPendingChange(null)}>Cancel</Button><Button variant={pendingChange?.destructive ? "danger" : "primary"} onClick={() => {const change=pendingChange; setPendingChange(null); change?.apply();}}>{pendingChange?.label}</Button></div></dialog>
   </PageContainer></PageShell>;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

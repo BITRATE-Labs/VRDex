@@ -38,7 +38,8 @@ BASIC requested the remaining plan as one delivery on November 9, 2026. YouTube 
 | Packaged Linux Twitch acquisition/process cleanup | 9 passed |
 | Packaged Linux connection test encoding/readback | 10 passed |
 | Packaged direct-media proof | MP4, WebM, TS, HLS and silent MP4 decoded, retained finite preroll and reached EOF |
-| Image build and source correspondence | Smoke passed; all 137 packaged file hashes matched this checkout |
+| Image build and source correspondence | Smoke passed; all 138 packaged file hashes matched this checkout |
+| Offline implementation closure and program-result contracts | 123 passed in Linux with canonical LF source bytes |
 | Backend/web types and edited UI lint | Passed |
 | Terraform | Formatted, initialized without a backend, and validated; no plan or apply |
 
