@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
-import type { FunctionReturnType } from "convex/server";
+import type { FunctionReturnType, FunctionArgs } from "convex/server";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@convex-generated-api";
 import { EventBroadcastQuickSwitch, type PreparedBroadcastSource } from "./event-broadcast-quick-switch";
@@ -11,6 +11,7 @@ import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/pa
 import { CopyValueRow } from "@/components/ui/copy-value-row";
 import { EventOperatorPreview } from "./event-operator-preview";
 import { parseBroadcastInputUrl } from "../../../../../convex/_broadcastInputUrl";
+import { eventBroadcastObservationFresh } from "@/lib/event-broadcast-observation";
 import { Radio, ArrowUpRight } from "lucide-react";
 import { ViewerLocalEventDateTime } from "./viewer-local-event-times";
 import { operatorViewState } from "@/lib/event-operator-state";
@@ -116,14 +117,15 @@ type TwitchInput = {
   providerRulesAccepted: boolean;
   rightsClearedMediaAccepted: boolean;
 };
-type AuthoringExpected = {expectedSourceRevision:number;expectedSessionId?:OperatorStatus["sessions"][number]["sessionId"];expectedIntentSequence?:number};
+type CommandExpected = Pick<FunctionArgs<typeof api.events.queueEventMediaCommand>, "expectedSourceRevision" | "expectedSessionId" | "expectedIntentSequence">;
+type AuthoringExpected = Pick<FunctionArgs<typeof api.eventMediaSources.remove>, "expectedSourceRevision" | "expectedSessionId" | "expectedIntentSequence">;
 type ControlsProps = {
   nextSource?: FunctionReturnType<typeof api.events.getNextEventMediaSource>;
   onPrepare?: (label:string,url:string,idempotencyKey:string)=>Promise<PreparedBroadcastSource>;
   title?: string;
   onTwitch: (input: TwitchInput) => Promise<unknown>;
   status: OperatorStatus;
-  onCommand: (type: Command, key?: string, expected?: {expectedSourceRevision?:number; expectedIntentSequence?:number; expectedSessionId?:OperatorStatus["sessions"][number]["sessionId"]}) => Promise<unknown>;
+  onCommand: (type: Command, key?: string, expected?:CommandExpected) => Promise<unknown>;
   onStart: (key: string) => Promise<unknown>;
   onStop: (
     id: OperatorStatus["sessions"][number]["sessionId"],
@@ -247,7 +249,7 @@ export function EventOperatorControls({
       setChange(null);
     }
   }
-  async function cut(expected?: {expectedIntentSequence?:number; expectedSessionId?:OperatorStatus["sessions"][number]["sessionId"]}) {
+  async function cut(expected?:CommandExpected) {
     if (cutLock.current || stopLock.current || !view.canCut) return;
     cutLock.current = true;
     setCutBusy(true);
@@ -293,6 +295,10 @@ export function EventOperatorControls({
       setChange(null); setFailure(true); return;
     }
     const action = change.run; setChange(null); await action();
+  }
+  function outputHealth(output:OperatorStatus["outputs"][number]) {
+    const fresh=observationFresh && output.authorized !== false && eventBroadcastObservationFresh({serverNow:status.serverNow,elapsedMs:elapsed,leaseExpiresAt:session?.leaseExpiresAt,observedAt:session?.outputHealthObservedAt,status:session?.status});
+    return fresh ? session?.outputHealth.find(row=>row.outputId===output.outputId)?.status ?? "Unknown" : "Unknown";
   }
   const readyOutputs = status.outputs.filter(row => row.authorized !== false && ["ready", "active"].includes(row.state));
   const selectedOutput = readyOutputs.length === 1 ? readyOutputs[0].key : outputKey;
@@ -352,7 +358,7 @@ export function EventOperatorControls({
             <aside className="min-w-0 rounded-control border border-border bg-surface p-5" aria-label="Destination">
               {destination ? <>
                 <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">Destination</h2>{status.canControl && !status.outputConfigurationLocked && <Link className="text-sm text-muted" href={setupPath}>Edit connection</Link>}</div>
-                <div className="mb-4 flex items-center justify-between gap-3"><strong className="text-sm">{destination.label}</strong><span className="text-sm capitalize text-muted">{destination.state}</span></div>
+                <div className="mb-4 flex items-center justify-between gap-3"><strong className="text-sm">{destination.label}</strong><span className="text-sm capitalize text-muted">{active ? outputHealth(destination) : destination.state}</span></div>
                 {readyOutputs.length > 1 && <label className="mb-4 grid gap-2 text-sm">Primary output<select aria-label="Primary output" className="rounded-control border border-border bg-surface p-2" value={outputKey} onChange={e=>setOutputKey(e.target.value)}><option value="">Select output</option>{readyOutputs.map(row=><option key={row.outputId} value={row.key}>{row.label}</option>)}</select></label>}
                 <Button className="w-full" disabled={busy || sessionPending || !status.canControl || Boolean(active) || status.outputConfigurationLocked || !selectedOutput} onClick={()=>submit(()=>onStart(selectedOutput))}>Start</Button>
                 {destination.playbackLinks.length > 0 && <div className="mt-4 border-t border-border pt-1">{destination.playbackLinks.map(link=><CopyValueRow key={`${link.platform}:${link.url}`} label={link.label ?? `${link.platform} URL`} value={link.url}/>)}</div>}
@@ -460,6 +466,7 @@ export function EventOperatorControls({
             </div>
           </dl>
 {!destination && <EventStreamSettings settings={status.program?.mediaSettings ?? NEW_PROGRAM_MEDIA_SETTINGS} activeSettings={active ? session?.mediaSettings : undefined} canControl={status.canControl} onSave={onSaveSettings}/>}
+<section className="space-y-3"><h2 className="text-lg font-semibold">Output health</h2>{status.outputs.map(output=><div key={output.outputId} className="flex justify-between gap-3 border-b border-border py-2 text-sm"><span>{output.label}</span><span>{outputHealth(output)}</span></div>)}</section>
 <EventOperatorDiagnostics session={session} now={status.serverNow + elapsed}/>
           <section className="space-y-3">
             <h2 className="text-xl font-semibold">Handoff policy</h2>

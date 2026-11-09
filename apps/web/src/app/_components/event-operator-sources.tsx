@@ -133,6 +133,7 @@ export function EventOperatorSources({
           </div>
         ) : null}
       </div>
+      <div className={preview ? "grid items-start gap-8 min-[1000px]:grid-cols-[minmax(0,1fr)_430px]" : ""}><div>
       {visible.map((source) => {
         const target = source.publicUrl
           ? eventDjTarget(source.publicUrl)
@@ -249,6 +250,7 @@ export function EventOperatorSources({
           </Button>
         </nav>
       ) : null}
+      </div>
       {preview ? (
         <EventOperatorPreview
           key={`${preview.sourceId}:${preview.revision}`}
@@ -256,6 +258,7 @@ export function EventOperatorSources({
           onClose={() => setPreviewId(undefined)}
         />
       ) : null}
+      </div>
       <details open={editing ? true : undefined}>
         <summary className="cursor-pointer text-sm">Add input</summary>
         <fieldset
