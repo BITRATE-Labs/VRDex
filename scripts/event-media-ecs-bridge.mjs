@@ -266,8 +266,10 @@ export function taskDefinitionFor(command, config, resolve = resolveWorkerAlloca
   if (secretArn && config.outputSecretEnvName !== "VRDEX_EVENT_MEDIA_OUTPUT_INGEST_SECRET_JSON") additionalSecrets.push({name:"VRDEX_EVENT_MEDIA_OUTPUT_INGEST_SECRET_JSON", valueFrom:secretArn});
   for (const output of optional) {
     const ref = output?.credentialRef;
-    const arn = ref && resolveOutputSecretArn(ref,config);
     // Missing optional binding is a destination setup fault, not primary failure.
+    let arn;
+    try { arn = ref && resolveOutputSecretArn(ref,config); }
+    catch { continue; }
     if (!arn) continue;
     bindings[ref] = arn;
   }
