@@ -91,7 +91,7 @@ export const replace = mutation({ args: {...sourceExpectationArgs, currentSlug: 
 export const rename = mutation({
   args: { currentSlug: v.string(), sourceId: v.id("eventMediaSources"), label: v.string() },
   handler: async (ctx, args) => {
-    const { actor, event, source } = await sourceAuthority(ctx, args.currentSlug, args.sourceId, args);
+    const { actor, event, source } = await sourceAuthority(ctx, args.currentSlug, args.sourceId);
     if (source.state === "disabled") throw new Error("Event source is disabled.");
     const now = Date.now();
     await ctx.db.patch(source._id, { label: sourceLabel(args.label), updatedAt: now });
