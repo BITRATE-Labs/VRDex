@@ -14,7 +14,7 @@ BASIC requested retaining userCount, queueSize and platform totals alongside the
 
 ## Queue UX prototype
 
-Use the existing dark VRDex primitives and chart library. Compare an unstacked solid population series and dashed queue series on one count axis. Give an exact-value tooltip/table, a simple Queue visibility control, and an optional Diagnostics disclosure with userCount and reported platform sum/breakdown. Show missing intervals as gaps and missing queue as unknown, never as a zero line.
+Use the existing dark VRDex primitives and chart library. Compare an unstacked solid population series and dashed queue series on one count axis. Give an exact-value tooltip/table, an optional Diagnostics disclosure with userCount and reported platform sum/breakdown. Show missing intervals as gaps and missing queue as unknown, never as a zero line.
 
 Use clearly marked synthetic sample states for queue present, true zero, missing historical queue and conflicting diagnostic counts. Include the earlier requested closed-to-new-joins marker, continuing population afterward. No marker for an unknown closure. Confirmed closure markers are always shown, without a visibility control. Preview labels are candidates for BASIC review, not shipped product prose.
 
@@ -25,14 +25,14 @@ The existing instance page remains unchanged until the UX is accepted. Build the
 ~~~mermaid
 flowchart LR
  A[Instance detail] --> B[Population and queue chart]
- B --> C[Toggle Queue]
+ B --> C[Compare platform and queue lines]
  B --> D[Inspect exact sample table]
  D --> E[Expand Diagnostics]
 ~~~
 
 ## UX reference pass
 
-Inspected web screenshots on November 9: [Searchable comparison chart and table](https://mobbin.com/screens/67b0a484-9bc6-4e7b-bb04-5ef269facd6d) places a legend and compare control next to the chart; [Base44 analytics](https://mobbin.com/screens/da0f9406-dbdd-47b4-af80-3e3f97a21459) shows a filter popover obscuring the chart. Reuse the compact adjacent-control pattern. Avoid a popover for two series. These are single-screen observations, not verified interaction journeys.
+Inspected web screenshots on November 9: [Searchable comparison chart and table](https://mobbin.com/screens/67b0a484-9bc6-4e7b-bb04-5ef269facd6d) places a legend and compare control next to the chart; [Base44 analytics](https://mobbin.com/screens/da0f9406-dbdd-47b4-af80-3e3f97a21459) shows a filter popover obscuring the chart. BASIC subsequently chose plain legend labels and automatic queue visibility. No series menu or toggle is needed. These are single-screen observations, not verified interaction journeys.
 
 ## Deferred and risks
 
@@ -42,6 +42,6 @@ No historical queue reconstruction, count correction, production field-definitio
 
 [Open the live closure example](http://127.0.0.1:6019/iframe.html?id=clubs-instance-population-preview--confirmed-closure&viewMode=story). The Sample case control switches between paired counts, historical unknowns, conflicting counts and confirmed closure. This is a local Storybook server and uses synthetic data.
 
-Locked revision from BASIC: label the total Population, add separate Windows and Android lines, remove the gap caption and closure-marker toggle. Show Queue only when at least one sample is positive, with an adjacent checkbox. Zero-only and wholly missing queues have no chart line or control, while exact values retain zero versus unknown. Platform fields stay independent from Population and missing platform samples remain gaps. Keep the exact-value table and Diagnostics collapsed initially. That keeps the chart readable while retaining inspectable counts one action away. BASIC should review the updated multi-line chart and contrast before production integration. No recap or population calculation changes are proposed here.
+Locked revision from BASIC: label the total Population, add separate Windows and Android lines, remove the gap caption and closure-marker toggle. Show Queue automatically only when at least one sample is positive. It has a plain legend label and no toggle. Zero-only and wholly missing queues have no chart line or control, while exact values retain zero versus unknown. Platform fields stay independent from Population and missing platform samples remain gaps. Keep the exact-value table and Diagnostics collapsed initially. That keeps the chart readable while retaining inspectable counts one action away. BASIC should review the updated multi-line chart and contrast before production integration. No recap or population calculation changes are proposed here.
 
 Desktop and mobile browser checks pass for the preview. The mobile closure label was moved above its marker after visual review found clipping. The production instance screen is unchanged.

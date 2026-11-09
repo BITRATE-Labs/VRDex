@@ -27,10 +27,7 @@ test("paired samples keep gaps, zero and independent queue values @storybook-vis
     await expect(page.getByText("Windows: 14", { exact: true })).toBeVisible();
     await expect(page.getByText("Android: 4", { exact: true })).toBeVisible();
   }
-  await page.getByRole("checkbox", { name: "Queue", exact: true }).uncheck();
-  await expect(page.locator(".recharts-line-curve")).toHaveCount(3);
-  await expect(values.getByRole("columnheader", { name: "Queue", exact: true })).toHaveCount(0);
-  await page.getByRole("checkbox", { name: "Queue", exact: true }).check();
+  await expect(page.getByRole("checkbox", { name: "Queue", exact: true })).toHaveCount(0);
   await page.getByText("Diagnostics", { exact: true }).click();
   await expect(page.getByRole("table", { name: "Synthetic diagnostic counts" })).toContainText("standalonewindows: 14");
   await page.mouse.move(0, 0);

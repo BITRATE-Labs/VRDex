@@ -27,7 +27,7 @@ Files: workers/group-telemetry/vrchat-client.mjs and its snapshot tests; convex/
 
 Files: new isolated instance-population chart component, dedicated Storybook stories and a targeted desktop/mobile browser test. Do not edit production club chart or account route.
 
-- [x] Build a small working prototype using existing primitives/library. Solid Population, Windows and Android lines and a dashed Queue on one axis, exact table, diagnostic disclosure, measured-zero versus unknown and automatic confirmed closure marker. Omit the queue line and control when no sample is positive.
+- [x] Build a small working prototype using existing primitives/library. Solid Population, Windows and Android lines and a dashed Queue on one axis, exact table, diagnostic disclosure, measured-zero versus unknown and automatic confirmed closure marker. Show Queue automatically when a sample is positive, with no visibility toggle.
 - [x] Add labelled sample cases and do a desktop/mobile visual pass with no overflow. Respect screenshot selection contract; do not create backend writes.
 - [x] Start/reuse Storybook on a task-specific local port, open the exact preview in the built-in browser and keep it available for BASIC. Record URL, fixture limits and remaining design decisions.
 

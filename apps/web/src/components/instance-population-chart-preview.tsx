@@ -4,7 +4,7 @@ import { useState } from "react";
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { CheckboxField, Field, Select } from "@/components/ui/field";
+import { Field, Select } from "@/components/ui/field";
 
 type Sample = {
   minute: number;
@@ -48,12 +48,10 @@ const time = (minute: number) => `${20 + Math.floor(minute / 60)}:${String(minut
 
 export function InstancePopulationChartPreview({ initialScenario = "paired" }: { initialScenario?: PopulationPreviewScenario }) {
   const [scenario, setScenario] = useState(initialScenario);
-  const [showQueue, setShowQueue] = useState(true);
   const [showTable, setShowTable] = useState(false);
   const [diagnostics, setDiagnostics] = useState(false);
   const points = samples[scenario];
   const hasQueue = points.some((point) => (point.queueSize ?? 0) > 0);
-  const queueVisible = hasQueue && showQueue;
   const hasPlatforms = points.some((point) => point.platforms !== undefined);
   const closedAt = scenario === "closure" ? 60 : null;
 
@@ -83,9 +81,9 @@ export function InstancePopulationChartPreview({ initialScenario = "paired" }: {
               <span className="flex items-center gap-2"><span className="w-5 border-t-2 border-success" />Windows</span>
               <span className="flex items-center gap-2"><span className="w-5 border-t-2 border-warning" />Android</span>
             </> : null}
-            {hasQueue ? <CheckboxField checked={showQueue} onChange={(event) => setShowQueue(event.target.checked)}>
+            {hasQueue ? <span className="flex items-center gap-2">
               <span className="w-5 border-t-2 border-dashed border-muted" />Queue
-            </CheckboxField> : null}
+            </span> : null}
           </div>
         </div>
         <div className="h-72 min-w-0" role="group" aria-label="Population and queue chart">
@@ -100,7 +98,7 @@ export function InstancePopulationChartPreview({ initialScenario = "paired" }: {
                   <p className="mb-2 text-muted">{time(point.minute)}</p>
                   <p>Population: {count(point.population)}</p>
                   {hasPlatforms ? <><p>Windows: {count(point.platforms?.standalonewindows)}</p><p>Android: {count(point.platforms?.android)}</p></> : null}
-                  {queueVisible ? <p>Queue: {count(point.queueSize)}</p> : null}
+                  {hasQueue ? <p>Queue: {count(point.queueSize)}</p> : null}
                 </div> : null;
               }} />
               {closedAt !== null ? <ReferenceLine x={closedAt} stroke="var(--muted)" strokeDasharray="2 4" label={{ value: "Closed to new joins", position: "top", fill: "var(--muted)", fontSize: 10 }} /> : null}
@@ -109,7 +107,7 @@ export function InstancePopulationChartPreview({ initialScenario = "paired" }: {
                 <Line name="Windows" dataKey="platforms.standalonewindows" type="linear" stroke="var(--success)" strokeWidth={2} dot={{ r: 2 }} connectNulls={false} isAnimationActive={false} />
                 <Line name="Android" dataKey="platforms.android" type="linear" stroke="var(--warning)" strokeWidth={2} dot={{ r: 2 }} connectNulls={false} isAnimationActive={false} />
               </> : null}
-              {queueVisible ? <Line name="Queue" dataKey="queueSize" type="linear" stroke="var(--muted)" strokeWidth={2} strokeDasharray="5 4" dot={{ r: 3 }} connectNulls={false} isAnimationActive={false} /> : null}
+              {hasQueue ? <Line name="Queue" dataKey="queueSize" type="linear" stroke="var(--muted)" strokeWidth={2} strokeDasharray="5 4" dot={{ r: 3 }} connectNulls={false} isAnimationActive={false} /> : null}
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -123,8 +121,8 @@ export function InstancePopulationChartPreview({ initialScenario = "paired" }: {
         {showTable ? <div id="population-sample-table" className="mt-5 overflow-x-auto">
           <table className="w-full text-left text-sm tabular-nums">
             <caption className="sr-only">Exact synthetic sample values</caption>
-            <thead className="border-b border-border text-muted"><tr><th className="py-3 pr-4 font-normal">Time</th><th className="px-2 py-3 font-normal">Population</th>{hasPlatforms ? <><th className="px-2 py-3 font-normal">Windows</th><th className="px-2 py-3 font-normal">Android</th></> : null}{showQueue ? <th className="px-2 py-3 font-normal">Queue</th> : null}</tr></thead>
-            <tbody>{points.map((point) => <tr key={point.minute} className="border-b border-border"><th scope="row" className="py-3 pr-4 font-normal">{time(point.minute)}</th><td className="px-2 py-3">{count(point.population)}</td>{hasPlatforms ? <><td className="px-2 py-3">{count(point.platforms?.standalonewindows)}</td><td className="px-2 py-3">{count(point.platforms?.android)}</td></> : null}{showQueue ? <td className="px-2 py-3">{count(point.queueSize)}</td> : null}</tr>)}</tbody>
+            <thead className="border-b border-border text-muted"><tr><th className="py-3 pr-4 font-normal">Time</th><th className="px-2 py-3 font-normal">Population</th>{hasPlatforms ? <><th className="px-2 py-3 font-normal">Windows</th><th className="px-2 py-3 font-normal">Android</th></> : null}<th className="px-2 py-3 font-normal">Queue</th></tr></thead>
+            <tbody>{points.map((point) => <tr key={point.minute} className="border-b border-border"><th scope="row" className="py-3 pr-4 font-normal">{time(point.minute)}</th><td className="px-2 py-3">{count(point.population)}</td>{hasPlatforms ? <><td className="px-2 py-3">{count(point.platforms?.standalonewindows)}</td><td className="px-2 py-3">{count(point.platforms?.android)}</td></> : null}<td className="px-2 py-3">{count(point.queueSize)}</td></tr>)}</tbody>
           </table>
         </div> : null}
       </Card>
