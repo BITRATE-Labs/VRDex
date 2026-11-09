@@ -34,7 +34,7 @@ BASIC requested the remaining plan as one delivery on November 9, 2026. YouTube 
 | Web state, authority, preview, adapters and validation | 34 passed |
 | Full web suite after current-main integration | 1164 passed |
 | Credential broker, transport and test-screen suites | 18 passed |
-| Production-component browser flows | 20 passed together, including desktop/mobile, legacy metadata, passed-test editing, active-test recovery, retained replacement drafts and connection-request renewal |
+| Production-component browser flows | 21 passed together, including desktop/mobile, legacy metadata, passed-test editing, active-test recovery, retained replacement drafts and request renewal |
 | Packaged Linux renderer and timing | 68 passed |
 | Packaged Linux Twitch acquisition/process cleanup | 9 passed |
 | Packaged Linux connection test encoding/readback | 10 passed |
@@ -54,6 +54,8 @@ The final recovery pass also separates connection-test teardown from source cont
 While a connection test is active, ordinary source controls are disabled and their backend commands are rejected. Stop and test cancellation remain available. Control, connection-test and rendered-state regressions passed 102 tests.
 
 Confirmed expired or irreversibly abandoned connection requests receive a new request ID on retry. Uncertain commits retain their original ID, including a committed grant replayed after expiry. Grant and broker regressions passed 13 tests.
+
+Quick switch also retains uncertain preparation IDs and renews completed checks, so an expired temporary source cannot leave the form stuck. Restoring a deployment-owned VRCDN account clears incompatible managed metadata; all ten connection tests pass, including successful worker scheduling after restoration.
 
 Finite selection now closes preroll before starting a fresh pacing clock. The rebuilt packaged image passed all five offline media cases. After 6.5 seconds of preroll, four-second MP4, WebM, HLS and silent MP4 inputs retained 3.8 to 3.9 seconds of progressing playback, with one active decoder at a time. Direct-media, input-manager and worker regressions passed 222 tests. The prepared frame and silence cover fresh-decoder startup for at most five seconds.
 

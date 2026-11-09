@@ -42,6 +42,7 @@ export function EventBroadcastQuickSwitch({eventPath, disabled, canTake, onPrepa
     try {
       const prepared = await onPrepare(name,url,request.current.key);
       if (generation.current !== current) return;
+      request.current = null;
       setSource(prepared);
       const response = await fetch(`${eventPath}/operate/status?ids=${encodeURIComponent(prepared.sourceId)}`, {signal:AbortSignal.timeout(12_000)});
       if (!response.ok) throw Error();

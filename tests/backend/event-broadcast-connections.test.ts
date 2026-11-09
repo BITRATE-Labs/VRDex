@@ -7,6 +7,7 @@ import schemaModule from '../../convex/schema';
 import { api } from '../../convex/_generated/api';
 import { newClerkUserId } from './_clerkTestIdentity';
 import { normalizeConnection, managedSecretRefAllowed } from '../../convex/_eventBroadcastConnections';
+import { bindVrcdnTestAccount } from './_eventOutputAccountFixture';
 const schema = (schemaModule as unknown as { default?: typeof schemaModule }).default ?? schemaModule;
 const modules = { '../../convex/_generated/server.ts': () => import('../../convex/_generated/server'), '../../convex/events.ts': loadEventsWithFixtureCapacity, '../../convex/eventBroadcastConnections.ts': () => import('../../convex/eventBroadcastConnections') };
 const ref = (name: string) => makeFunctionReference<'mutation'>(`eventBroadcastConnections:${name}`);
@@ -50,6 +51,15 @@ it('abandonment fences a late commit before deleting any staged secret', async (
   const brokerToken = process.env.VRDEX_EVENT_OUTPUT_BROKER_TOKEN;
   assert.deepEqual(await f.owner.mutation(ref('abandonConnection'), { grantId: grant.grantId, brokerToken }), { canDelete: true });
   await assert.rejects(f.owner.mutation(ref('commitConnection'), { grantId: grant.grantId, brokerToken, credentialRef: prefix + grant.secretName + '-AbCd12' }), /expired/);
+});
+it('restoring a deployment VRCDN account clears managed authorization metadata and can start',async()=>{
+ const f=await fixture();const grant=await f.owner.mutation(ref('prepareConnection'),f.input);
+ const saved=await f.owner.mutation(ref('commitConnection'),{grantId:grant.grantId,credentialRef:prefix+grant.secretName+'-AbCd12',brokerToken:process.env.VRDEX_EVENT_OUTPUT_BROKER_TOKEN});
+ const event=await f.t.run(({db})=>db.get(f.event.eventId));bindVrcdnTestAccount(event!.communityProfileId!,'event-media/vrcdn/restored');
+ const restored=await f.owner.mutation(api.events.configureVrcdnOutput,{currentSlug:f.event.slug,key:'primary',label:'Restored',outputAccountKey:'test-owned',sourceConsentAccepted:true,destinationAuthorityAccepted:true,providerRulesAccepted:true,rightsClearedMediaAccepted:true});
+ assert.equal(restored.outputId,saved.connection.outputId);
+ const output=await f.t.run(({db})=>db.get(restored.outputId));assert.equal(output?.managedConnection,undefined);assert.equal(output?.credential?.secretRef,'event-media/vrcdn/restored');
+ const scheduled=await f.owner.mutation(api.events.scheduleEventMediaWorker,{currentSlug:f.event.slug,startImmediately:true});assert.ok(scheduled.sessionId);
 });
 it('expired uncommitted grants require a fresh request while committed retries remain authoritative',async()=>{
  const f=await fixture();const grant=await f.owner.mutation(ref('prepareConnection'),f.input);

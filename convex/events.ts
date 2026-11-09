@@ -3868,6 +3868,7 @@ export const configureVrcdnOutput = mutation({
       accountModel: output.accountModel,
       state: output.state,
       label: output.label,
+      managedConnection: undefined,
       ...(credential === undefined ? {} : { credential }),
       vrcdnSetup: output.vrcdnSetup,
       compliance: output.compliance,

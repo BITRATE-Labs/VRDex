@@ -38,6 +38,7 @@ Object.defineProperty(fixtureClient,"watchQuery",{value:(ref:FunctionReference<"
 export function EventOperatorFixture() {
   const [status, setStatus] = useState<FixtureStatus>(initial);
   const [count, setCount] = useState(0);
+  const [preparationKeys, setPreparationKeys] = useState<string[]>([]);
   const [startedOutput, setStartedOutput] = useState("");
   const [holdRequest, setHoldRequest] = useState(false);
   const [fail, setFail] = useState(false);
@@ -148,7 +149,9 @@ export function EventOperatorFixture() {
       <EventOperatorControls
         status={status}
         nextSource={{sourceId:status.sources[0].sourceId,key:status.sources[0].key,label:status.sources[0].label,revision:status.sources[0].revision}}
-        onPrepare={async(label,url)=>{
+        onPrepare={async(label,url,idempotencyKey)=>{
+          setPreparationKeys(value=>[...value,idempotencyKey]);
+          if(fail) throw Error("fixture failure");
           const input=parseBroadcastInputUrl(url);
           const source={...fixtureSource(`quick${status.sources.length}`,label,input.kind === "twitch" ? "twitch" : "vrcdn"),input,publicUrl:broadcastInputPublicUrl(input)};
           setStatus(value=>({...value,sources:[...value.sources,source]}));
@@ -453,7 +456,9 @@ export function EventOperatorFixture() {
           Confirm task stopped
         </button>
         <output aria-label="Command count">{count}</output>
+        <output aria-label="Preparation request keys">{preparationKeys.join(",")}</output>
         <button onClick={() => setFail(true)}>Fail commands</button>
+        <button onClick={() => setFail(false)}>Allow commands</button>
         <button
           onClick={() =>
             setStatus((value) => ({ ...value, canControl: false }))

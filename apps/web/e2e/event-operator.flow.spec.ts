@@ -98,3 +98,11 @@ test("a confirmation cannot apply after the worker epoch changes @flow @fixture"
  await page.getByRole("dialog").getByRole("button",{name:"Put Custom on air",exact:true}).click();
  await expect(page.getByLabel("Command count")).toHaveText("0");await expect(page.getByText("Command failed",{exact:true})).toBeVisible();
 });
+test("Quick switch keeps uncertain request IDs and renews completed checks @flow @fixture",async({page})=>{
+ await page.goto("/playwright/event-operator");await page.getByLabel("Or paste a link",{exact:true}).fill("https://www.twitch.tv/aurora");
+ await page.getByRole("button",{name:"Fail commands",exact:true}).click();await page.getByRole("button",{name:"Check source",exact:true}).click();await expect(page.getByRole("region",{name:"Quick switch",exact:true}).getByRole("alert")).toContainText("Couldn’t check");
+ await page.getByRole("button",{name:"Allow commands",exact:true}).click();await page.getByRole("button",{name:"Check source",exact:true}).click();await expect(page.getByRole("region",{name:"Quick switch preview",exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"Check source",exact:true}).click();await expect(page.getByRole("button",{name:"Check source",exact:true})).toBeEnabled();
+ const keys=(await page.getByLabel("Preparation request keys",{exact:true}).textContent())!.split(",");
+ expect(keys).toHaveLength(3);expect(keys[0]).toBe(keys[1]);expect(keys[2]).not.toBe(keys[1]);
+});
