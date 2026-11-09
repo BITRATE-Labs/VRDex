@@ -29,7 +29,8 @@ test("direct native preview controls acquire foreground before unmute and handle
     f.video.muted = false; f.video.dispatchEvent(new Event("volumechange")); assert.equal(f.video.muted, true); assert.equal(calls, 1);
     allowed = true; f.video.muted = false; f.video.dispatchEvent(new Event("volumechange")); assert.equal(f.video.muted, false);
     f.video.dispatchEvent(new Event("volumechange")); f.video.dispatchEvent(new Event("volumechange")); assert.equal(calls, 2);
-    adapter.dispose(); f.video.muted = false; f.video.dispatchEvent(new Event("volumechange")); assert.equal(calls, 2); assert.equal(f.video.removed, true);
+    adapter.setMuted(true); f.video.muted = false; f.video.dispatchEvent(new Event("volumechange")); assert.equal(calls, 3);
+    adapter.dispose(); f.video.muted = false; f.video.dispatchEvent(new Event("volumechange")); assert.equal(calls, 3); assert.equal(f.video.removed, true);
   } finally { adapter?.dispose(); f.restore(); }
 });
 test("direct HLS preview uses bounded MSE player and disposes its ownership", async () => {

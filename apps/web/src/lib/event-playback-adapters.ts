@@ -61,7 +61,7 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
     enableControls(callback) { beforeUnmute = callback; video.controls = true; },
     async play() { const current = ++attempt; await ready; if (disposed || current !== attempt) return false;
       try { await video.play(); return !disposed && current === attempt; } catch { return false; } },
-    pause() { attempt++; video.pause(); }, setVolume(value) { video.volume = value; }, setMuted(value) { video.muted = value; },
+    pause() { attempt++; video.pause(); }, setVolume(value) { if (value === 0) audible = false; video.volume = value; }, setMuted(value) { if (value) audible = false; video.muted = value; },
     update(value) { video.title = value.title; },
     dispose() { if (disposed) return; disposed = true; attempt++; for (const [event, listener] of listeners) video.removeEventListener(event, listener); video.pause(); video.removeEventListener("volumechange", volumeChange); hls?.destroy(); if (player) releaseVrcdnTransport(player); video.removeAttribute("src"); video.load(); video.remove(); },
   };
