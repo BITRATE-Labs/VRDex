@@ -36,7 +36,10 @@ MP4 and WebM are finite. HLS preflight inspects a bounded master-playlist tree
 and marks it finite only when each media playlist has `EXT-X-ENDLIST`.
 MPEG-TS is treated as live until clean EOF. Decoded finite candidates pause in
 preroll until the program selects them. Paused preroll remains ready without
-claiming progressing playback. A decoder error after finite playback begins is
+claiming progressing playback. Selection closes the preroll decoder before
+starting a fresh decoder from the clip opening, so FFmpeg's pacing clock cannot
+catch up across the wait. During startup, the prepared frame is held with silence
+for at most five seconds. The decoders do not overlap. A decoder error after finite playback begins is
 terminal, so a partial announcement is not automatically replayed.
 
 Clean direct-media EOF emits `ended:true`. The operator coordinator consumes this
@@ -61,7 +64,8 @@ node --import tsx --test tests/backend/event-direct-media.test.ts
 Run `node scripts/event-direct-media-local-proof.mjs` inside the Linux worker
 image. The script creates synthetic MP4, WebM, MPEG-TS, HLS and silent MP4 inputs,
 passes them through the production relay and supervisor, and requires decoded
-readiness, finite preroll stability and terminal EOF. Its injected synthetic
+readiness, finite preroll stability, full selected duration after a wait longer
+than the clip, one decoder at a time and terminal EOF. Its injected synthetic
 origin does not bypass DNS validation. A container with `--network none` is enough.
 Windows FFmpeg does not support the worker's extended POSIX pipe descriptors.
 

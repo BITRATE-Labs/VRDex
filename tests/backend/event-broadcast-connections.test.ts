@@ -51,6 +51,16 @@ it('abandonment fences a late commit before deleting any staged secret', async (
   assert.deepEqual(await f.owner.mutation(ref('abandonConnection'), { grantId: grant.grantId, brokerToken }), { canDelete: true });
   await assert.rejects(f.owner.mutation(ref('commitConnection'), { grantId: grant.grantId, brokerToken, credentialRef: prefix + grant.secretName + '-AbCd12' }), /expired/);
 });
+it('expired uncommitted grants require a fresh request while committed retries remain authoritative',async()=>{
+ const f=await fixture();const grant=await f.owner.mutation(ref('prepareConnection'),f.input);
+ await f.t.run(({db})=>db.patch(grant.grantId,{expiresAt:0}));
+ await assert.rejects(f.owner.mutation(ref('prepareConnection'),f.input),/Connection request expired/);
+ const input={...f.input,requestId:'62345678-1234-1234-1234-123456789012'};
+ const fresh=await f.owner.mutation(ref('prepareConnection'),input);
+ const committed=await f.owner.mutation(ref('commitConnection'),{grantId:fresh.grantId,credentialRef:prefix+fresh.secretName+'-AbCd12',brokerToken:process.env.VRDEX_EVENT_OUTPUT_BROKER_TOKEN});
+ await f.t.run(({db})=>db.patch(fresh.grantId,{expiresAt:0}));
+ assert.deepEqual((await f.owner.mutation(ref('prepareConnection'),input)).connection,committed.connection);
+});
 
 for(const provider of ['vrcdn','twitch','custom'] as const)it(`managed ${provider} schedules with exact profile and blocks edits until real cleanup`,async()=>{
  const f=await fixture();const input={...f.input,provider,serverUrl:provider==='vrcdn'?f.input.serverUrl:provider==='twitch'?'rtmps://live.twitch.tv/app':'rtmps://stream.example.test/live'};

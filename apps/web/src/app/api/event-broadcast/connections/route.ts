@@ -22,6 +22,6 @@ export async function POST(request: Request) {
     const knownErrors=["Enter a valid stream server URL.","Enter a valid RTMP or RTMPS server URL.","Enter a VRCDN ingest server URL.","Enter a Twitch ingest server URL.","Enter a valid playback URL.","Enter an HTTPS playback URL.","Enter a stream key for this connection.","Enter a valid stream key.","Connection changed. Reload and try again.","An event media worker session is already active for this event."];
     const message=error instanceof Error?error.message:"";
     const detail=knownErrors.find(candidate=>message.includes(candidate))??"Could not save the connection. Check the server and key, then try again.";
-    return Response.json({error:detail},{status:400,headers});
+    return Response.json({error:detail,...(message.includes("Connection request expired.") ? {retryWithNewRequest:true} : {})},{status:400,headers});
   }
 }

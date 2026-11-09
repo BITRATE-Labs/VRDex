@@ -19,6 +19,18 @@ test("setup cancellation and failure remain retryable @flow @fixture",async({pag
  await page.goto("/playwright/event-operator/setup");await page.getByLabel("Stream key",{exact:true}).fill("fixture-not-a-secret");await page.getByRole("checkbox").check();await page.getByRole("button",{name:"Continue",exact:true}).click();await page.getByLabel("Playback URL",{exact:true}).fill("https://example.com/live");await page.getByRole("button",{name:"Continue",exact:true}).click();await page.getByRole("button",{name:"Test connection",exact:true}).click();await page.getByRole("button",{name:"Cancel test",exact:true}).click();await expect(page.getByRole("link",{name:"Skip test",exact:true})).toBeVisible();
  await page.getByRole("button",{name:"Test connection",exact:true}).click();await page.getByRole("button",{name:"Fail test",exact:true}).click();await expect(page.getByRole("main").getByRole("alert")).toContainText("The test");await expect(page.getByRole("button",{name:"Test connection",exact:true})).toBeEnabled();
 });
+for(const renew of [true,false]) test(`connection save retry ${renew ? "renews a confirmed expired request" : "preserves an uncertain request"} @flow @fixture`,async({page})=>{
+ const ids:string[]=[];
+ await page.route("**/api/event-broadcast/connections",async route=>{
+  const body=route.request().postDataJSON();ids.push(body.requestId);
+  if(ids.length===1) return route.fulfill({status:400,json:{error:"Could not save",...(renew ? {retryWithNewRequest:true} : {})}});
+  return route.fulfill({json:{connection:{outputId:"fixture-output",revision:1}}});
+ });
+ await page.goto("/playwright/event-operator/setup");await page.getByLabel("Stream key",{exact:true}).fill("fixture-not-a-secret");await page.getByRole("checkbox").check();await page.getByRole("button",{name:"Continue",exact:true}).click();
+ await page.getByLabel("Playback URL",{exact:true}).fill("https://example.com/live");await page.getByRole("button",{name:"Continue",exact:true}).click();await expect(page.getByRole("main").getByRole("alert")).toBeVisible();
+ await page.getByRole("button",{name:"Continue",exact:true}).click();await expect(page.getByRole("heading",{name:"Test your connection",exact:true})).toBeVisible();
+ expect(ids).toHaveLength(2);expect(ids[0]===ids[1]).toBe(!renew);
+});
 test("unsaved connection changes can be retained @flow @fixture",async({page})=>{
  await page.goto("/playwright/event-operator/setup");await page.getByLabel("Stream key",{exact:true}).fill("fixture-not-a-secret");await page.getByRole("link",{name:"Back to broadcast",exact:true}).click();await expect(page.getByRole("dialog")).toBeVisible();await page.getByRole("button",{name:"Keep editing",exact:true}).click();await expect(page.getByLabel("Stream key",{exact:true})).toHaveValue("fixture-not-a-secret");
 });

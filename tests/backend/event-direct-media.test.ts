@@ -111,14 +111,15 @@ test("chunked HLS disguised as a segment is rewritten at the actual fetch bounda
   });
   try { const root = await (await fetch(f.url)).text(); assert.equal((await fetch(root.split("\n").at(-1)!)).status, 502); } finally { await f.close(); }
 });
-test("finite video-only preroll resumes on selection and never reconnects after completion", async () => {
+test("finite preroll replaces its pacing clock only after close and never replays completion", async () => {
   const { createInputSupervisor } = await import("../../workers/restream/input-supervisor.mjs");
   const { EventEmitter } = await import("node:events");
   const { PassThrough } = await import("node:stream");
-  let now = 0;
+  let now = 0, active = 0, peak = 0;
   const children: any[] = [], signals: string[] = [], argumentsByChild: string[][] = [];
   const input = createInputSupervisor({ source: { slotKey: "clip", sourceId: "clip", url: "http://127.0.0.1:1234/clip.mp4", transport: "direct_media", demuxer: "mov", finite: true }, quality: { width: 2, height: 2, frameRate: 30 }, clock: () => now, spawnProcess: (_command: string, args: string[]) => {
     const child = new EventEmitter() as any; children.push(child); argumentsByChild.push(args);
+    peak = Math.max(peak, ++active); child.once("close", () => active--);
     child.stdio = [null, null, ...Array.from({ length: 4 }, () => new PassThrough())];
     child.kill = (signal: string) => { signals.push(signal); if (signal === "SIGKILL") queueMicrotask(() => child.emit("close", null)); return true; };
     return child;
@@ -126,12 +127,56 @@ test("finite video-only preroll resumes on selection and never reconnects after 
   try {
     input.start(); children[0].stdio[2].write("Stream map '0:a:0' matches no streams.\n"); children[0].emit("close", 1);
     assert.equal(children.length, 2); assert.equal(argumentsByChild[1]!.includes("0:a:0"), false);
-    const frame = (index: number) => { children[1].stdio[2].write(`[Parsed_showinfo_1 @ fixture] n: ${index} pts: ${index * 3000} pts_time:0\n`); children[1].stdio[3].write(Buffer.alloc(6)); };
+    const frame = (index: number) => { children.at(-1).stdio[2].write(`[Parsed_showinfo_1 @ fixture] n: ${index} pts: ${index * 3000} pts_time:0\n`); children.at(-1).stdio[3].write(Buffer.alloc(6)); };
     frame(0); now = 34; frame(1); assert.equal(input.getObservation().ready, true); assert.deepEqual(signals, ["SIGSTOP"]);
     now = 10000; assert.equal(input.getObservation().ready, true); assert.equal(input.getObservation().progressing, false);
-    input.buffer.beginPlayback(); assert.deepEqual(signals, ["SIGSTOP", "SIGCONT"]);
-    now++; frame(2); assert.equal(input.getObservation().progressing, true);
-    children[1].emit("close", 1); assert.equal(input.getObservation().ended, true); assert.equal(input.getObservation().ready, false);
-    input.start(); assert.equal(children.length, 2);
+    const prepared = input.buffer;
+    input.buffer.beginPlayback(); assert.deepEqual(signals, ["SIGSTOP", "SIGKILL"]);
+    assert.equal(children.length, 2, "replacement waits for physical close");
+    assert.equal(input.buffer.frame, prepared.frame);
+    const held = input.buffer;
+    assert.equal(input.getObservation().ready, true);
+    await Promise.resolve();
+    assert.equal(children.length, 3); assert.equal(peak, 1);
+    assert.equal(input.buffer, held, "prepared frame survives fresh decoder startup");
+    children[1].stdio[3].write(Buffer.alloc(6, 9));
+    assert.equal(input.buffer, held, "obsolete pipes cannot replace prepared frame");
+    now++; frame(0); now += 34; frame(1); assert.equal(input.getObservation().progressing, true);
+    assert.notEqual(input.buffer, prepared);
+    children[2].emit("close", 1); assert.equal(input.getObservation().ended, true); assert.equal(input.getObservation().ready, false);
+    input.start(); assert.equal(children.length, 3);
+  } finally { await input.stop(); }
+});
+test("immediate finite selection retains prepared evidence and Stop fences the pending restart", async () => {
+  const { createInputSupervisor } = await import("../../workers/restream/input-supervisor.mjs");
+  const { EventEmitter } = await import("node:events");
+  const { PassThrough } = await import("node:stream");
+  let now = 0;
+  const children: any[] = [];
+  const input = createInputSupervisor({ source: { slotKey: "clip", sourceId: "clip", url: "http://127.0.0.1:1234/clip.mp4", transport: "direct_media", demuxer: "mov", finite: true }, quality: { width: 2, height: 2, frameRate: 30 }, clock: () => now, spawnProcess: () => {
+    const child = new EventEmitter() as any; children.push(child);
+    child.stdio = [null, null, ...Array.from({ length: 4 }, () => new PassThrough())];
+    child.kill = (signal: string) => { if (signal === "SIGKILL" && !child.killed) { child.killed = true; queueMicrotask(() => child.emit("close", null)); } return true; };
+    return child;
+  } });
+  try {
+    input.start();
+    for (let index = 0; index < 2; index++) {
+      now += 34;
+      children[0].stdio[2].write(`[Parsed_showinfo_1 @ fixture] n: ${index} pts: ${index * 3000} pts_time:0\n`);
+      children[0].stdio[5].write(`frame:${index} pts:${index * 1600} pts_time:0\nlavfi.astats.Overall.Number_of_samples=1600.000000\n`);
+      children[0].stdio[3].write(Buffer.alloc(6)); children[0].stdio[4].write(Buffer.alloc(6400));
+    }
+    assert.equal(input.getObservation().ready, true);
+    const preparedFrame = input.buffer.frame;
+    input.buffer.beginPlayback();
+    assert.equal(input.getObservation().ready, true);
+    assert.equal(input.getObservation().progressing, false);
+    assert.equal(input.buffer.frame, preparedFrame);
+    assert.deepEqual(input.buffer.takeAudio(16), Buffer.alloc(16), "startup holds silence");
+    await input.stop(); await Promise.resolve();
+    assert.equal(children.length, 1, "Stop must preempt replacement spawn");
+    assert.equal(input.getObservation().ready, false);
+    assert.equal(input.getObservation().ended, undefined, "cancellation is not clip EOF");
   } finally { await input.stop(); }
 });

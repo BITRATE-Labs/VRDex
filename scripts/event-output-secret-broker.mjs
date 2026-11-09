@@ -19,7 +19,9 @@ export async function provisionConnection({ input, prepare, commit, abandon, sec
     // A lost response may hide a committed binding. Replaying the same grant is
     // authoritative; never delete a possibly referenced secret after uncertainty.
     try { return await commit({ grantId: grant.grantId, credentialRef: arn, brokerToken }); } catch { }
-    if (streamKey && abandon) { try { if ((await abandon({ grantId: grant.grantId, brokerToken })).canDelete) await secrets.send(new DeleteSecretCommand({ SecretId: arn, RecoveryWindowInDays: 7 })); } catch { } }
+    let abandoned = false;
+    if (streamKey && abandon) { try { abandoned = (await abandon({ grantId: grant.grantId, brokerToken })).canDelete; if (abandoned) await secrets.send(new DeleteSecretCommand({ SecretId: arn, RecoveryWindowInDays: 7 })); } catch { } }
+    if (abandoned) throw Error('Connection request expired.');
     throw Error('Could not save the connection. Reload and try again.');
   }
 }

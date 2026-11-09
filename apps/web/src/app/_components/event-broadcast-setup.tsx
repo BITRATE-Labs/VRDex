@@ -46,8 +46,11 @@ export function EventBroadcastSetupForm({currentSlug,eventPath,eventTitle,state,
     requestId.current ??= crypto.randomUUID();
     try {
       const response = await fetch("/api/event-broadcast/connections",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({currentSlug,provider,serverUrl:server,streamKey:key || undefined,permissionsAccepted:permissions,playbackUrl:playback,expectedRevision:revision,requestId:requestId.current})});
-      if (!response.ok) throw Error("Couldn’t save this connection. Check the details and try again.");
       const body:unknown = await response.json();
+      if (!response.ok) {
+        if (typeof body === "object" && body !== null && "retryWithNewRequest" in body && body.retryWithNewRequest === true) requestId.current=undefined;
+        throw Error("Couldn’t save this connection. Check the details and try again.");
+      }
       if (typeof body !== "object" || body === null || !("connection" in body) || typeof body.connection !== "object" || body.connection === null || !("revision" in body.connection) || typeof body.connection.revision !== "number") throw Error("Couldn’t save this connection. Try again.");
       setRevision(body.connection.revision);setKey("");setStep(3);requestId.current=undefined;
     } catch(failure) {setError(failure instanceof Error ? failure.message : "Couldn’t save this connection.");}

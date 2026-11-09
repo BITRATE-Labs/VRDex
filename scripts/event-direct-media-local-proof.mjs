@@ -39,21 +39,26 @@ try {
     const file = ext === "silent.mp4" ? ext : `fixture.${ext}`;
     const handle = relay.createInput({ source: { input: { kind: "direct_media", url: `https://media.example.org/${file}` } } });
     const transport = await handle.transportReady;
-    let ready = false, ended = false, selected = false;
-    const input = createInputSupervisor({ source: { slotKey: "fixture", sourceId: ext, revision: 1, ...transport }, quality: { width: 160, height: 90, frameRate: 30 }, spawnProcess: (command, args, options) => { const child = spawn(command, args, options); let diagnostic = ""; child.stderr.on("data", chunk => { diagnostic = (diagnostic + chunk).slice(-6000); }); child.on("close", code => { if (code && !diagnostic.includes("matches no streams")) console.error(diagnostic); }); return child; }, onObservation: state => { ready ||= state.ready; ended ||= Boolean(state.ended); } });
+    let ready = false, ended = false, selected = false, selectedAt, selectedProgressAt, activeDecoders = 0, peakDecoders = 0;
+    const input = createInputSupervisor({ source: { slotKey: "fixture", sourceId: ext, revision: 1, ...transport }, quality: { width: 160, height: 90, frameRate: 30 }, spawnProcess: (command, args, options) => { const child = spawn(command, args, options); peakDecoders = Math.max(peakDecoders, ++activeDecoders); child.once("close", () => activeDecoders--); let diagnostic = ""; child.stderr.on("data", chunk => { diagnostic = (diagnostic + chunk).slice(-6000); }); child.on("close", code => { if (code && !diagnostic.includes("matches no streams")) console.error(diagnostic); }); return child; }, onObservation: state => { ready ||= state.ready; ended ||= Boolean(state.ended); } });
     try {
-      input.start(); const deadline = Date.now() + 20000;
-      while (!ended && Date.now() < deadline) { const state = input.getObservation(); ready ||= state.ready; ended ||= Boolean(state.ended); if (state.ready && transport.finite && !selected) {
+      input.start(); const deadline = Date.now() + 30000;
+      while (!ended && Date.now() < deadline) { const state = input.getObservation(); ready ||= state.ready; ended ||= Boolean(state.ended); if (selected && state.progressing) selectedProgressAt ??= Date.now(); if (state.ready && transport.finite && !selected) {
         const pts = input.buffer.framePts;
-        await new Promise(resolve => setTimeout(resolve, 1200));
+        await new Promise(resolve => setTimeout(resolve, 6500));
         assert.equal(input.getObservation().ready, true, `${ext}: lost prepared readiness`);
         assert.equal(input.getObservation().progressing, false, `${ext}: prepared clip keeps playing`);
         assert.equal(input.buffer.framePts, pts, `${ext}: prepared clip advanced`);
         assert.equal(ended, false, `${ext}: clip finished before selection`);
-        input.buffer.beginPlayback(); selected = true;
+        selectedAt = Date.now(); input.buffer.beginPlayback(); selected = true;
       } await new Promise(resolve => setTimeout(resolve, 20)); }
       assert.ok(ready, `${ext}: no decoded A/V readiness`); assert.ok(ended, `${ext}: no terminal EOF`);
-      console.log(JSON.stringify({ format: ext, decodedAudioVideoReady: ready, terminalEof: ended, bytes: (await stat(join(directory, file))).size }));
+      const selectedDurationMs = selectedAt === undefined ? undefined : Date.now() - selectedAt;
+      const selectedProgressDurationMs = selectedProgressAt === undefined ? undefined : Date.now() - selectedProgressAt;
+      if (transport.finite) assert.ok(selectedProgressDurationMs >= 3500, `${ext}: selected progressing playback lasted only ${selectedProgressDurationMs}ms`);
+      if (transport.finite) assert.ok(selectedDurationMs >= 3500, `${ext}: selected clip caught up after preroll, played only ${selectedDurationMs}ms`);
+      assert.equal(peakDecoders, 1, `${ext}: replacement overlapped active decoder`);
+      console.log(JSON.stringify({ selectedDurationMs, selectedProgressDurationMs, peakDecoders, format: ext, decodedAudioVideoReady: ready, terminalEof: ended, bytes: (await stat(join(directory, file))).size }));
     } finally { await input.stop(); await handle.dispose(); }
   }
 } finally {

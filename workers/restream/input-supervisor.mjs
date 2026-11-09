@@ -243,7 +243,7 @@ export function createInputSupervisor({
   silenceThresholdDb,
   spawnProcess = spawn,
 }) {
-  const buffer = new LatestMediaBuffer(
+  let buffer = new LatestMediaBuffer(
     (quality.width * quality.height * 3) / 2,
   );
   let child,
@@ -256,6 +256,9 @@ export function createInputSupervisor({
     videoOnly = false,
     playbackStarted = false,
     prerollPaused = false,
+    heldBuffer,
+    heldAt,
+    restarting = false,
     generation = 0,
     stopPromise;
   let videoAt = -Infinity,
@@ -279,12 +282,36 @@ export function createInputSupervisor({
     silenceSince = undefined;
     audioLevelDb = undefined;
   };
-  const beginPlayback = buffer.beginPlayback.bind(buffer);
-  buffer.beginPlayback = () => {
-    beginPlayback();
-    playbackStarted = true;
-    if (prerollPaused) { prerollPaused = false; child?.kill("SIGCONT"); }
-  };
+  function attachPlayback(value) {
+    const beginPlayback = value.beginPlayback.bind(value);
+    value.beginPlayback = () => {
+      beginPlayback();
+      if (playbackStarted || !running || terminal) return;
+      playbackStarted = true;
+      if (!prerollPaused) return;
+      // FFmpeg 5.1 counts SIGSTOP time in -readrate's wall clock. A new
+      // process must own the selected clock, or it races through the clip.
+      heldBuffer = {
+        frame: buffer.frame,
+        beginPlayback() {},
+        takeAudio: bytes => Buffer.alloc(bytes),
+      };
+      heldAt = clock();
+      prerollPaused = false;
+      restarting = true;
+      const stopping = child, restartGeneration = ++generation;
+      stopping.once("close", () => {
+        if (!running || terminal || generation !== restartGeneration) return;
+        child = undefined;
+        restarting = false;
+        buffer = new LatestMediaBuffer((quality.width * quality.height * 3) / 2);
+        attachPlayback(buffer);
+        connect();
+      });
+      stopping.kill("SIGKILL");
+    };
+  }
+  attachPlayback(buffer);
   function getObservation() {
     const now = clock();
     timedAudioObserved ||= buffer.hasAudioTiming;
@@ -302,8 +329,9 @@ export function createInputSupervisor({
       // on air. Keep a decoded frame/PCM tail and resume only at selection.
       prerollPaused = child?.kill("SIGSTOP") === true;
     }
-    if (prerollPaused) progressing = false;
-    const ready = progressing || (prerollPaused && buffer.frame !== undefined && buffer.hasAudioTiming);
+    if (prerollPaused || restarting) progressing = false;
+    if (heldBuffer && (progressing || now - heldAt >= 5000)) heldBuffer = undefined;
+    const ready = progressing || heldBuffer !== undefined || (prerollPaused && buffer.frame !== undefined && buffer.hasAudioTiming);
     if (ready) failureSince = undefined;
     else {
       failureSince ??= now;
@@ -500,7 +528,8 @@ export function createInputSupervisor({
       if (!owns()) return;
       child = undefined;
       if (missingAudio && !videoOnly) { videoOnly = true; connect(); return; }
-      if (source.transport === "direct_media" && (code === 0 || (source.finite && frames > 0))) { terminal = true; ended = true; }
+      if (source.transport === "direct_media" && (code === 0 || (source.finite && (frames > 0 || playbackStarted)))) { terminal = true; ended = true; }
+      heldBuffer = undefined;
       reset();
       failureSince ??= clock();
       onObservation(getObservation());
@@ -513,7 +542,7 @@ export function createInputSupervisor({
   }
   return {
     source,
-    buffer,
+    get buffer() { return heldBuffer ?? buffer; },
     getObservation,
     start() {
       if (running || terminal) return;
@@ -525,7 +554,7 @@ export function createInputSupervisor({
         if (observation.ready && clock() - startedAt > 10000) attempt = 0;
         // A hung demuxer has a deadline too. Never keep a socket forever without decoded media.
         if (
-          child && !prerollPaused &&
+          child && !prerollPaused && !restarting &&
           clock() -
             Math.max(
               startedAt,
@@ -544,6 +573,7 @@ export function createInputSupervisor({
       clearTimeout(retryTimer);
       clearInterval(healthTimer);
       const stopping = child;
+      heldBuffer = undefined;
       reset();
       failureSince ??= clock();
       stopPromise = stopping

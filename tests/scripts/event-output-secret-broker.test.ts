@@ -14,6 +14,9 @@ it('reconciles a lost commit response before considering orphan cleanup', async 
   assert.equal(result.connection.revision, 1); assert.equal(deletes, 0);
 });
 it('cleans a staged orphan only after the grant is irreversibly abandoned', async () => {
-  const order = []; await assert.rejects(provisionConnection({ input, brokerToken, prepare: async () => ({ grantId: 'grant', secretName: 'generated' }), secrets: { send: async command => { order.push(command.constructor.name); return { ARN: 'arn' }; } }, commit: async () => { throw Error('failed'); }, abandon: async () => { order.push('abandoned'); return { canDelete: true }; } }), /Could not save/);
+  const order = []; await assert.rejects(provisionConnection({ input, brokerToken, prepare: async () => ({ grantId: 'grant', secretName: 'generated' }), secrets: { send: async command => { order.push(command.constructor.name); return { ARN: 'arn' }; } }, commit: async () => { throw Error('failed'); }, abandon: async () => { order.push('abandoned'); return { canDelete: true }; } }), /Connection request expired/);
   assert.deepEqual(order, ['CreateSecretCommand', 'abandoned', 'DeleteSecretCommand']);
+});
+it('uncertain commits retain the same request when abandonment is not confirmed',async()=>{
+ for(const abandon of [async()=>({canDelete:false}),async()=>{throw Error('lost response');}]) await assert.rejects(provisionConnection({input,brokerToken,prepare:async()=>({grantId:'grant',secretName:'generated'}),secrets:{send:async()=>({ARN:'arn'})},commit:async()=>{throw Error('lost response');},abandon}),error=>error.message.includes('Could not save')&&!error.message.includes('expired'));
 });
