@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import type {
   PlanReference,
   TimelineRange,
@@ -15,50 +15,48 @@ import {
   timelineNavigationHref,
   type TimelineNavigation,
 } from "@/lib/timeline/navigation";
+import { localDayBands } from "@/lib/timeline/geometry";
 import { togglePlanAction } from "@/lib/timeline/plan-actions";
 import { HOUR, inRange } from "@/lib/timeline/window-cache";
 import { useTimelinePreferences } from "./use-timeline-preferences";
 import { useTimelineData } from "./use-timeline-data";
 import { TimelineToolbar } from "./timeline-toolbar";
 import { TimelineChart } from "./timeline-chart";
-import { TimelineAgenda } from "./timeline-agenda";
 import { TimelineNight } from "./timeline-night";
 import { type TimelineActions } from "./timeline-event-bar";
 import styles from "./timeline.module.css";
-import { EventDetailPanel } from "./event-detail-panel";
-import type { PreferenceAction } from "@/lib/timeline/preferences";
-export type TimelineSelection = {
-  eventId: string;
-  slug: string;
-  slotId?: string;
-};
+import { HomeBrowseProvider, useHomeBrowse, useOptionalHomeBrowse, type TimelineSelection } from "../home-browse-provider";
+export type { TimelineSelection } from "../home-browse-provider";
 type Runtime = {
   now: number;
   navigation: TimelineNavigation;
   timeZone: string;
   hour12: boolean;
 };
-export function HomeSchedule({
+export function HomeSchedule(props: { onSelectionChange?: (selection: TimelineSelection | null) => void } = {}) {
+  const browse = useOptionalHomeBrowse();
+  return browse ? <HomeScheduleContent {...props} /> : <HomeBrowseProvider><HomeScheduleContent {...props} /></HomeBrowseProvider>;
+}
+function HomeScheduleContent({
   onSelectionChange,
 }: { onSelectionChange?: (selection: TimelineSelection | null) => void } = {}) {
+  const browse = useHomeBrowse();
   const [runtime, setRuntime] = useState<Runtime | null>(null);
   useEffect(() => {
+    if (browse.kind !== "ready") return;
     const frame = requestAnimationFrame(() => {
-      const browser = new Intl.DateTimeFormat(undefined, {
-        hour: "numeric",
-      }).resolvedOptions();
       const navigation = readTimelineNavigation(
         new URLSearchParams(window.location.search),
       );
       setRuntime({
         now: Date.now(),
         navigation,
-        timeZone: navigation.timeZone ?? browser.timeZone,
-        hour12: browser.hour12 ?? false,
+        timeZone: browse.timeZone,
+        hour12: browse.hour12,
       });
     });
     return () => cancelAnimationFrame(frame);
-  }, []);
+  }, [browse.kind, browse.timeZone, browse.hour12]);
   return (
     <>
       <noscript>
@@ -75,9 +73,16 @@ export function HomeSchedule({
           className={styles.schedule}
           aria-label="Schedule"
         >
-          <h2>Schedule</h2>
-          <div className={styles.loading} role="status">
-            Loading events
+          <TimelineToolbar navigation={{ anchor: null, timeZone: null, favoritesOnly: false }}
+            date="" timeZone="" hour12 disabled onNavigate={() => {}} onDate={() => {}} onPan={() => {}} onNow={() => {}}>
+            <div className={styles.status} role="status">Loading events</div>
+          </TimelineToolbar>
+          <div aria-hidden="true" inert className={styles.scroller}>
+            <div className={styles.canvas} style={{ width: 14400 }}>
+              <div className={styles.dayAxis} />
+              <div className={styles.hourAxis} />
+              <div className={styles.lanes} style={{ height: 376 }} />
+            </div>
           </div>
         </section>
       )}
@@ -97,15 +102,22 @@ function ScheduleContent({
   });
   const [now, setNow] = useState(runtime.now);
   const [width, setWidth] = useState(1000);
-  const [selection, setSelection] = useState<TimelineSelection | null>(null);
-  const invoker = useRef<HTMLElement | null>(null);
-  const [limit, setLimit] = useState(false);
+  const browse = useHomeBrowse();
+  const { selection, registerBeforeTimeZoneChange, setDisplayTimeZone } = browse;
+  const notifySelection = useEffectEvent((value: TimelineSelection | null) => onSelectionChange?.(value));
+  const lastSelection = useRef(selection);
+  useEffect(() => {
+    if (lastSelection.current !== selection) {
+      lastSelection.current = selection;
+      notifySelection(selection);
+    }
+  }, [selection]);
   const preference = useTimelinePreferences();
   const pending = useRef<{
     timer: ReturnType<typeof setTimeout>;
     flush: () => void;
   } | null>(null);
-  const timeZone = navigation.timeZone ?? runtime.timeZone;
+  const timeZone = browse.timeZone ?? runtime.timeZone;
   const anchor = navigation.anchor ?? now - HOUR;
   const range: TimelineRange = {
     startAt: anchor,
@@ -137,10 +149,12 @@ function ScheduleContent({
     cancelReplace();
     update?.flush();
   }, [cancelReplace]);
+  useEffect(() => registerBeforeTimeZoneChange(flushReplace), [registerBeforeTimeZoneChange, flushReplace]);
   const navigate = (changes: Partial<TimelineNavigation>, push = true) => {
     if (push) flushReplace();
     else cancelReplace();
-    const next = { ...navigation, ...changes };
+    const next = { ...navigation, timeZone, ...changes };
+    if (changes.timeZone) setDisplayTimeZone(changes.timeZone);
     const valid = normalizeTimelineAnchor(next.anchor);
     next.anchor = valid ?? Date.now() - HOUR;
     setNavigation(next);
@@ -162,6 +176,7 @@ function ScheduleContent({
         new URLSearchParams(window.location.search),
       );
       setNavigation({ ...parsed, anchor: parsed.anchor ?? Date.now() - HOUR });
+      setDisplayTimeZone(parsed.timeZone ?? new Intl.DateTimeFormat().resolvedOptions().timeZone);
     };
     // Next can keep Home mounted while a destination loads. Flush before its
     // delegated handlers navigate so Back restores the last viewed anchor.
@@ -193,42 +208,14 @@ function ScheduleContent({
       document.removeEventListener("submit", flushReplace, true);
       document.removeEventListener("keydown", key, true);
     };
-  }, [cancelReplace, flushReplace]);
+  }, [cancelReplace, flushReplace, setDisplayTimeZone]);
   const onSelect = (next: TimelineSelection) => {
-    invoker.current =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
-    setSelection(next);
-    onSelectionChange?.(next);
-  };
-  const onClose = () => {
-    setSelection(null);
-    onSelectionChange?.(null);
-    const target = invoker.current?.isConnected
-      ? invoker.current
-      : document.getElementById("schedule-heading");
-    target?.focus({ preventScroll: true });
-  };
-  const onPreferenceAction = (action: PreferenceAction) => {
-    const result =
-      action.type === "add-plan"
-        ? preference.addPlan(action.reference)
-        : action.type === "remove-plan"
-          ? preference.removePlan(action.reference)
-          : action.type === "add-favorite"
-            ? preference.addFavorite(action.profileId)
-            : preference.removeFavorite(action.profileId);
-    setLimit(result.outcome === "limit");
+    browse.selectEvent(next, document.activeElement instanceof HTMLElement ? document.activeElement : null);
   };
   const onSave = (reference: PlanReference) => {
     const action = togglePlanAction(preference.preferences.plan, reference);
     if (!action) return;
-    const result =
-      action.type === "remove-plan"
-        ? preference.removePlan(action.reference)
-        : preference.addPlan(action.reference);
-    setLimit(result.outcome === "limit");
+    browse.onPreferenceAction(action);
   };
   const actions: TimelineActions = {
     selection,
@@ -237,12 +224,10 @@ function ScheduleContent({
     onSelect,
     onSave,
     onFavorite: (profileId) => {
-      const result = preference.preferences.favoriteProfileIds.includes(
+      browse.onPreferenceAction({
+        type: preference.preferences.favoriteProfileIds.includes(profileId) ? "remove-favorite" : "add-favorite",
         profileId,
-      )
-        ? preference.removeFavorite(profileId)
-        : preference.addFavorite(profileId);
-      setLimit(result.outcome === "limit");
+      });
     },
   };
   const nextSaved = () => {
@@ -258,6 +243,16 @@ function ScheduleContent({
     if (next !== undefined) navigate({ anchor: next });
   };
   const visible = data.records.filter((event) => inRange(event, range));
+  const nextEvent = visible.length === 0 ? data.records.flatMap((event) => {
+    const schedule = event.schedule;
+    if (schedule.kind === "date_only") {
+      const nominal = Date.parse(schedule.eventDate);
+      const day = localDayBands({ startAt: nominal - 36 * HOUR, endAt: nominal + 36 * HOUR, timeZone })
+        .find((day) => formatZonedDateTimeInput(day.startAt, timeZone).slice(0, 10) === schedule.eventDate);
+      return day && day.startAt >= range.endAt ? [day.startAt] : [];
+    }
+    return schedule.startAt >= range.endAt ? [schedule.startAt] : [];
+  }).sort((a, b) => a - b)[0] : undefined;
   return (
     <section
       data-home-schedule
@@ -285,84 +280,72 @@ function ScheduleContent({
         }}
         onPan={(hours) => navigate({ anchor: anchor + hours * HOUR })}
         onNow={() => navigate({ anchor: Date.now() - HOUR })}
-      />
+      >
+        <div
+          className={styles.status}
+          role="status"
+          aria-label="Schedule data state"
+          data-state={data.kind}
+        >
+          {data.kind === "loading" && "Loading events"}
+          {data.kind === "error" && (
+            <>
+              Events unavailable{" "}
+              <Button size="sm" onClick={() => void data.retry()}>
+                Retry
+              </Button>
+            </>
+          )}
+          {data.kind === "partial" && (
+            <>
+              More events available{" "}
+              <Button size="sm" onClick={() => void data.loadMore()}>
+                More
+              </Button>
+            </>
+          )}
+          {data.kind === "ready" &&
+            visible.length === 0 &&
+            (navigation.favoritesOnly
+              ? "No favorites in this range"
+              : "No events in this range")}
+          {nextEvent !== undefined && (
+            <Button size="sm" onClick={() => navigate({ anchor: nextEvent })}>Next event</Button>
+          )}
+          {preference.persistence === "session" && <span>Not saved</span>}
+          {data.savedState === "loading" && <span>Loading events</span>}
+          {data.savedState === "error" && (
+            <>
+              <span>Events unavailable</span>
+              <Button size="sm" onClick={() => void data.retry()}>
+                Retry
+              </Button>
+            </>
+          )}
+        </div>
+      </TimelineToolbar>
       {preference.preferences.plan.length > 0 && (
         <TimelineNight
           saved={data.saved}
           range={range}
           onNext={nextSaved}
-          onSelect={onSelect}
-          onSave={onSave}
-        />
-      )}
-      {navigation.view === "timeline" ? (
-        <TimelineChart
           records={data.records}
-          lanes={data.eventLanes}
-          saved={data.saved}
-          range={range}
           now={now}
-          slotCoverage={data.slotCoverage}
-          onPan={(instant) => navigate({ anchor: instant }, false)}
-          onWidth={setWidth}
-          onNext={nextSaved}
-          {...actions}
-        />
-      ) : (
-        <TimelineAgenda
-          records={visible}
-          timeZone={timeZone}
-          slotCoverage={data.slotCoverage}
           {...actions}
         />
       )}
-      <EventDetailPanel
-        selection={selection}
-        timeZone={timeZone}
-        onClose={onClose}
-        preferences={preference.preferences}
-        onPreferenceAction={onPreferenceAction}
+      <TimelineChart
+        records={data.records}
+        lanes={data.eventLanes}
+        saved={data.saved}
+        range={range}
+        now={now}
+        slotCoverage={data.slotCoverage}
+        onPan={(instant) => navigate({ anchor: instant }, false)}
+        onWidth={setWidth}
+        onNext={nextSaved}
+        {...actions}
       />
-      <div
-        className={styles.status}
-        role="status"
-        aria-label="Schedule data state"
-        data-state={data.kind}
-      >
-        {data.kind === "loading" && "Loading events"}
-        {data.kind === "error" && (
-          <>
-            Events unavailable{" "}
-            <Button size="sm" onClick={() => void data.retry()}>
-              Retry
-            </Button>
-          </>
-        )}
-        {data.kind === "partial" && (
-          <>
-            More events available{" "}
-            <Button size="sm" onClick={() => void data.loadMore()}>
-              More
-            </Button>
-          </>
-        )}
-        {data.kind === "ready" &&
-          visible.length === 0 &&
-          (navigation.favoritesOnly
-            ? "No favorites in this range"
-            : "No events in this range")}
-        {preference.persistence === "session" && <span>Not saved</span>}
-        {limit && <span>Limit reached</span>}
-        {data.savedState === "loading" && <span>Loading events</span>}
-        {data.savedState === "error" && (
-          <>
-            <span>Events unavailable</span>
-            <Button size="sm" onClick={() => void data.retry()}>
-              Retry
-            </Button>
-          </>
-        )}
-      </div>
     </section>
   );
 }

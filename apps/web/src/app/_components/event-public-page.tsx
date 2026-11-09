@@ -1,4 +1,5 @@
 "use client";
+import { inferLineupEnds } from "@vrdex/api-contracts";
 import { useQuery } from "convex/react";
 import Link from "next/link";
 import type { FunctionReturnType } from "convex/server";
@@ -105,6 +106,7 @@ export type PublicEvent = Omit<PublicEventPreview, "worlds"> & {
   lineup?: PublicEventLineupEntry[];
   id: string;
   slug: string;
+  seriesId?: string;
   watchSurfaceEnabled: boolean;
   watchMode?: ProjectedEvent["watchMode"];
   authoredBannerImageUrl?: string;
@@ -318,16 +320,16 @@ export type PublicEventLineupEntry = {
 
 /** Legacy payloads remain usable while the backend and web deploy separately. */
 export function eventLineupForDisplay(event: PublicEvent): PublicEventLineupEntry[] {
-  if (event.lineup !== undefined) return event.lineup;
+  if (event.lineup !== undefined) return inferLineupEnds(event.lineup, event.endAt);
   const slots = event.scheduleKind === "date_only" ? [] : event.slots;
   const represented = new Set(slots.flatMap(slot => slot.performer ? [slot.performer.slug] : []));
-  return [
+  return inferLineupEnds<PublicEventLineupEntry>([
     ...slots.map(slot => ({ ...slot, key: slot.playbackKey ?? `slot-${slot.position}-${slot.startAt}` })),
     ...event.participants.filter(person => !represented.has(person.slug)).map((person, index) => ({
       key: `person-${person.slug}`, position: slots.length + index, displayLabel: person.displayName,
       roleLabel: person.roleLabel, performer: person,
     })),
-  ];
+  ], event.endAt);
 }
 
 export function EventPublicPage({ event: initialEvent }: { event: PublicEvent }) {
@@ -456,6 +458,9 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
                 <span className={actionLabelClassName}>Add to calendar</span>
                 <span className={actionMetaClassName}>Download .ics</span>
               </a> : null}
+              {event.seriesId && event.communitySlug ? <Link className={actionCardVariants({ variant: "accent" })} href={`/${event.communitySlug}/series/${event.seriesId}`}>
+                <span className={actionLabelClassName}>Upcoming nights</span>
+              </Link> : null}
               {sourceUrl ? (
                 <a className={actionCardVariants({ variant: "accent" })} href={sourceUrl} rel="noreferrer" target="_blank">
                   <span className={actionLabelClassName}>

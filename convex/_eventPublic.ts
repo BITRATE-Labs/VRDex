@@ -1,3 +1,4 @@
+import { inferLineupEnds } from "../packages/api-contracts/src/lineup-timing";
 import { eventProfileBroadcastInputChoices } from "./_eventBroadcastSources";
 import { eventOutputIsAuthorized } from "./_eventOutputSetup";
 import { eventProfileStreamChoices, resolveEventStream, type PlaybackStream } from "./_eventPlayback";
@@ -113,6 +114,7 @@ export type PublicEvent = PublicEventPreview & {
   lineup: PublicEventLineupEntry[];
   id: string;
   slug: string;
+  seriesId?: string;
   watchMode: "event_stream" | "performer_sequence";
   watchSurfaceEnabled: boolean;
   authoredBannerImageUrl?: string;
@@ -192,7 +194,19 @@ export type PublicEventLineupEntry = {
   performer?: NonNullable<PublicEvent["slots"][number]["performer"]>;
 };
 
-function publicLineup(record: PublicEventRecord): PublicEventLineupEntry[] {
+/** Infer on canonical order before projecting timed slots, so untimed rows remain barriers. */
+function effectivePublicSlots(record: PublicEventRecord, inferEnds = true): PublicEventSlotRecord[] {
+  if (record.event.scheduleKind === "date_only") return [];
+  if (!inferEnds) return record.slots.slice();
+  const ordered = [
+    ...record.slots.map(({ slot }) => ({ key: slot._id, position: slot.position, startAt: slot.startAt, endAt: slot.endAt })),
+    ...(record.lineupEntries ?? []).map(({ entry }) => ({ key: entry._id, position: entry.position, startAt: undefined, endAt: undefined })),
+  ].sort((a, b) => a.position - b.position || (a.startAt ?? Infinity) - (b.startAt ?? Infinity));
+  const ends = new Map(inferLineupEnds(ordered, record.event.endAt).map(row => [row.key, row.endAt]));
+  return record.slots.map(row => ({ ...row, slot: { ...row.slot, ...optionalField("endAt", ends.get(row.slot._id)) } }));
+}
+
+function publicLineup(record: PublicEventRecord, inferEnds = true): PublicEventLineupEntry[] {
   const represented = new Set<Id<"profiles">>();
   function performer(row: { profile?: Doc<"profiles">; imageUrl?: string; avatarAppearance?: PublicProfileAvatarAppearance }) {
     const { profile } = row;
@@ -207,7 +221,7 @@ function publicLineup(record: PublicEventRecord): PublicEventLineupEntry[] {
     } };
   }
   const rows: PublicEventLineupEntry[] = [
-    ...(record.event.scheduleKind === "date_only" ? [] : record.slots).map(row => ({
+    ...effectivePublicSlots(record, inferEnds).map(row => ({
       key: row.slot._id, position: row.slot.position, displayLabel: /^Session \d+$/.test(row.slot.displayLabel) ? row.profile?.displayName ?? `Slot ${row.slot.position + 1}` : row.slot.displayLabel,
       ...optionalField("roleLabel", row.slot.roleLabel || undefined),
       startAt: row.slot.startAt, ...optionalField("endAt", row.slot.endAt), ...performer(row),
@@ -348,7 +362,7 @@ export function toPublicEventPreviewFromRecord(
     })),
     participantCount: participants.length,
     slotCount: slots.length,
-    nextSlots: (event.scheduleKind === "date_only" ? [] : [...slots])
+    nextSlots: effectivePublicSlots(record)
       .filter(
         ({ slot }) =>
           options.now === undefined || (slot.endAt ?? slot.startAt) >= options.now,
@@ -387,7 +401,7 @@ export function toPublicEventPreviewFromRecord(
   };
 }
 
-export function toPublicEvent(record: PublicEventRecord): PublicEvent | null {
+export function toPublicEvent(record: PublicEventRecord, inferEnds = true): PublicEvent | null {
   if (record.event.slug === undefined) {
     return null;
   }
@@ -412,7 +426,7 @@ export function toPublicEvent(record: PublicEventRecord): PublicEvent | null {
   return {
     ...preview,
     id: record.event._id,
-    lineup: publicLineup(record),
+    lineup: publicLineup(record, inferEnds),
     slug: record.event.slug,
     watchMode: record.event.watchMode ?? "event_stream",
     watchSurfaceEnabled: record.event.scheduleKind !== "date_only" && (record.event.watchSurfaceEnabled ?? false),
@@ -455,7 +469,7 @@ export function toPublicEvent(record: PublicEventRecord): PublicEvent | null {
         },
       };
     }),
-    slots: (record.event.scheduleKind === "date_only" ? [] : record.slots)
+    slots: effectivePublicSlots(record, inferEnds)
       .sort((first, second) => first.slot.startAt - second.slot.startAt || first.slot.position - second.slot.position)
       .map(({ avatarAppearance, imageUrl: projectedImageUrl, profile, slot }) => {
         const sourceUrl = safeHttpsUrl(slot.sourceUrl);
@@ -510,12 +524,21 @@ export async function getPublicEventCommunityImage(db: DatabaseReader, community
   return publicEventCommunityImage(community, await getPublicProfileMediaKit(db, community, { surface: "discovery" }));
 }
 
-export async function getPublishedCommunity(db: DatabaseReader, event: Doc<"events">) {
+export async function getPublishedCommunity(
+  db: DatabaseReader,
+  event: Pick<Doc<"events">, "communityProfileId">,
+  profileCache?: Map<Id<"profiles">, Promise<Doc<"profiles"> | null>>,
+) {
   if (event.communityProfileId === undefined) {
     return undefined;
   }
 
-  const community = await db.get(event.communityProfileId);
+  let pending = profileCache?.get(event.communityProfileId);
+  if (pending === undefined) {
+    pending = db.get(event.communityProfileId);
+    profileCache?.set(event.communityProfileId, pending);
+  }
+  const community = await pending;
 
   if (
     community === null ||
@@ -796,14 +819,20 @@ export async function getPublicEventBySlug(
   }
 
   const record = await getPublicEventRecord(db, event);
+  const projected = record === null ? null : toPublicEvent(record);
+  if (projected === null || event.seriesId === undefined) {
+    return projected;
+  }
 
-  return record === null ? null : toPublicEvent(record);
+  const series = await db.get(event.seriesId);
+
+  return series === null || series.state === "removed" ? projected : { ...projected, seriesId: series._id };
 }
 
 /** Caller must authorize event operations before requesting unpublished content. */
 export async function getEventForHost(db: DatabaseReader, event: Doc<"events">): Promise<PublicEvent | null> {
   const record = await getPublicEventRecord(db, event, { includeUnpublished: true });
-  return record === null ? null : toPublicEvent(record);
+  return record === null ? null : toPublicEvent(record, false);
 }
 
 export async function getEventForEditor(
@@ -814,7 +843,7 @@ export async function getEventForEditor(
     includeAssociationMediaKits: false,
     includeUnpublished: true,
   });
-  const projected = record === null ? null : toPublicEvent(record);
+  const projected = record === null ? null : toPublicEvent(record, false);
   const authoredMediaLinks = (event.mediaLinks ?? []).flatMap(safePublicEventMediaLink);
   const [community, worldAssociations, participantAssociations, slotAssociations] = await Promise.all([
     event.communityProfileId === undefined ? null : db.get(event.communityProfileId),
@@ -842,6 +871,7 @@ export async function getEventForEditor(
     ...(record?.lineupEntries?.flatMap(row => row.entry.personProfileId ? [row.entry.personProfileId] : []) ?? []),
     ...(record?.participants.map(row => row.profile._id) ?? []),
   ]);
+  const series = event.seriesId === undefined ? null : await db.get(event.seriesId);
   const retainedLineupAssociations = {
     participantIds: participantAssociations.filter(row => !representedPersonIds.has(row.personProfileId)).map(row => row._id),
     slotIds: slotAssociations.filter(row => !projected?.slots.some(slot => slot.playbackKey === row._id)).map(row => row._id),
@@ -887,6 +917,26 @@ export async function getEventForEditor(
         ...(editableWorldAssociation === undefined ? {} : { editableWorldAssociation }),
         preservedCommunityProfileId: event.communityProfileId,
         publicationState: event.publicationState,
+        series: series === null ? null : {
+          id: series._id as string,
+          title: series.title,
+          ...optionalField("summary", series.summary),
+          timezone: series.timezone,
+          ...optionalField("venueLabel", series.venueLabel),
+          ...optionalField("worldSlug", series.worldSlug),
+          ...optionalField("sourceUrl", series.sourceUrl),
+          ...optionalField("bannerImageUrl", series.bannerImageUrl),
+          ...optionalField("thumbnailImageUrl", series.thumbnailImageUrl),
+          ...optionalField("mediaLinks", series.mediaLinks),
+          ...optionalField("watchMode", series.watchMode),
+          ...optionalField("watchSurfaceEnabled", series.watchSurfaceEnabled),
+          rule: series.rule,
+          startsOn: series.startsOn,
+          ...optionalField("endsOn", series.endsOn),
+          ...optionalField("count", series.count),
+          state: series.state,
+        },
+        overrides: event.overrides ?? [],
       };
 }
 

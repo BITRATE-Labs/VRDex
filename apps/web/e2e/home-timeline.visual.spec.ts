@@ -1,5 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import { test, TIMELINE_NOW } from "./home-timeline-fixture";
+import { initializeDiscovery, usableDiscovery } from "./home-discovery-fixture";
 import { prepareVisualPage, waitForVisualReady } from "./public-routes";
 
 async function capture(page: Page, name: string) {
@@ -15,6 +16,29 @@ async function capture(page: Page, name: string) {
     );
   });
   const panel = name === "details" || name === "dense";
+  {
+    const discover = await usableDiscovery(page);
+    await expect(
+      discover.getByRole("link", { name: "Open ORBIT Discovery", exact: true }),
+    ).toBeVisible();
+    await expect(
+      discover.getByRole("link", { name: "Open Tidal Discovery", exact: true }),
+    ).toBeVisible();
+    await expect(
+      discover.getByRole("list", { name: "Favorite people", exact: true })
+        .getByRole("link", { name: "Nori", exact: true }),
+    ).toBeVisible();
+    await discover.locator("img").evaluateAll(async (images) => {
+      await Promise.all(
+        images.map(async (image) => {
+          if (image instanceof HTMLImageElement) {
+            image.loading = "eager";
+            await image.decode();
+          }
+        }),
+      );
+    });
+  }
   await page.evaluate((panel) => {
     const schedule = document.querySelector<HTMLElement>(
       "[data-home-schedule]",
@@ -42,10 +66,17 @@ async function capture(page: Page, name: string) {
 }
 
 test.describe("Home schedule images @visual @snapshot @fixture", () => {
-  test.beforeEach(async ({ page }) => {
+  test.use({ timelineScenario: "timeline-visual" });
+  test.beforeEach(async ({ page, timelineFixture, timelineScenario }) => {
     await prepareVisualPage(page, { freezeClock: false });
     await page.clock.setFixedTime(TIMELINE_NOW);
-    await page.addInitScript(() => localStorage.setItem("vrdex-theme", "dark"));
+    await initializeDiscovery(
+      page,
+      timelineFixture,
+      timelineScenario === "timeline-visual" || timelineScenario === "detail-visual"
+        ? timelineFixture.profileIds.slice(-3, -1)
+        : [],
+    );
   });
   test("ordinary browsing contains transparent wide logos, long names and missing-logo identity", async ({
     page,
@@ -110,7 +141,7 @@ test.describe("Home schedule images @visual @snapshot @fixture", () => {
   test("overlapping My night uses purple lanes on the shared axis", async ({
     page,
   }) => {
-    await page.goto("/?scheduleView=agenda");
+    await page.goto("/");
     await expect(page.getByLabel("Schedule data state")).toHaveAttribute(
       "data-state",
       "ready",
@@ -121,22 +152,26 @@ test.describe("Home schedule images @visual @snapshot @fixture", () => {
       "Low Tide",
     ]) {
       await page
-        .getByRole("button", { name: `Add ${title} to My night`, exact: true })
+        .getByRole("button", { name: `Interested: ${title}`, exact: true })
         .click();
     }
-    await expect(
-      page
-        .getByRole("region", { name: "My night", exact: true })
-        .getByText("Overlap", { exact: true }),
-    ).toHaveCount(2);
-    await page.getByRole("button", { name: "Timeline", exact: true }).click();
+    const overlappingBars = page.getByTestId("night-lanes").locator("[data-night-reference]");
+    await expect(overlappingBars).toHaveCount(2);
+    for (const bar of await overlappingBars.all()) {
+      await expect(bar.getByRole("button", { name: /^Open/ }).first()).toHaveAccessibleDescription(/Overlap/);
+    }
+
+    // Save controls can scroll the canvas into view. Capture a fixed useful
+    // anchor through the same native navigation on both devices.
+    await page.getByRole("button", { name: "Now", exact: true }).click();
     await capture(page, "night");
   });
   test("empty range is settled", async ({ page }) => {
-    await page.goto(`/?at=${Date.UTC(2026, 10, 5, 12)}`);
+    await page.goto(`/?at=${Date.UTC(2036, 10, 5, 12)}`);
     await expect(
-      page.getByText("No events in this range", { exact: true }),
-    ).toBeVisible();
+      page.getByLabel("Schedule data state", { exact: true }),
+    ).toContainText("No events in this range");
+    await expect(page.getByRole("button", { name: "Next event", exact: true })).toHaveCount(0);
     await capture(page, "empty");
   });
   test("failed range keeps search and Retry usable", async ({ page }) => {
@@ -199,11 +234,11 @@ test.describe("Home schedule images @visual @snapshot @fixture", () => {
     await capture(page, "failed");
   });
   test.describe("dense lineup", () => {
-    test.use({ timelineScenario: "detail" });
+    test.use({ timelineScenario: "detail-visual" });
     test("later-page selected set remains visible in dense detail", async ({
       page,
     }) => {
-      await page.goto("/?scheduleView=agenda");
+      await page.goto("/");
       await expect(page.getByLabel("Schedule data state")).toHaveAttribute(
         "data-state",
         "ready",

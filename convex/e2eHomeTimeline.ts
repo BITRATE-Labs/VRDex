@@ -32,7 +32,20 @@ export const create = mutation({
     secret: v.string(),
     runId: v.string(),
     startAt: v.number(),
-    scenario: v.optional(v.union(v.literal("prefetch"), v.literal("detail"))),
+    scenario: v.optional(
+      v.union(
+        v.literal("prefetch"),
+        v.literal("detail"),
+        v.literal("detail-visual"),
+        v.literal("discovery"),
+        v.literal("discovery-dense"),
+        v.literal("discovery-sparse"),
+        v.literal("discovery-clubs"),
+        v.literal("discovery-roster"),
+        v.literal("timeline-visual"),
+        v.literal("short-sets"),
+      ),
+    ),
   },
   handler: async (ctx, args) => {
     guard(args.secret, args.runId);
@@ -50,8 +63,287 @@ export const create = mutation({
           .first()
       )
         throw Error("Fixture run already exists");
+    if (args.scenario?.startsWith("discovery")) {
+      const profileIds: Id<"profiles">[] = [];
+      const paddingProfileIds: Id<"profiles">[] = [];
+      const addPaddingClub = async (index: number) =>
+        paddingProfileIds.push(
+          await ctx.db.insert("profiles", {
+            slug: `${args.runId}-pad${index}`,
+            displayName: `Fixture Club ${index}`,
+            sortName: `fixture club ${index}`,
+            profileType: "community",
+            community: { categoryTags: [] },
+            genres: [],
+            aliases: [],
+            tags: [],
+            claimState: "unclaimed",
+            creationSource: "community",
+            publicationState: "published",
+            publicSurfacingState: "public",
+            updatedAt: Date.now(),
+            sourceAttribution: {
+              submittedAt: Date.now(),
+              submitter: {
+                tokenIdentifier: `e2e:${args.runId}`,
+                issuer: "vrdex:e2e",
+                subject: args.runId,
+              },
+            },
+          }),
+        );
+      // Put the original favorite host strictly between both 12-club samples.
+      if (args.scenario === "discovery-clubs")
+        for (let i = 0; i < 14; i++) await addPaddingClub(i);
+      const kinds = ["community", "person", "community2", "person2"];
+      for (const [index, kind] of kinds.entries()) {
+        const community = kind.startsWith("community");
+        profileIds.push(
+          await ctx.db.insert("profiles", {
+            slug: `${args.runId}-${kind}`,
+            displayName: [
+              "Prism Collective",
+              "Aurora",
+              "Tidal Society",
+              "Nori",
+            ][index],
+            sortName: kind,
+            ...(community
+              ? {
+                  profileType: "community" as const,
+                  community: { categoryTags: [] },
+                }
+              : {
+                  profileType: "person" as const,
+                  person: { roleTags: ["DJ"] },
+                }),
+            ...(community
+              ? {
+                  avatarImageUrl: `https://timeline-artwork.invalid/${args.runId}/prism.svg`,
+                }
+              : {}),
+            genres: [
+              {
+                slug: "fixture-liquid",
+                displayName: "Liquid DnB",
+                source: "owner_selected",
+                confidence: "high",
+                explicit: true,
+              },
+            ],
+            aliases: [],
+            tags: [],
+            claimState: "unclaimed",
+            creationSource: "community",
+            publicationState: "published",
+            publicSurfacingState: "public",
+            updatedAt: Date.now(),
+            sourceAttribution: {
+              submittedAt: Date.now(),
+              submitter: {
+                tokenIdentifier: `e2e:${args.runId}`,
+                issuer: "vrdex:e2e",
+                subject: args.runId,
+              },
+            },
+          }),
+        );
+      }
+      if (args.scenario === "discovery-clubs") {
+        for (let i = 14; i < 28; i++) await addPaddingClub(i);
+        profileIds.push(...paddingProfileIds);
+      }
+      const eventIds: Id<"events">[] = [],
+        slotIds: Id<"eventSlots">[] = [];
+      for (let i = 0; i < (args.scenario === "discovery-sparse" ? 1 : 2); i++) {
+        const startAt = args.startAt + (i === 0 ? 24 * 7 : 24 * 40) * h;
+        const eventId = await ctx.db.insert("events", {
+          slug: `${args.runId}-${i}`,
+          title: i === 0 ? "ORBIT" : "Low Tide",
+          sortTitle: i === 0 ? "orbit" : "low tide",
+          posterImageUrl:
+            i === 0
+              ? "/api/e2e/fixture-assets/fixture-orbit-timeline-poster"
+              : "/api/e2e/fixture-assets/fixture-low-tide-discovery-poster",
+          communityProfileId: profileIds[i * 2],
+          startAt,
+          endAt: startAt + 4 * h,
+          scheduleKind: "timed",
+          eventStatus: "scheduled",
+          publicationState: "published",
+          sourceType: "community",
+          sourceLabel: args.runId,
+          updatedAt: Date.now(),
+        });
+        eventIds.push(eventId);
+        slotIds.push(
+          await ctx.db.insert("eventSlots", {
+            eventId,
+            position: 0,
+            personProfileId: profileIds[i * 2 + 1],
+            startAt,
+            endAt: startAt + h,
+            displayLabel: i === 0 ? "Aurora" : "Nori",
+            roleLabel: "DJ",
+            sourceType: "community",
+            sourceLabel: args.runId,
+            confidence: 1,
+            reviewState: "confirmed",
+            updatedAt: Date.now(),
+          }),
+        );
+      }
+      if (args.scenario === "discovery-roster") {
+        const original = await ctx.db.get(profileIds[1]);
+        if (!original || original.profileType !== "person") throw Error("Missing fixture performer");
+        const { _id, _creationTime, ...fields } = original;
+        void _id; void _creationTime;
+        for (let i = 0; i < 13; i++) {
+          profileIds.push(await ctx.db.insert("profiles", {
+            ...fields,
+            slug: `${args.runId}-roster${i}`,
+            displayName: i === 12 ? "SECRET ROSTER PERSON" : `Favorite performer ${String(i + 1).padStart(2, "0")} with a complete public name`,
+            sortName: `roster${i}`,
+            publicSurfacingState: i === 12 ? "suppressed" : "public",
+          }));
+        }
+        // Eighty earlier authored rows force favorite matches beyond both the
+        // old signal prefix and the first native roster page.
+        for (let i = 0; i < 93; i++) {
+          const startAt = args.startAt + 7 * 24 * h;
+          slotIds.push(await ctx.db.insert("eventSlots", {
+            eventId: eventIds[0], position: i + 1,
+            ...(i >= 80 ? { personProfileId: profileIds[4 + i - 80] } : {}),
+            startAt, endAt: startAt + h,
+            displayLabel: i < 80 ? `Authored guest ${i + 1}` : "Favorite guest",
+            roleLabel: "DJ", sourceType: "community", sourceLabel: args.runId,
+            confidence: 1, reviewState: "confirmed", updatedAt: Date.now(),
+          }));
+        }
+      }
+      if (args.scenario === "discovery-dense") {
+        const original = await ctx.db.get(profileIds[1]);
+        if (!original || original.profileType !== "person")
+          throw Error("Missing fixture performer");
+        for (const [kind, name, type] of [
+          [
+            "community3",
+            "The Society for Exceptionally Long Musical Journeys",
+            "community",
+          ],
+          ["hidden", "SECRET PERFORMER", "person"],
+          ["hidden-community", "SECRET CLUB", "community"],
+          ["person3", "An Exceptionally Long Public Performer Name", "person"],
+        ] as const) {
+          const { _id, _creationTime, person, profileType, ...fields } =
+            original;
+          void _id;
+          void _creationTime;
+          void person;
+          void profileType;
+          profileIds.push(
+            await ctx.db.insert("profiles", {
+              ...fields,
+              slug: `${args.runId}-${kind}`,
+              displayName: name,
+              sortName: kind,
+              ...(type === "community"
+                ? {
+                    profileType: "community" as const,
+                    community: { categoryTags: [] },
+                  }
+                : {
+                    profileType: "person" as const,
+                    person: { roleTags: ["DJ"] },
+                  }),
+              publicSurfacingState: kind.startsWith("hidden")
+                ? "suppressed"
+                : "public",
+              genres: [
+                ...(original.genres ?? []),
+                {
+                  slug: "fixture-deep",
+                  displayName: "Deep House",
+                  displayLabel: "Deep journeys",
+                  source: "owner_selected",
+                  confidence: "high",
+                  explicit: true,
+                },
+              ],
+            }),
+          );
+        }
+        await ctx.db.patch(profileIds[1], {
+          genres: [
+            ...(original.genres ?? []),
+            {
+              slug: "fixture-deep",
+              displayName: "Deep House",
+              displayLabel: "Deep journeys",
+              source: "owner_selected",
+              confidence: "high",
+              explicit: true,
+            },
+          ],
+        });
+        for (let i = 2; i < 246; i++) {
+          const distant = i === 242;
+          const startAt =
+            args.startAt +
+            (distant ? 120 * 24 * h : 5 * 24 * h + (i - 1) * 60_000);
+          const id = await ctx.db.insert("events", {
+            slug: `${args.runId}-${i}`,
+            title: distant
+              ? "Distant Horizons"
+              : i === 245
+                ? "Prism Return"
+                : `Near-term ${i}`,
+            sortTitle: `fixture ${i}`,
+            communityProfileId:
+              i === 244
+                ? profileIds[6]
+                : i === 242
+                  ? profileIds[2]
+                  : profileIds[0],
+            startAt,
+            endAt: startAt + h,
+            scheduleKind: "timed",
+            eventStatus: "scheduled",
+            publicationState: i === 243 ? "draft_private" : "published",
+            sourceType: "community",
+            sourceLabel: args.runId,
+            updatedAt: Date.now(),
+          });
+          eventIds.push(id);
+          if (i === 2 || distant || i === 245)
+            slotIds.push(
+              await ctx.db.insert("eventSlots", {
+                eventId: id,
+                position: 0,
+                personProfileId:
+                  i === 2
+                    ? profileIds[5]
+                    : distant
+                      ? profileIds[7]
+                      : profileIds[1],
+                startAt,
+                endAt: startAt + h,
+                displayLabel: "Fixture performer",
+                roleLabel: "DJ",
+                sourceType: "community",
+                sourceLabel: args.runId,
+                confidence: 1,
+                reviewState: "confirmed",
+                updatedAt: Date.now(),
+              }),
+            );
+        }
+      }
+      return { runId: args.runId, eventIds, slotIds, profileIds, lineupEntryIds: [] };
+    }
+    const detail = args.scenario === "detail" || args.scenario === "detail-visual";
     const profiles: Id<"profiles">[] = [];
-    for (const kind of args.scenario === "detail"
+    for (const kind of detail
       ? (["community", "person", "hidden"] as const)
       : (["community", "person"] as const)) {
       const slug = `${args.runId}-${kind}`;
@@ -102,7 +394,8 @@ export const create = mutation({
       );
     }
     const eventIds: Id<"events">[] = [],
-      slotIds: Id<"eventSlots">[] = [];
+      slotIds: Id<"eventSlots">[] = [],
+      lineupEntryIds: Id<"eventLineupEntries">[] = [];
     for (let i = 0; i < 8; i++) {
       const offset =
         args.scenario === "prefetch"
@@ -147,7 +440,7 @@ export const create = mutation({
       if (i < 4)
         for (
           let j = 0;
-          j < (args.scenario === "detail" && i === 3 ? 81 : 2);
+          j < (detail && i === 3 ? 81 : 2);
           j++
         )
           slotIds.push(
@@ -160,8 +453,24 @@ export const create = mutation({
                   : j > 1 && j < 80
                     ? undefined
                     : profiles[1],
-              startAt: startAt + (j > 1 ? j * 60000 : j * h),
-              endAt: startAt + (j > 1 ? (j + 1) * 60000 : (j + 1) * h),
+              startAt:
+                startAt +
+                (args.scenario === "short-sets" && i === 3
+                  ? j === 0
+                    ? h
+                    : 1.5 * h
+                  : j > 1
+                    ? j * 60000
+                    : j * h),
+              endAt:
+                startAt +
+                (args.scenario === "short-sets" && i === 3
+                  ? j === 0
+                    ? 1.5 * h
+                    : 1.75 * h
+                  : j > 1
+                    ? (j + 1) * 60000
+                    : (j + 1) * h),
               displayLabel:
                 j === 80
                   ? "Later-page guest"
@@ -179,18 +488,112 @@ export const create = mutation({
             }),
           );
     }
-    if (args.scenario === "detail")
+    if (detail)
       for (let i = 0; i < 2; i++) {
-        await ctx.db.insert("eventLineupEntries", {
+        lineupEntryIds.push(await ctx.db.insert("eventLineupEntries", {
           eventId: eventIds[3],
           clientKey: `${args.runId}-lineup-${i}`,
           position: 81 + i,
           performerLabel: i === 0 ? "Untimed Aurora" : "Manual guest",
+          roleLabel: i === 1 ? "Host" : undefined,
           personProfileId: i === 0 ? profiles[1] : undefined,
           updatedAt: Date.now(),
-        });
+        }));
       }
-    return { runId: args.runId, eventIds, slotIds, profileIds: profiles };
+    if (args.scenario === "timeline-visual" || args.scenario === "detail-visual") {
+      const visualProfileStart = profiles.length;
+      const genres = [
+        {
+          slug: "fixture-visual-liquid",
+          displayName: "Liquid DnB",
+          source: "owner_selected" as const,
+          confidence: "high" as const,
+          explicit: true,
+        },
+        {
+          slug: "fixture-visual-deep",
+          displayName: "Deep House",
+          source: "owner_selected" as const,
+          confidence: "high" as const,
+          explicit: true,
+        },
+      ];
+      // Only the new DJ/club IDs become favorites. The eight original Schedule
+      // rows retain their existing geometry and unfavorited emphasis.
+      await ctx.db.patch(profiles[0], { genres });
+      const source = await ctx.db.get(profiles[1]);
+      if (!source || source.profileType !== "person")
+        throw Error("Missing fixture performer");
+      const { _id, _creationTime, person, profileType, ...fields } = source;
+      void _id;
+      void _creationTime;
+      void person;
+      void profileType;
+      for (const [kind, displayName] of [
+        ["community2", "Tidal Society"],
+        ["person2", "Nori"],
+        ["person3", "Iona"],
+      ] as const) {
+        profiles.push(
+          await ctx.db.insert("profiles", {
+            ...fields,
+            slug: `${args.runId}-${kind}`,
+            displayName,
+            sortName: kind,
+            genres,
+            ...(kind === "community2"
+              ? {
+                  profileType: "community" as const,
+                  community: { categoryTags: [] },
+                  avatarImageUrl: `https://timeline-artwork.invalid/${args.runId}/prism.svg`,
+                }
+              : {
+                  profileType: "person" as const,
+                  person: { roleTags: ["DJ"] },
+                }),
+          }),
+        );
+      }
+      for (const i of [8, 9]) {
+        const startAt = args.startAt + (i === 8 ? 7 : 40) * 24 * h;
+        const id = await ctx.db.insert("events", {
+          slug: `${args.runId}-${i}`,
+          title: i === 8 ? "ORBIT Discovery" : "Tidal Discovery",
+          sortTitle: `discovery ${i}`,
+          posterImageUrl:
+            i === 8
+              ? "/api/e2e/fixture-assets/fixture-orbit-timeline-poster"
+              : "/api/e2e/fixture-assets/fixture-low-tide-discovery-poster",
+          communityProfileId: i === 8 ? profiles[visualProfileStart] : profiles[0],
+          startAt,
+          endAt: startAt + 4 * h,
+          scheduleKind: "timed",
+          eventStatus: "scheduled",
+          publicationState: "published",
+          sourceType: "community",
+          sourceLabel: args.runId,
+          updatedAt: Date.now(),
+        });
+        eventIds.push(id);
+        slotIds.push(
+          await ctx.db.insert("eventSlots", {
+            eventId: id,
+            position: 0,
+            personProfileId: profiles[visualProfileStart + (i === 8 ? 1 : 2)],
+            startAt,
+            endAt: startAt + h,
+            displayLabel: i === 8 ? "Nori" : "Iona",
+            roleLabel: "DJ",
+            sourceType: "community",
+            sourceLabel: args.runId,
+            confidence: 1,
+            reviewState: "confirmed",
+            updatedAt: Date.now(),
+          }),
+        );
+      }
+    }
+    return { runId: args.runId, eventIds, slotIds, profileIds: profiles, lineupEntryIds };
   },
 });
 export const cleanup = mutation({
@@ -199,7 +602,7 @@ export const cleanup = mutation({
     guard(args.secret, args.runId);
     const count = { events: 0, profiles: 0, slots: 0 };
     let lineupEntries = 0;
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 246; i++) {
       const e = await ctx.db
         .query("events")
         .withIndex("by_slug", (q) => q.eq("slug", `${args.runId}-${i}`))
@@ -230,7 +633,18 @@ export const cleanup = mutation({
       await ctx.db.delete(e._id);
       count.events++;
     }
-    for (const kind of ["community", "person", "hidden"]) {
+    for (const kind of [
+      "community",
+      "person",
+      "hidden",
+      "community2",
+      "person2",
+      "community3",
+      "hidden-community",
+      "person3",
+      ...Array.from({ length: 28 }, (_, i) => `pad${i}`),
+      ...Array.from({ length: 13 }, (_, i) => `roster${i}`),
+    ]) {
       const p = await ctx.db
         .query("profiles")
         .withIndex("by_slug", (q) => q.eq("slug", `${args.runId}-${kind}`))
@@ -256,6 +670,7 @@ export const changeState = mutation({
       v.literal("cancelled"),
       v.literal("hidden"),
       v.literal("recreate-slot"),
+      v.literal("suppress-host"),
     ),
   },
   handler: async (ctx, args) => {
@@ -274,6 +689,22 @@ export const changeState = mutation({
       .unique();
     if (!event || event.sourceLabel !== args.runId)
       throw Error("Fixture ownership mismatch");
+    if (args.state === "suppress-host") {
+      const host = event.communityProfileId
+        ? await ctx.db.get(event.communityProfileId)
+        : null;
+      if (
+        !host ||
+        host.sourceAttribution?.submitter.tokenIdentifier !==
+          `e2e:${args.runId}`
+      )
+        throw Error("Fixture host ownership mismatch");
+      await ctx.db.patch(host._id, {
+        publicSurfacingState: "suppressed",
+        updatedAt: Date.now(),
+      });
+      return;
+    }
     if (args.state === "recreate-slot") {
       const slot = await ctx.db
         .query("eventSlots")

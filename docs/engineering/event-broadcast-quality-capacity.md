@@ -89,7 +89,7 @@ Each frozen snapshot is checked against its own resolver and evidence identity.
 Neither fixture is measured evidence. Both module loaders replace only the
 scheduling mutation; the remaining handlers, validators and lifecycle assertions
 run unchanged. Public scheduling and default dispatcher entrypoints still use the
-empty production registry and reject these fixtures. No environment variable,
+production registry and reject these synthetic evidence IDs. No environment variable,
 client field or database fixture can populate the measured registry.
 
 The baseline CI migration lane explicitly selects `run-admission-blocked` and
@@ -97,7 +97,7 @@ requires `migration-admission-blocked` evidence: historical migration, exact
 production capacity rejection, unchanged owned admission rows and cleanup. Its
 passing receipt does not establish successful whole-flow admission, native
 execution, measured capacity or external A. Default `run` continues to require
-`whole-flow` evidence and remains blocked by the empty production map. See the
+`whole-flow` evidence and uses the production map and rejects unmeasured settings. See the
 [local rehearsal scope](event-broadcast-rehearsal.md#october-24-2026-task-9-source-prerequisites).
 
 ## Session authority
@@ -138,8 +138,13 @@ real worker, operator controller, input manager, Twitch wrapper, Python HLS
 reader/reservoir/remux, both decoder supervisors, renderer and destination
 senders run together. The fixtures independently probe as H264/AAC 1920x1080/60.
 They include motion/detail, distinct source colors, a visible clock and
-synchronized flash/audio markers. Preencoding finishes before steady sampling;
-replayers, TLS delivery, receivers and every child still count in cgroup usage.
+synchronized flash/audio markers. H264 video without B-frame reordering and lossless PCM intermediates finish
+before steady sampling. This bounds the tested synthetic profile, not every
+possible H264 input. Replayers
+loop those intermediates through one continuous AAC encoder per source; looping
+already encoded AAC would repeat encoder priming/padding at each seam. The actual
+HLS inputs must independently probe as H264/AAC 1080p60. Replayers, AAC encoding,
+TLS delivery, receivers and every child still count in cgroup usage.
 
 Healthy automatic A remains selected while eligible/prewarmed B continues to
 decode. Timetable eligibility alone never promotes B. Every readiness loss in
@@ -229,7 +234,7 @@ Source/proof packaging uses the explicit `workers/restream/packaging-manifest.js
 Build the committed candidate from a clean archive; preserve the main-only
 publishing workflow guard. For the constrained managed Docker disk, collect an
 actual-image file inventory in an isolated Fargate task. Independently compare
-all 47 baseline packaged source files and 1854 installed wheel payload files (including four relocated Streamlink data files) with the
+every manifest-listed packaged source file and all 1854 installed wheel payload files (including four relocated Streamlink data files) with the
 clean archive and verified locked wheelhouse, including native libraries.
 The controller records that comparison and the inventory artifact hash before
 accepting the image. The small `packaged-files` export and
@@ -362,18 +367,84 @@ New exact-image transport, functional and capacity proof is still required.
 
 ## Measured allocation status
 
-| Preset  | Primary only | Twitch simulcast |
-| ------- | ------------ | ---------------- |
-| 480p30  | Unproved     | Unproved         |
-| 480p60  | Unproved     | Unproved         |
-| 720p30  | Unproved     | Unproved         |
-| 720p60  | Unproved     | Unproved         |
-| 1080p30 | Unproved     | Unproved         |
-| 1080p60 | Unproved     | Unproved         |
+| Output | Audio | Destination | Allocation | Status |
+| --- | --- | --- | --- | --- |
+| 720p30 | 320 kbps | VRCDN only | 8 CPU / 16 GiB | Measured B0 synthetic baseline |
+| 720p30 | 160 kbps | VRCDN only | None | Failed marker verification |
+| All other combinations | Either | Either | None | Unproved |
 
-This table and the production map must be populated together from passing
-controller receipts before Task 6 completion. No production deployment is part
-of the benchmark work.
+Admission keys include video preset, audio bitrate and simulcast membership.
+Missing bitrate is invalid; there is no fallback between 160 and 320 kbps.
+The scheduler resolves the immutable session settings, and the ECS bridge checks
+those same settings against the measured allocation before registration.
+
+The [November 8 evidence](./evidence/twitch-operator-task6/bitrate-320-recovery-capacity.json)
+binds the current allocation to source `89e2811e`, immutable image `e51e2ac`,
+run `task6-bitrate-20261108-320-recovery-v4`, and recording hashes. Independent
+registry-layer reads verified all 134 packaged source files and 1,854 installed
+wheel payload files. The 320-kbps run completed 300 seconds of dual decode with
+no readiness loss, 31.22% CPU P95, full recording decode and clean process/cloud
+teardown.
+
+A separate test of the same image used real media and local HTTP control. A
+3-second request timeout recovered within the unchanged authority window while
+encoded output advanced. Both Stop paths awaited command acknowledgment;
+explicit denial and lease expiry fenced publication. All four recordings passed
+independent hash and full-decode checks. This synthetic authority does not prove
+hosted Convex authorization or live VRCDN delivery.
+
+The [November 7 evidence](./evidence/twitch-operator-task6/bitrate-320-capacity.json)
+remains historical evidence. Its 160-kbps run failed with `unknown_competitor`,
+despite 32.13% CPU P95 and no readiness loss. It remains rejected, as do all
+earlier failed runs.
+
+The accepted inputs are H264 1080p60 **without B-frames**, continuously encoded
+AAC, and two synthetic sources. This is not worst-case capacity for arbitrary
+H264 inputs. The actual two-source B2 operational rehearsal remains required
+before live acceptance. Provider delivery and live-user acceptance are separate.
+
+Release order matters: deploy and verify the matching ECS dispatcher bundle
+before merging this admission change, because merging automatically deploys
+Convex. Keep the measured worker image pinned. These admission files are excluded
+from that image, so this change does not alter its measured runtime bytes.
+No deployment is performed by the source PR.
+
+## Reproducing the isolated Stop and recovery proof
+
+The [qualification driver](https://github.com/BITRATE-Labs/VRDex/blob/main/scripts/qualification/stop-recovery-image-proof.mjs)
+is external to the runtime image and excluded from its packaging manifest. It
+imports the packaged modules under `/app` without changing them. It requires ECS
+v4 metadata, checks the actual image digest and worker-file hash, and creates
+only loopback HTTP/RTMP endpoints and synthetic media.
+
+Use a separate one-off ECS task with the same 8 CPU / 16 GiB allocation and the
+immutable image recorded in the evidence JSON. Stage the exact driver at
+`/tmp/stop-recovery-image-proof.mjs` outside `/app`. Export the committed file
+without newline conversion; verify its SHA-256 against
+`controlProof.driverSha256` before executing it. Supply a fresh output directory
+and no provider credentials:
+
+```sh
+PROOF_DIRECTORY=/tmp/stop-recovery-proof \
+  timeout --signal=TERM --kill-after=10s 190s \
+  node /tmp/stop-recovery-image-proof.mjs
+```
+
+Keep an independent outer task bound covering download, execution and upload.
+Collect only `receipt.json` and the four named `.ts` recordings from the output
+directory, with a combined media cap of 128 MiB and a receipt cap of 256 KiB.
+Verify every recording against its receipt hash and decode the complete files.
+Require all four cases to pass: timeout recovery plus configuration Stop,
+ordinary claimed Stop, HTTP denial, and lease expiry during a pending request.
+The driver verifies no post-fence enqueue, waits for Stop acknowledgment, and
+checks process/descendant cleanup in every case. Independently confirm task exit
+0, network-attachment deletion and retirement of the temporary task definition.
+
+The November 8 proof receipt and recordings are retained under the private
+artifact prefix `synthetic-benchmarks/stop-recovery-20261108-e51e2ac/`. The evidence
+JSON records their hashes and the tested driver hash. This proof does not use
+production control authority or publish to a provider; the actual two-source B2
+rehearsal remains a separate gate.
 
 ## Decoder pacing correction awaiting image qualification
 
@@ -495,7 +566,7 @@ gaps fail. Required destination evidence is exactly one VRCDN row, plus exactly
 one Twitch row when simulcast is enabled, independently of row order. Duplicated
 primary rows cannot substitute for the optional destination. Existing timing,
 quality, resource, cleanup and artifact gates still apply. The production
-capacity map remains empty until complete measured evidence and review.
+capacity map remained empty at that checkpoint. See the measured allocation status above for the later scoped result.
 
 ## Source-identified proof candidate
 
@@ -510,7 +581,7 @@ preserved counterexamples, fixed execution bounds and root-owned acceptance.
 ## October 24 Task 9 source status
 
 The local migration fixture/driver and CLI pin forwarding are source prerequisites,
-not capacity receipts. The production measured map remains empty. All 24 matrix
+not capacity receipts. The production measured map remained empty at that checkpoint. All 24 matrix
 outcomes, both audio rates, destination modes, final-image inventory, immutable
 image/source pins, controller cleanup receipts, the 132-outcome deterministic
 gate and separate 79,996-case source-marker qualification still require actual
@@ -529,5 +600,5 @@ Fargate, two real 1080p Twitch inputs scaled to 720p30, and manual take/cut/retu
 with advancing encoded output. The successful private recording is about
 20 seconds long. Owned VRCDN `basicbit1` publishing/playback passed its codec
 smoke; `basicbit` publication was rejected, leaving the two-account relay blocked.
-These results preserve the empty production allocation table and all remaining
+At that checkpoint, these results preserved the empty production allocation table and all remaining
 capacity, source-marker, automatic handoff and device acceptance requirements.

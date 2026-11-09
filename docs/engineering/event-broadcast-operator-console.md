@@ -23,6 +23,12 @@ its confirmation. Return to auto remains available in schedule gaps; the resulti
 automatic slate is valid. Start retains admission, output reservation, and terminal
 cleanup restrictions. Every live state change has a captured-target confirmation. Next preserves automatic/manual mode, and its persisted lineup cursor survives worker recovery and temporary custom takeovers. Hold validates the captured current source. Resume re-prepares the last actually observed source. No UI path bypasses the measured allocation map.
 
+A requested Stop closes publication immediately, then the worker claims and
+acknowledges that Stop before its bounded control tick completes. A stopped
+configuration alone does not prove a failed Stop. Event cancellation or authority
+loss still fences publication, and task cleanup confirmation remains separate
+from the command acknowledgement.
+
 Custom sources use `eventMediaSources.create/replace/remove`. The authorized server
 projection supplies `editable`; profile projections and lineup sources cannot be
 edited as custom inputs. Replacing creates a new source identity and revision; it
@@ -88,5 +94,5 @@ Pure view, route, editor persistence, foreground and fake SDK tests exercise sou
 contracts without services. Guarded browser fixtures exercise production components
 with synthetic control receipts and intercepted playback; they are not authenticated
 backend or provider rehearsals. Desktop/mobile browser execution, screenshots and
-VLM review remain required before UI completion. Real Start remains blocked until
-the measured allocation map is qualified; fixture Start does not establish capacity.
+VLM review remain required before UI completion. A new image/source mix needs its
+own allocation qualification before live rollout; fixture Start does not establish capacity.

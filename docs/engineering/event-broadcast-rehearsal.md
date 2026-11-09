@@ -194,8 +194,10 @@ operation bound, the worker's unchanged 15-second publication startup guard, and
 independent 50 ms watchdog. After initial publication, the required sender must keep
 advancing its reported output timestamp. A three-second gap fences the sender and
 permanently fails the proof, even when the local recording remains valid or the sender
-later reconnects. A dedicated switch false/unavailable or expired lease
-fences through the real worker; no enable response is hardcoded. The normal workload
+later reconnects. A dedicated switch false or expired authority fences through
+the real worker; no enable response is hardcoded. A transient control timeout may
+retry only within the unchanged lease, session and last-known enablement windows.
+An unavailable switch check cannot extend the previous successful check. The normal workload
 ends at 120 seconds, including startup. It sends an explicit hold at +20 seconds and
 return at +30 seconds. Successful command acknowledgements reflect encoded output.
 
@@ -893,11 +895,11 @@ outcomes are persisted before the outer owner closes the backend group. Failed
 recovery remains failed evidence. Cancellation stays authoritative through final
 generated-file verification, proof writing and native process exit.
 
-CI explicitly selects `run-admission-blocked` while the production measured
-allocation map is intentionally empty. Its driver receipt has scope
+CI explicitly selects `run-admission-blocked` with the unmeasured 160-kbps
+profile, even when the production map admits a different bitrate. Its driver receipt has scope
 `migration-admission-blocked`. It executes the same historical migration assertions,
-then configures the fake output through the acting owner's production handler and
-calls the real `events:scheduleEventMediaWorker`. Passing requires the exact
+then configures the fake output and explicitly selects 720p30/160 through the
+acting owner's production handlers and calls the real `events:scheduleEventMediaWorker`. Passing requires the exact
 `Unproved broadcast configuration` rejection. Unexpected success, a different
 error or any changed admission snapshot fails. The snapshot includes a SHA-256
 digest of complete fixture-owned event, program, output, session, command and audit

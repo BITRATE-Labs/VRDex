@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@convex-generated-api";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -13,10 +13,11 @@ export type BroadcastSetupState = FunctionReturnType<typeof api.eventBroadcastCo
 type TestId = NonNullable<BroadcastSetupState["activeTest"]>["jobId"];
 export const getBroadcastSetup = api.eventBroadcastConnections.getSetup;
 export function EventBroadcastSetup({currentSlug,eventPath,eventTitle}:{currentSlug:string;eventPath:string;eventTitle:string}) {
-  const state = useQuery(getBroadcastSetup,{currentSlug});
+  const {isAuthenticated}=useConvexAuth();
+  const state = useQuery(getBroadcastSetup,isAuthenticated ? {currentSlug} : "skip");
   const start = useMutation(api.eventBroadcastConnectionTests.startConnectionTest), cancel = useMutation(api.eventBroadcastConnectionTests.cancelConnectionTest);
   const testRequest = useRef<{revision:number;key:string} | null>(null);
-  if (!state) return <PageShell><PageContainer max="3xl"><p role="status">Loading connection…</p></PageContainer></PageShell>;
+  if (!isAuthenticated || !state) return <PageShell><PageContainer max="3xl"><p role="status">Loading connection…</p></PageContainer></PageShell>;
   return <EventBroadcastSetupForm key={currentSlug} currentSlug={currentSlug} eventPath={eventPath} eventTitle={eventTitle} state={state} onStart={revision=>{
     if(testRequest.current?.revision!==revision || (state.activeTest && ["passed","failed","cancelled"].includes(state.activeTest.state))) testRequest.current={revision,key:crypto.randomUUID()};
     return start({currentSlug,expectedRevision:revision,idempotencyKey:testRequest.current.key});

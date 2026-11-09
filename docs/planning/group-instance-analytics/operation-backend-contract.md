@@ -208,9 +208,11 @@ fencing and execution-time human/provider authorization remain mandatory.
 The worker authenticates its VRChat user, then reserves one shared account and
 integration allowance for the remaining preflight and write. Ordinary writes
 need two requests per minute, normal instance closes need three, and instance
-invitations need four. Lower effective limits reject the claimed action with
-`operation_budget_too_low` before provider reads or budget waits. Limits are
-never raised automatically.
+invitations need four. Calendar creates and updates with artwork need three
+requests per minute and other calendar operations need two; list pages after
+the first reserve one request each. Lower effective limits reject the claimed
+action with `operation_budget_too_low` before provider reads or budget waits.
+Limits are never raised automatically.
 
 The reserved allowance includes the current group grant read, the optional
 destination and friendship reads, and exactly one write. Local sliding budgets
@@ -253,7 +255,7 @@ still uses the selected event start plus the reviewed offset, with the existing
 minus-30-minute initial offset; event selection does not change the timing mode.
 Creation linkage remains separate from manual observed-session association.
 
-Telemetry-backed Live and complete Instance history lists retain their category checks and peak/average hierarchy. Home Recent instances also uses complete history. Fresh sessions may appear in both lists. Direct detail and list rows require current per-session evidence for Still open and for telemetry-detail closure. Mounted expiry changes unconfirmed closure to Unknown and removes an open confirmation while retaining metrics and navigation. The management list creates no telemetry sessions or historical observations.
+Telemetry-backed Live and complete Instance history lists retain their category checks and peak/average hierarchy. Home Recent instances also uses complete history. Fresh sessions may appear in both lists. Direct detail and list rows require current per-session evidence for Still open and for telemetry-detail closure. Mounted expiry changes unconfirmed closure to Unknown and removes an open confirmation while retaining metrics and navigation. The management list creates no telemetry sessions or historical observations. Missing telemetry list entries preserve session identity without renewing freshness or confirming closure. The same location resumes its existing session within the connection epoch, including across midnight and long outages. Only positive provider closure evidence ends it; a later active observation then starts a new session.
 
 ```mermaid
 flowchart LR

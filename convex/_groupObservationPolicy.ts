@@ -11,6 +11,21 @@ import { admissionMatches } from "./_groupAdmission";
 
 export type CollectionSubject = NonNullable<Doc<"communityVrchatIntegrations">["collectionScope"]>;
 
+/** A sole public group link needs no separate primary-selection step. */
+export function primaryGroupSelection(profile: Pick<Doc<"profiles">, "profileType" | "fieldVisibility" | "outboundLinks" | "primaryGroupReference" | "primaryGroupSelectionDisabled" | "inferredGroupContributorUserId">) {
+  const selected = profile.primaryGroupReference;
+  if (selected && !selected.inferred) return selected;
+  if (profile.profileType !== "community" || profile.primaryGroupSelectionDisabled) return undefined;
+  const groups = new Map<string, string>();
+  for (const link of visibleProfileList(profile, "outboundLinks", profile.outboundLinks ?? [], "profile_page")) {
+    const target = parseProfileLinkDestination(link);
+    if (target?.kind === "vrchat_group") groups.set(target.key, link.url);
+  }
+  if (groups.size !== 1) return undefined;
+  const [key, url] = groups.entries().next().value!;
+  return { key, url, inferred: true, contributorUserId: selected?.contributorUserId ?? profile.inferredGroupContributorUserId };
+}
+
 export function automaticAdmissionEnabled(fleet: Doc<"collectorFleetSettings"> | null, groupId: string) {
   return fleet?.automaticEnrollmentEnabled === true && !fleet.killSwitchEnabled &&
     (fleet.automaticEnrollmentLimit ?? 0) > 0 && fleet.automaticEnrollmentScope !== undefined &&
@@ -49,11 +64,20 @@ export function isManagedIntegrationSession(
   communityProfileId: Id<"profiles">,
   session: Doc<"instanceSessions">,
 ) {
-  if (!integration || session.integrationId !== integration._id ||
+  if (!integration || session.mergedIntoSessionId || session.integrationId !== integration._id ||
     (session.communityProfileId !== undefined && session.communityProfileId !== communityProfileId) ||
     session.openedAt < (integration.telemetryEpochStartedAt ?? integration.createdAt)) return false;
   const subject = readCollectionSubject(integration);
   return subject.kind === "managed" && subject.communityProfileId === communityProfileId;
+}
+
+/** Resolve only one same-scope repair alias; chains and foreign targets fail closed. */
+export async function resolveManagedIntegrationSession(db: DatabaseReader, integration: Doc<"communityVrchatIntegrations"> | null, communityProfileId: Id<"profiles">, id: Id<"instanceSessions">) {
+  const row = await db.get(id);
+  if (!row || !isManagedIntegrationSession(integration, communityProfileId, { ...row, mergedIntoSessionId: undefined })) return null;
+  if (!row.mergedIntoSessionId) return row;
+  const canonical = await db.get(row.mergedIntoSessionId);
+  return canonical && isManagedIntegrationSession(integration, communityProfileId, canonical) && canonical.providerLocation === row.providerLocation && canonical.vrchatWorldId === row.vrchatWorldId ? canonical : null;
 }
 
 export async function saveManagedPublicationChoice(ctx: MutationCtx, communityProfileId: Id<"profiles">) {
@@ -77,7 +101,7 @@ export async function readPublicGroupId(db: DatabaseReader, profileId: Id<"profi
     const link = primary[0]!;
     if (link.provenance === "directory_reference") {
       const profile = await db.get(profileId);
-      const selected = profile?.primaryGroupReference;
+      const selected = profile && primaryGroupSelection(profile);
       if (!profile || !selected || !visibleProfileList(profile, "outboundLinks", profile.outboundLinks ?? [], "profile_page")
         .some(outbound => parseProfileLinkDestination(outbound)?.key === selected.key)) return null;
       const reference = await db.query("profileLinkDestinationReferences")

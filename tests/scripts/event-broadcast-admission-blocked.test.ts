@@ -13,6 +13,7 @@ const modules = {
   "../../convex/_generated/api.ts": () => import("../../convex/_generated/api"),
   "../../convex/localEventBroadcastRehearsal.ts": () => import("../../convex/localEventBroadcastRehearsal"),
   "../../convex/events.ts": () => import("../../convex/events"),
+  "../../convex/eventMediaSettings.ts": () => import("../../convex/eventMediaSettings"),
   "../../convex/eventMediaWorker.ts": () => import("../../convex/eventMediaWorker"),
   "../../convex/eventMediaControlMigration.ts": () => import("../../convex/eventMediaControlMigration"),
 };
@@ -99,7 +100,7 @@ test("blocked scope rejects unexpected schedule success, other errors, state wri
   }
 });
 
-test("default whole-flow stays failed against the unproved production map", async () => {
+test("default whole-flow cannot claim success without the complete protocol lifecycle", async () => {
   const f = await fixture();
   try {
     const receipt = await runMigrationRehearsal({ ...pins, admin: f.admin, owner: f.owner, bridgeToken: "local-test-bridge" });

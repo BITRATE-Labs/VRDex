@@ -2302,3 +2302,129 @@ it("terminal Stop fences publication while ordinary Start acknowledgement is unr
     await f.runtime.stop();
   }
 });
+
+
+it('a three-second observation timeout recovers while authority remains valid', async () => {
+  let fail = true, observations = 0;
+  const metrics: Record<string, unknown>[] = [];
+  const f = runtimeFixture({requestTimeoutMs:3000, metric:(value:Record<string,unknown>)=>metrics.push(value),
+    controlFilter: (name:string,args:unknown,next:(name:string,args:unknown)=>Promise<unknown>) => {
+      if (name === "observeProgram") {
+        observations++;
+        if (fail) return new Promise(()=>{});
+      }
+      return next(name,args);
+    }});
+  try {
+    await f.worker.start(); f.encoded();
+    await f.worker.tick();
+    assert.equal(f.worker.getState().stopped,false);
+    assert.equal(f.counts().fenced,0);
+    assert.deepEqual(metrics.filter(m=>m.event==="event_worker_control_failure").map(m=>[m.operation,m.category,m.retrying]),[["observeProgram","timeout",true]]);
+    fail=false; f.advance(1000); f.encoded(); await f.worker.tick();
+    assert.ok(observations>=2);
+    assert.equal(f.worker.getState().stopped,false);
+  } finally { await f.worker.stop(); }
+});
+
+
+for (const kind of ['lease','kill-switch','session-deadline']) it(`transient control failures never extend ${kind} authority`, async () => {
+  const metrics: Record<string,unknown>[] = [];
+  const f=runtimeFixture({requestTimeoutMs:20,maxSessionMs:kind==='session-deadline'?5000:43200000,metric:(m:Record<string,unknown>)=>metrics.push(m),
+    controlFilter:(name:string,args:unknown,next:(name:string,args:unknown)=>Promise<any>)=>{
+      if(name==='observeProgram')return new Promise(()=>{});
+      if(name==='acquireSession' && kind==='lease')return next(name,args).then(r=>({...r,expiresAt:6000}));
+      return next(name,args);
+    }});
+  try{
+    await f.worker.start();f.encoded();await f.worker.tick();assert.equal(f.worker.getState().stopped,false);
+    f.advance(kind==='lease'?5750:kind==='kill-switch'?10000:5000);f.worker.watchdog();
+    assert.equal(f.worker.getState().stopped,true);
+    assert.equal(metrics.find(m=>m.event==='event_worker_authority_expired')?.authority,kind);
+  }finally{await f.worker.stop();}
+});
+
+for (const operation of ['refreshConfiguration','claimCommands','observeProgram']) it(`explicit ${operation} refusal fences immediately`, async()=>{
+  const metrics:Record<string,unknown>[]=[];
+  const f=runtimeFixture({metric:(m:Record<string,unknown>)=>metrics.push(m),controlFilter:(name:string,args:unknown,next:(name:string,args:unknown)=>Promise<unknown>)=>name===operation?Promise.resolve({granted:false,accepted:false}):next(name,args)});
+  try{await f.worker.start();f.encoded();await f.worker.tick();assert.equal(f.worker.getState().stopped,true);assert.equal(metrics.find(m=>m.event==='event_worker_control_failure')?.retrying,false);}
+  finally{await f.worker.stop();}
+});
+
+it('kill-switch false and operator Stop still fence after a transient observation failure',async()=>{
+  for(const stop of ['kill-switch','operator']){
+    let fail=true,enabled=true;
+    const f=runtimeFixture({requestTimeoutMs:20,checkEnabled:async()=>enabled,controlFilter:(name:string,args:unknown,next:(name:string,args:unknown)=>Promise<unknown>)=>fail&&name==='observeProgram'?new Promise(()=>{}):next(name,args)});
+    try{await f.worker.start();f.encoded();await f.worker.tick();assert.equal(f.worker.getState().stopped,false);fail=false;
+      if(stop==='operator'){f.config.stopped=true;f.advance(1000);}else{enabled=false;f.advance(5000);}
+      await f.worker.tick();assert.equal(f.worker.getState().stopped,true);
+    }finally{await f.worker.stop();}
+  }
+});
+
+
+it('failure diagnostics cannot prevent a hard authority fence',async()=>{
+  const f=runtimeFixture({metric:(m:Record<string,unknown>)=>{if(m.event==='event_worker_control_failure')throw Error('diagnostic unavailable');},controlFilter:(name:string,args:unknown,next:(name:string,args:unknown)=>Promise<unknown>)=>name==='refreshConfiguration'?Promise.resolve({granted:false}):next(name,args)});
+  try{await f.worker.start();await f.worker.tick();assert.equal(f.worker.getState().stopped,true);assert.equal(f.counts().fenced,1);}finally{await f.worker.stop();}
+});
+
+
+it('a late control response cannot revive publication after watchdog expiry',async()=>{
+  let complete!: (value:unknown)=>void;
+  const response=new Promise(resolve=>{complete=resolve;});
+  const f=runtimeFixture({controlFilter:(name:string,args:unknown,next:(name:string,args:unknown)=>Promise<unknown>)=>name==='observeProgram'?response:next(name,args)});
+  try{
+    await f.worker.start();f.encoded();const tick=f.worker.tick();await drainReceiptCallbacks();
+    f.advance(10000);f.worker.watchdog();assert.equal(f.worker.getState().stopped,true);
+    complete({accepted:true});await tick;assert.equal(f.worker.getState().stopped,true);assert.equal(f.counts().fenced,1);
+  }finally{complete({accepted:true});await f.worker.stop();}
+});
+
+for (const stoppedInRefresh of [true, false]) for (const transientBeforeStop of [false, true]) it(`operator Stop settles before exit (refresh stopped=${stoppedInRefresh}, prior transient=${transientBeforeStop})`, async () => {
+  const f = await fixture();
+  let publishing = true, stopRequested = false, tickFinished = false, injectTimeout = false, elapsed = 0;
+  let releaseAck!: () => void;
+  const ackGate = new Promise<void>(resolve => { releaseAck = resolve; });
+  const runtime = createEventWorker({
+    identity: {...f.args},
+    clock: () => elapsed,
+    control: async (name: string, args: Record<string, unknown>) => {
+      if (name === "observeProgram" && injectTimeout) {
+        injectTimeout = false;
+        throw new DOMException("Worker operation timed out", "TimeoutError");
+      }
+      if (name === "acknowledgeCommand" && args.observedState === "ended") await ackGate;
+      const result = await f.t.mutation(worker(name), args);
+      // A Stop arriving just after refresh is first visible in the claimed batch.
+      if (name === "refreshConfiguration" && stopRequested && !stoppedInRefresh)
+        return {...result, configuration:{...result.configuration, stopped:false}};
+      return result;
+    },
+    renderer: {start:async()=>{},stop:async()=>{},subscribe:()=>()=>{},reconcileSources:async()=>{},getInputs:()=>[],hold:()=>{},getState:()=>({running:true,outputMs:1000})},
+    outputs: {start:async()=>{},stop:async()=>{},stopNow:()=>{publishing=false;},enqueue:()=>{},getState:()=>({publishing})},
+    inputs: syntheticInputs(async()=>undefined), checkEnabled:async()=>true,
+  });
+  try {
+    await runtime.start();
+    await runtime.tick();
+    await drainReceiptCallbacks();
+    if (transientBeforeStop) {
+      injectTimeout = true;
+      await runtime.tick();
+      assert.equal(runtime.getState().stopped,false);
+      elapsed = 1000;
+    }
+    const stop = await f.owner.mutation(api.events.stopEventMediaWorker,{currentSlug:f.event.slug,sessionId:f.args.sessionId});
+    stopRequested = true;
+    const tick = runtime.tick().then(() => { tickFinished = true; });
+    await drainReceiptCallbacks();
+    assert.equal(publishing,false);
+    assert.equal(runtime.getState().stopped,true);
+    assert.equal(tickFinished,false);
+    releaseAck();
+    await tick;
+    const state = await f.t.run(async ({db}) => ({session:await db.get(f.args.sessionId),command:await db.get(stop.stopCommandId)}));
+    assert.equal(state.command?.status,'succeeded');
+    assert.equal(state.session?.status,'ended');
+  } finally { releaseAck(); await runtime.stop(); }
+});

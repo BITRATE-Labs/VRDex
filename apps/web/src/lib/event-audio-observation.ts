@@ -1,18 +1,17 @@
 import type { PlaybackEvidence } from "./event-playback";
 
-export const AUDIO_SILENCE_THRESHOLD_DBFS = -90;
+export const AUDIO_SILENCE_THRESHOLD_DBFS = -60;
 export const AUDIO_OBSERVATION_INTERVAL_MS = 100;
 export const AUDIO_OBSERVATION_FRESHNESS_MS = 500;
 
 /** Values come from decoded playback and an analyser upstream of viewer gain. */
 export type AudioObservationSample = {
   observedAt: number;
-  dbfs: number;
   progressing: boolean;
   analysisActive: boolean;
   paused: boolean;
   disconnected: boolean;
-};
+} & ({ audioLevel: { kind: "unavailable" }; dbfs?: never } | { dbfs: number; audioLevel?: { kind: "measured"; dbfs: number } });
 
 export function clearPlaybackEvidence(observedAt: number): PlaybackEvidence {
   return {
@@ -65,7 +64,7 @@ export function observeAudio(
   const failure = sample.disconnected || !sample.progressing;
   const silence =
     !failure &&
-    Number.isFinite(sample.dbfs) &&
+    sample.dbfs !== undefined && Number.isFinite(sample.dbfs) &&
     sample.dbfs < AUDIO_SILENCE_THRESHOLD_DBFS;
 
   return {

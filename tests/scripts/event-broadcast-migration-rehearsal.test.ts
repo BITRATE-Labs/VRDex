@@ -161,7 +161,7 @@ for (const synthetic of [false, true]) test(synthetic
   const errors: string[] = [];
   let measured = false;
   try {
-    resolveWorkerAllocation({ videoPreset: "720p30", simulcastEnabled: false });
+    resolveWorkerAllocation({ videoPreset: "720p30", audioBitrateKbps: 320, simulcastEnabled: false });
     measured = true;
   } catch (error) {
     assert.match(String(error), /Unproved broadcast configuration/);

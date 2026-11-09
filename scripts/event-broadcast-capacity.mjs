@@ -27,6 +27,8 @@ import {
 } from "./event-capacity-resources.mjs";
 import {
   createFixture,
+  probeFixture,
+  capacityReplayArguments,
   observeSelectionMarkers,
   referenceFrames,
   verifyMedia,
@@ -89,43 +91,28 @@ export async function runCapacityWorkload(
     const references = {};
     receipt.inputs = {};
     for (const id of ["a", "b"]) {
-      receipt.inputs[id] = await createFixture(
-        owner,
-        `${directory}/${id}.ts`,
-        id,
-      );
-      references[id] = await referenceFrames(owner, `${directory}/${id}.ts`);
-      await mkdir(`${directory}/${id}-hls`);
-      owner.start(
-        "ffmpeg",
-        [
-          "-hide_banner",
-          "-loglevel",
-          "error",
-          "-re",
-          "-stream_loop",
-          "-1",
-          "-i",
-          `${directory}/${id}.ts`,
-          "-c",
-          "copy",
-          "-f",
-          "hls",
-          "-hls_time",
-          "1",
-          "-hls_list_size",
-          "8",
-          "-hls_flags",
-          "delete_segments+temp_file",
-          "-hls_segment_filename",
-          `${directory}/${id}-hls/segment%d.ts`,
-          `${directory}/${id}-hls/index.m3u8`,
-        ],
-        { stdio: "ignore" },
-      );
+      const file = `${directory}/${id}.nut`;
+      await createFixture(owner, file, id, { replayIntermediate: true });
+      references[id] = await referenceFrames(owner, file);
+      const hls = `${directory}/${id}-hls`;
+      await mkdir(hls);
+      owner.start("ffmpeg", capacityReplayArguments(file, hls), { stdio: "ignore" });
     }
-    // Fixtures are preencoded before steady sampling. Their live copy, TLS delivery,
-    // all decoders/encoders/senders/receivers remain charged in the same cgroup.
+    for (const id of ["a", "b"]) {
+      const playlist = `${directory}/${id}-hls/index.m3u8`;
+      const deadline = performance.now() + 15000;
+      for (;;) {
+        try { await stat(playlist); break; }
+        catch (error) {
+          if (error.code !== "ENOENT" || performance.now() >= deadline) throw error;
+          await sleep(100);
+        }
+      }
+      // Verify what the real input pipeline reads, not the lossless intermediate.
+      receipt.inputs[id] = await probeFixture(owner, playlist);
+    }
+    // Fixture construction finishes before steady sampling. Replayers, continuous
+    // AAC encoding, TLS, decoders and outputs all remain charged in this cgroup.
     const now = Date.now();
     const compliance = {
       sourceConsent: "accepted",

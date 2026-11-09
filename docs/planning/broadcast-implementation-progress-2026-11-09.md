@@ -29,7 +29,7 @@ BASIC requested the remaining plan as one delivery on November 9, 2026. YouTube 
 
 | Evidence | Result |
 | --- | --- |
-| Combined backend/control/source/media suites | 316 passed before the final rate-limit additions; final setup/limit suite 16 passed |
+| Combined backend/control/source/media suites | 332 passed after merging current main; final setup/limit suite 16 passed |
 | Web state, authority, preview, adapters and validation | 34 passed |
 | Credential broker, transport and test-screen suites | 18 passed |
 | Production-component browser flows | 15 passed, including desktop, mobile, lookup, confirmations, setup and refresh recovery |
@@ -47,7 +47,9 @@ Fresh whole-branch review found and recycled real gaps in provider readback, PC/
 
 ## Remaining release evidence
 
-The current image/source mix still requires measured Fargate admission evidence before a real session can start. Existing production allocation remains unqualified and was not replaced with fixture measurements. Real broker-role configuration, additive deployment/migration rehearsal, owned-provider publication, real browser audio/network playback and separate PC/Quest device checks remain open. Uploads/custom slate media remain follow-up work; YouTube is [issue 446](https://github.com/BITRATE-Labs/VRDex/issues/446).
+The new image/source mix still requires measured Fargate evidence before live rollout. Current main retains its qualified 720p30/AAC320/no-Twitch B0 allocation for the pinned recovery image; that evidence does not qualify this rebuilt image, direct-media mix or Custom destination. No fixture measurement replaced admission evidence. Real broker-role configuration, additive deployment/migration rehearsal, owned-provider publication, real browser audio/network playback and separate PC/Quest device checks remain open. Uploads/custom slate media remain follow-up work; YouTube is [issue 446](https://github.com/BITRATE-Labs/VRDex/issues/446).
+
+Current main was merged before the final PR run. The resolution preserves browser auth waiting for both operator queries and setup, audio-aware allocation, publication stop before awaited acknowledgment, bounded transient-control retries, and the retained/native public playback paths.
 
 The broader Windows backend/web runs and normal PR CI are recorded separately from the green scoped suites. A Windows process-group failure is not Linux worker proof.
 

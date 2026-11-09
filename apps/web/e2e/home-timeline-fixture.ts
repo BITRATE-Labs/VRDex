@@ -7,35 +7,140 @@ export type TimelineFixture = {
   eventIds: string[];
   slotIds: string[];
   profileIds: string[];
+  lineupEntryIds: string[];
 };
 export const test = base.extend<{
   timelineFixture: TimelineFixture;
-  timelineScenario: "default" | "prefetch" | "detail";
+  timelineScenario:
+    | "default"
+    | "prefetch"
+    | "detail"
+    | "detail-visual"
+    | "discovery"
+    | "discovery-dense"
+    | "discovery-sparse"
+    | "discovery-clubs"
+    | "discovery-roster"
+    | "timeline-visual"
+    | "short-sets";
   timelineStartAt: number;
 }>({
   timelineScenario: ["default", { option: true }],
   timelineStartAt: [TIMELINE_NOW - 30 * 60000, { option: true }],
-  page: async ({ page, timelineFixture, request }, provide) => {
+  page: async ({ page, timelineFixture, request }, provide, info) => {
+    const diagnostics: { kind: string; message: string }[] = [];
+    const capture = (kind: string, message: string) => {
+      if (diagnostics.length < 50)
+        diagnostics.push({ kind, message: message.slice(0, 2000) });
+    };
+    page.on("pageerror", (error) =>
+      capture("pageerror", error.stack ?? error.message),
+    );
+    page.on("console", (message) => {
+      if (message.type() === "error") capture("console", message.text());
+    });
+    page.on("requestfailed", (request) => {
+      const url = new URL(request.url());
+      capture(
+        "requestfailed",
+        `${url.origin}${url.pathname}: ${request.failure()?.errorText ?? "unknown"}`,
+      );
+    });
+    const runtimeDiagnostics =
+      process.env.VRDEX_E2E_BOOT_DIAGNOSTICS === "true"
+        ? await page.context().newCDPSession(page)
+        : null;
+    if (runtimeDiagnostics) {
+      await runtimeDiagnostics.send("Runtime.enable");
+      runtimeDiagnostics.on(
+        "Runtime.exceptionThrown",
+        ({ exceptionDetails: d }) => {
+          capture(
+            "exception-location",
+            JSON.stringify({
+              text: d.text,
+              url: d.url,
+              scriptId: d.scriptId,
+              line: d.lineNumber,
+              column: d.columnNumber,
+              description: d.exception?.description,
+            }),
+          );
+          const scriptId = d.scriptId;
+          if (scriptId)
+            void (async () => {
+              // Enable the debugger after a fault, preserving normal bootstrap timing.
+              await runtimeDiagnostics.send("Debugger.enable");
+              const { scriptSource } = await runtimeDiagnostics.send(
+                "Debugger.getScriptSource",
+                { scriptId },
+              );
+              const lines = scriptSource.split("\n");
+              const line = lines[d.lineNumber] ?? lines[0] ?? "";
+              capture(
+                "exception-source",
+                JSON.stringify({
+                  bytes: scriptSource.length,
+                  lines: lines.length,
+                  excerpt: line.slice(
+                    Math.max(0, d.columnNumber - 500),
+                    d.columnNumber + 500,
+                  ),
+                }),
+              );
+            })().catch((error) => capture("diagnostic-error", String(error)));
+        },
+      );
+    }
     // Only the run-owned image URL is bridged to original local artwork.
     // Public event/profile query responses always come from the real backend.
+    const artwork = await request.get(
+      "/api/e2e/fixture-assets/fixture-prism-timeline-logo",
+    );
+    await expect(artwork).toBeOK();
+    const artworkBody = await artwork.body();
     await page
       .context()
       .route(
         `https://timeline-artwork.invalid/${timelineFixture.runId}/prism.svg`,
         async (route) => {
-          const artwork = await request.get(
-            "/api/e2e/fixture-assets/fixture-prism-timeline-logo",
-          );
-          await expect(artwork).toBeOK();
-          await route.fulfill({ response: artwork });
+          await route.fulfill({
+            body: artworkBody,
+            contentType: "image/svg+xml",
+          });
         },
       );
-    await provide(page);
+    try {
+      await provide(page);
+    } finally {
+      if (info.status !== info.expectedStatus) {
+        const documentState = await page
+          .evaluate(() => ({
+            readyState: document.readyState,
+            visibility: document.visibilityState,
+            hasFocus: document.hasFocus(),
+            scheduleState:
+              document
+                .querySelector('[aria-label="Schedule data state"]')
+                ?.getAttribute("data-state") ?? null,
+            scripts: [...document.scripts].map((script) =>
+              script.src ? new URL(script.src).pathname : "inline",
+            ),
+          }))
+          .catch(() => null);
+        await info.attach("home-browser-diagnostics.json", {
+          body: JSON.stringify({ diagnostics, documentState }, null, 2),
+          contentType: "application/json",
+        });
+      }
+      await runtimeDiagnostics?.detach().catch(() => {});
+    }
   },
   timelineFixture: [
     async (
       { request, baseURL, timelineScenario, timelineStartAt },
       provide,
+      info,
     ) => {
       if (
         !["127.0.0.1", "localhost", "[::1]"].includes(
@@ -47,12 +152,30 @@ export const test = base.extend<{
         "x-vrdex-e2e-token":
           process.env.VRDEX_E2E_BROWSER_TOKEN ?? "local-playwright-token",
       };
-      const runId = `playwright-timeline-${randomUUID()}`;
+      // Keep every derived profile slug inside the canonical 64-character limit.
+      const runId = `playwright-timeline-${randomUUID().replaceAll("-", "").slice(0, 24)}`;
+      const expectedCounts = {
+        default: { events: 8, profiles: 2, slots: 8 },
+        prefetch: { events: 8, profiles: 2, slots: 8 },
+        detail: { events: 8, profiles: 3, slots: 87, lineupEntries: 2 },
+        "detail-visual": { events: 10, profiles: 6, slots: 89, lineupEntries: 2 },
+        discovery: { events: 2, profiles: 4, slots: 2 },
+        "discovery-dense": { events: 246, profiles: 8, slots: 5 },
+        "discovery-sparse": { events: 1, profiles: 4, slots: 1 },
+        "discovery-clubs": { events: 2, profiles: 32, slots: 2 },
+        "discovery-roster": { events: 2, profiles: 17, slots: 95 },
+        "timeline-visual": { events: 10, profiles: 5, slots: 10 },
+        "short-sets": { events: 8, profiles: 2, slots: 8 },
+      }[timelineScenario];
+      let created = false;
+      let stage = "request";
+      let responseStatus: number | null = null;
+      let primaryFailure: { error: unknown } | undefined;
       await withTimelineFixtureLease(
         process.env.PLAYWRIGHT_CONVEX_URL ??
           process.env.CONVEX_URL ??
           "http://127.0.0.1:3210",
-        async (blockAfterCleanupFailure) => {
+        async (blockAfterCleanupFailure, manifest) => {
           try {
             const response = await request.post("/api/e2e/home-timeline", {
               headers,
@@ -66,12 +189,19 @@ export const test = base.extend<{
                   : {
                       runId,
                       startAt: timelineStartAt,
-                      ...(timelineScenario === "detail"
-                        ? { scenario: "detail" }
+                      ...(timelineScenario === "detail" ||
+                      timelineScenario === "detail-visual" ||
+                      timelineScenario === "timeline-visual" ||
+                      timelineScenario === "short-sets" ||
+                      timelineScenario.startsWith("discovery")
+                        ? { scenario: timelineScenario }
                         : {}),
                     },
             });
+            responseStatus = response.status();
+            stage = "response";
             await expect(response).toBeOK();
+            stage = "decode";
             const value: unknown = await response.json();
             if (
               !value ||
@@ -84,33 +214,57 @@ export const test = base.extend<{
               !value.slotIds.every((id) => typeof id === "string") ||
               !("profileIds" in value) ||
               !Array.isArray(value.profileIds) ||
-              !value.profileIds.every((id) => typeof id === "string")
+              !value.profileIds.every((id) => typeof id === "string") ||
+              !("lineupEntryIds" in value) ||
+              !Array.isArray(value.lineupEntryIds) ||
+              !value.lineupEntryIds.every((id) => typeof id === "string")
             )
               throw Error("Invalid timeline fixture result");
+            stage = "manifest";
+            await manifest.recordCreated({
+              eventIds: value.eventIds,
+              slotIds: value.slotIds,
+              profileIds: value.profileIds,
+              lineupEntryIds: value.lineupEntryIds,
+            }, expectedCounts);
+            created = true;
+            stage = "body";
             await provide({
               runId,
+              lineupEntryIds: value.lineupEntryIds,
               eventIds: value.eventIds,
               slotIds: value.slotIds,
               profileIds: value.profileIds,
             });
+          } catch (error) {
+            primaryFailure = { error };
+            await info.attach("timeline-fixture-stage.json", {
+              body: JSON.stringify({ runId, stage, responseStatus, created }),
+              contentType: "application/json",
+            });
+            throw error;
           } finally {
             try {
               const cleanup = await request.delete("/api/e2e/home-timeline", {
                 headers,
                 data: { runId },
+                maxRetries: 1,
               });
               await expect(cleanup).toBeOK();
               const counts: unknown = await cleanup.json();
               // A disconnected POST can commit after DELETE reads zero. Only
               // exact owned cleanup proves the attempted create is cleared.
-              expect(counts).toEqual({
-                events: 8,
-                profiles: timelineScenario === "detail" ? 3 : 2,
-                slots: timelineScenario === "detail" ? 87 : 8,
-                ...(timelineScenario === "detail" ? { lineupEntries: 2 } : {}),
-              });
+              expect(counts).toEqual(expectedCounts);
+              if (created) await manifest.markClean();
             } catch (error) {
               blockAfterCleanupFailure();
+              if (primaryFailure) {
+                throw new AggregateError(
+                  [primaryFailure.error, error],
+                  "Timeline fixture cleanup also failed",
+                  { cause: primaryFailure.error },
+                );
+              }
               throw error;
             }
           }
@@ -126,7 +280,7 @@ export async function changeTimelineFixture(
   request: import("@playwright/test").APIRequestContext,
   fixture: TimelineFixture,
   eventIndex: number,
-  state: "cancelled" | "hidden" | "recreate-slot",
+  state: "cancelled" | "hidden" | "recreate-slot" | "suppress-host",
 ) {
   const result = await request.patch("/api/e2e/home-timeline", {
     headers: {

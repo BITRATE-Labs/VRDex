@@ -307,6 +307,11 @@ export async function runMigrationRehearsal(
       const owner = input.owner;
       assert.ok(owner, "Acting owner required for admission regression.");
       await configureRehearsalOutput(owner, manifest.slug, call);
+      await call(() => owner.mutation(api.eventMediaSettings.configure, {
+        currentSlug: manifest.slug,
+        videoPreset: "720p30",
+        audioBitrateKbps: 160,
+      }));
       const before = await snapshot();
       assert.ok(before.sessions.every((row) => row.status === "ended"));
       assert.equal(before.commands.filter((row) => row.commandType === "start_program").length, 0);
