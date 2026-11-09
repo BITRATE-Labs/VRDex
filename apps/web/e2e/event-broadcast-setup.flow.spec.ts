@@ -22,3 +22,12 @@ test("setup cancellation and failure remain retryable @flow @fixture",async({pag
 test("unsaved connection changes can be retained @flow @fixture",async({page})=>{
  await page.goto("/playwright/event-operator/setup");await page.getByLabel("Stream key",{exact:true}).fill("fixture-not-a-secret");await page.getByRole("link",{name:"Back to broadcast",exact:true}).click();await expect(page.getByRole("dialog")).toBeVisible();await page.getByRole("button",{name:"Keep editing",exact:true}).click();await expect(page.getByLabel("Stream key",{exact:true})).toHaveValue("fixture-not-a-secret");
 });
+
+test("reentering setup during a running test resumes progress and allows cancellation @flow @fixture",async({page})=>{
+ await page.goto("/playwright/event-operator/setup?running=1");
+ await expect(page.getByRole("heading",{name:"Test your connection",exact:true})).toBeVisible();
+ await expect(page.getByRole("button",{name:"Test connection",exact:true})).toBeDisabled();
+ await expect(page.getByRole("button",{name:"Cancel test",exact:true})).toBeEnabled();
+ await page.reload();await expect(page.getByRole("heading",{name:"Test your connection",exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"Cancel test",exact:true}).click();await expect(page.getByRole("link",{name:"Skip test",exact:true})).toBeVisible();await expect(page.getByRole("button",{name:"Test connection",exact:true})).toBeEnabled();
+});
