@@ -242,7 +242,7 @@ function environmentEntries(command, config, snapshot) {
 }
 
 export function resolveOutputSecretArn(ref,config) {
- if(config.secretRefMap[ref])return config.secretRefMap[ref];
+ if(Object.hasOwn(config.secretRefMap,ref))return config.secretRefMap[ref];
  const prefix=config.managedOutputSecretArnPrefix;
  if(typeof prefix==='string' && /^arn:aws[a-z-]*:secretsmanager:[a-z0-9-]+:\d{12}:secret:$/.test(prefix) && typeof ref==='string' && ref.startsWith(prefix+'vrdex/broadcast/') && /^vrdex\/broadcast\/[A-Za-z0-9]{1,64}\/[A-Za-z0-9]{1,64}\/[a-f0-9-]{36}-[A-Za-z0-9]{6}$/.test(ref.slice(prefix.length)))return ref;
  throw Error('Output secret reference has no authorized mapping');

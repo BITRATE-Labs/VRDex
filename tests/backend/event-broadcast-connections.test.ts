@@ -1,3 +1,4 @@
+import {loadEventsWithFixtureCapacity} from "./_eventCapacityFixture";
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import { convexTest } from 'convex-test';
@@ -7,7 +8,7 @@ import { api } from '../../convex/_generated/api';
 import { newClerkUserId } from './_clerkTestIdentity';
 import { normalizeConnection, managedSecretRefAllowed } from '../../convex/_eventBroadcastConnections';
 const schema = (schemaModule as unknown as { default?: typeof schemaModule }).default ?? schemaModule;
-const modules = { '../../convex/_generated/server.ts': () => import('../../convex/_generated/server'), '../../convex/events.ts': () => import('../../convex/events'), '../../convex/eventBroadcastConnections.ts': () => import('../../convex/eventBroadcastConnections') };
+const modules = { '../../convex/_generated/server.ts': () => import('../../convex/_generated/server'), '../../convex/events.ts': loadEventsWithFixtureCapacity, '../../convex/eventBroadcastConnections.ts': () => import('../../convex/eventBroadcastConnections') };
 const ref = (name: string) => makeFunctionReference<'mutation'>(`eventBroadcastConnections:${name}`);
 const prefix = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:';
 process.env.VRDEX_EVENT_OUTPUT_SECRET_ARN_PREFIX = prefix;
@@ -47,4 +48,14 @@ it('abandonment fences a late commit before deleting any staged secret', async (
   const brokerToken = process.env.VRDEX_EVENT_OUTPUT_BROKER_TOKEN;
   assert.deepEqual(await f.owner.mutation(ref('abandonConnection'), { grantId: grant.grantId, brokerToken }), { canDelete: true });
   await assert.rejects(f.owner.mutation(ref('commitConnection'), { grantId: grant.grantId, brokerToken, credentialRef: prefix + grant.secretName + '-AbCd12' }), /expired/);
+});
+
+for(const provider of ['vrcdn','twitch','custom'] as const)it(`managed ${provider} schedules with exact profile and blocks edits until real cleanup`,async()=>{
+ const f=await fixture();const input={...f.input,provider,serverUrl:provider==='vrcdn'?f.input.serverUrl:provider==='twitch'?'rtmps://live.twitch.tv/app':'rtmps://stream.example.test/live'};
+ const grant=await f.owner.mutation(ref('prepareConnection'),input);
+ const saved=await f.owner.mutation(ref('commitConnection'),{grantId:grant.grantId,credentialRef:prefix+grant.secretName+'-AbCd12',brokerToken:process.env.VRDEX_EVENT_OUTPUT_BROKER_TOKEN});
+ const scheduled=await f.owner.mutation(api.events.scheduleEventMediaWorker,{currentSlug:f.event.slug,startImmediately:true});
+ const session=await f.t.run(({db})=>db.get(scheduled.sessionId));
+ assert.equal(session?.destinationProfiles?.[0].destination,provider);assert.equal(session?.destinationProfiles?.[0].outputId,saved.connection.outputId);
+ await assert.rejects(f.owner.mutation(ref('prepareConnection'),{...input,expectedRevision:1,requestId:'52345678-1234-1234-1234-123456789012'}),/already active/);
 });
