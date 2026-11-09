@@ -252,6 +252,10 @@ export function createInputSupervisor({
     running = false,
     attempt = 0,
     terminal = false,
+    ended = false,
+    videoOnly = false,
+    playbackStarted = false,
+    prerollPaused = false,
     generation = 0,
     stopPromise;
   let videoAt = -Infinity,
@@ -275,10 +279,16 @@ export function createInputSupervisor({
     silenceSince = undefined;
     audioLevelDb = undefined;
   };
+  const beginPlayback = buffer.beginPlayback.bind(buffer);
+  buffer.beginPlayback = () => {
+    beginPlayback();
+    playbackStarted = true;
+    if (prerollPaused) { prerollPaused = false; child?.kill("SIGCONT"); }
+  };
   function getObservation() {
     const now = clock();
     timedAudioObserved ||= buffer.hasAudioTiming;
-    const progressing =
+    let progressing =
       frames >= 2 &&
       buffer.frame !== undefined &&
       !buffer.timingFailed &&
@@ -287,7 +297,14 @@ export function createInputSupervisor({
       now - videoAt < 1000 &&
       now - audioAt < 1000 &&
       now - mediaProgressAt < 1000;
-    if (progressing) failureSince = undefined;
+    if (progressing && source.finite && !playbackStarted && !prerollPaused) {
+      // A prepared finite clip must not finish while the current program stays
+      // on air. Keep a decoded frame/PCM tail and resume only at selection.
+      prerollPaused = child?.kill("SIGSTOP") === true;
+    }
+    if (prerollPaused) progressing = false;
+    const ready = progressing || (prerollPaused && buffer.frame !== undefined && buffer.hasAudioTiming);
+    if (ready) failureSince = undefined;
     else {
       failureSince ??= now;
       silenceSince = undefined;
@@ -296,8 +313,9 @@ export function createInputSupervisor({
       slotKey: source.slotKey,
       sourceId: source.sourceId,
       observedAt: now,
-      ready: progressing,
+      ready,
       progressing,
+      ...(ended ? { ended: true } : {}),
       analysisActive: progressing && audioLevelDb !== undefined,
       ...(failureSince === undefined ? {} : { failureSince }),
       ...(progressing && audioLevelDb !== undefined ? { audioLevelDb } : {}),
@@ -324,7 +342,7 @@ export function createInputSupervisor({
         "-probesize",
         "1000000",
         ...(source.url.startsWith("http://127.0.0.1:")
-          ? ["-f", "mpegts", "-protocol_whitelist", "http,tcp"]
+          ? [...(source.transport === "direct_media" ? ["-f", source.demuxer] : ["-f", "mpegts"]), "-protocol_whitelist", "http,tcp,crypto", "-format_whitelist", "mpegts,hls,mov,matroska,webm,aac", "-rw_timeout", "5000000"]
           : []),
         // Buffered normalized input must not accelerate the selected media clock.
         "-readrate",
@@ -342,7 +360,7 @@ export function createInputSupervisor({
         "-f",
         "rawvideo",
         "pipe:3",
-        "-map",
+        ...(videoOnly ? [] : ["-map",
         "0:a:0",
         "-ac",
         "2",
@@ -352,12 +370,13 @@ export function createInputSupervisor({
         "aresample=48000,aformat=sample_fmts=s16:channel_layouts=stereo,asettb=1/48000,astats=metadata=1:reset=1:measure_perchannel=none:measure_overall=Number_of_samples,ametadata=mode=print:direct=1:file='pipe\\:5'",
         "-f",
         "s16le",
-        "pipe:4",
+        "pipe:4"]),
       ],
       { stdio: ["ignore", "ignore", "pipe", "pipe", "pipe", "pipe"] },
     );
     const current = child,
       attemptGeneration = ++generation;
+    let missingAudio = false, syntheticAudioIndex = 0;
     const owns = () =>
       running &&
       !terminal &&
@@ -367,6 +386,14 @@ export function createInputSupervisor({
       if (buffer.frameCount === frames) return;
       frames = buffer.frameCount;
       videoAt = clock();
+      if (videoOnly) {
+        const samples = Math.max(1, Math.min(48000, Math.round(48000 / quality.frameRate)));
+        const pts = Math.round(buffer.framePts * 48000 / 90000);
+        buffer.audioTimestamp(syntheticAudioIndex++, pts, samples);
+        buffer.audio(Buffer.alloc(samples * 4));
+        audioAt = audioTimingAt = clock();
+        audioLevelDb = -120;
+      }
       const pts = buffer.framePts;
       if (Number.isSafeInteger(pts) && pts > mediaPts) {
         if (Number.isFinite(mediaPts)) mediaProgressAt = clock();
@@ -382,6 +409,7 @@ export function createInputSupervisor({
       4096,
       (line) => {
         if (!owns()) return;
+        if (source.transport === "direct_media" && !videoOnly && /Stream map .0:a:0. matches no streams/.test(line)) missingAudio = true;
         const match = line.match(
           /^\[Parsed_showinfo_\d+ @ [^\]]+\]\s+n:\s*(\d+)\s+pts:\s*(-?\d+)\s+pts_time:/,
         );
@@ -467,13 +495,15 @@ export function createInputSupervisor({
       else silenceSince = undefined;
     });
     child.on("error", () => {}); // close also fires for spawn failure; diagnostics intentionally omit URLs.
-    child.once("close", () => {
+    child.once("close", (code) => {
       if (!owns()) return;
       child = undefined;
+      if (missingAudio && !videoOnly) { videoOnly = true; connect(); return; }
+      if (source.transport === "direct_media" && (code === 0 || (source.finite && frames > 0))) { terminal = true; ended = true; }
       reset();
       failureSince ??= clock();
       onObservation(getObservation());
-      if (running)
+      if (running && !terminal)
         retryTimer = setTimeout(() => {
           if (running && !terminal && generation === attemptGeneration)
             connect();
@@ -494,7 +524,7 @@ export function createInputSupervisor({
         if (observation.ready && clock() - startedAt > 10000) attempt = 0;
         // A hung demuxer has a deadline too. Never keep a socket forever without decoded media.
         if (
-          child &&
+          child && !prerollPaused &&
           clock() -
             Math.max(
               startedAt,

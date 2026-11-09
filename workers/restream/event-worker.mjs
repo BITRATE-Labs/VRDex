@@ -8,6 +8,7 @@ import { readTaskMetadata, createManagedAllocationValidator } from './task-metad
 import { createEventOutputs } from "./output-sender.mjs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { createDirectMediaRelay } from "./direct-media-input.mjs";
 import { createSourceRelay } from "./source-relay.mjs";
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
@@ -471,6 +472,7 @@ export async function runEventWorker({
       env.VRDEX_EVENT_MEDIA_SOURCE_ENDPOINTS_JSON ?? "[]",
     ),
   });
+  const directRelay = await createDirectMediaRelay();
   let worker;
   worker = createEventWorker({
     identity: {
@@ -496,6 +498,7 @@ export async function runEventWorker({
       }),
     inputs: createInputManager({
       createVrcdnInput: (args) => relay.createInput(args),
+      createDirectMediaInput: (args) => directRelay.createInput(args),
       createTwitchInput: (args) =>
         createTwitchInput({ ...args, source: args.source.input }),
     }),
@@ -506,6 +509,7 @@ export async function runEventWorker({
     clearInterval(timer);
     clearInterval(poll);
     relay.stop();
+    directRelay.stop();
   };
   timer = setInterval(() => {
     worker.watchdog();

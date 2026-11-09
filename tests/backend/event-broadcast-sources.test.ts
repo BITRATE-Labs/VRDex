@@ -292,9 +292,9 @@ test("deployment-owned endpoint descriptors reach the guarded relay without inve
     assert.equal((await fetch(privateDns.resolveSource(source))).status, 502);
     assert.equal(privateRequests, 0);
     assert.throws(() => validateSourceEndpoint("https://127.0.0.1/source.ts", ["https://127.0.0.1/source.ts"]), /not public/);
-    await assert.rejects(owner.mutation(sourceMutation("create"), { currentSlug: event.slug, label: "Not public input", url: source.publicUrl }), /canonical/);
+    await assert.rejects(owner.mutation(sourceMutation("create"), { currentSlug: event.slug, label: "Not public input", url: source.publicUrl }), /public HTTPS video link/);
     const canonical = await owner.mutation(sourceMutation("create"), { currentSlug: event.slug, label: "Canonical", url: "vrcdn:alpha" });
-    await assert.rejects(owner.mutation(sourceMutation("replace"), { currentSlug: event.slug, sourceId: canonical.sourceId, label: "Not public input", url: source.publicUrl }), /canonical/);
+    await assert.rejects(owner.mutation(sourceMutation("replace"), { currentSlug: event.slug, sourceId: canonical.sourceId, label: "Not public input", url: source.publicUrl }), /public HTTPS video link/);
   } finally { relay.stop(); unauthorized.stop(); privateDns.stop(); }
 });
 

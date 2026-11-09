@@ -121,6 +121,7 @@
   "workers/restream/resource-policy.mjs",
   "workers/restream/resource-sampler.mjs",
   "workers/restream/source-relay.mjs",
+  "workers/restream/direct-media-input.mjs",
   "workers/restream/task-metadata.mjs",
   "workers/restream/tests/capacity_input.py",
   "workers/restream/tests/owner_proof.mjs",

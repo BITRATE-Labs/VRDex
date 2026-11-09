@@ -24,8 +24,8 @@ cleanup restrictions. No UI path bypasses the measured allocation map.
 Custom sources use `eventMediaSources.create/replace/remove`. The authorized server
 projection supplies `editable`; profile projections and lineup sources cannot be
 edited as custom inputs. Replacing creates a new source identity and revision; it
-does not rewrite an on-air record. The backend accepts only canonical VRCDN and
-Twitch inputs. Provider liveness does not establish decoder readiness.
+does not rewrite an on-air record. The backend accepts canonical VRCDN, Twitch and
+[qualified HTTPS direct-media inputs](event-direct-media.md). Provider liveness does not establish decoder readiness.
 
 ## Status windows and diagnostics
 

@@ -1,5 +1,6 @@
 /** Lexical admission only. The acquisition relay resolves and pins DNS at every fetch. */
 export function canonicalDirectMediaUrl(value: string): string {
+  if (value.length > 2048) throw new Error("Use a shorter video link.");
   let url: URL;
   try { url = new URL(value); } catch { throw new Error("Enter a valid HTTPS video link."); }
   const host = url.hostname.toLowerCase();
