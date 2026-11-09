@@ -1682,19 +1682,19 @@ export const ingestAggregatePoll = internalMutation({
     for (const item of detailedInstances) {
       let session = await ctx.db
         .query("instanceSessions")
-        .withIndex("by_integrationId_providerLocation_state_openedAt", (q) =>
+        .withIndex("by_integration_location_canonical_state_openedAt", (q) =>
           q
             .eq("integrationId", integration._id)
-            .eq("providerLocation", item.providerLocation)
+            .eq("providerLocation", item.providerLocation).eq("mergedIntoSessionId", undefined)
             .eq("state", "open")
             .gte("openedAt", epochStartedAt),
         )
         .first();
       if (!session && item.closedAt !== undefined) {
         session = await ctx.db.query("instanceSessions")
-          .withIndex("by_integrationId_providerLocation_state_openedAt", q => q
+          .withIndex("by_integration_location_canonical_state_openedAt", q => q
             .eq("integrationId", integration._id)
-            .eq("providerLocation", item.providerLocation)
+            .eq("providerLocation", item.providerLocation).eq("mergedIntoSessionId", undefined)
             .eq("state", "closed")
             .gte("openedAt", epochStartedAt))
           .order("desc").first();
@@ -1849,7 +1849,7 @@ async function telemetryDashboardData(ctx: QueryCtx, profile: Doc<"profiles">, n
     events,
   ] = await Promise.all([
     integration.assignedCollectorAccountId ? ctx.db.get(integration.assignedCollectorAccountId) : null,
-    ctx.db.query("instanceSessions").withIndex("by_integrationId_openedAt", (q) => q.eq("integrationId", integration._id).gte("openedAt", epochStartedAt)).order("desc").take(100),
+    ctx.db.query("instanceSessions").withIndex("by_integration_canonical_openedAt", (q) => q.eq("integrationId", integration._id).eq("mergedIntoSessionId", undefined).gte("openedAt", epochStartedAt)).order("desc").take(100),
     ctx.db.query("communityPopulationObservations").withIndex("by_integrationId_observedAt", (q) => q.eq("integrationId", integration._id).gte("observedAt", epochStartedAt).lte("observedAt", now)).order("desc").take(2500),
     ctx.db.query("instancePopulationObservations").withIndex("by_integrationId_observedAt", (q) => q.eq("integrationId", integration._id).gte("observedAt", epochStartedAt)).order("desc").take(2500),
     ctx.db.query("communityMemberCountObservations").withIndex("by_integrationId_observedAt", (q) => q.eq("integrationId", integration._id).gte("observedAt", epochStartedAt)).order("desc").take(500),
@@ -2543,8 +2543,8 @@ export const suggestEventAssociations = internalMutation({
     const now = args.now ?? Date.now();
     const eventEndAt = event.endAt ?? eventStartAt + 6 * 60 * 60_000;
     const sessionsPage = await ctx.db.query("instanceSessions")
-      .withIndex("by_integrationId_openedAt", (q) =>
-        q.eq("integrationId", integration._id)
+      .withIndex("by_integration_canonical_openedAt", (q) =>
+        q.eq("integrationId", integration._id).eq("mergedIntoSessionId", undefined)
           .gte("openedAt", Math.max(epochStartedAt, eventStartAt - 6 * 60 * 60_000))
           .lte("openedAt", eventEndAt),
       )

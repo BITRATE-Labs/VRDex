@@ -47,7 +47,7 @@ class AnalyticsFixtureClient extends ConvexReactClient {
     { id: "fixture-suggestion-1", eventTitle: "Afterhours 043", sessionId: "fixture-session-2", worldName: "Afterhours Lounge", openedAt: this.now - 3 * 86400_000, confidence: 0.75, canConfirm: true },
     { id: "fixture-suggestion-2", eventTitle: "Afterhours 043", sessionId: null, worldName: null, openedAt: null, confidence: 0.75, canConfirm: false },
   ];
-  constructor() {
+  constructor(private readonly repaired = false) {
     super("https://fixture.invalid");
   }
   private result(name: string, args: Record<string, unknown>) {
@@ -143,7 +143,7 @@ class AnalyticsFixtureClient extends ConvexReactClient {
     else if (name === "clubAnalytics:getInstanceListClock") result = Date.now();
     else if (name === "clubAnalytics:listInstances")
       result = page(
-        args.kind === "live"
+        this.repaired ? args.kind === "live" ? [] : [{ ...session(2), state: "open", closedAt: null }] : args.kind === "live"
           ? [session(0, true), session(1, true)]
           : [session(2), session(3), session(4)],
       );
@@ -151,6 +151,7 @@ class AnalyticsFixtureClient extends ConvexReactClient {
       if (args.sessionId === "foo") return null;
       if (args.sessionId === "unreadable")
         throw new Error("Instance not found.");
+      if (this.repaired) return { ...session(2), state: "open", closedAt: null };
       const index = Number(String(args.sessionId).split("-").at(-1));
       result = session(index, index < 2);
     } else if (name === "clubMembership:getMovementBucket")
@@ -302,13 +303,15 @@ function AnalyticsFixture({
   initialInstance,
   canManageEvents = true,
   canReadInstances = true,
+  repaired = false,
 }: {
   mode?: "home" | "analytics" | "instances";
   initialInstance?: string;
   canManageEvents?: boolean;
   canReadInstances?: boolean;
+  repaired?: boolean;
 }) {
-  const [client] = useState(() => new AnalyticsFixtureClient());
+  const [client] = useState(() => new AnalyticsFixtureClient(repaired));
   const [href, setHref] = useState(
     `/account/communities/afterhours${mode === "home" ? "" : `/${mode}`}${initialInstance ? `?instance=${initialInstance}` : ""}`,
   );
@@ -364,6 +367,10 @@ export const AnalyticsWithoutInstanceHistory: Story = {
 export const Instances: Story = {
   render: () => <AnalyticsFixture mode="instances" />,
 };
+export const RepairedInstance: Story = {
+  render: () => <AnalyticsFixture mode="instances" initialInstance="merged-fragment" repaired />,
+};
+export const RepairedHome: Story = { render: () => <AnalyticsFixture repaired /> };
 export const PopulationOutage: Story = {
   render: () => <PageShell><PageContainer><ClubChart label="Population" points={observedChartPoints([
     {at:0,value:10,coverage:"observed"}, {at:120_000,value:12,coverage:"observed"},

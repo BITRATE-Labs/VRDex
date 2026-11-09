@@ -2054,6 +2054,7 @@ export default defineSchema({
   instanceSessions: defineTable({
     integrationId: v.id("communityVrchatIntegrations"),
     communityProfileId: v.optional(v.id("profiles")),
+    mergedIntoSessionId: v.optional(v.id("instanceSessions")),
     providerInstanceId: v.string(),
     providerLocation: v.string(),
     vrchatWorldId: v.string(),
@@ -2079,7 +2080,19 @@ export default defineSchema({
       "openedAt",
     ])
     .index("by_communityProfileId_openedAt", ["communityProfileId", "openedAt"])
-    .index("by_worldId_openedAt", ["worldId", "openedAt"]),
+    .index("by_worldId_openedAt", ["worldId", "openedAt"])
+    .index("by_integration_canonical_openedAt", ["integrationId", "mergedIntoSessionId", "openedAt"])
+    .index("by_integration_canonical_state_openedAt", ["integrationId", "mergedIntoSessionId", "state", "openedAt"])
+    .index("by_integration_canonical_state_lastObservedAt", ["integrationId", "mergedIntoSessionId", "state", "lastObservedAt"])
+    .index("by_integration_location_canonical_state_openedAt", ["integrationId", "providerLocation", "mergedIntoSessionId", "state", "openedAt"]),
+  instanceSessionRepairs: defineTable({
+    deploymentUrl: v.string(),
+    integrationId: v.id("communityVrchatIntegrations"), epoch: v.number(), sessionIds: v.array(v.id("instanceSessions")),
+    canonicalSessionId: v.id("instanceSessions"), fingerprint: v.string(), afterFingerprint: v.string(),
+    state: v.union(v.literal("applied"), v.literal("rolled_back")), createdAt: v.number(), rolledBackAt: v.optional(v.number()),
+    beforeSessions: v.array(v.object({id:v.id("instanceSessions"),state:instanceSessionStateValidator,openedAt:v.number(),lastObservedAt:v.number(),closedAt:v.optional(v.number()),consecutiveMisses:v.number(),updatedAt:v.number()})),
+    owners: v.array(v.object({observationId:v.id("instancePopulationObservations"),sessionId:v.id("instanceSessions")})),
+  }).index("by_fingerprint", ["fingerprint"]),
   collectionCoverageWindows: defineTable({
     observedThroughAt: v.optional(v.number()),
     integrationId: v.id("communityVrchatIntegrations"),
