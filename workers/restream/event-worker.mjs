@@ -314,7 +314,7 @@ export function createEventWorker({
           if(!testReadback) {
             testReadback=true;
             const link=config.outputs.find(o=>o.id===config.outputId)?.playbackLinks?.find(l=>["browser","pc"].includes(l.platform))?.url;
-            void readConnectionTest({url:link,marker:config.connectionTest.marker,timeoutMs:Math.min(10000,Math.max(1,config.connectionTest.deadlineAt-Date.now()))})
+            void readConnectionTest({url:link,marker:config.connectionTest.marker,mediaSettings:config.mediaSettings,timeoutMs:Math.min(10000,Math.max(1,config.connectionTest.deadlineAt-Date.now()))})
               .then(async matched=>{if(matched&&!stopped){const proof=await request("recordConnectionTestProof",{jobId:config.connectionTest.jobId,marker:config.connectionTest.marker,decodedAt:Date.now()});if(proof.accepted)fence("connection-test-complete");}})
               .catch(()=>{}).finally(()=>{testReadback=false;});
           }

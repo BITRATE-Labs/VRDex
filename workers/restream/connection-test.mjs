@@ -21,23 +21,24 @@ export function createConnectionTestRenderer({connectionTest,mediaSettings,onErr
  return {subscribe(listener){listeners.add(listener);return()=>listeners.delete(listener);},getState:()=>({outputMs,running:!!child&&!stopped&&child.exitCode===null,publishing:bytes>0}),async start(){if(stopped)throw Error('Test stopped');child=launch('ffmpeg',connectionTestEncoderArguments({marker:connectionTest.marker,mediaSettings}),{stdio:['ignore','pipe','ignore','pipe']});createInterface({input:child.stdio[3]}).on('line',line=>{if(line.startsWith('out_time_us='))outputMs=Number(line.slice(12))/1000;});child.stdout.on('data',chunk=>{bytes+=chunk.length;for(const listener of listeners)listener(chunk);});child.on('error',onError);child.on('exit',()=>{if(!stopped)onError();});},async stop(){stopped=true;if(!child||child.exitCode!==null)return;await new Promise(resolve=>{child.once('exit',resolve);child.kill('SIGKILL');});}};
 }
 /** Readback decodes pixels, never treats a response, timer, socket or byte count as success. */
-export async function decodeConnectionTest({url,marker,timeoutMs=10000,launch=spawn}){
+export async function decodeConnectionTest({url,marker,mediaSettings,timeoutMs=10000,launch=spawn}){
  markerBits(marker);
+ const startedAt=Date.now(),profile=VIDEO_PROFILES[parseMediaSettings(mediaSettings).videoPreset];
  const endpoint=new URL(url);
  if(endpoint.protocol!=='https:'||endpoint.username||endpoint.password||endpoint.port||/^(localhost|127\.|10\.|192\.168\.|169\.254\.|\[)/i.test(endpoint.hostname))throw Error('Invalid test playback URL');
  const {createDirectMediaRelay}=await import('./direct-media-input.mjs');
  const relay=await createDirectMediaRelay({limits:{lifetimeMs:timeoutMs,requestMs:timeoutMs,sessionBytes:32*1024*1024,responseBytes:16*1024*1024}});
  let handle;
  try {
-  handle=relay.createInput({source:{input:{kind:'direct_media',url:endpoint.href}}});
+  handle=relay.createInput({source:{input:{kind:'direct_media',url:endpoint.href}},signal:AbortSignal.timeout(timeoutMs)});
   const descriptor=await handle.transportReady;
-  return await decodeMarkerFrame({input:descriptor.url,demuxer:descriptor.demuxer,marker,timeoutMs,launch});
+  return await decodeMarkerFrame({input:descriptor.url,demuxer:descriptor.demuxer,marker,encodedSize:profile,timeoutMs:Math.max(1,timeoutMs-(Date.now()-startedAt)),launch});
  } finally {await handle?.dispose();relay.stop();}
 }
-export async function decodeMarkerFrame({input,demuxer,marker,timeoutMs=10000,launch=spawn}) {
+export async function decodeMarkerFrame({input,demuxer,marker,encodedSize,timeoutMs=10000,launch=spawn}) {
  if(!Number.isFinite(timeoutMs)||timeoutMs<1||timeoutMs>10000)throw Error('Invalid readback bound');
  return new Promise((resolve,reject)=>{
-  const child=launch('ffmpeg',['-hide_banner','-loglevel','error','-nostdin','-rw_timeout',String(Math.ceil(timeoutMs*1000)),...(demuxer?['-protocol_whitelist','http,tcp,crypto','-format_whitelist','mpegts,hls,mov,matroska,webm,aac','-f',demuxer]:[]),'-i',input,'-an','-vf','crop=256:256:0:0,scale=8:8:flags=area','-frames:v','1','-pix_fmt','rgb24','-f','rawvideo','pipe:1'],{stdio:['ignore','pipe','ignore']});
+  const child=launch('ffmpeg',['-hide_banner','-loglevel','error','-nostdin','-rw_timeout',String(Math.ceil(timeoutMs*1000)),...(demuxer?['-protocol_whitelist','http,tcp,crypto','-format_whitelist','mpegts,hls,mov,matroska,webm,aac','-f',demuxer]:[]),'-i',input,'-an','-vf',`${encodedSize?`crop=iw*256/${encodedSize.width}:ih*256/${encodedSize.height}:0:0`:'crop=256:256:0:0'},scale=8:8:flags=area`,'-frames:v','1','-pix_fmt','rgb24','-f','rawvideo','pipe:1'],{stdio:['ignore','pipe','ignore']});
   let buffer=Buffer.alloc(0),expired=false;const timer=setTimeout(()=>{expired=true;child.kill('SIGKILL');},timeoutMs);
   child.stdout.on('data',data=>{if(buffer.length+data.length>192){child.kill('SIGKILL');return;}buffer=Buffer.concat([buffer,data]);});
   child.once('error',error=>{clearTimeout(timer);reject(error);});child.once('exit',code=>{clearTimeout(timer);resolve(!expired&&code===0&&matchingMarker(buffer,marker));});

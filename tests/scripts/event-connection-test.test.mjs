@@ -25,6 +25,8 @@ it('real FFmpeg encodes a synthetic test screen then decodes the matching visual
   const encoded=spawnSync('ffmpeg',args,{timeout:15000,encoding:'utf8'});assert.equal(encoded.status,0,encoded.stderr);
   assert.equal(await decodeMarkerFrame({input:path,marker}),true);
   assert.equal(await decodeMarkerFrame({input:path,marker:'11111111111111111111111111111111'}),false);
+  const resized=join(directory,'resized.ts');const scaled=spawnSync('ffmpeg',['-hide_banner','-loglevel','error','-i',path,'-vf','scale=640:360','-c:v','libx264','-an',resized],{timeout:15000,encoding:'utf8'});assert.equal(scaled.status,0,scaled.stderr);
+  assert.equal(await decodeMarkerFrame({input:resized,marker,encodedSize:{width:854,height:480}}),true);
  }finally{await rm(directory,{recursive:true,force:true});}
 });
 import { createEventWorker } from '../../workers/restream/event-worker.mjs';
