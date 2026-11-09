@@ -12,3 +12,5 @@ export const QueueAndGaps: Story = { args: { initialScenario: "paired" } };
 export const MissingHistoricalQueue: Story = { args: { initialScenario: "historical" } };
 export const ConflictingCounts: Story = { args: { initialScenario: "conflicting" } };
 export const ConfirmedClosure: Story = { args: { initialScenario: "closure" } };
+
+export const NoQueue: Story = { args: { initialScenario: "noQueue" } };
