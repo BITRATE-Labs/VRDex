@@ -84,6 +84,7 @@ function harness() {
     compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   vm.runInNewContext(code, {
+    URL,
     exports,
     require: (name: string) => { assert(name in mocks, `Uninspected import: ${name}`); return mocks[name]; },
     window: {
@@ -134,6 +135,18 @@ function assertMutedInert(h: ReturnType<typeof harness>, index: number) {
   assert.equal(h.adapters[index].muted, true);
 
 }
+it("uppercase HLS and TS links retain their streaming preview adapters",()=>{
+ const h=harness();
+ try {
+  for(const [extension,transport] of [["M3U8","hls"],["TS","mpegts"]] as const){
+   const url=`https://media.example.com/clip.${extension}`;
+   h.render({...source,sourceId:`direct-${extension}`,input:{kind:"direct_media",url},publicUrl:url});
+   const request=h.adapters.at(-1)!.request;
+   assert.equal(request.kind,"direct_media");
+   assert.equal(request.transport,transport);
+  }
+ } finally {h.close();}
+});
 
 it("same ID/revision/key rename retains the monitored handle and its foreground ownership", () => {
   const h = harness();

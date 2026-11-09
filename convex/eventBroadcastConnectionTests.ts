@@ -6,6 +6,7 @@ import type { Doc } from "./_generated/dataModel";
 import { requireActiveBrowserSessionSubject } from "./_browserSessionAuthority";
 import { getMediaManageableEventBySlug, getLatestEventMediaProgram, requireStoppedOutputSessions, scheduleEventMediaWorkerInContext } from "./events";
 import { requireEventMediaBridgeToken, workerSessionArgs, settleTerminalSessionCommands } from "./_eventBroadcastInputs";
+import { controlFence } from "./_eventBroadcastControl";
 
 const jobState = v.union(v.literal("queued"),v.literal("running"),v.literal("stopping"),v.literal("passed"),v.literal("failed"),v.literal("cancelled"));
 export const projection = v.object({jobId:v.id("eventBroadcastConnectionTests"),revision:v.number(),state:jobState,failure:v.optional(v.string()),deadlineAt:v.number()});
@@ -58,7 +59,9 @@ export const cancelConnectionTest=mutation({args:{currentSlug:v.string(),jobId:v
 export const expireConnectionTest=internalMutation({args:{jobId:v.id("eventBroadcastConnectionTests")},returns:v.null(),handler:async(ctx,args)=>{const job=await ctx.db.get(args.jobId);if(!job||Date.now()<job.deadlineAt)return null;const status=await connectionTestProjection(ctx,job);if(["passed","failed","cancelled"].includes(status.state))return null;const now=Date.now();await ctx.db.patch(job._id,{state:"stopping",failure:job.decodedAt?undefined:"The stream test timed out.",updatedAt:now});await requestTestStop(ctx,(await ctx.db.get(job._id))!,now);return null;}});
 /** Only the currently leased worker can submit decoded identity proof for this exact saved revision. */
 export const recordConnectionTestProof=mutation({args:{...workerSessionArgs,jobId:v.id("eventBroadcastConnectionTests"),marker:v.string(),decodedAt:v.number()},returns:v.object({accepted:v.boolean()}),handler:async(ctx,args)=>{
- requireEventMediaBridgeToken(args.bridgeToken);const now=Date.now(),job=await ctx.db.get(args.jobId),session=await ctx.db.get(args.sessionId);
+ requireEventMediaBridgeToken(args.bridgeToken);
+ const authority=await controlFence(ctx.db,args);if("result" in authority)return {accepted:false};
+ const now=Date.now(),job=await ctx.db.get(args.jobId),session=authority.session;
  if(!job||!session||job.sessionId!==session._id||job.eventId!==args.eventId||session.connectionTest?.jobId!==job._id||session.workerId!==args.workerId||session.epoch!==args.epoch||(session.leaseExpiresAt??0)<=now||job.cancelRequestedAt!==undefined||now>=job.deadlineAt||session.stopRequestedAt!==undefined||args.marker!==job.marker||!Number.isFinite(args.decodedAt)||args.decodedAt<job.createdAt||args.decodedAt>now||args.decodedAt>job.deadlineAt)return {accepted:false};
  const output=await ctx.db.get(job.outputId);if(output?.managedConnection?.revision!==job.revision)return {accepted:false};
  if(!job.decodedAt)await ctx.db.patch(job._id,{decodedAt:args.decodedAt,state:"stopping",updatedAt:now});

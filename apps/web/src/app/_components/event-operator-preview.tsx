@@ -51,7 +51,7 @@ export function EventOperatorPreview({
     const target = eventDjTarget(url);
     const request: PlaybackRequest | undefined =
       kind === "direct_media"
-        ? { ...identity, kind:"direct_media", src:name, transport:new URL(name).pathname.endsWith(".m3u8") ? "hls" : new URL(name).pathname.endsWith(".ts") ? "mpegts" : "video" }
+        ? { ...identity, kind:"direct_media", src:name, transport:new URL(name).pathname.toLowerCase().endsWith(".m3u8") ? "hls" : new URL(name).pathname.toLowerCase().endsWith(".ts") ? "mpegts" : "video" }
         : kind === "twitch"
         ? { ...identity, kind: "twitch", channel: name }
         : target?.questUrl

@@ -1049,6 +1049,9 @@ for (const mode of ["automatic", "manual"] as const) {
     assert.equal((await f.promote(f.operation.commandId)).kind, "ok");
     const after = await f.receipt(f.args.sessionId);
     assert.equal(after.committedIntent.kind, mode);
+    assert.deepEqual(after.lineupCursor, command.controlTarget.source);
+    const recovered = await f.t.mutation(worker("refreshConfiguration"), f.args);
+    assert.deepEqual(recovered.configuration.lineupCursor, command.controlTarget.source);
     assert.equal(after.currentSourceId, before.currentSourceId);
   });
   it(`failed Next retains ${mode} intent and current output`, async () => {
@@ -1062,6 +1065,21 @@ for (const mode of ["automatic", "manual"] as const) {
     assert.equal(after.broadcastMode, before.broadcastMode);
   });
 }
+it("a custom takeover preserves the lineup cursor used by Next", async () => {
+  const f = await projectedControlFixture("automatic");
+  const projected = await f.receipt(f.operation.commandId);
+  await f.promote(f.operation.commandId);
+  await f.ack(f.operation.commandId, {observedSourceId:f.projectedSource.id,sourceRevision:f.projectedSource.revision,slotKey:projected.controlTarget.source.slotKey});
+  await f.t.run(({db})=>db.patch(f.args.sessionId, {currentSourceId:f.sourceId,observedSlotKey:`manual-${f.sourceId}`,committedIntent:{kind:"manual",sourceId:f.sourceId,revision:1}}));
+  assert.deepEqual((await f.receipt(f.args.sessionId)).lineupCursor,projected.controlTarget.source);
+  assert.equal(await f.owner.query(api.events.getNextEventMediaSource,{currentSlug:f.event.slug}),null,"the only lineup slot remains consumed during a temporary takeover");
+});
+for(const captured of ["source_a","hold-slate"]) it(`Hold rejects a changed captured target (${captured})`,async()=>{
+ const f=await controlFixture();
+ const other=await f.t.run(async({db})=>{const source=(await db.get(f.sourceId))!;const {_id,_creationTime,...copy}=source;return db.insert("eventMediaSources",{...copy,key:"other"});});
+ await f.t.run(({db})=>db.patch(f.args.sessionId,{currentSourceId:other,observedSourceRevision:1}));
+ await assert.rejects(f.owner.mutation(api.events.queueEventMediaCommand,{currentSlug:f.event.slug,type:"hold_current",targetSourceKey:captured,expectedIntentSequence:0,idempotencyKey:crypto.randomUUID()}),/Current source changed/);
+});
 it("profile link removal during preparation is denied without waiting for projection refresh", async () => {
   const f = await projectedControlFixture();
   await f.t.run((ctx) => ctx.db.patch(f.profile.person, { outboundLinks: [] }));

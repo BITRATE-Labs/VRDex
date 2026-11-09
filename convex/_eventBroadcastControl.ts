@@ -190,7 +190,7 @@ export async function resolveControlTarget(
     if (slots.length > 64) throw Error("Event schedule exceeds worker limits.");
     const now = Date.now();
     const currentIndex = slots.findIndex(
-      (s) => s._id === session.observedSlotKey,
+      (s) => s._id === (session.lineupCursor?.slotKey ?? session.observedSlotKey),
     );
     if (
       command.type === "set_automatic_mode" ||
@@ -348,6 +348,9 @@ export async function admitControlOperation(
   if (["switch_next", "next_slot"].includes(command.type) && command.targetSourceKey !== undefined &&
     (target.kind !== "source" || (await db.get(target.source.sourceId))?.key !== command.targetSourceKey))
     throw Error("Next source changed. Confirm the action again.");
+  if (command.type === "hold_current" && command.targetSourceKey !== undefined &&
+    (target.kind === "source" ? (await db.get(target.source.sourceId))?.key : "hold-slate") !== command.targetSourceKey)
+    throw Error("Current source changed. Confirm the action again.");
   const sequence = (await allocateSessionCommandSequence(db, s._id))!;
   const now = Date.now();
   const resumeSource = isCut(command.type) && s.currentSourceId && s.observedSourceRevision !== undefined && s.observedSlotKey &&
@@ -601,12 +604,15 @@ export async function promoteControlOperation(
   const failed = await checkPreparation(db, session, command, event);
   if (failed) return failed;
   if (command.controlPhase === "preparing") {
+    const target = command.controlTarget!;
+    const source = target.kind === "source" ? await db.get(target.source.sourceId) : null;
     await db.patch(command._id, {
       controlPhase: "promoting",
       updatedAt: Date.now(),
     });
     await db.patch(session._id, {
       committedIntent: intentForTarget(command.controlTarget!),
+      ...(source?.eventSlotId && target.kind === "source" ? {lineupCursor:target.source} : target.kind === "slate" && target.mode === "automatic" ? {lineupCursor:undefined} : {}),
       intentSequence: command.sequence,
       updatedAt: Date.now(),
     });
@@ -712,7 +718,9 @@ export async function writeControlObservation(
 ) {
   const now = Date.now();
   const state = e.state as "live" | "hold" | "fallback";
+  const source = e.sourceId ? await db.get(e.sourceId) : null;
   await db.patch(session._id, {
+    ...(source?.eventSlotId && e.sourceRevision !== undefined && e.slotKey === source.eventSlotId ? {lineupCursor:{sourceId:source._id,revision:e.sourceRevision,slotKey:e.slotKey}} : {}),
     broadcastMode: broadcastModeForIntent(session.committedIntent),
     currentSourceId: e.sourceId ?? undefined,
     observedSourceRevision: e.sourceRevision,

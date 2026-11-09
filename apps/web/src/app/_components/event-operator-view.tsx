@@ -283,11 +283,12 @@ export function EventOperatorControls({
   }
   function requestCommand(type: Command, key?:string, label?:string) {
     if (!session || !status.canControl) return;
-    const source = type === "switch_next" ? nextSource : key ? status.sources.find(row => row.key === key) : undefined;
+    const source = type === "switch_next" ? nextSource : type === "hold_current" ? status.sources.find(row=>row.sourceId === session.currentSourceId) : key ? status.sources.find(row => row.key === key) : undefined;
+    const capturedKey = type === "hold_current" ? source?.key ?? "hold-slate" : key;
     const expected = {expectedSessionId:session.sessionId,expectedIntentSequence:session.intentSequence ?? 0, ...(source ? {expectedSourceRevision:source.revision} : {})};
     setChange({title:label ?? "Change broadcast?", label:label ?? "Confirm", sessionId:session.sessionId, epoch:session.epoch,
       message:type === "switch_next" ? "Advance the lineup. The current automatic or manual mode stays the same." : type === "set_automatic_mode" ? "Resume following the event lineup." : type === "resume_previous" ? "Return to the previous source. Automatic switching stays paused." : type === "switch_source" ? "Put this source on air and pause automatic switching." : "Pause automatic switching and hold this output.",
-      run:() => type === "switch_hold" ? cut(expected) : submit(() => onCommand(type,key,expected)),
+      run:() => type === "switch_hold" ? cut(expected) : submit(() => onCommand(type,capturedKey,expected)),
     });
   }
   async function confirmChange() {
@@ -361,7 +362,7 @@ export function EventOperatorControls({
             <aside className="min-w-0 rounded-control border border-border bg-surface p-5" aria-label="Destination">
               {destination ? <>
                 <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">Destination</h2>{status.canControl && !status.outputConfigurationLocked && <Link className="text-sm text-muted" href={setupPath}>Edit connection</Link>}</div>
-                <div className="mb-4 flex items-center justify-between gap-3"><strong className="text-sm">{destination.label}</strong><span className="text-sm capitalize text-muted">{active ? outputHealth(destination) : destination.state}</span></div>
+                <div className="mb-4 flex items-center justify-between gap-3"><strong className="text-sm">{destination.label}</strong><span className="text-sm capitalize text-muted">{active ? outputHealth(destination) : destination.testState === "not_tested" ? "Not tested" : destination.testState === "failed" ? "Test failed" : destination.testState === "passed" ? "Test passed" : destination.state}</span></div>
                 {!active && readyOutputs.length > 1 && <label className="mb-4 grid gap-2 text-sm">Primary output<select aria-label="Primary output" className="rounded-control border border-border bg-surface p-2" value={outputKey} onChange={e=>setOutputKey(e.target.value)}><option value="">Select output</option>{readyOutputs.map(row=><option key={row.outputId} value={row.key}>{row.label}</option>)}</select></label>}
                 {!active && <Button className="w-full" disabled={busy || sessionPending || !status.canControl || Boolean(active) || status.outputConfigurationLocked || !selectedOutput} onClick={()=>submit(()=>onStart(selectedOutput))}>Start</Button>}
                 {destination.playbackLinks.length > 0 && <div className="mt-4 border-t border-border pt-1">{destination.playbackLinks.map(link=><CopyValueRow key={`${link.platform}:${link.url}`} label={link.label ?? `${link.platform} URL`} value={link.url}/>)}</div>}

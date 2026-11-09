@@ -565,7 +565,7 @@ export function createOperatorControl({
         } else {
           if (pending) remember(pending.command._id, { settled: true });
           abandon();
-          commit(config.committedIntent, config.intentSequence);
+          commit(config.committedIntent, config.intentSequence, config.committedIntent.kind === "automatic" ? slot(config.lineupCursor) : undefined);
         }
       }
       if (pending && config.pendingOperation?._id !== pending.command._id) {

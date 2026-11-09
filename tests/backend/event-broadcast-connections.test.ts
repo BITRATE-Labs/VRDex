@@ -22,6 +22,7 @@ async function fixture() {
   return { t, owner, event, input };
 }
 it('validates preset servers with friendly errors and exact namespace binding', () => {
+  assert.match(normalizeConnection({provider:'vrcdn',serverUrl:'rtmp://ingest.vrcdn.live/live',playbackUrl:'rtspt://stream.vrcdn.live/live/example'}).playbackUrl,/^https:.*\.m3u8$/);
   assert.throws(() => normalizeConnection({ provider: 'vrcdn', serverUrl: 'bad', playbackUrl: 'https://example.test' }), /Enter a valid stream server URL/);
   assert.equal(managedSecretRefAllowed(prefix + 'vrdex/broadcast/abc/def/12345678-1234-1234-1234-123456789012-AbCd12', 'abc', 'def', '12345678-1234-1234-1234-123456789012'), true);
   assert.equal(managedSecretRefAllowed(prefix + 'vrdex/broadcast/other/def/12345678-1234-1234-1234-123456789012-AbCd12', 'abc', 'def', '12345678-1234-1234-1234-123456789012'), false);
@@ -36,6 +37,7 @@ it('commits CAS metadata, retains a blank key and rejects changed server or stal
   const f = await fixture(); const grant = await f.owner.mutation(ref('prepareConnection'), f.input);
   const args = { grantId: grant.grantId, credentialRef: prefix + grant.secretName + '-AbCd12', brokerToken: process.env.VRDEX_EVENT_OUTPUT_BROKER_TOKEN };
   const saved = await f.owner.mutation(ref('commitConnection'), args); assert.equal(saved.connection.revision, 1); assert.equal(saved.connection.testState, 'not_tested'); assert.equal(JSON.stringify(saved).includes('credentialRef'), false);
+  assert.deepEqual(saved.connection.playbackLinks.map((link:any)=>link.platform),['browser','pc','standalone']);
   assert.deepEqual(await f.owner.mutation(ref('commitConnection'), args), saved);
   await assert.rejects(f.owner.mutation(ref('prepareConnection'), { ...f.input, requestId: '22345678-1234-1234-1234-123456789012' }), /Connection changed/);
   const edit = { ...f.input, requestId: '32345678-1234-1234-1234-123456789012', expectedRevision: 1, replaceKey: false, credentialDigest: '' };

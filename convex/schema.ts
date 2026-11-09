@@ -1654,6 +1654,7 @@ export default defineSchema({
   eventMediaSessions: defineTable({
     connectionTest:v.optional(v.object({jobId:v.id("eventBroadcastConnectionTests"),revision:v.number(),marker:v.string(),deadlineAt:v.number()})),
     resumeSource:v.optional(v.object({sourceId:v.id("eventMediaSources"),revision:v.number(),slotKey:v.string()})),
+    lineupCursor:v.optional(v.object({sourceId:v.id("eventMediaSources"),revision:v.number(),slotKey:v.string()})),
     resourceSnapshot: v.optional(resourceSnapshotValidator),
     resourceObservedAt: v.optional(v.number()),
     computeRuntime: v.optional(computeRuntimeValidator),

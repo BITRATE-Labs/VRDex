@@ -21,6 +21,8 @@ const modules = {
 };
 const bridgeToken = "worker-test-only-credential";
 process.env.VRDEX_EVENT_MEDIA_BRIDGE_TOKEN = bridgeToken;
+const secretPrefix='arn:aws:secretsmanager:us-east-1:123456789012:secret:';
+process.env.VRDEX_EVENT_OUTPUT_SECRET_ARN_PREFIX=secretPrefix;
 async function fixture() {
     const t = convexTest({ schema, modules });
     const subject = newClerkUserId();
@@ -34,7 +36,7 @@ async function fixture() {
     const owner = t.withIdentity({ subject, emailVerified: true, issuer: "test", tokenIdentifier: `test|${subject}` });
     const event = await owner.mutation(api.events.createCommunityEvent, { title: "Worker event", communitySlug: "club", startAt: Date.now() + 600000, timezone: "UTC" });
     const output = await owner.mutation(api.events.configureVrcdnOutput, { currentSlug: event.slug, key: "primary", label: "Main", credentialRef: "event-media/vrcdn/main", sourceConsentAccepted: true, destinationAuthorityAccepted: true, providerRulesAccepted: true, rightsClearedMediaAccepted: true, playbackLinks: [{ platform: "browser", url: "https://example.test/watch" }] });
-    await t.run(async({db})=>{const stored=await db.get(output.outputId);const eventDoc=await db.get(event.eventId);await db.patch(output.outputId,{managedConnection:{communityProfileId:eventDoc!.communityProfileId,provider:"vrcdn",serverUrl:"rtmp://ingest.vrcdn.live/live",revision:1,requestId:"fixture",testState:"not_tested"}});});
+    await t.run(async({db})=>{const stored=(await db.get(output.outputId))!;const eventDoc=(await db.get(event.eventId))!;const requestId='12345678-1234-1234-1234-123456789012';await db.patch(output.outputId,{credential:{...stored.credential!,secretRef:`${secretPrefix}vrdex/broadcast/${eventDoc.communityProfileId}/${event.eventId}/${requestId}-AbCd12`},managedConnection:{communityProfileId:eventDoc.communityProfileId!,provider:"vrcdn",serverUrl:"rtmp://ingest.vrcdn.live/live",revision:1,requestId,testState:"not_tested"}});});
     const startArgs={currentSlug:event.slug,expectedRevision:1,idempotencyKey:"test-request"};
     const started=await owner.mutation(api.eventBroadcastConnectionTests.startConnectionTest,startArgs);
     const job=await t.run(({db})=>db.get(started.jobId));
@@ -71,6 +73,18 @@ it('a stale revision cannot submit success and foreign users cannot inspect a te
  await t.run(async({db})=>{const stored=await db.get(output.outputId);await db.patch(output.outputId,{managedConnection:{...stored!.managedConnection!,revision:2}});});
  assert.equal((await t.mutation(worker('recordConnectionTestProof'),{...args,epoch:lease.epoch,jobId:job._id,marker:job.marker,decodedAt:Date.now()})).accepted,false);
  await assert.rejects(t.query(api.eventBroadcastConnectionTests.getConnectionTest,{currentSlug:event.slug,jobId:job._id}),/signed-in/);
+});
+it('late decoded proof cannot revive a failed cleaned session with an unexpired lease',async()=>{
+ const {t,owner,job,args,event}=await fixture();const lease=await t.mutation(worker('acquireSession'),args);
+ await t.run(async({db})=>{
+  const session=(await db.get(job.sessionId))!;
+  await db.patch(session._id,{status:'error',dispatchId:'test-dispatch',workerTaskId:'test-task',dispatchStopConfirmedAt:Date.now(),workerTaskCleanupPending:false});
+  await db.patch(session.programId,{activeSessionId:undefined});
+  await db.patch(job._id,{state:'failed'});
+ });
+ assert.equal((await t.mutation(worker('recordConnectionTestProof'),{...args,epoch:lease.epoch,jobId:job._id,marker:job.marker,decodedAt:Date.now()})).accepted,false);
+ assert.equal((await owner.query(api.eventBroadcastConnectionTests.getConnectionTest,{currentSlug:event.slug,jobId:job._id}))?.state,'failed');
+ assert.equal((await t.run(({db})=>db.get(job.sessionId)))?.status,'error');
 });
 it('cancelling before admission atomically proves no launch and releases the queued test',async()=>{
  const {t,owner,job,event,args}=await fixture();

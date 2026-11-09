@@ -4,3 +4,13 @@
 !workers/restream/**
 !scripts/
 !scripts/*.mjs
+!tests/
+!tests/backend/
+!tests/backend/*.ts
+!tests/fixtures/
+!tests/fixtures/*.json
+!tests/fixtures/*.mjs
+!tests/native/
+!tests/native/*.mjs
+!tests/scripts/
+!tests/scripts/*.mjs

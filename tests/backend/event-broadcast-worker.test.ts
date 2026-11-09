@@ -19,6 +19,12 @@ const modules = {
     "../../convex/eventMediaWorker.ts": () => import("../../convex/eventMediaWorker"),
 };
 const bridgeToken = "worker-test-only-credential";
+it("automatic recovery preserves an early Next cursor instead of replaying the scheduled interval",()=>{
+ const operator=createOperatorControl({control:async()=>({kind:"ok"}),renderer:{hold:()=>{}},inputs:{}});
+ operator.applyConfiguration({epoch:1,intentSequence:5,committedIntent:{kind:"automatic"},lineupCursor:{sourceId:"nova",revision:1,slotKey:"nova-slot"},sources:[{id:"aurora",revision:1},{id:"nova",revision:1}],slots:[{slotKey:"aurora-slot",sourceId:"aurora",available:true,startAt:0,endAt:30000},{slotKey:"nova-slot",sourceId:"nova",available:true,startAt:30000,endAt:60000}],policy:{}});
+ assert.equal(operator.getState().current?.sourceId,"nova");
+ assert.equal(operator.getState().committedIntent.kind,"automatic");
+});
 it("direct-media EOF holds output while retrying durable completion and ignores a late reply", async () => {
     let ended = true, holds = 0, calls = 0, reply: (value: unknown) => void = () => {};
     const source = { id: "file", revision: 1, input: { kind: "direct_media", url: "https://example.com/video.mp4" } };

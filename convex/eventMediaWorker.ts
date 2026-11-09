@@ -424,6 +424,7 @@ async function configuration(ctx: MutationCtx, { session, program, event }: NonN
         connectionTest: session.connectionTest,
         programId: program._id, eventId: event._id, outputId: session.outputId,
         committedIntent:session.committedIntent,intentSequence:session.intentSequence,
+        lineupCursor:session.lineupCursor,
         pendingOperation:session.pendingControlCommandId?await ctx.db.get(session.pendingControlCommandId):null,
         allocation: session.allocation, destinationProfiles: session.destinationProfiles,
         mediaSettings: parseMediaSettings(session.mediaSettings), controlProtocolVersion: session.controlProtocolVersion,

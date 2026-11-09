@@ -2537,6 +2537,7 @@ export const getEventMediaControlStatus = query({
           simulcastEnabled: output.simulcastEnabled ?? false,
           twitchSetup: output.twitchSetup,
           playbackLinkCount: output.playbackLinks.length,
+          ...(output.managedConnection ? {testState:output.managedConnection.testState} : {}),
           playbackLinks: eventOutputIsAuthorized(event,output) ? output.playbackLinks : [],
           updatedAt: output.updatedAt,
         })),
