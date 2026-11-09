@@ -8,6 +8,9 @@ BASIC requested the whole plan as one delivery on November 9, 2026. No independe
 
 ## Execution rulings
 
+- Switch from serial execution to the repository's parallel-worktree delivery skill after the shared control/source foundation passed 101 backend and 17 web checks. Reason: setup/provisioning, direct-media acquisition and production layout are independently testable and now have stable enough contracts. Cost: root must resolve integration seams and run fresh whole-branch review. All leaves converge into one local delivery; no leaf publishes or deploys.
+- YouTube was explicitly removed from this delivery by BASIC. Track direct broadcasting and yt-dlp/alternative acquisition investigation in https://github.com/BITRATE-Labs/VRDex/issues/446. Do not silently claim browser embed playback satisfies it.
+
 - Use this existing isolated design-jam worktree and preserve the accepted fixture as reference. The initial checkout was detached at `d2f2febba`; implementation starts on `codex/broadcast-locked-flow`.
 - The shell sandbox launcher cannot acquire its helper lock. Read/test commands use the approved escalated route; file edits still use apply_patch.
 - Begin with control semantics because the presentation depends on the corrected contract. Task ordering is an engineering dependency, not a separate release.

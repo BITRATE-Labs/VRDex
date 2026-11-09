@@ -161,7 +161,7 @@ function run(command, args, options = {}) {
 }
 
 function aws(config, args) {
-  return run(config.awsCommand, [...args, "--region", config.region], { redactValues: config.redactValues });
+  return run(config.awsCommand, [...(config.awsCommandArgs ?? []), ...args, "--region", config.region], { redactValues: config.redactValues });
 }
 
 export function loadConfig(options = {}) {

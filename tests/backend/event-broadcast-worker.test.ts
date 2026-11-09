@@ -593,13 +593,13 @@ for (const admitted of [false, true]) it(`F1 unknown admission response retains 
 
 for (const failure of ['run-task', 'registration-response']) it(`F1 admitted ${failure} failure retains reservation and cannot start twice`, async () => {
     const f = await fixture();
-    const { mkdtemp, writeFile, chmod, rm } = await import('node:fs/promises');
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
     const { tmpdir } = await import('node:os');
     const { join } = await import('node:path');
     const { getFunctionName } = await import('convex/server');
     const dir = await mkdtemp(join(tmpdir(), 'pr377-aws-fixture-'));
-    const cli = join(dir, 'aws');
-    await writeFile(cli, `#!${process.execPath}
+    const cli = join(dir, 'aws-fixture.mjs');
+    await writeFile(cli, `
 const command = process.argv[3];
 if (command === 'register-task-definition') console.log(JSON.stringify({taskDefinition:{taskDefinitionArn:'definition'}}));
 else if (command === 'run-task') {
@@ -607,13 +607,12 @@ else if (command === 'run-task') {
   console.log(JSON.stringify({tasks:[{taskArn:'task'}]}));
 } else process.exit(2);
 `);
-    await chmod(cli, 0o700);
     const client = { mutation: async (ref: any, args: any) => {
         const result = await f.t.mutation(ref, args);
         if (getFunctionName(ref) === 'eventMediaWorker:recordDispatchedTask') throw Error('registration response lost');
         return result;
     } };
-    const config = { bridgeToken, workerId: 'bridge', region: 'us-east-1', redactValues: [], awsCommand: cli, secretRefMap: {'event-media/vrcdn/main':'test-secret'}, baseEnvironment: {}, subnets: [], securityGroups: [] };
+    const config = { bridgeToken, workerId: 'bridge', region: 'us-east-1', redactValues: [], awsCommand: process.execPath, awsCommandArgs:[cli], secretRefMap: {'event-media/vrcdn/main':'test-secret'}, baseEnvironment: {}, subnets: [], securityGroups: [] };
     try {
         await claimAndProcess(client, config, undefined, () => false, { resolveAllocation: fixtureCapacityResolver });
         const session = await f.t.run(({db}) => db.get(f.args.sessionId));
