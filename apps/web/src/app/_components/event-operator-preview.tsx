@@ -170,7 +170,7 @@ export function EventOperatorPreview({
       {!available || failed ? (
         <div className="flex gap-3 text-sm">
           <span>Unavailable</span>
-          {available && <Button size="sm" variant="secondary" onClick={()=>{const candidate=player.current;if (!candidate) return;const accepted=candidate.enableControls();if (accepted && mount.current) {mount.current.inert=false;mount.current.style.pointerEvents="auto";}setView(current=>current?.handle===candidate ? {...current,failed:!accepted} : current);}}>Retry preview</Button>}
+          {available && <Button size="sm" variant="secondary" onClick={()=>{const candidate=player.current;if (!candidate) return;const accepted=candidate.retry();if (accepted && mount.current) {mount.current.inert=false;mount.current.style.pointerEvents="auto";}setView(current=>current?.handle===candidate ? {...current,failed:!accepted} : current);}}>Retry preview</Button>}
           {url ? (
             <a href={url} target="_blank" rel="noreferrer">
               Open

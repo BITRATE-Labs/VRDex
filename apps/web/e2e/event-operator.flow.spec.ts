@@ -42,6 +42,20 @@ test("custom source validates links, supports direct video, and removal confirms
  await page.goto("/playwright/event-operator");await page.getByText("Add input",{exact:true}).click();await page.getByLabel("Source label",{exact:true}).fill("New source");await page.getByLabel("Video or stream link",{exact:true}).fill("https://example.invalid/private");await page.getByRole("button",{name:"Add source",exact:true}).click();await expect(page.getByText("Save failed",{exact:true})).toBeVisible();
  await page.getByLabel("Video or stream link",{exact:true}).fill("https://media.example.com/open-decks.mp4");await page.getByRole("button",{name:"Add source",exact:true}).click();const source=page.getByRole("article",{name:"New source",exact:true});await expect(source.getByRole("link",{name:"Open",exact:true})).toHaveAttribute("href","https://media.example.com/open-decks.mp4");await source.getByRole("button",{name:"Remove New source",exact:true}).click();await confirm(page,"Remove source");await expect(source).toHaveCount(0);
 });
+
+test("cancelled and rejected live replacements retain the draft until a successful save @flow @fixture",async({page})=>{
+ await page.goto("/playwright/event-operator");
+ await page.getByRole("button",{name:"Replace Custom",exact:true}).click();
+ const label=page.getByLabel("Source label",{exact:true}),url=page.getByLabel("Video or stream link",{exact:true});
+ await label.fill("Retained draft");await url.fill("https://www.twitch.tv/replacement");
+ await page.getByRole("button",{name:"Replace source",exact:true}).click();await page.getByRole("dialog").getByRole("button",{name:"Cancel",exact:true}).click();
+ await expect(label).toHaveValue("Retained draft");await expect(url).toHaveValue("https://www.twitch.tv/replacement");
+ await page.getByRole("button",{name:"Replace source",exact:true}).click();await page.keyboard.press("Escape");await expect(label).toBeEnabled();
+ await url.fill("https://example.invalid/private");await page.getByRole("button",{name:"Replace source",exact:true}).click();await confirm(page,"Replace source");
+ await expect(page.getByText("Command failed",{exact:true})).toBeVisible();await expect(label).toHaveValue("Retained draft");await expect(url).toHaveValue("https://example.invalid/private");
+ await url.fill("https://www.twitch.tv/replacement");await page.getByRole("button",{name:"Replace source",exact:true}).click();await confirm(page,"Replace source");
+ await expect(page.getByRole("article",{name:"Retained draft",exact:true})).toBeVisible();await expect(label).toHaveValue("");await expect(url).toHaveValue("");
+});
 test.describe("mobile operator",()=>{test.use({viewport:devices["Pixel 7"].viewport,isMobile:true,hasTouch:true,deviceScaleFactor:devices["Pixel 7"].deviceScaleFactor});test("controls and diagnostics fit the viewport @flow @fixture",async({page},info)=>{
  await page.goto("/playwright/event-operator");await page.getByRole("button",{name:"Observe live",exact:true}).click();await details(page);await page.getByText("Diagnostics",{exact:true}).click();await expect(page.getByText("CPU",{exact:true})).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:info.outputPath("operator-mobile.png"),fullPage:true});
 });});

@@ -39,6 +39,10 @@ export class LocalPreviewPlayer {
     this.adapter?.enableControls?.(() => this.acquireAudio());
     return true;
   }
+  retry() {
+    this.stop();
+    return this.enableControls();
+  }
   monitor() {
     if (!this.start()) return false;
     this.focus.acquire(this, () => this.stop());

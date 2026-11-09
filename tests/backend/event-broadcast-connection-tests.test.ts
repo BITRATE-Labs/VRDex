@@ -51,6 +51,12 @@ it('test start is idempotent, immutable, and uses normal allocated session dispa
  const admitted=await t.mutation(worker('admitDispatch'),{bridgeToken,eventId:args.eventId,sessionId:args.sessionId,dispatchId:'test-dispatch',launchProtocol:'fenced-v1'});assert.equal(admitted.granted,true);
  await assert.rejects(owner.mutation(api.eventBroadcastConnectionTests.startConnectionTest,{...startArgs,idempotencyKey:'second-test'}),/already active/);
 });
+it('connection-test sessions reject source commands while retaining cancellation',async()=>{
+ const f=await fixture();
+ for(const type of ['switch_hold','switch_next','hold_current','set_automatic_mode'] as const) await assert.rejects(f.owner.mutation(api.events.queueEventMediaCommand,{currentSlug:f.event.slug,type,idempotencyKey:`test-${type}`}),/Connection test session/);
+ await f.owner.mutation(api.eventBroadcastConnectionTests.cancelConnectionTest,{currentSlug:f.event.slug,jobId:f.started.jobId});
+ assert.equal((await f.owner.query(api.eventBroadcastConnectionTests.getConnectionTest,{currentSlug:f.event.slug,jobId:f.started.jobId}))?.state,'cancelled');
+});
 it('community test limits preserve retries and retention never deletes an unfinished job',async()=>{
  const f=await fixture();
  await f.t.run(async({db})=>{

@@ -285,7 +285,7 @@ export function createEventWorker({
           silenceThresholdDb,
           connectionTest:config.connectionTest,
         });
-        operator = createOperatorControl({
+        if (!config.connectionTest) operator = createOperatorControl({
           control: request,
           renderer,
           inputs,

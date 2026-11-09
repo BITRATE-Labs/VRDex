@@ -169,7 +169,7 @@ export function EventOperatorControls({
   const [cutBusy, setCutBusy] = useState(false);
   const [stopBusy, setStopBusy] = useState(false);
   const [failure, setFailure] = useState(false);
-  const [change, setChange] = useState<{title:string; message:string; label:string; sessionId:string; epoch?:number; run:()=>Promise<unknown>} | null>(null);
+  const [change, setChange] = useState<{title:string; message:string; label:string; sessionId:string; epoch?:number; run:()=>Promise<unknown>; cancel?:()=>void} | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {if (change) dialog.current?.showModal(); else dialog.current?.close();}, [change]);
   const [outputKey, setOutputKey] = useState("");
@@ -213,6 +213,7 @@ export function EventOperatorControls({
   );
   const disabled =
     busy ||
+    Boolean(session?.connectionTest) ||
     Boolean(view.pending) ||
     !status.canControl ||
     stopBusy ||
@@ -224,14 +225,16 @@ export function EventOperatorControls({
       !status.canControl ||
       session?.status === "stopping"
     )
-      return;
+      return false;
     lock.current = true;
     setBusy(true);
     setFailure(false);
     try {
       await action();
+      return true;
     } catch {
       setFailure(true);
+      return false;
     } finally {
       lock.current = false;
       setBusy(false);
@@ -296,9 +299,13 @@ export function EventOperatorControls({
   }
   async function confirmChange() {
     if (!change || !status.canControl || change.sessionId !== session?.sessionId || change.epoch !== session?.epoch) {
-      setChange(null); setFailure(true); return;
+      change?.cancel?.(); setChange(null); setFailure(true); return;
     }
     const action = change.run; setChange(null); await action();
+  }
+  function dismissChange() {
+    change?.cancel?.();
+    setChange(null);
   }
   function outputHealth(output:OperatorStatus["outputs"][number]) {
     const fresh=observationFresh && output.authorized !== false && eventBroadcastObservationFresh({serverNow:status.serverNow,elapsedMs:elapsed,leaseExpiresAt:session?.leaseExpiresAt,observedAt:session?.outputHealthObservedAt,status:session?.status});
@@ -374,8 +381,8 @@ export function EventOperatorControls({
               </> : <Link aria-disabled={!status.canControl} href={status.canControl ? setupPath : status.eventPath} className="flex min-h-[100px] items-center gap-4 rounded-control bg-gradient-to-br from-accent/15 to-surface p-1"><Radio aria-hidden="true" className="size-8 shrink-0 text-accent"/><span className="flex-1 text-lg font-semibold">Set up broadcast</span><ArrowUpRight aria-hidden="true" className="size-5"/></Link>}
             </aside>
           </div>
-          {change && <dialog ref={dialog} onCancel={() => setChange(null)} aria-labelledby="broadcast-change-title" className="m-auto w-full max-w-md rounded-control border border-border bg-surface-strong p-6 text-foreground backdrop:bg-black/60">
-            <h2 id="broadcast-change-title" className="text-xl font-semibold">{change?.title}</h2><p className="my-4 text-sm text-muted">{change?.message}</p><div className="flex gap-3"><Button autoFocus onClick={() => setChange(null)}>Cancel</Button><Button variant={change?.label === "Stop broadcast" ? "danger" : "primary"} disabled={!status.canControl} onClick={() => void confirmChange()}>{change?.label}</Button></div>
+          {change && <dialog ref={dialog} onCancel={dismissChange} aria-labelledby="broadcast-change-title" className="m-auto w-full max-w-md rounded-control border border-border bg-surface-strong p-6 text-foreground backdrop:bg-black/60">
+            <h2 id="broadcast-change-title" className="text-xl font-semibold">{change?.title}</h2><p className="my-4 text-sm text-muted">{change?.message}</p><div className="flex gap-3"><Button autoFocus onClick={dismissChange}>Cancel</Button><Button variant={change?.label === "Stop broadcast" ? "danger" : "primary"} disabled={!status.canControl} onClick={() => void confirmChange()}>{change?.label}</Button></div>
           </dialog>}
           <p role="status">
             {failure
@@ -415,8 +422,7 @@ export function EventOperatorControls({
             onReplace={(source,input) => {
               const expected = {expectedSourceRevision:source.revision,...(active && session ? {expectedSessionId:session.sessionId,expectedIntentSequence:session.intentSequence ?? 0} : {})};
               if (!active || !session) return onReplace(source,input,expected);
-              setChange({title:`Replace ${source.label}?`,message:"Update this input for the broadcast.",label:"Replace source",sessionId:session.sessionId,epoch:session.epoch,run:()=>submit(()=>onReplace(source,input,expected))});
-              return Promise.resolve();
+              return new Promise<boolean>(resolve => setChange({title:`Replace ${source.label}?`,message:"Update this input for the broadcast.",label:"Replace source",sessionId:session.sessionId,epoch:session.epoch,cancel:()=>resolve(false),run:async()=>resolve(await submit(()=>onReplace(source,input,expected)))}));
             }}
             onRemove={source => {
               const expected = {expectedSourceRevision:source.revision,...(active && session ? {expectedSessionId:session.sessionId,expectedIntentSequence:session.intentSequence ?? 0} : {})};

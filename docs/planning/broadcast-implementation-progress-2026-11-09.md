@@ -34,7 +34,7 @@ BASIC requested the remaining plan as one delivery on November 9, 2026. YouTube 
 | Web state, authority, preview, adapters and validation | 34 passed |
 | Full web suite after current-main integration | 1164 passed |
 | Credential broker, transport and test-screen suites | 18 passed |
-| Production-component browser flows | 17 passed together, including desktop/mobile, legacy metadata, passed-test editing and active-test recovery |
+| Production-component browser flows | 18 passed together, including desktop/mobile, legacy metadata, passed-test editing, active-test recovery and retained replacement drafts |
 | Packaged Linux renderer and timing | 68 passed |
 | Packaged Linux Twitch acquisition/process cleanup | 9 passed |
 | Packaged Linux connection test encoding/readback | 10 passed |
@@ -48,6 +48,10 @@ BASIC requested the remaining plan as one delivery on November 9, 2026. YouTube 
 Desktop/mobile screenshots were inspected with visual review. Browser fixtures use explicit synthetic transports and do not establish signed-in provider delivery. The two Windows-only AWS executable fixtures were repaired portably; native Linux checks cover the process/pipe behavior Windows cannot establish.
 
 Fresh whole-branch review found and recycled real gaps in provider readback, PC/Quest persistence, stale test receipts, setup recovery, preview transport casing, automatic recovery and Hold confirmations. The reviewer rechecked both final control fixes and independently passed six regressions.
+
+The final recovery pass also separates connection-test teardown from source controls, recreates failed preview transports on retry, and retains live replacement drafts through cancellation or a rejected save. The worker lifecycle suite passed 197 tests; five local-preview tests and the immediate test-renderer cleanup regression passed.
+
+While a connection test is active, ordinary source controls are disabled and their backend commands are rejected. Stop and test cancellation remain available. Control, connection-test and rendered-state regressions passed 102 tests.
 
 ## Remaining release evidence
 

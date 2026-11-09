@@ -2651,6 +2651,7 @@ export const queueEventMediaCommand = mutation({
     }
 
     const session = await getOpenEventMediaSession(ctx.db, program);
+    if (session?.connectionTest) throw Error("Connection test session cannot accept source commands.");
     if(command.type === "preview_source")throw Error("Preview is local and cannot queue a worker command.");
     if(isControl(command.type)) {
       const receipt=await admitControlOperation(ctx.db,event,session,subject,args.idempotencyKey,command);

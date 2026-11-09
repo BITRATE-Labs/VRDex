@@ -110,7 +110,7 @@ export function EventOperatorSources({
     setBusy(true);
     setFailed(false);
     try {
-      await action();
+      if (await action() === false) return;
       setEditing(undefined);
       setLabel("");
       setUrl("");

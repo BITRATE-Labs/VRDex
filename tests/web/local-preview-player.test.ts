@@ -89,3 +89,16 @@ it("native player controls claim foreground before unmute and refuse a disposed 
  assert.equal(preview.enableControls(),true);assert.deepEqual(calls,[]);assert.equal(unmute?.(),true);calls.push("native:unmute");assert.deepEqual(calls,["program:pause","native:unmute"]);
  preview.close();assert.equal(unmute?.(),false);
 });
+
+it("retry disposes a failed transport and creates a fresh muted player",()=>{
+ const calls:string[]=[];
+ let created=0;
+ const preview=new LocalPreviewPlayer(()=>{const id=++created;return {play:async()=>true,pause:()=>calls.push(`pause:${id}`),setMuted:()=>{},setVolume:()=>{},update:()=>{},dispose:()=>calls.push(`dispose:${id}`),enableControls:()=>calls.push(`controls:${id}`)};},()=>{},new ForegroundPlayback());
+ preview.enableControls();
+ assert.equal(preview.retry(),true);
+ assert.equal(created,2);
+ assert.deepEqual(calls,["controls:1","pause:1","dispose:1","controls:2"]);
+ preview.close();
+ assert.equal(preview.retry(),false);
+ assert.equal(created,2);
+});
