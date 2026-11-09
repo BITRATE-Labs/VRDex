@@ -300,9 +300,12 @@ export function EventOperatorControls({
     const fresh=observationFresh && output.authorized !== false && eventBroadcastObservationFresh({serverNow:status.serverNow,elapsedMs:elapsed,leaseExpiresAt:session?.leaseExpiresAt,observedAt:session?.outputHealthObservedAt,status:session?.status});
     return fresh ? session?.outputHealth.find(row=>row.outputId===output.outputId)?.status ?? "Unknown" : "Unknown";
   }
-  const readyOutputs = status.outputs.filter(row => row.authorized !== false && ["ready", "active"].includes(row.state));
+  const usableOutputs = status.outputs.filter(row => row.authorized !== false && ["ready", "active"].includes(row.state));
+  const primaryOutputs = usableOutputs.filter(row=>!row.simulcastEnabled);
+  const readyOutputs = primaryOutputs.length ? primaryOutputs : usableOutputs;
+  const actualLabel = observationFresh ? status.sources.find(source=>source.sourceId===session?.currentSourceId)?.label ?? view.actual : "Unknown";
   const selectedOutput = readyOutputs.length === 1 ? readyOutputs[0].key : outputKey;
-  const destination = status.outputs.find(row => row.key === selectedOutput) ?? status.outputs[0];
+  const destination = (active ? status.outputs.find(row=>row.outputId===status.program?.currentOutputId) : undefined) ?? status.outputs.find(row => row.key === selectedOutput) ?? status.outputs[0];
   const outputLink = destination?.playbackLinks.find(link=>link.platform === "standalone") ?? destination?.playbackLinks[0];
   let outputInput: OperatorStatus["sources"][number]["input"];
   try {outputInput = outputLink ? parseBroadcastInputUrl(outputLink.url) : undefined;} catch { /* Keep the public playback link available. */ }
@@ -318,11 +321,11 @@ export function EventOperatorControls({
           </header>
           <div className="grid items-start gap-8 min-[850px]:grid-cols-[minmax(0,1fr)_310px]">
             <section className="min-w-0" aria-label="Broadcast output">
-              <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-semibold">Output</h2><span className="text-sm text-muted">{active && observationFresh ? view.actual : "Off air"}</span></div>
+              <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-semibold">Output</h2><span className="text-sm text-muted">{active && observationFresh ? actualLabel : "Off air"}</span></div>
               {active && observationFresh && outputInput && outputLink ? <EventOperatorPreview source={{label:destination?.label ?? "Output",input:outputInput,publicUrl:outputLink.url}}/> : <div className="flex aspect-video flex-col items-center justify-center gap-3 rounded-control border border-border bg-[#070b12] text-white">
-                <Radio aria-hidden="true" className="size-10 text-accent"/><strong className="text-xl">{active ? view.actual : "Starting soon"}</strong><span className="text-sm text-slate-400">{active ? workerStatus : title ?? status.eventTitle}</span>
+                <Radio aria-hidden="true" className="size-10 text-accent"/><strong className="text-xl">{active ? actualLabel : "Starting soon"}</strong><span className="text-sm text-slate-400">{active ? workerStatus : title ?? status.eventTitle}</span>
               </div>}
-              <dl className="flex flex-wrap gap-8 border-b border-border py-4"><div><dt className="text-xs text-muted">On air</dt><dd className="mt-1 text-sm font-medium">{active ? view.actual : "None"}</dd></div><div><dt className="text-xs text-muted">Up next</dt><dd className="mt-1 text-sm font-medium">{nextSource?.label ?? status.nextSlot?.displayLabel ?? "End of lineup"}</dd></div><div><dt className="text-xs text-muted">Switching</dt><dd className="mt-1 text-sm font-medium">{observationFresh ? session?.broadcastMode ?? "Unknown" : active ? "Unknown" : "Automatic"}</dd></div></dl>
+              <dl className="flex flex-wrap gap-8 border-b border-border py-4"><div><dt className="text-xs text-muted">On air</dt><dd className="mt-1 text-sm font-medium">{active ? actualLabel : "None"}</dd></div><div><dt className="text-xs text-muted">Up next</dt><dd className="mt-1 text-sm font-medium">{nextSource?.label ?? status.nextSlot?.displayLabel ?? "End of lineup"}</dd></div><div><dt className="text-xs text-muted">Switching</dt><dd className="mt-1 text-sm font-medium">{observationFresh ? session?.broadcastMode ?? "Unknown" : active ? "Unknown" : "Automatic"}</dd></div></dl>
               <div className="mt-4 flex flex-wrap gap-3">
             {active && session?.status === "hold" && session.resumeSource && <Button disabled={disabled} onClick={()=>requestCommand("resume_previous",status.sources.find(source=>source.sourceId===session.resumeSource?.sourceId)?.key,"Resume previous source")}>Resume previous source</Button>}
             <Button
@@ -359,8 +362,8 @@ export function EventOperatorControls({
               {destination ? <>
                 <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">Destination</h2>{status.canControl && !status.outputConfigurationLocked && <Link className="text-sm text-muted" href={setupPath}>Edit connection</Link>}</div>
                 <div className="mb-4 flex items-center justify-between gap-3"><strong className="text-sm">{destination.label}</strong><span className="text-sm capitalize text-muted">{active ? outputHealth(destination) : destination.state}</span></div>
-                {readyOutputs.length > 1 && <label className="mb-4 grid gap-2 text-sm">Primary output<select aria-label="Primary output" className="rounded-control border border-border bg-surface p-2" value={outputKey} onChange={e=>setOutputKey(e.target.value)}><option value="">Select output</option>{readyOutputs.map(row=><option key={row.outputId} value={row.key}>{row.label}</option>)}</select></label>}
-                <Button className="w-full" disabled={busy || sessionPending || !status.canControl || Boolean(active) || status.outputConfigurationLocked || !selectedOutput} onClick={()=>submit(()=>onStart(selectedOutput))}>Start</Button>
+                {!active && readyOutputs.length > 1 && <label className="mb-4 grid gap-2 text-sm">Primary output<select aria-label="Primary output" className="rounded-control border border-border bg-surface p-2" value={outputKey} onChange={e=>setOutputKey(e.target.value)}><option value="">Select output</option>{readyOutputs.map(row=><option key={row.outputId} value={row.key}>{row.label}</option>)}</select></label>}
+                {!active && <Button className="w-full" disabled={busy || sessionPending || !status.canControl || Boolean(active) || status.outputConfigurationLocked || !selectedOutput} onClick={()=>submit(()=>onStart(selectedOutput))}>Start</Button>}
                 {destination.playbackLinks.length > 0 && <div className="mt-4 border-t border-border pt-1">{destination.playbackLinks.map(link=><CopyValueRow key={`${link.platform}:${link.url}`} label={link.label ?? `${link.platform} URL`} value={link.url}/>)}</div>}
                 <details className="mt-5 border-t border-border pt-3"><summary className="cursor-pointer text-sm">Stream settings</summary><div className="pt-4"><EventStreamSettings embedded settings={status.program?.mediaSettings ?? NEW_PROGRAM_MEDIA_SETTINGS} activeSettings={active ? session?.mediaSettings : undefined} canControl={status.canControl} onSave={onSaveSettings}/></div></details>
               </> : <Link aria-disabled={!status.canControl} href={status.canControl ? setupPath : status.eventPath} className="flex min-h-[100px] items-center gap-4 rounded-control bg-gradient-to-br from-accent/15 to-surface p-1"><Radio aria-hidden="true" className="size-8 shrink-0 text-accent"/><span className="flex-1 text-lg font-semibold">Set up broadcast</span><ArrowUpRight aria-hidden="true" className="size-5"/></Link>}

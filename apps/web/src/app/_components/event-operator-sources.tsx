@@ -152,7 +152,7 @@ export function EventOperatorSources({
               <div>
                 <span className="font-medium">{source.label}</span>
                 <span className="ml-2 text-sm text-muted">
-                  {source.editable ? "Custom" : "Lineup"} · r{source.revision}
+                  {source.editable ? "Custom" : "Lineup"}
                 </span>
               </div>
               <span className="capitalize text-sm text-muted">{state}</span>
