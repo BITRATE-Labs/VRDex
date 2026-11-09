@@ -9,6 +9,8 @@ not admit a Fargate capacity profile or authorize deployment.
 
 ## Status
 
+The November 9 connection wizard requires the server broker role/token, managed secret namespace and worker secret permissions described in [broadcast output credentials](../engineering/broadcast-output-credentials.md). Tests share ordinary admission and cleanup; they do not bypass an unqualified allocation map. [Direct-media formats and limits](../engineering/event-direct-media.md) describe the new acquisition path. Build and measure the final image before deployment; local decode checks do not qualify a Fargate allocation.
+
 The current implementation provides persistent event dispatch through a scheduled
 singleton Lambda. Hosts use the existing Start/Stop, automatic/manual, Next and
 Hold controls after configuring an authorized destination. No daily dispatcher

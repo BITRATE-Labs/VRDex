@@ -10,6 +10,8 @@
 
 **Spec:** [Locked baseline](../../planning/broadcast-design-jam-2026-11-09.md), [final UX iterations](../../planning/broadcast-ux-review-2026-11-09.md), [setup journey](../../planning/broadcast-setup-flow-2026-11-09.md). These supersede conflicting earlier jam notes.
 
+**Implementation record:** [November 9 delivery evidence](../../planning/broadcast-implementation-progress-2026-11-09.md) records the implemented contracts, local checks and remaining release gates. Checklists below retain the original acceptance scope; local functional proof does not close provider, deployment or Fargate qualification.
+
 ## Outcome and decisions
 
 Locked decision: retain the shared header, compact destination card, contextual previews, person lookup and pasted-link paths, optional test and success return, copyable output URLs, mode-preserving Next, hold/resume and confirmations for live changes. Local preview audio uses player controls and is not permanently muted.
@@ -170,13 +172,14 @@ flowchart TD
 - [ ] Qualify continuous output, cancellation/restart and finite EOF. Recommended finite semantics: start from beginning on explicit take; EOF returns to opening screen in manual mode; recovery never silently replays an ended announcement. Resolve timestamp-bearing URL behavior before admitting it.
 - [ ] Measure the final image/source mix for admission. Unsupported acquisition fails before promotion. Add backend/worker/browser tests and current-image capacity evidence before committing M2.
 
-## Task 7: YouTube feasibility checkpoint
+## Task 7: Deferred YouTube follow-up
 
-**Files:** first create `docs/engineering/event-broadcast-youtube-feasibility.md`. Amend this plan with exact adapter/files/tests only after choosing a supported path.
+Locked scope amendment: BASIC removed YouTube from this delivery. [Issue 446](https://github.com/BITRATE-Labs/VRDex/issues/446) tracks direct broadcasting, including yt-dlp/youtube-dl and alternative acquisition paths.
 
-- [ ] Establish permitted acquisition/rendering, output redistribution rights and provider requirements from primary documentation and explicit provider approval where needed. Record blocked/private/removed videos, age/region restrictions, finite/live behavior, latency, audio capture, startup and runtime costs.
-- [ ] Demonstrate owned-content playback through continuous shared output using the proposed approach. An official iframe in the browser is not that proof. Do not silently substitute downloading/extraction or browser capture as an approved path.
-- [ ] If feasible, write an executable adapter amendment, package it reproducibly and test EOF, cancellation, failed promotion and capacity. If infeasible, present alternatives to BASIC. Do not quietly remove YouTube or call the broader objective complete.
+- [x] Record the official API/iframe acquisition gap in [the feasibility note](../../engineering/event-broadcast-youtube-feasibility.md).
+- [x] File the direct-broadcasting investigation and keep YouTube out of enabled production inputs.
+
+Owned-content output proof, acquisition/redistribution requirements, restricted videos, finite/live behavior, cancellation and capacity remain acceptance criteria for that follow-up.
 
 ## Task 8: Acceptance, migration and release
 

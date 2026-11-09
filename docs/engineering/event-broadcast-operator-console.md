@@ -7,6 +7,8 @@ permissions or source rows. Read-only operations staff retain diagnostics access
 
 ## Control and observation
 
+The locked workspace adds person lookup and a pasted-link Quick switch, optional local previews, copyable destination URLs and a connection wizard. A single primary destination is plain text. The wizard supports VRCDN, Twitch and Custom ingest, derives VRCDN PC/Quest URLs, and permits skipping its bounded test. Saved but untested connections remain labeled Not tested. [Credential setup and self-hosting configuration](broadcast-output-credentials.md) must be ready before enabling the new setup route.
+
 Desired source comes from committed intent. Pending source comes from the current
 operation, including its Preparing or Promoting phase. Observed output requires
 fresh encoded evidence: the source identity, revision, slot and output watermark,
@@ -19,7 +21,7 @@ Cut to slate has its own synchronous submission guard and does not wait behind a
 ordinary request or preparation. Stop has priority over source controls and retains
 its confirmation. Return to auto remains available in schedule gaps; the resulting
 automatic slate is valid. Start retains admission, output reservation, and terminal
-cleanup restrictions. No UI path bypasses the measured allocation map.
+cleanup restrictions. Every live state change has a captured-target confirmation. Next preserves automatic/manual mode, and its persisted lineup cursor survives worker recovery and temporary custom takeovers. Hold validates the captured current source. Resume re-prepares the last actually observed source. No UI path bypasses the measured allocation map.
 
 Custom sources use `eventMediaSources.create/replace/remove`. The authorized server
 projection supplies `editable`; profile projections and lineup sources cannot be
@@ -64,19 +66,19 @@ Changing a performer clears the prior input without changing legacy playback
 semantics. Available choices are presentation metadata and never enter save args.
 
 Preview owns a local adapter and foreground identity. It never calls the persistent
-playback owner's Play or replaces its request. It starts muted. Monitor acquires
-foreground audio synchronously before unmuting, and focus loss disposes the local
+playback owner's Play or replaces its request. It starts muted and exposes the player's own controls. Native unmute acquires
+foreground audio synchronously before becoming audible, and focus loss disposes the local
 adapter. Close and navigation do not resume the program automatically.
 Monitoring and provider status belong to the current local handle. Label changes
 update metadata without replacing playback. Source or geometry replacements reset
 keyboard/pointer interactivity synchronously before creating a muted adapter; they
-require their own Monitor acquisition. Notifications from stopped or replaced
+require their own foreground acquisition. Notifications from stopped or replaced
 adapters cannot change the current handle's state, and current successful playback
 clears an earlier Unavailable status.
 
 Twitch preview uses the official SDK, passes initial muted state into construction,
-and fences late SDK/READY callbacks after disposal. Its mount is inert to keyboard
-and pointer input until Monitor. The actual visible mount must be at least
+and fences late SDK/READY callbacks after disposal. Keyboard and pointer controls
+are available through the player; audibility still requires foreground ownership. The actual visible mount must be at least
 400 by 300 pixels, including at a 400-pixel viewport with card padding. Narrow or
 nonvisible placements expose an external link; they do not create a clipped embed.
 

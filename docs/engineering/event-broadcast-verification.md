@@ -1,5 +1,7 @@
 # Event broadcast integration verification
 
+Status, November 9, 2026: the locked broadcast workflow is wired on the implementation branch. Local browser flows, backend controls, secure provisioning, decoded connection-test proof and packaged Linux media checks are recorded in the [current delivery evidence](../planning/broadcast-implementation-progress-2026-11-09.md). This is source and local-runtime evidence. Current-image Fargate qualification, deployment, real provider delivery and PC/Quest acceptance remain open. Earlier dated results below retain their original scope.
+
 Status, October 24, 2026: the nine-task branch has source implementations for
 canonical VRCDN/Twitch inputs, six presets, protocol-2 durable intent, bounded
 current/candidate control, resource diagnostics and the persistent host player.

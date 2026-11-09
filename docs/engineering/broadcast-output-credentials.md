@@ -26,6 +26,8 @@ On an uncertain commit response, the broker replays the same grant before consid
 
 ## Custom output transport
 
+Connection tests allow ten new jobs per community per ten minutes. Exact retries reuse their existing job and do not consume another allowance. Queue waiting is bounded to two minutes; the first worker lease freezes a maximum 60-second runtime. Success requires decoded matching video and confirmed process/task-definition cleanup. Completed test records are eligible for hourly cleanup after 30 days, at most 50 per terminal state per pass; unfinished or ambiguously stopped sessions retain their records. This also bounds the retained test idempotency window.
+
 Custom output uses the selected program encoding directly. Immediately before publication, its transport resolves IPv4 addresses and rejects local, link-local, private, multicast and documentation ranges. A local tunnel connects to the pinned public address; RTMPS verifies the original hostname with Node TLS. FFmpeg receives the loopback endpoint and cannot resolve the upstream hostname independently. The tunnel closes with its sender. IPv6-only ingest servers are currently unsupported.
 
 Twitch uses the existing conservative allocation that includes a Twitch transcode. Custom RTMP copies the encoded primary program. Connection tests share ordinary admission and cleanup rather than allocating outside capacity controls.

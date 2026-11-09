@@ -4,7 +4,7 @@ Plan: [locked broadcast implementation](../superpowers/plans/2026-11-09-locked-b
 
 ## Delivery contract
 
-BASIC requested the whole plan as one delivery on November 9, 2026. No independently released VRCDN/Twitch, direct-media or YouTube milestones. Implementation is authorized; deployment and live-provider operations retain their existing gates.
+BASIC requested the remaining plan as one delivery on November 9, 2026. YouTube was then explicitly deferred to issue 446. Implementation is authorized; deployment and live-provider operations retain their existing gates.
 
 ## Execution rulings
 
@@ -16,12 +16,39 @@ BASIC requested the whole plan as one delivery on November 9, 2026. No independe
 - Begin with control semantics because the presentation depends on the corrected contract. Task ordering is an engineering dependency, not a separate release.
 - Keep the execution record here with the human-facing plan rather than adding a second planning system. No task is complete until its scoped checks pass.
 
-## Progress
+## Implemented
 
-- Control semantics: in progress.
-- Added regression cases for automatic/manual Next, failed preparation retaining intent/output, and preserved manual-revision takeover coverage. Automatic Next failed before the fix and passes afterward. The complete control suite passes 72/72; backend typecheck passes.
-- Changed protocol-2 target resolution and legacy completion mapping to preserve Next mode. This is not yet a complete control-task acceptance result; worker recovery, captured confirmations and Resume remain to be implemented/qualified.
-- Combined control/worker run initially passed 250/253. One assertion encoded the old manual-Next behavior and its pinned-manual fixture was corrected; two admission tests fail identically on untouched HEAD. Their executable AWS stubs use a Unix shebang/chmod pattern on Windows. Keep those failures visible until verified in the supported worker test environment or repaired portably.
-- Production presentation, provisioning, connection tests, integrated lookup/playback, direct media, YouTube qualification and full acceptance: pending.
+- Locked production workspace and connection wizard, shared header, person lookup, pasted links, contextual player controls, copyable PC/Quest links and optional test return.
+- Captured live confirmations check session, intent, source identity and revision. Next preserves mode and a durable lineup cursor across recovery and temporary takeovers. Resume uses the last observed source.
+- Community-scoped credential provisioning, immutable running destinations, pinned Custom RTMP/RTMPS transport and preserved deployment-owned bindings.
+- Connection tests use ordinary admission and reservations, a two-minute queue bound, at most 60 seconds of worker runtime, decoded per-job identity proof and actual task cleanup before success. Old, cancelled, replaced and terminal worker proofs cannot pass.
+- Protected direct MP4/WebM/TS/HLS acquisition, bounded nested requests, finite preroll, video-only silence and durable return to hold at EOF.
+- Quick-check sources expire after 30 minutes when no active control/session references them. New provisioning grants and tests each have a community limit of ten per ten minutes; exact retries are free. Cleaned terminal test jobs become eligible for bounded hourly deletion after 30 days.
+
+## Verified locally
+
+| Evidence | Result |
+| --- | --- |
+| Combined backend/control/source/media suites | 316 passed before the final rate-limit additions; final setup/limit suite 16 passed |
+| Web state, authority, preview, adapters and validation | 34 passed |
+| Credential broker, transport and test-screen suites | 18 passed |
+| Production-component browser flows | 15 passed, including desktop, mobile, lookup, confirmations, setup and refresh recovery |
+| Packaged Linux renderer and timing | 68 passed |
+| Packaged Linux Twitch acquisition/process cleanup | 9 passed |
+| Packaged Linux connection test encoding/readback | 10 passed |
+| Packaged direct-media proof | MP4, WebM, TS, HLS and silent MP4 decoded, retained finite preroll and reached EOF |
+| Image build and source correspondence | Smoke passed; all 137 packaged file hashes matched this checkout |
+| Backend/web types and edited UI lint | Passed |
+| Terraform | Formatted, initialized without a backend, and validated; no plan or apply |
+
+Desktop/mobile screenshots were inspected with visual review. Browser fixtures use explicit synthetic transports and do not establish signed-in provider delivery. The two Windows-only AWS executable fixtures were repaired portably; native Linux checks cover the process/pipe behavior Windows cannot establish.
+
+Fresh whole-branch review found and recycled real gaps in provider readback, PC/Quest persistence, stale test receipts, setup recovery, preview transport casing, automatic recovery and Hold confirmations. The reviewer rechecked both final control fixes and independently passed six regressions.
+
+## Remaining release evidence
+
+The current image/source mix still requires measured Fargate admission evidence before a real session can start. Existing production allocation remains unqualified and was not replaced with fixture measurements. Real broker-role configuration, additive deployment/migration rehearsal, owned-provider publication, real browser audio/network playback and separate PC/Quest device checks remain open. Uploads/custom slate media remain follow-up work; YouTube is [issue 446](https://github.com/BITRATE-Labs/VRDex/issues/446).
+
+The broader Windows backend/web runs and normal PR CI are recorded separately from the green scoped suites. A Windows process-group failure is not Linux worker proof.
 
 No real stream, provider publication, credential write or deployment has been performed.
