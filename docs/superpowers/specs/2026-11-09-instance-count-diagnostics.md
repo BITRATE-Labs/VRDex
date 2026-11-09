@@ -45,3 +45,7 @@ No historical queue reconstruction, count correction, production field-definitio
 Locked revision from BASIC: label the total Population, add separate Windows and Android lines, remove the gap caption and closure-marker toggle. Show Queue automatically only when at least one sample is positive. It has a plain legend label and no toggle. Zero-only and wholly missing queues have no chart line or control, while exact values retain zero versus unknown. Platform fields stay independent from Population and missing platform samples remain gaps. Keep the exact-value table and Diagnostics collapsed initially. That keeps the chart readable while retaining inspectable counts one action away. BASIC should review the updated multi-line chart and contrast before production integration. No recap or population calculation changes are proposed here.
 
 Desktop and mobile browser checks pass for the preview. The mobile closure label was moved above its marker after visual review found clipping. The production instance screen is unchanged.
+
+## Production follow-through
+
+The prototype is a visual reference. The [production instance-history design](2026-11-09-instance-history-chart.md) and its [implementation plan](../plans/2026-11-09-instance-history-chart.md) define real account-page integration, rollout and acceptance.
