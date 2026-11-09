@@ -175,6 +175,7 @@ import type * as eventInventory from "../eventInventory.js";
 import type * as eventMediaControlMigration from "../eventMediaControlMigration.js";
 import type * as eventMediaSettings from "../eventMediaSettings.js";
 import type * as eventMediaSources from "../eventMediaSources.js";
+import type * as eventBroadcastConnectionTests from "../eventBroadcastConnectionTests.js";
 import type * as eventMediaWorker from "../eventMediaWorker.js";
 import type * as eventScheduleMigration from "../eventScheduleMigration.js";
 import type * as eventTimeline from "../eventTimeline.js";
@@ -391,6 +392,7 @@ declare const fullApi: ApiFromModules<{
   eventMediaControlMigration: typeof eventMediaControlMigration;
   eventMediaSettings: typeof eventMediaSettings;
   eventMediaSources: typeof eventMediaSources;
+  eventBroadcastConnectionTests: typeof eventBroadcastConnectionTests;
   eventMediaWorker: typeof eventMediaWorker;
   eventScheduleMigration: typeof eventScheduleMigration;
   eventTimeline: typeof eventTimeline;

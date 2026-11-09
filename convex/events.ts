@@ -9,7 +9,7 @@ import { sanitizeTwitchOutput, getTwitchOutputAccount, listTwitchOutputAccounts,
 import { EVENT_BROADCAST_MAX_OUTPUTS, validateBroadcastPolicy, allocateSessionCommandSequence, settleTerminalSessionCommands, requireEventMediaBridgeToken } from "./_eventBroadcastInputs";
 import { dateOnlyEventsEnabled, eventDateForInstant, eventSortAt, eventSortEndAt, normalizeEventSchedule, publicEventSchedule, requireDateOnlyEventsEnabled } from "./_eventSchedule";
 import { eventProfileStreamChoices, resolveEventStream } from "./_eventPlayback";
-import { ConvexError, v } from "convex/values";
+import { ConvexError, v, type Infer } from "convex/values";
 import {syncClubEventOperations} from "./_clubOperationEvents";
 import { internal } from "./_generated/api";
 
@@ -1630,6 +1630,11 @@ async function getOpenEventMediaSession(
 /** Configuration is immutable until every session has stopped or released admission. */
 export async function eventOutputConfigurationLocked(db: DatabaseReader, program: Doc<"eventMediaPrograms">) {
   if (await getOpenEventMediaSession(db, program)) return true;
+
+  for(const status of ["ended","error"] as const) {
+    const cleaning=await db.query("eventMediaSessions").withIndex("by_programId_status",q=>q.eq("programId",program._id).eq("status",status)).filter(q=>q.and(q.neq(q.field("connectionTest"),undefined),q.eq(q.field("workerTaskCleanupPending"),true))).first();
+    if(cleaning)return true;
+  }
   for (const status of ["ended", "error"] as const) {
     const held = await db.query("eventMediaSessions")
       .withIndex("by_programId_status", q => q.eq("programId", program._id).eq("status", status))
@@ -1981,6 +1986,7 @@ function workerSessionStatus(session: Doc<"eventMediaSessions">) {
     controlProtocolVersion: session.controlProtocolVersion,
     destinationProfiles: session.destinationProfiles ?? [],
     allocation: session.allocation,
+    connectionTest: session.connectionTest,
     currentSourceId: session.currentSourceId,
     programObservedAt: session.programObservedAt,
     observedSourceRevision: session.observedSourceRevision,
@@ -3771,11 +3777,8 @@ export const configureTwitchOutput = mutation({
   },
 });
 
-/** Bind capacity authority at construction; public callers cannot override it. */
-export function createScheduleEventMediaWorker(resolveAllocation: typeof resolveWorkerAllocation) {
-  return mutation({
-  args: eventMediaWorkerScheduleArgs,
-  handler: async (ctx, args) => {
+/** Shared transaction seam. Tests use the same measured allocation and scheduling authority. */
+export async function scheduleEventMediaWorkerInContext(ctx: MutationCtx, args: Infer<ReturnType<typeof workerScheduleValidator>>, resolveAllocation: typeof resolveWorkerAllocation = resolveWorkerAllocation, connectionTest = false) {
     const subject = await requireAuthenticatedSubject(ctx);
     const { event, slug } = await getMediaManageableEventBySlug(ctx, args.currentSlug, subject);
     if (event.eventStatus !== "scheduled") {
@@ -3789,7 +3792,7 @@ export function createScheduleEventMediaWorker(resolveAllocation: typeof resolve
 
     const outputKey = optionalTrimmedText(args.outputKey, "Output key", 64)?.toLowerCase();
     const output = await getReadyEventMediaOutput(ctx.db, program, outputKey);
-    if (event.startAt === undefined || event.scheduleKind === "date_only") throw new Error("Set an event time before scheduling a media worker.");
+    if (!connectionTest && (event.startAt === undefined || event.scheduleKind === "date_only")) throw new Error("Set an event time before scheduling a media worker.");
     const now = Date.now();
     if (args.startImmediately && (args.scheduledStartAt !== undefined || args.readyDeadlineAt !== undefined)) {
       throw new Error("Immediate start cannot include scheduled start or ready deadline fields.");
@@ -3799,7 +3802,7 @@ export function createScheduleEventMediaWorker(resolveAllocation: typeof resolve
     const schedule = args.startImmediately
       ? { scheduledStartAt: now, readyDeadlineAt: now + EVENT_MEDIA_WORKER_START_LEAD_MS - EVENT_MEDIA_WORKER_READY_LEAD_MS }
       : sanitizeEventMediaWorkerSchedule({
-          eventStartAt: event.startAt,
+          eventStartAt: event.startAt ?? now,
           scheduledStartAt: args.scheduledStartAt,
           readyDeadlineAt: args.readyDeadlineAt,
         });
@@ -3808,6 +3811,10 @@ export function createScheduleEventMediaWorker(resolveAllocation: typeof resolve
     const workerTaskId = optionalTrimmedText(args.workerTaskId, "Worker task id", 512);
     const workerTaskStatusReason = optionalTrimmedText(args.workerTaskStatusReason, "Worker task status reason", 500);
     const artifactLinks = sanitizeEventMediaWorkerArtifactLinks(args.artifactLinks);
+    for(const status of ["ended","error"] as const){
+      const cleaning=await ctx.db.query("eventMediaSessions").withIndex("by_programId_status",q=>q.eq("programId",program._id).eq("status",status)).filter(q=>q.and(q.neq(q.field("connectionTest"),undefined),q.eq(q.field("workerTaskCleanupPending"),true))).first();
+      if(cleaning)throw Error("The stream test is still cleaning up.");
+    }
     const openSession = await getOpenEventMediaSession(ctx.db, program);
 
     if (openSession !== null && openSession.status !== "scheduled") {
@@ -3832,7 +3839,7 @@ export function createScheduleEventMediaWorker(resolveAllocation: typeof resolve
     }
     const mediaSettings = parseMediaSettings(openSession ? openSession.mediaSettings : program.mediaSettings);
     const configuredOutputs = await ctx.db.query("eventMediaOutputs").withIndex("by_programId_key", q => q.eq("programId", program._id)).take(9);
-    const destinationProfiles = configuredOutputs.filter(o => o.eventId === event._id && (o._id === output._id || (o.type === "external_rtmp" && o.twitchSetup && o.simulcastEnabled)) && ["ready", "active"].includes(o.state) && eventOutputIsAuthorized(event,o)).map(o => {
+    const destinationProfiles = configuredOutputs.filter(o => o.eventId === event._id && (o._id === output._id || (!connectionTest && o.type === "external_rtmp" && o.twitchSetup && o.simulcastEnabled)) && ["ready", "active"].includes(o.state) && eventOutputIsAuthorized(event,o)).map(o => {
       const destination = o.managedConnection?.provider ?? (o.type === "vrcdn" ? "vrcdn" as const : "twitch" as const);
       return {outputId:o._id,destination,profile:resolveDestinationProfile({settings:mediaSettings,destination})};
     });
@@ -3932,8 +3939,11 @@ export function createScheduleEventMediaWorker(resolveAllocation: typeof resolve
       readyDeadlineAt: schedule.readyDeadlineAt,
       ...(startCommandId === undefined ? {} : { startCommandId }),
     };
-  },
-  });
+}
+function workerScheduleValidator() { return v.object(eventMediaWorkerScheduleArgs); }
+/** Bind capacity authority at construction; public callers cannot override it. */
+export function createScheduleEventMediaWorker(resolveAllocation: typeof resolveWorkerAllocation) {
+ return mutation({args:eventMediaWorkerScheduleArgs,handler:(ctx,args)=>scheduleEventMediaWorkerInContext(ctx,args,resolveAllocation)});
 }
 
 export const scheduleEventMediaWorker = createScheduleEventMediaWorker(resolveWorkerAllocation);

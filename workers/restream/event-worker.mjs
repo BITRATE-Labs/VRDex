@@ -1,3 +1,4 @@
+import { createConnectionTestRenderer, decodeConnectionTest } from "./connection-test.mjs";
 import { createResourceSampler, readCgroupCounters } from "./resource-sampler.mjs";
 import {
   RESOURCE_INTERVAL_MS,
@@ -51,6 +52,7 @@ export function createEventWorker({
   readCounters = readCgroupCounters,
   clock = () => performance.now(),
   maxSessionMs = 43200000,
+  readConnectionTest = decodeConnectionTest,
   requestTimeoutMs = RESOURCE_REQUEST_ALLOWANCE_MS,
   metric = () => {},
 }) {
@@ -79,7 +81,7 @@ export function createEventWorker({
   let lastOutput = 0,
     outputProgressAt = 0,
     silenceThresholdDb,
-    outputConfiguration;
+    outputConfiguration, testReadback=false;
   const request = (name, args = {}) => {
     const captured = { ...identity, protocolVersion: 2, ...args };
     return bounded(
@@ -245,6 +247,7 @@ export function createEventWorker({
           quality: config.mediaSettings?.videoPreset,
           audioBitrateKbps: config.mediaSettings?.audioBitrateKbps,
           silenceThresholdDb,
+          connectionTest:config.connectionTest,
         });
         operator = createOperatorControl({
           control: request,
@@ -252,7 +255,7 @@ export function createEventWorker({
           inputs,
           clock,
         });
-        operator.applyConfiguration({
+        if(!config.connectionTest) operator.applyConfiguration({
           ...config,
           epoch: identity.epoch,
           sessionId: identity.sessionId,
@@ -303,6 +306,17 @@ export function createEventWorker({
         sampledAt = clock();
         if (config.stopped) {
           fence("event-stopped");
+          return;
+        }
+        if(config.connectionTest) {
+          actual();
+          if(!testReadback) {
+            testReadback=true;
+            const link=config.outputs.find(o=>o.id===config.outputId)?.playbackLinks?.find(l=>["browser","pc"].includes(l.platform))?.url;
+            void readConnectionTest({url:link,marker:config.connectionTest.marker,timeoutMs:Math.min(10000,Math.max(1,config.connectionTest.deadlineAt-Date.now()))})
+              .then(async matched=>{if(matched&&!stopped){const proof=await request("recordConnectionTestProof",{jobId:config.connectionTest.jobId,marker:config.connectionTest.marker,decodedAt:Date.now()});if(proof.accepted)fence("connection-test-complete");}})
+              .catch(()=>{}).finally(()=>{testReadback=false;});
+          }
           return;
         }
         operator.applyConfiguration({
@@ -470,7 +484,7 @@ export async function runEventWorker({
       token: env.VRDEX_EVENT_MEDIA_BRIDGE_TOKEN,
     }),
     createRenderer: (options) =>
-      createProgramRenderer({ ...options, onError: () => void worker?.stop() }),
+      options.connectionTest ? createConnectionTestRenderer({...options,onError:()=>void worker?.stop()}) : createProgramRenderer({ ...options, onError: () => void worker?.stop() }),
     createOutputs: (options) => createOutputs({ ...options, env }),
     maxSessionMs,
     readCounters,

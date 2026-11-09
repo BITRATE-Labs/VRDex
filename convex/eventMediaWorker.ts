@@ -1,3 +1,6 @@
+import { internal } from "./_generated/api";
+import { finishConnectionTest } from "./eventBroadcastConnectionTests";
+export { recordConnectionTestProof } from "./eventBroadcastConnectionTests";
 import { recordResourceSnapshot, computeRuntimeValidator, trustedComputeRuntime } from "./_eventBroadcastResources";
 import {assertWorkerProtocol,beginControlPreparation,promoteControlOperation,completeControlOperation,controlFence,coherentEvidence,writeControlObservation,broadcastModeForIntent,isCut,isControl,settleControl} from "./_eventBroadcastControl";
 import {controlTargetValidator,controlResultValidator,controlFailureValidator} from "./_eventMediaControl";
@@ -39,7 +42,7 @@ async function records(ctx: MutationCtx, args: Request, allowTerminal = false, a
         return null;
     if (!allowRevokedDestination && session.outputId) {
         const selectedOutput = await ctx.db.get(session.outputId);
-        if (!selectedOutput || !eventOutputIsAuthorized(event, selectedOutput)) return null;
+        if (!selectedOutput || !eventOutputIsAuthorized(event, selectedOutput) || (session.connectionTest && selectedOutput.managedConnection?.revision!==session.connectionTest.revision)) return null;
     }
     return { session, program, event };
 }
@@ -81,7 +84,7 @@ export const acquireSession = mutation({
             return reject(ctx, args, "Session is not the active event session.");
         const { session, program, event } = found;
         const now = Date.now();
-        if (event.eventStatus !== "scheduled" || session.stopRequestedAt !== undefined || session.status === "stopping") {
+        if (event.eventStatus !== "scheduled" || (session.runtimeDeadlineAt??Infinity)<=now || session.stopRequestedAt !== undefined || session.status === "stopping") {
             return reject(ctx, args, "Session is stopping or the event is cancelled.");
         }
         if ((session.scheduledStartAt ?? 0) > now)
@@ -96,6 +99,16 @@ export const acquireSession = mutation({
         const epoch = active ? currentEpoch : currentEpoch + 1;
         const acquiredAt = active ? session.acquiredAt ?? now : now;
         const expiresAt = active ? session.leaseExpiresAt! : now + EVENT_BROADCAST_LEASE_MS;
+        if (!active && session.connectionTest) {
+            const job=await ctx.db.get(session.connectionTest.jobId);
+            if(!job || job.cancelRequestedAt!==undefined || now>=job.deadlineAt)return reject(ctx,args,"The stream test expired.");
+            if(job.startedAt===undefined){
+                const deadlineAt=now+60000;
+                await ctx.db.patch(job._id,{startedAt:now,deadlineAt,state:"running",updatedAt:now});
+                await ctx.db.patch(session._id,{connectionTest:{...session.connectionTest,deadlineAt},runtimeDeadlineAt:deadlineAt,readyDeadlineAt:deadlineAt});
+                await ctx.scheduler.runAt(deadlineAt,internal.eventBroadcastConnectionTests.expireConnectionTest,{jobId:job._id});
+            }
+        }
         if (!active) {
             // Check even inconsistent legacy activeSessionId records before granting publication authority.
             const siblings = (await Promise.all((["scheduled", "starting", "live", "hold", "fallback", "stopping"] as const).map(status =>
@@ -408,6 +421,7 @@ async function configuration(ctx: MutationCtx, { session, program, event }: NonN
     if (session.runtimeDeadlineAt === undefined)
         await ctx.db.patch(session._id, { runtimeDeadlineAt: deadline });
     return {
+        connectionTest: session.connectionTest,
         programId: program._id, eventId: event._id, outputId: session.outputId,
         committedIntent:session.committedIntent,intentSequence:session.intentSequence,
         pendingOperation:session.pendingControlCommandId?await ctx.db.get(session.pendingControlCommandId):null,
@@ -419,7 +433,7 @@ async function configuration(ctx: MutationCtx, { session, program, event }: NonN
         mode: session.committedIntent ? session.committedIntent.kind === "slate" ? "hold" : session.committedIntent.kind : session.broadcastMode ?? "automatic", policy: effectiveBroadcastPolicy(program.broadcastPolicy), slots,
         sources: sources.filter(s => s.eventId === event._id && s.state !== "disabled" && s.projectionAvailable !== false && (!s.eventSlotId || authored.some(slot => slot._id === s.eventSlotId))).flatMap(source => { const descriptor = eventMediaSourceWorkerDescriptor(source); return descriptor ? [descriptor] : []; }),
         scenes: scenes.filter(s => s.eventId === event._id).map(s => ({ id: s._id, key: s.key, type: s.type, sourceId: s.sourceId })),
-        outputs: outputs.filter(o => o.eventId === event._id && eventOutputIsAuthorized(event, o) && ["ready", "active"].includes(o.state) && (!session.destinationProfiles || session.destinationProfiles.some(d => d.outputId === o._id))).map(o => ({ id: o._id, key: o.key, type: o.type, credential: o.credential, vrcdnSetup: o.vrcdnSetup, twitchSetup: o.twitchSetup, managedConnection:o.managedConnection, profile: session.destinationProfiles?.find(d => d.outputId === o._id)?.profile ?? resolveDestinationProfile({settings:session.mediaSettings,destination:o.managedConnection?.provider ?? (o.type === "vrcdn" ? "vrcdn" : "twitch")}), simulcastEnabled: session.destinationProfiles ? o._id !== session.outputId : o.simulcastEnabled ?? false, compliance: o.compliance })),
+        outputs: outputs.filter(o => o.eventId === event._id && eventOutputIsAuthorized(event, o) && ["ready", "active"].includes(o.state) && (!session.destinationProfiles || session.destinationProfiles.some(d => d.outputId === o._id))).map(o => ({ id: o._id, key: o.key, type: o.type, playbackLinks:o.playbackLinks, credential: o.credential, vrcdnSetup: o.vrcdnSetup, twitchSetup: o.twitchSetup, managedConnection:o.managedConnection, profile: session.destinationProfiles?.find(d => d.outputId === o._id)?.profile ?? resolveDestinationProfile({settings:session.mediaSettings,destination:o.managedConnection?.provider ?? (o.type === "vrcdn" ? "vrcdn" : "twitch")}), simulcastEnabled: session.destinationProfiles ? o._id !== session.outputId : o.simulcastEnabled ?? false, compliance: o.compliance })),
     };
 }
 export const refreshConfiguration = mutation({ args: workerSessionArgs, handler: async (ctx, args) => {
@@ -498,7 +512,7 @@ export const admitDispatch = mutation({ args: { bridgeToken: v.string(), eventId
         const event = await ctx.db.get(args.eventId);
         const selectedOutput = session.outputId ? await ctx.db.get(session.outputId) : null;
         if (!event || (session.outputId !== undefined && (!selectedOutput || !eventOutputIsAuthorized(event, selectedOutput)))) return { granted:false };
-        if (session.dispatchStopConfirmedAt !== undefined)
+        if ((session.connectionTest && selectedOutput?.managedConnection?.revision!==session.connectionTest.revision) || session.dispatchStopConfirmedAt !== undefined || (session.runtimeDeadlineAt??Infinity)<=Date.now())
             return { granted: false };
         if (session.dispatchId)
             return { granted: session.dispatchId === args.dispatchId };
@@ -554,6 +568,7 @@ export const releaseUnlaunchedDispatch = mutation({ args: { ...prelaunchArgs, ta
     await ctx.db.patch(found.session._id, { dispatchId: undefined, launchProtocol: undefined, status: "error", workerTaskStatus: "failed", leaseExpiresAt: now, ...(args.taskDefinitionArn ? { workerTaskDefinitionArn: args.taskDefinitionArn, workerTaskCleanupPending: true } : {}), updatedAt: now });
     await ctx.db.patch(found.program._id, { activeSessionId: undefined, state: "error", updatedAt: now });
     await ctx.db.insert("eventMediaAuditEvents", { eventId: args.eventId, programId: found.program._id, sessionId: args.sessionId, commandId: args.commandId, actorSurface: "worker", action: "worker_dispatch_unlaunched_released", createdAt: now });
+    if(!args.taskDefinitionArn)await finishConnectionTest(ctx,found.session);
     return { accepted: true };
 } });
 /** A losing registration can only record bounded private cleanup evidence. */
@@ -569,6 +584,7 @@ export const completeUnlaunchedCleanup = mutation({ args: { bridgeToken: v.strin
     const session = await ctx.db.get(args.sessionId);
     if (!session || session.dispatchId || session.epoch !== undefined || session.workerTaskId || session.launchAttemptedAt !== undefined || session.workerTaskDefinitionArn !== args.taskDefinitionArn || !["ended", "error"].includes(session.status)) return { accepted: false };
     await ctx.db.patch(session._id, { workerTaskCleanupPending: false, updatedAt: Date.now() });
+    await finishConnectionTest(ctx,session);
     return { accepted: true };
 } });
 export const recordDispatchedTask = mutation({ args: { bridgeToken: v.string(), sessionId: v.id("eventMediaSessions"), dispatchId: v.string(), taskArn: v.string(), taskDefinitionArn: v.string(), computeRuntime: v.optional(computeRuntimeValidator) }, handler: async (ctx, args) => {
@@ -617,6 +633,7 @@ export const completeTaskCleanup = mutation({ args: { bridgeToken: v.string(), s
         if (!session || session.workerTaskId !== args.taskArn || (session.dispatchId ? session.dispatchStopConfirmedAt === undefined : session.workerTaskStatus !== "stopped"))
             return { accepted: false };
         await ctx.db.patch(session._id, { workerTaskCleanupPending: false, updatedAt: Date.now() });
+        await finishConnectionTest(ctx,session);
         return { accepted: true };
     } });
 

@@ -1107,3 +1107,36 @@ records the expected `Unproved broadcast configuration` failure with successful
 owned cleanup. That passing negative test does not validate the later lifecycle
 scenarios. The full in-memory lifecycle path runs when the production map actually
 admits the default profile; no test injects a production admission map.
+
+## Bounded broadcast connection tests
+
+The connection wizard starts `eventBroadcastConnectionTests.startConnectionTest`
+with the saved connection revision and a stable request identity. This creates an
+ordinary measured worker session and Start command in the same transaction, with
+a two-minute queue deadline. First lease acquisition freezes a separate 60-second
+absolute runtime deadline without extending it on replacement. It uses the existing dispatcher admission,
+exclusive event output reservation, credential binding, kill switch, lease and
+cleanup acknowledgements. It does not publish directly from the browser or bypass
+capacity checks. A test targets only the selected destination, not optional
+simulcast outputs. Event calendar times do not delay a connection test.
+
+The worker publishes a random per-job visual marker encoded into a test screen.
+Readback uses the public-address-pinned direct-media relay, a bounded decoder, and
+matching decoded pixels. A socket connection, successful response, output bytes,
+heartbeat or elapsed timer cannot pass a test. A provider watch webpage is not a
+direct playback URL and cannot supply this proof. The supported readback formats
+are the relay's MPEG-TS, HLS, MP4 and WebM inputs. YouTube remains deferred in
+[issue 446](https://github.com/BITRATE-Labs/VRDex/issues/446).
+
+Cancellation, timeout and matching proof request publication stop. A job remains
+busy until the worker process is confirmed stopped and its task definition cleanup
+is acknowledged. A queued test with atomic proof that no dispatch was admitted
+can terminate immediately. Saved verification changes only for the matching
+connection revision. Repeated starts with the same request identity return the
+same job; stale receipts cannot verify a replacement connection.
+
+Local verification covers actual synthetic FFmpeg encode/decode, incorrect
+identity, incomplete frames, decoder failure and deadline termination, plus
+backend authorization, idempotency, admission, cancellation, immutable revision
+and cleanup-gated success. These checks do not establish provider publication,
+VRChat playback, deployed configuration or paid-cloud acceptance.
