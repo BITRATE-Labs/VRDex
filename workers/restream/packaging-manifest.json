@@ -115,6 +115,7 @@
   "workers/restream/live-control.mjs",
   "workers/restream/operator-control.mjs",
   "workers/restream/output-sender.mjs",
+  "workers/restream/output-arguments.mjs",
   "workers/restream/output-tunnel.mjs",
   "workers/restream/packaging-manifest.json",
   "workers/restream/program-renderer.mjs",

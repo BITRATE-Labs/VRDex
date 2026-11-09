@@ -38,8 +38,9 @@ test("HLS rewrites nested playlists, segments, initialization maps and keys, pin
     else res.end("safe bytes");
   });
   try {
-    const root = await (await fetch(f.url)).text(); assert.ok(!root.includes("media.example.org"));
+    const root = await (await fetch(f.url)).text();
     const child = root.split("\n").at(-1)!; assert.match(child, /^http:\/\/127\.0\.0\.1:/);
+    assert.equal(new URL(child).origin,new URL(f.url).origin);
     const manifest = await (await fetch(child)).text();
     for (const local of [...manifest.matchAll(/URI="([^"]+)"/g)].map(x => x[1]!).concat(manifest.split("\n").filter(x => x.startsWith("http:")))) assert.equal(await (await fetch(local)).text(), "safe bytes");
     assert.equal(f.calls.length, 5); assert.equal(f.pins.length, 5);

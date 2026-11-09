@@ -9,7 +9,7 @@ BASIC requested the remaining plan as one delivery on November 9, 2026. YouTube 
 ## Execution rulings
 
 - Switch from serial execution to the repository's parallel-worktree delivery skill after the shared control/source foundation passed 101 backend and 17 web checks. Reason: setup/provisioning, direct-media acquisition and production layout are independently testable and now have stable enough contracts. Cost: root must resolve integration seams and run fresh whole-branch review. All leaves converge into one local delivery; no leaf publishes or deploys.
-- YouTube was explicitly removed from this delivery by BASIC. Track direct broadcasting and yt-dlp/alternative acquisition investigation in https://github.com/BITRATE-Labs/VRDex/issues/446. Do not silently claim browser embed playback satisfies it.
+- YouTube was explicitly removed from this delivery by BASIC. Track direct broadcasting and yt-dlp/alternative acquisition investigation in [issue 446](https://github.com/BITRATE-Labs/VRDex/issues/446). Do not silently claim browser embed playback satisfies it.
 
 - Use this existing isolated design-jam worktree and preserve the accepted fixture as reference. The initial checkout was detached at `d2f2febba`; implementation starts on `codex/broadcast-locked-flow`.
 - The shell sandbox launcher cannot acquire its helper lock. Read/test commands use the approved escalated route; file edits still use apply_patch.
@@ -31,6 +31,7 @@ BASIC requested the remaining plan as one delivery on November 9, 2026. YouTube 
 | --- | --- |
 | Combined backend/control/source/media suites | 332 passed after merging current main; final setup/limit suite 16 passed |
 | Web state, authority, preview, adapters and validation | 34 passed |
+| Full web suite after current-main integration | 1164 passed |
 | Credential broker, transport and test-screen suites | 18 passed |
 | Production-component browser flows | 15 passed, including desktop, mobile, lookup, confirmations, setup and refresh recovery |
 | Packaged Linux renderer and timing | 68 passed |
@@ -51,6 +52,6 @@ The new image/source mix still requires measured Fargate evidence before live ro
 
 Current main was merged before the final PR run. The resolution preserves browser auth waiting for both operator queries and setup, audio-aware allocation, publication stop before awaited acknowledgment, bounded transient-control retries, and the retained/native public playback paths.
 
-The broader Windows backend/web runs and normal PR CI are recorded separately from the green scoped suites. A Windows process-group failure is not Linux worker proof.
+The broader Windows backend run stopped at a native process-group cleanup failure; the matching packaged Linux check passed. Normal PR CI independently passed the complete backend suite, types, lint, Terraform and CodeQL. Documentation formatting and generated-declaration drift were identified for correction; remaining CI jobs are tracked on [PR 447](https://github.com/BITRATE-Labs/VRDex/pull/447).
 
 No real stream, provider publication, credential write or deployment has been performed.
