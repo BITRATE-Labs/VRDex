@@ -318,3 +318,19 @@ test("recap cutoff saves, clears and preserves errors @storybook-visual", async 
   await expect(page.getByRole("heading", { name: "Event recaps", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Recap end", exact: true })).toHaveCount(0);
 });
+
+
+test("invalid recap ranges retain a usable correction editor @storybook-visual", async ({ page, isMobile }) => {
+  await page.goto("/iframe.html?id=clubs-analytics--invalid-recap-range&viewMode=story");
+  await expect(page.getByText("Invalid range", { exact: true })).toBeVisible();
+  await expect(page.getByText("602", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Recap end", exact: true }).click();
+  const input = page.getByLabel("Recap end", { exact: true });
+  await expect(input).not.toHaveValue("");
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") await page.getByRole("heading", { name: "Event recaps", exact: true }).locator("..").screenshot({ path: `../../.cache/artifacts/recap-invalid-range-${isMobile ? "mobile" : "desktop"}.png` });
+  await page.getByRole("button", { name: "Automatic", exact: true }).click();
+  await expect(page.getByText("Invalid range", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Recap end", exact: true }).click();
+  await expect(input).not.toHaveValue("");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});

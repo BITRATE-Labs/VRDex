@@ -285,7 +285,9 @@ function RecapEndEditor({ communitySlug, recap }: { communitySlug: string; recap
   }
   if (!editing) return (
     <Button className="mt-3" onClick={() => {
-      setValue(formatZonedDateTimeInput(recap.recapEndAt ?? recap.effectiveEndAt, Intl.DateTimeFormat().resolvedOptions().timeZone));
+      const requestedEndAt = recap.recapEndAt ?? recap.effectiveEndAt ?? recap.endAt;
+      const initialEndAt = Number.isFinite(new Date(requestedEndAt).getTime()) ? requestedEndAt : recap.endAt;
+      setValue(formatZonedDateTimeInput(initialEndAt, Intl.DateTimeFormat().resolvedOptions().timeZone));
       setError(false);
       setEditing(true);
     }}>
@@ -335,7 +337,11 @@ function EventRecaps({
         <div key={recap.id} className="mt-4 border-t border-border pt-4">
           <h3 className="font-semibold">{recap.title}</h3>
           <p className="mt-1 text-xs text-muted">{metricTime(recap.startAt)} to {metricTime(recap.endAt)}</p>
-          {recap.startAt !== recap.scheduledStartAt || recap.endAt !== recap.effectiveEndAt ? <p role="status" className="mt-1 text-xs text-muted">Updating</p> : null}
+          {recap.startAt !== recap.scheduledStartAt || recap.endAt !== recap.effectiveEndAt ? (
+            <p role="status" className="mt-1 text-xs text-muted">
+              {recap.effectiveEndAt === null ? "Invalid range" : "Updating"}
+            </p>
+          ) : null}
           {recap.canEdit ? <RecapEndEditor communitySlug={communitySlug} recap={recap} /> : null}
           <div className="mt-3 flex gap-6 text-sm">
             <span>

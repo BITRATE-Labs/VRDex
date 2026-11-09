@@ -5,8 +5,12 @@ import { resolveManagedIntegrationSession } from "./_groupObservationPolicy";
 export const MAX_RECAP_RANGE_MS = 93 * 86400_000;
 const MAX_RECAP_ASSOCIATIONS = 1000;
 
+function isRecapRangeValid(startAt: number, endAt: number) {
+  return Number.isSafeInteger(startAt) && Number.isSafeInteger(endAt) && endAt > startAt && endAt - startAt <= MAX_RECAP_RANGE_MS;
+}
+
 export function validateRecapRange(startAt: number, endAt: number) {
-  if (!Number.isSafeInteger(startAt) || !Number.isSafeInteger(endAt) || endAt <= startAt || endAt - startAt > MAX_RECAP_RANGE_MS)
+  if (!isRecapRangeValid(startAt, endAt))
     throw new Error("Recap window is outside the supported range.");
 }
 
@@ -32,10 +36,10 @@ export async function resolveEventRecapWindow(db: DatabaseReader, event: Doc<"ev
       .order("desc").first();
     if (last?.integrationId === integration._id) endAt = Math.max(endAt, last.observedAt + 1);
   }
-  validateRecapRange(event.startAt, endAt);
+  const rangeValid = isRecapRangeValid(event.startAt, endAt);
   const sessionIds = [...sessions.keys()].sort();
   // Include edits even when the resulting boundaries happen to be identical.
   const signature = JSON.stringify([event.startAt, event.endAt, event.recapEndAt, integration.telemetryEpochStartedAt ?? integration.createdAt,
     associations.map(a => [a._id, a.sessionId, a.updatedAt]), sessionIds]);
-  return { startAt: event.startAt, endAt, sessionIds, signature, associationCount: associations.length };
+  return { startAt: event.startAt, endAt, rangeValid, sessionIds, signature, associationCount: associations.length };
 }

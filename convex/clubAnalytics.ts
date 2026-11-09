@@ -913,7 +913,7 @@ export const listEventRecaps = query({
         playerHours: v.number(),
         scheduledStartAt: v.number(),
         scheduledEndAt: v.union(v.number(), v.null()),
-        effectiveEndAt: v.number(),
+        effectiveEndAt: v.union(v.number(), v.null()),
         recapEndAt: v.union(v.number(), v.null()),
         canEdit: v.boolean(),
         coverageRatio: v.number(),
@@ -976,7 +976,7 @@ export const listEventRecaps = query({
         page.push({
           scheduledStartAt: window.startAt,
           scheduledEndAt: event.endAt ?? null,
-          effectiveEndAt: window.endAt,
+          effectiveEndAt: window.rangeValid ? window.endAt : null,
           recapEndAt: event.recapEndAt ?? null,
           canEdit: managesEvents,
           id: row._id,

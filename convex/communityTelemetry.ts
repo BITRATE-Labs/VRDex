@@ -2077,6 +2077,7 @@ async function advanceEventRecapJob(
   }
 
   const window = await resolveEventRecapWindow(ctx.db, event, integration);
+  if (window) validateRecapRange(window.startAt, window.endAt);
   if (!window || (event.recapEndAt !== undefined ? window.endAt !== job.bucketEndAt : window.endAt < job.bucketEndAt) ||
     (job.windowSignature !== undefined && window.signature !== job.windowSignature)) {
     await ctx.db.delete(job._id);
@@ -2276,6 +2277,7 @@ export const recomputeRollup = internalMutation({
     const currentEvent = event && event.communityProfileId === communityProfileId &&
       event.startAt !== undefined && event.scheduleKind !== "date_only" ? event : null;
     const window = currentEvent ? await resolveEventRecapWindow(ctx.db, currentEvent, integration) : null;
+    if (window) validateRecapRange(window.startAt, window.endAt);
     const bucketStartAt = window?.startAt ?? args.bucketStartAt;
     const bucketEndAt = window?.endAt ?? args.bucketEndAt;
     if (bucketEndAt <= bucketStartAt) throw new Error("Rollup window is invalid.");
@@ -2345,6 +2347,7 @@ export const setEventRecapEnd = mutation({
     if (args.endAt !== null) validateRecapRange(event.startAt, args.endAt);
     const window = await resolveEventRecapWindow(ctx.db, next, integration);
     if (!window?.sessionIds.length) throw new Error("Event recap was not found.");
+    validateRecapRange(window.startAt, window.endAt);
     await ctx.db.patch(event._id, { recapEndAt: next.recapEndAt });
     await invalidateEventRecapJob(ctx, event._id);
     await ctx.scheduler.runAfter(0, internal.communityTelemetry.recomputeRollup, {

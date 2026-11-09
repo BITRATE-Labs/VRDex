@@ -48,8 +48,9 @@ class AnalyticsFixtureClient extends ConvexReactClient {
     { id: "fixture-suggestion-1", eventTitle: "Afterhours 043", sessionId: "fixture-session-2", worldName: "Afterhours Lounge", openedAt: this.now - 3 * 86400_000, confidence: 0.75, canConfirm: true },
     { id: "fixture-suggestion-2", eventTitle: "Afterhours 043", sessionId: null, worldName: null, openedAt: null, confidence: 0.75, canConfirm: false },
   ];
-  constructor(private readonly repaired = false, private readonly canManageEvents = true) {
+  constructor(private readonly repaired = false, private readonly canManageEvents = true, invalidRecapRange = false) {
     super("https://fixture.invalid");
+    if (invalidRecapRange) this.recapEndAt = Infinity;
   }
   private result(name: string, args: Record<string, unknown>) {
     const key = JSON.stringify([name, args]);
@@ -180,7 +181,7 @@ class AnalyticsFixtureClient extends ConvexReactClient {
           playerHours: 602,
           scheduledStartAt: this.now - 3 * 86400_000,
           scheduledEndAt: this.now - 3 * 86400_000 + 4 * 3600_000,
-          effectiveEndAt: this.recapEndAt ?? this.now - 3 * 86400_000 + 6 * 3600_000,
+          effectiveEndAt: this.recapEndAt !== null && (!Number.isFinite(this.recapEndAt) || this.recapEndAt <= this.now - 3 * 86400_000) ? null : this.recapEndAt ?? this.now - 3 * 86400_000 + 6 * 3600_000,
           recapEndAt: this.recapEndAt,
           canEdit: this.canManageEvents,
           coverageRatio: 0.97,
@@ -314,14 +315,16 @@ function AnalyticsFixture({
   canManageEvents = true,
   canReadInstances = true,
   repaired = false,
+  invalidRecapRange = false,
 }: {
   mode?: "home" | "analytics" | "instances";
   initialInstance?: string;
   canManageEvents?: boolean;
   canReadInstances?: boolean;
   repaired?: boolean;
+  invalidRecapRange?: boolean;
 }) {
-  const [client] = useState(() => new AnalyticsFixtureClient(repaired, canManageEvents));
+  const [client] = useState(() => new AnalyticsFixtureClient(repaired, canManageEvents, invalidRecapRange));
   const [href, setHref] = useState(
     `/account/communities/afterhours${mode === "home" ? "" : `/${mode}`}${initialInstance ? `?instance=${initialInstance}` : ""}`,
   );
@@ -750,4 +753,8 @@ function MembershipClockFixture() {
 }
 export const MembershipClock: Story = {
   render: () => <MembershipClockFixture />,
+};
+
+export const InvalidRecapRange: Story = {
+  render: () => <AnalyticsFixture mode="analytics" invalidRecapRange />,
 };

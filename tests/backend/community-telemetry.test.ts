@@ -17,6 +17,7 @@ const modules = {
   "../../convex/clubConnection.ts": () => import("../../convex/clubConnection"),
   "../../convex/clubAnalytics.ts": () => import("../../convex/clubAnalytics"),
   "../../convex/profiles.ts": () => import("../../convex/profiles"),
+  "../../convex/events.ts": () => import("../../convex/events"),
 };
 const schema = (schemaModule as unknown as { default?: typeof schemaModule }).default ?? schemaModule;
 const NOW = Date.parse("2026-07-21T12:00:00.000Z");
@@ -2266,4 +2267,56 @@ it("paged recaps publish pinned prefixes under incoming polls and coalesced sche
   await t.mutation(internal.communityTelemetry.advanceEventRecapPage, { jobId: edited._id });
   assert.equal(await t.run(ctx => ctx.db.get(edited._id)), null, "cutoff edits still reject coalesced obsolete jobs");
   assert.equal((await t.run(ctx => ctx.db.get(published!._id)))?.bucketEndAt, startAt + 249_000);
+});
+
+
+it("invalid desired recap windows preserve independent schedule edits and explicit cutoff recovery", async test => {
+  test.mock.timers.enable({ apis: ["setTimeout"] });
+  const t = convexTest({ schema, modules });
+  const communityProfileId = await seedCommunity(t);
+  await grantVisibilityOwner(t);
+  await registerAccount(t);
+  const integrationId = await t.withIdentity(identity).mutation(api.communityTelemetry.connectGroup, { communitySlug: "faceless", vrchatGroupId: "grp_00000000-0000-4000-8000-000000000001", groupVisibility: "public", joinPolicy: "free" });
+  const startAt = Date.now() + 1000;
+  const ids = await t.run(async ctx => {
+    const ids: Id<"events">[] = [];
+    for (const slug of ["cutoff-recovery", "healthy-recap"]) {
+      const eventId = await ctx.db.insert("events", { slug, title: slug, sortTitle: slug, startAt, endAt: startAt + 180_000, communityProfileId, sourceType: "community", sourceLabel: "test", eventStatus: "scheduled", publicationState: "published", updatedAt: startAt });
+      const sessionId = await ctx.db.insert("instanceSessions", { integrationId, communityProfileId, providerInstanceId: slug, providerLocation: `wrld_recovery:${slug}`, vrchatWorldId: "wrld_recovery", source: "first_party", state: "open", openedAt: startAt, lastObservedAt: startAt + 120_000, consecutiveMisses: 0, updatedAt: startAt });
+      await ctx.db.insert("eventInstanceAssociations", { eventId, sessionId, communityProfileId, source: "manual", confidence: 1, state: "confirmed", createdAt: startAt, updatedAt: startAt });
+      for (const offset of [0, 60_000, 120_000]) await ctx.db.insert("instancePopulationObservations", { integrationId, sessionId, idempotencyKey: `${slug}-${offset}`, providerInstanceId: slug, vrchatWorldId: "wrld_recovery", population: 10, observedAt: startAt + offset, source: "first_party", collectorVersion: "test", coverageState: "observed", fencingToken: 1 });
+      ids.push(eventId);
+    }
+    return ids;
+  });
+  const owner = t.withIdentity(identity);
+  const recapArgs = (eventId: Id<"events">) => ({ integrationId, eventId, grain: "event" as const, bucketStartAt: startAt, bucketEndAt: startAt + 180_000 });
+  await owner.mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId: ids[0]!, endAt: startAt + 60_000 });
+  for (const eventId of ids) await t.mutation(internal.communityTelemetry.recomputeRollup, recapArgs(eventId));
+  await owner.mutation(api.events.updateCommunityEvent, { currentSlug: "cutoff-recovery", communitySlug: "faceless", startAt: startAt + 120_000, endAt: startAt + 180_000, timezone: "UTC" });
+  assert.equal((await t.run(ctx => ctx.db.get(ids[0]!)))?.recapEndAt, startAt + 60_000, "schedule edits preserve the explicit cutoff");
+  const read = () => owner.query(api.clubAnalytics.listEventRecaps, { communitySlug: "faceless", startAt: startAt - 1000, endAt: startAt + 86400_000, paginationOpts: { numItems: 10, cursor: null } });
+  let page = await read();
+  assert.equal(page.page.length, 2);
+  const invalid = page.page.find(row => row.eventId === ids[0]);
+  assert.equal(invalid?.canEdit, true);
+  assert.equal(invalid?.effectiveEndAt, null);
+  assert.equal(invalid?.endAt, startAt + 60_000, "persisted metrics retain their original range");
+  await assert.rejects(t.mutation(internal.communityTelemetry.recomputeRollup, recapArgs(ids[0]!)), /supported range/);
+  await owner.mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId: ids[0]!, endAt: null });
+  assert.equal((await read()).page.find(row => row.eventId === ids[0])?.effectiveEndAt, startAt + 180_000);
+  await t.run(ctx => ctx.db.patch(ids[0]!, { recapEndAt: Infinity }));
+  page = await read();
+  assert.equal(page.page.length, 2, "an invalid imported cutoff cannot hide the healthy row or recovery editor");
+  assert.equal(page.page.find(row => row.eventId === ids[0])?.effectiveEndAt, null);
+  await owner.mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId: ids[0]!, endAt: startAt + 150_000 });
+  assert.equal((await read()).page.find(row => row.eventId === ids[0])?.effectiveEndAt, startAt + 150_000);
+  await owner.mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId: ids[0]!, endAt: null });
+  await owner.mutation(api.events.updateCommunityEvent, { currentSlug: "cutoff-recovery", communitySlug: "faceless", startAt, endAt: startAt + 94 * 86400_000, timezone: "UTC" });
+  assert.equal((await read()).page.find(row => row.eventId === ids[0])?.effectiveEndAt, null, "oversized automatic ranges preserve correction access");
+  await assert.rejects(t.mutation(internal.communityTelemetry.recomputeRollup, recapArgs(ids[0]!)), /supported range/);
+  await owner.mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId: ids[0]!, endAt: startAt + 180_000 });
+  assert.equal((await read()).page.find(row => row.eventId === ids[0])?.effectiveEndAt, startAt + 180_000);
+  await assert.rejects(owner.mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId: ids[0]!, endAt: null }), /supported range/);
+  assert.equal((await t.run(ctx => ctx.db.get(ids[0]!)))?.recapEndAt, startAt + 180_000, "failed Automatic restoration preserves the explicit cutoff");
 });
