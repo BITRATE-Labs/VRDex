@@ -74,3 +74,12 @@ test("Quick switch searches people, previews their source and confirms before ta
  await page.getByRole("combobox",{name:"Stream",exact:true}).selectOption("https://stream.vrcdn.live/live/aurora.live.ts");await expect(page.getByLabel("Or paste a link",{exact:true})).toHaveValue("https://stream.vrcdn.live/live/aurora.live.ts");
  await page.getByRole("button",{name:"Check source",exact:true}).click();await expect(page.getByRole("region",{name:"Quick switch preview",exact:true})).toBeVisible();await page.getByRole("button",{name:"Put Aurora on air",exact:true}).click();await expect(page.getByRole("dialog")).toBeVisible();await expect(page.getByLabel("Command count")).toHaveText("0");await page.getByRole("dialog").getByRole("button",{name:"Cancel",exact:true}).click();await expect(page.getByLabel("Command count")).toHaveText("0");
 });
+
+test("a confirmation cannot apply after the worker epoch changes @flow @fixture",async({page})=>{
+ await page.goto("/playwright/event-operator");await page.getByRole("button",{name:"Take Custom",exact:true}).click();
+ await expect(page.getByRole("dialog")).toBeVisible();
+ // A subscription can replace authority while the native modal is open.
+ await page.getByRole("button",{name:"New epoch",exact:true}).evaluate(button=>button.click());
+ await page.getByRole("dialog").getByRole("button",{name:"Put Custom on air",exact:true}).click();
+ await expect(page.getByLabel("Command count")).toHaveText("0");await expect(page.getByText("Command failed",{exact:true})).toBeVisible();
+});
