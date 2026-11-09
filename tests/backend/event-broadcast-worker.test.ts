@@ -3,6 +3,7 @@ import { loadEventsWithFixtureCapacity } from "./_eventCapacityFixture";
 import { bindVrcdnTestAccount } from "./_eventOutputAccountFixture";
 import assert from "node:assert/strict";
 import { it } from "node:test";
+import { createOperatorControl } from "../../workers/restream/operator-control.mjs";
 import { convexTest } from "convex-test";
 import { makeFunctionReference, getFunctionName } from "convex/server";
 import { api } from "../../convex/_generated/api";
@@ -18,6 +19,30 @@ const modules = {
     "../../convex/eventMediaWorker.ts": () => import("../../convex/eventMediaWorker"),
 };
 const bridgeToken = "worker-test-only-credential";
+it("direct-media EOF holds output while retrying durable completion and ignores a late reply", async () => {
+    let ended = true, holds = 0, calls = 0, reply: (value: unknown) => void = () => {};
+    const source = { id: "file", revision: 1, input: { kind: "direct_media", url: "https://example.com/video.mp4" } };
+    const config = { epoch: 1, intentSequence: 2, committedIntent: { kind: "manual", sourceId: "file", revision: 1 }, sources: [source], slots: [], policy: {}, sessionDeadline: 100000 };
+    const operator = createOperatorControl({
+        clock: () => 1000,
+        renderer: { hold: () => holds++, getInputs: () => [{ source: { sourceId: "file", revision: 1, slotKey: "manual-file" }, getObservation: () => ({ ended }) }], reconcileSources: () => {} },
+        inputs: { reconcile: () => {}, readySources: () => [] },
+        control: async (name: string) => { assert.equal(name, "completeSource"); calls++; return new Promise(resolve => { reply = resolve; }); },
+    });
+    operator.applyConfiguration(config);
+    operator.advance({ epoch: 1, scheduleNow: 1000, commands: [], state: {} });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(calls, 1);
+    assert.ok(holds > 0);
+    operator.advance({ epoch: 1, scheduleNow: 1000, commands: [], state: {} });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(calls, 1);
+    operator.applyConfiguration({ ...config, intentSequence: 3, committedIntent: { kind: "slate" } });
+    reply({ kind: "ok", intentSequence: 4 });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(operator.getState().intentSequence, 3);
+    assert.equal(operator.getState().current, undefined);
+});
 process.env.VRDEX_EVENT_MEDIA_BRIDGE_TOKEN = bridgeToken;
 async function fixture() {
     const t = convexTest({ schema, modules });

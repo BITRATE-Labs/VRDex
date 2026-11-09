@@ -32,7 +32,8 @@ export function createOperatorControl({
     stopped = false;
   const completed = new Map();
   let ordinary,
-    claimVersion = 0;
+    claimVersion = 0,
+    ending;
   const mode = () =>
     intent.kind === "slate"
       ? "hold"
@@ -363,6 +364,31 @@ export function createOperatorControl({
       current && index < 0 ? { ...current, endAt: undefined } : current;
     const currentEvidence = evidence(current),
       nextEvidence = evidence(next);
+    if (currentEvidence?.ended) {
+      hold();
+      const source = config.sources.find((s) => s.id === current?.sourceId);
+      if (source?.input?.kind !== "direct_media") return;
+      const sequence = intentSequence, completedSource = current, ownerEpoch = epoch;
+      if (ending?.sequence === sequence && (ending.inflight || clock() < ending.retryAt)) return;
+      const request = ending = { sequence, inflight: true, retryAt: 0 };
+      Promise.resolve().then(() => control("completeSource", {
+        epoch: ownerEpoch, intentSequence: sequence, sourceId: completedSource.sourceId,
+        sourceRevision: completedSource.revision, slotKey: completedSource.slotKey,
+      })).then((result) => {
+        if (stopped || epoch !== ownerEpoch || intentSequence !== sequence || ending !== request) return;
+        if (fenced(result)) return;
+        request.inflight = false;
+        request.retryAt = clock() + 1000;
+        if (result.kind === "ok") {
+          commit({ kind: "slate" }, result.intentSequence);
+          reconcile();
+        }
+      }, () => {
+        request.inflight = false;
+        request.retryAt = clock() + 1000;
+      });
+      return;
+    }
     const decision = decideHandoff({
       scheduleNow: context.scheduleNow,
       observationNow: clock(),

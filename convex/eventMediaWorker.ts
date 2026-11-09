@@ -429,6 +429,28 @@ export const refreshConfiguration = mutation({ args: workerSessionArgs, handler:
             return reject(ctx, args, "Session ownership is stale or expired.");
         return { granted: true as const, serverNow: Date.now(), configuration: await configuration(ctx, found) };
     } });
+export const completeSource = mutation({
+    args: { ...workerSessionArgs, intentSequence: v.number(), sourceId: v.id("eventMediaSources"), sourceRevision: v.number(), slotKey: v.string() },
+    handler: async (ctx, args) => {
+        authenticate(args);
+        const found = await controlFence(ctx.db, args);
+        if ("result" in found) return found.result;
+        const { session } = found;
+        const source = await ctx.db.get(args.sourceId);
+        if (session.pendingControlCommandId || session.intentSequence !== args.intentSequence ||
+            session.currentSourceId !== args.sourceId || session.observedSourceRevision !== args.sourceRevision ||
+            session.observedSlotKey !== args.slotKey || source?.input?.kind !== "direct_media" ||
+            source.eventId !== args.eventId || source.programId !== session.programId ||
+            (source.revision ?? 1) !== args.sourceRevision || source.state === "disabled" || source.projectionAvailable === false ||
+            session.committedIntent?.kind === "slate" || (session.committedIntent?.kind === "manual" &&
+                (session.committedIntent.sourceId !== args.sourceId || session.committedIntent.revision !== args.sourceRevision)))
+            return { kind: "superseded" as const };
+        const sequence = await allocateSessionCommandSequence(ctx.db, session._id);
+        // Persist the return to hold before acknowledging EOF, so recovery cannot replay the file.
+        await ctx.db.patch(session._id, { committedIntent: { kind: "slate" }, intentSequence: sequence, resumeSource: undefined, updatedAt: Date.now() });
+        return { kind: "ok" as const, intentSequence: sequence };
+    },
+});
 export const observeProgram = mutation({ args: { ...workerSessionArgs, intentSequence:v.optional(v.number()),sourceRevision:v.optional(v.number()),slotKey:v.optional(v.string()), state: observedBroadcastStateValidator, outputMs: v.number(), publishing: v.boolean(), outputId: v.optional(v.id("eventMediaOutputs")), sourceId: v.optional(v.id("eventMediaSources")), mode: v.optional(v.union(v.literal("automatic"), v.literal("manual"), v.literal("hold"))) }, handler: async (ctx, args) => {
         authenticate(args);
         const session=await ctx.db.get(args.sessionId);

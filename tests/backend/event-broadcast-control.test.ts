@@ -202,6 +202,28 @@ async function controlFixture() {
   };
   return { ...f, args, sourceId, take, receipt, begin, promote, ack };
 }
+it("finished direct media durably returns to hold and rejects stale completion", async () => {
+  const f = await controlFixture();
+  await f.t.run(({ db }) => db.patch(f.sourceId, {
+    type: "hls_url", input: { kind: "direct_media", url: "https://media.example.com/announcement.mp4" },
+    publicUrl: "https://media.example.com/announcement.mp4",
+  }));
+  const take = await f.take();
+  await f.begin(take.commandId);
+  await f.promote(take.commandId);
+  await f.ack(take.commandId);
+  const command = await f.receipt(take.commandId);
+  const args = { ...f.args, intentSequence: command.sequence, sourceId: f.sourceId, sourceRevision: 1, slotKey: `manual-${f.sourceId}` };
+  assert.equal((await f.t.mutation(worker("completeSource"), { ...args, sourceRevision: 2 })).kind, "superseded");
+  const result = await f.t.mutation(worker("completeSource"), args);
+  assert.equal(result.kind, "ok");
+  const session = await f.receipt(f.args.sessionId);
+  assert.deepEqual(session.committedIntent, { kind: "slate" });
+  assert.ok(session.intentSequence > command.sequence);
+  assert.equal((await f.t.mutation(worker("completeSource"), args)).kind, "superseded");
+  const recovered = await f.t.mutation(worker("refreshConfiguration"), f.args);
+  assert.deepEqual(recovered.configuration.committedIntent, { kind: "slate" });
+});
 it("scoped idempotency and one pending operation", async () => {
   const f = await controlFixture();
   const a = await f.take();
