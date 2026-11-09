@@ -79,7 +79,7 @@ test("a confirmation cannot apply after the worker epoch changes @flow @fixture"
  await page.goto("/playwright/event-operator");await page.getByRole("button",{name:"Take Custom",exact:true}).click();
  await expect(page.getByRole("dialog")).toBeVisible();
  // A subscription can replace authority while the native modal is open.
- await page.getByRole("button",{name:"New epoch",exact:true}).evaluate(button=>button.click());
+ await page.getByRole("button",{name:"New epoch",exact:true}).evaluate(button=>{if(button instanceof HTMLElement)button.click();});
  await page.getByRole("dialog").getByRole("button",{name:"Put Custom on air",exact:true}).click();
  await expect(page.getByLabel("Command count")).toHaveText("0");await expect(page.getByText("Command failed",{exact:true})).toBeVisible();
 });

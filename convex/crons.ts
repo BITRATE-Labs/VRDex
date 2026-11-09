@@ -4,6 +4,7 @@ import { cronJobs } from "convex/server";
 import { internal } from "./_generated/api";
 
 const crons = cronJobs();
+crons.hourly("prune completed broadcast connection tests", {minuteUTC: 35}, internal.eventBroadcastConnectionTests.pruneConnectionTests, {});
 
 crons.interval(
   "delete expired staff invitation rate limits",

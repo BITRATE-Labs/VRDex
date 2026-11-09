@@ -1645,12 +1645,13 @@ export default defineSchema({
     .index("by_session_scope_status_sequence", ["sessionId", "eventId", "programId", "status", "sequence", "createdAt"])
     .index("by_program_scope_session_status_createdAt", ["programId", "eventId", "sessionId", "status", "createdAt"]),
   eventBroadcastConnectionTests: defineTable({
+    communityProfileId:v.optional(v.id("profiles")),
     eventId:v.id("events"), outputId:v.id("eventMediaOutputs"), sessionId:v.id("eventMediaSessions"),
     revision:v.number(), idempotencyKey:v.string(), marker:v.string(),
     state:v.union(v.literal("queued"),v.literal("running"),v.literal("stopping"),v.literal("passed"),v.literal("failed"),v.literal("cancelled")),
     cancelRequestedAt:v.optional(v.number()), decodedAt:v.optional(v.number()), failure:v.optional(v.string()),
     deadlineAt:v.number(), queueDeadlineAt:v.number(), startedAt:v.optional(v.number()), createdAt:v.number(), updatedAt:v.number(),
-  }).index("by_eventId_createdAt",["eventId","createdAt"]).index("by_eventId_idempotencyKey",["eventId","idempotencyKey"]),
+  }).index("by_eventId_createdAt",["eventId","createdAt"]).index("by_eventId_idempotencyKey",["eventId","idempotencyKey"]).index("by_community_createdAt",["communityProfileId","createdAt"]).index("by_state_createdAt",["state","createdAt"]),
   eventMediaSessions: defineTable({
     connectionTest:v.optional(v.object({jobId:v.id("eventBroadcastConnectionTests"),revision:v.number(),marker:v.string(),deadlineAt:v.number()})),
     resumeSource:v.optional(v.object({sourceId:v.id("eventMediaSources"),revision:v.number(),slotKey:v.string()})),

@@ -51,6 +51,22 @@ it('test start is idempotent, immutable, and uses normal allocated session dispa
  const admitted=await t.mutation(worker('admitDispatch'),{bridgeToken,eventId:args.eventId,sessionId:args.sessionId,dispatchId:'test-dispatch',launchProtocol:'fenced-v1'});assert.equal(admitted.granted,true);
  await assert.rejects(owner.mutation(api.eventBroadcastConnectionTests.startConnectionTest,{...startArgs,idempotencyKey:'second-test'}),/already active/);
 });
+it('community test limits preserve retries and retention never deletes an unfinished job',async()=>{
+ const f=await fixture();
+ await f.t.run(async({db})=>{
+  const {_id,_creationTime,...copy}=f.job;
+  for(let i=0;i<9;i++)await db.insert("eventBroadcastConnectionTests",{...copy,idempotencyKey:`recent-${i}`});
+  await db.patch(f.job._id,{createdAt:Date.now()-31*86400000,state:"failed"});
+  await db.insert("eventBroadcastConnectionTests",{...copy,idempotencyKey:"tenth"});
+ });
+ await assert.rejects(f.owner.mutation(api.eventBroadcastConnectionTests.startConnectionTest,{...f.startArgs,idempotencyKey:"over-limit"}),/Too many connection tests/);
+ assert.deepEqual(await f.owner.mutation(api.eventBroadcastConnectionTests.startConnectionTest,f.startArgs),f.started);
+ await f.t.mutation(internal.eventBroadcastConnectionTests.pruneConnectionTests,{});
+ assert.ok(await f.t.run(({db})=>db.get(f.job._id)),"an incorrectly terminal job with an active session is retained");
+ await f.t.run(async({db})=>{const session=(await db.get(f.job.sessionId))!;await db.patch(session._id,{status:"ended"});await db.patch(session.programId,{activeSessionId:undefined});});
+ await f.t.mutation(internal.eventBroadcastConnectionTests.pruneConnectionTests,{});
+ assert.equal(await f.t.run(({db})=>db.get(f.job._id)),null);
+});
 it('late, wrong-marker and cancelled proof cannot pass, and cancellation retains reservation',async()=>{
  const {t,owner,job,args,event,startArgs}=await fixture();const lease=await t.mutation(worker('acquireSession'),args);const proof={...args,epoch:lease.epoch,jobId:job._id,marker:job.marker,decodedAt:Date.now()};
  assert.equal((await t.mutation(worker('recordConnectionTestProof'),{...proof,marker:'11111111111111111111111111111111'})).accepted,false);

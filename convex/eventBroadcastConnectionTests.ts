@@ -10,9 +10,12 @@ import { controlFence } from "./_eventBroadcastControl";
 
 const jobState = v.union(v.literal("queued"),v.literal("running"),v.literal("stopping"),v.literal("passed"),v.literal("failed"),v.literal("cancelled"));
 export const projection = v.object({jobId:v.id("eventBroadcastConnectionTests"),revision:v.number(),state:jobState,failure:v.optional(v.string()),deadlineAt:v.number()});
+function cleanupComplete(session:Doc<"eventMediaSessions">|null){
+ return !!session && ((session.dispatchStopConfirmedAt!==undefined && session.workerTaskCleanupPending===false) || (!session.dispatchId && !session.workerTaskId && session.epoch===undefined && ["ended","error"].includes(session.status) && !session.workerTaskCleanupPending));
+}
 export async function connectionTestProjection(ctx: QueryCtx | MutationCtx, job: Doc<"eventBroadcastConnectionTests">) {
  const session=await ctx.db.get(job.sessionId);
- const cleaned=!!session && ((session.dispatchStopConfirmedAt!==undefined && session.workerTaskCleanupPending===false) || (!session.dispatchId && !session.workerTaskId && session.epoch===undefined && ["ended","error"].includes(session.status) && !session.workerTaskCleanupPending));
+ const cleaned=cleanupComplete(session);
  let state=job.state;
  if(cleaned) state=job.cancelRequestedAt!==undefined?"cancelled":job.decodedAt!==undefined?"passed":"failed";
  else if(job.cancelRequestedAt!==undefined || job.decodedAt!==undefined || Date.now()>=job.deadlineAt) state="stopping";
@@ -27,6 +30,9 @@ export function createStartConnectionTest(resolveAllocation:typeof resolveWorker
   if(!/^[a-zA-Z0-9:_-]{1,128}$/.test(args.idempotencyKey))throw Error("Invalid test request.");
   const previous=await ctx.db.query("eventBroadcastConnectionTests").withIndex("by_eventId_idempotencyKey",q=>q.eq("eventId",event._id).eq("idempotencyKey",args.idempotencyKey)).unique();
   if(previous){if(previous.revision!==args.expectedRevision)throw Error("This test request belongs to a different connection.");return {jobId:previous._id};}
+  if(!event.communityProfileId)throw Error("This event cannot test a connection.");
+  const recent=await ctx.db.query("eventBroadcastConnectionTests").withIndex("by_community_createdAt",q=>q.eq("communityProfileId",event.communityProfileId).gte("createdAt",Date.now()-600000)).take(10);
+  if(recent.length>=10)throw Error("Too many connection tests. Try again later.");
   const program=await getLatestEventMediaProgram(ctx.db,event._id);if(!program)throw Error("Connect your stream first.");
   await requireStoppedOutputSessions(ctx.db,program._id);
   const selected=program.currentOutputId?await ctx.db.get(program.currentOutputId):null;
@@ -35,7 +41,7 @@ export function createStartConnectionTest(resolveAllocation:typeof resolveWorker
   if(!output.playbackLinks.some(link=>["browser","pc"].includes(link.platform)))throw Error("Add a playback link before testing.");
   const scheduled=await scheduleEventMediaWorkerInContext(ctx,{currentSlug:args.currentSlug,startImmediately:true,outputKey:output.key},resolveAllocation,true);
   const now=Date.now(),deadlineAt=now+120000,marker=crypto.randomUUID().replaceAll("-","");
-  const jobId=await ctx.db.insert("eventBroadcastConnectionTests",{eventId:event._id,outputId:output._id,sessionId:scheduled.sessionId,revision:args.expectedRevision,idempotencyKey:args.idempotencyKey,marker,state:"queued",deadlineAt,queueDeadlineAt:deadlineAt,createdAt:now,updatedAt:now});
+  const jobId=await ctx.db.insert("eventBroadcastConnectionTests",{communityProfileId:event.communityProfileId,eventId:event._id,outputId:output._id,sessionId:scheduled.sessionId,revision:args.expectedRevision,idempotencyKey:args.idempotencyKey,marker,state:"queued",deadlineAt,queueDeadlineAt:deadlineAt,createdAt:now,updatedAt:now});
   await ctx.db.patch(scheduled.sessionId,{connectionTest:{jobId,revision:args.expectedRevision,marker,deadlineAt},runtimeDeadlineAt:deadlineAt,readyDeadlineAt:deadlineAt});
   await ctx.scheduler.runAt(deadlineAt,internal.eventBroadcastConnectionTests.expireConnectionTest,{jobId});
   return {jobId};
@@ -43,6 +49,13 @@ export function createStartConnectionTest(resolveAllocation:typeof resolveWorker
 });
 }
 export const startConnectionTest=createStartConnectionTest();
+export const pruneConnectionTests=internalMutation({args:{},returns:v.null(),handler:async ctx=>{
+ for(const state of ["passed","failed","cancelled"] as const){
+  const jobs=await ctx.db.query("eventBroadcastConnectionTests").withIndex("by_state_createdAt",q=>q.eq("state",state).lt("createdAt",Date.now()-30*86400000)).take(50);
+  for(const job of jobs)if(cleanupComplete(await ctx.db.get(job.sessionId)))await ctx.db.delete(job._id);
+ }
+ return null;
+}});
 export const getConnectionTest=query({args:{currentSlug:v.string(),jobId:v.id("eventBroadcastConnectionTests")},returns:v.union(projection,v.null()),handler:async(ctx,args)=>{const {event}=await authorize(ctx,args.currentSlug);const job=await ctx.db.get(args.jobId);return job?.eventId===event._id?connectionTestProjection(ctx,job):null;}});
 async function requestTestStop(ctx:MutationCtx,job:Doc<"eventBroadcastConnectionTests">,now:number){
  const session=await ctx.db.get(job.sessionId);if(!session)return;
