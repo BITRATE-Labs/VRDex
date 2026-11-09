@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict';
+import { it } from 'node:test';
+import { convexTest } from 'convex-test';
+import { makeFunctionReference } from 'convex/server';
+import schemaModule from '../../convex/schema';
+import { api } from '../../convex/_generated/api';
+import { newClerkUserId } from './_clerkTestIdentity';
+import { normalizeConnection, managedSecretRefAllowed } from '../../convex/_eventBroadcastConnections';
+const schema = (schemaModule as unknown as { default?: typeof schemaModule }).default ?? schemaModule;
+const modules = { '../../convex/_generated/server.ts': () => import('../../convex/_generated/server'), '../../convex/events.ts': () => import('../../convex/events'), '../../convex/eventBroadcastConnections.ts': () => import('../../convex/eventBroadcastConnections') };
+const ref = (name: string) => makeFunctionReference<'mutation'>(`eventBroadcastConnections:${name}`);
+const prefix = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:';
+process.env.VRDEX_EVENT_OUTPUT_SECRET_ARN_PREFIX = prefix;
+process.env.VRDEX_EVENT_OUTPUT_BROKER_TOKEN = 'test-broker-token-only-1234567890123456789';
+async function fixture() {
+  const t = convexTest({ schema, modules }); const subject = newClerkUserId();
+  await t.run(async ({ db }) => { const now = Date.now(); const userId = await db.insert('users', { clerkUserId: subject, name: 'Owner', email: 'owner@example.test', emailVerificationTime: now }); const profileId = await db.insert('profiles', { slug: 'club', displayName: 'Club', sortName: 'club', aliases: [], tags: [], claimState: 'claimed_verified', publicationState: 'published', publicSurfacingState: 'public', creationSource: 'self', updatedAt: now, profileType: 'community', community: { categoryTags: [] } }); await db.insert('profileOwners', { profileId, userId, roleKey: 'owner', state: 'active', grantedAt: now, updatedAt: now }); });
+  const owner = t.withIdentity({ subject, emailVerified: true, issuer: 'test', tokenIdentifier: `test|${subject}` });
+  const event = await owner.mutation(api.events.createCommunityEvent, { title: 'Connection event', communitySlug: 'club', startAt: Date.now() + 600000, timezone: 'UTC' });
+  const input = { permissionsAccepted: true, currentSlug: event.slug, provider: 'vrcdn', serverUrl: 'rtmp://ingest.vrcdn.live/live', playbackUrl: 'https://stream.vrcdn.live/live/example.live.ts', expectedRevision: 0, requestId: '12345678-1234-1234-1234-123456789012', replaceKey: true, credentialDigest: 'a'.repeat(64) };
+  return { t, owner, event, input };
+}
+it('validates preset servers with friendly errors and exact namespace binding', () => {
+  assert.throws(() => normalizeConnection({ provider: 'vrcdn', serverUrl: 'bad', playbackUrl: 'https://example.test' }), /Enter a valid stream server URL/);
+  assert.equal(managedSecretRefAllowed(prefix + 'vrdex/broadcast/abc/def/12345678-1234-1234-1234-123456789012-AbCd12', 'abc', 'def', '12345678-1234-1234-1234-123456789012'), true);
+  assert.equal(managedSecretRefAllowed(prefix + 'vrdex/broadcast/other/def/12345678-1234-1234-1234-123456789012-AbCd12', 'abc', 'def', '12345678-1234-1234-1234-123456789012'), false);
+});
+it('rejects unauthorized setup, missing key and untrusted commit', async () => {
+  const f = await fixture(); await assert.rejects(f.t.mutation(ref('prepareConnection'), f.input), /signed-in/);
+  await assert.rejects(f.owner.mutation(ref('prepareConnection'), { ...f.input, replaceKey: false, credentialDigest: '' }), /Enter a stream key/);
+  const grant = await f.owner.mutation(ref('prepareConnection'), f.input);
+  await assert.rejects(f.owner.mutation(ref('commitConnection'), { grantId: grant.grantId, credentialRef: prefix + grant.secretName + '-AbCd12', brokerToken: 'bad' }), /unavailable/);
+});
+it('commits CAS metadata, retains a blank key and rejects changed server or stale revision', async () => {
+  const f = await fixture(); const grant = await f.owner.mutation(ref('prepareConnection'), f.input);
+  const args = { grantId: grant.grantId, credentialRef: prefix + grant.secretName + '-AbCd12', brokerToken: process.env.VRDEX_EVENT_OUTPUT_BROKER_TOKEN };
+  const saved = await f.owner.mutation(ref('commitConnection'), args); assert.equal(saved.connection.revision, 1); assert.equal(saved.connection.testState, 'not_tested'); assert.equal(JSON.stringify(saved).includes('credentialRef'), false);
+  assert.deepEqual(await f.owner.mutation(ref('commitConnection'), args), saved);
+  await assert.rejects(f.owner.mutation(ref('prepareConnection'), { ...f.input, requestId: '22345678-1234-1234-1234-123456789012' }), /Connection changed/);
+  const edit = { ...f.input, requestId: '32345678-1234-1234-1234-123456789012', expectedRevision: 1, replaceKey: false, credentialDigest: '' };
+  const next = await f.owner.mutation(ref('prepareConnection'), edit); assert.equal(next.credentialRef, args.credentialRef);
+  await assert.rejects(f.owner.mutation(ref('prepareConnection'), { ...edit, requestId: '42345678-1234-1234-1234-123456789012', provider: 'twitch', serverUrl: 'rtmps://live.twitch.tv/app' }), /Enter a stream key/);
+  const updated = await f.owner.mutation(ref('commitConnection'), { ...args, grantId: next.grantId }); assert.equal(updated.connection.revision, 2);
+});
+it('abandonment fences a late commit before deleting any staged secret', async () => {
+  const f = await fixture(); const grant = await f.owner.mutation(ref('prepareConnection'), f.input);
+  const brokerToken = process.env.VRDEX_EVENT_OUTPUT_BROKER_TOKEN;
+  assert.deepEqual(await f.owner.mutation(ref('abandonConnection'), { grantId: grant.grantId, brokerToken }), { canDelete: true });
+  await assert.rejects(f.owner.mutation(ref('commitConnection'), { grantId: grant.grantId, brokerToken, credentialRef: prefix + grant.secretName + '-AbCd12' }), /expired/);
+});

@@ -1,3 +1,4 @@
+import {createOutputTunnel} from './output-tunnel.mjs';
 import { BROADCAST_ENCODING as E, parseMediaSettings, resolveDestinationProfile } from './broadcast-profiles.mjs';
 import { promisify } from 'node:util';
 import { spawn, execFile } from 'node:child_process';
@@ -23,7 +24,7 @@ export function parseOutputCredential(destination, value) {
             key = secret.streamKey;
         }
         const domain = destination === 'vrcdn' ? /^(?:[a-z0-9-]+\.)?ingest\.vrcdn\.live$/ : /^(?:[a-z0-9-]+\.)*live\.twitch\.tv$/;
-        if (!['vrcdn', 'twitch'].includes(destination) || !['rtmp:', 'rtmps:'].includes(url.protocol) || !domain.test(url.hostname) || url.username || url.password || url.search || url.hash || (url.port && !['1935', '443'].includes(url.port)) || url.pathname.replace(/\/$/, '') !== (destination === 'vrcdn' ? '/live' : '/app') || typeof key !== 'string' || !/^[a-zA-Z0-9_-]{1,512}$/.test(key))
+        if (!['vrcdn', 'twitch','custom'].includes(destination) || !['rtmp:', 'rtmps:'].includes(url.protocol) || (destination !== 'custom' && !domain.test(url.hostname)) || url.username || url.password || url.search || url.hash || (url.port && !['1935', '443'].includes(url.port)) || (destination !== 'custom' && url.pathname.replace(/\/$/, '') !== (destination === 'vrcdn' ? '/live' : '/app')) || typeof key !== 'string' || !/^[a-zA-Z0-9_-]{1,512}$/.test(key))
             throw Error();
         return { url: url.href.replace(/\/$/, ''), key };
     }
@@ -56,7 +57,7 @@ export function outputArguments(destination, target, profile = resolveDestinatio
     return ['-hide_banner', '-loglevel', 'error', '-nostdin', '-stats_period', '0.25', '-progress', 'pipe:3',
         '-fflags', '+discardcorrupt', '-probesize', '262144', '-analyzeduration', '1000000', '-f', E.programMux, '-i', 'pipe:0',
         '-map', '0:v:0', '-map', '0:a:0',
-        ...(destination === 'vrcdn' ? ['-c', 'copy'] : ['-c:v', E.videoCodec, '-threads', E.videoThreads, '-preset', profile.videoPreset === E.highRateVideoPreset ? E.highRatePreset : E.normalPreset, '-vf', `scale=${profile.width}:${profile.height},fps=${profile.frameRate}`, '-pix_fmt', E.pixelFormat, '-g', String(profile.frameRate * profile.keyframeIntervalSeconds), '-keyint_min', String(profile.frameRate * profile.keyframeIntervalSeconds), '-sc_threshold', E.sceneThreshold, '-bf', E.bFrames, '-b:v', `${profile.videoBitrateKbps}k`, '-minrate', `${profile.videoBitrateKbps}k`, '-maxrate', `${profile.videoBitrateKbps}k`, '-bufsize', `${profile.videoBitrateKbps * E.vbvMultiplier}k`, '-x264-params', E.x264Params, '-c:a', E.audioCodec, '-b:a', E.twitchAudioBitrateText, '-ar', E.audioSampleRateText, '-ac', E.audioChannelsText]),
+        ...(destination !== 'twitch' ? ['-c', 'copy'] : ['-c:v', E.videoCodec, '-threads', E.videoThreads, '-preset', profile.videoPreset === E.highRateVideoPreset ? E.highRatePreset : E.normalPreset, '-vf', `scale=${profile.width}:${profile.height},fps=${profile.frameRate}`, '-pix_fmt', E.pixelFormat, '-g', String(profile.frameRate * profile.keyframeIntervalSeconds), '-keyint_min', String(profile.frameRate * profile.keyframeIntervalSeconds), '-sc_threshold', E.sceneThreshold, '-bf', E.bFrames, '-b:v', `${profile.videoBitrateKbps}k`, '-minrate', `${profile.videoBitrateKbps}k`, '-maxrate', `${profile.videoBitrateKbps}k`, '-bufsize', `${profile.videoBitrateKbps * E.vbvMultiplier}k`, '-x264-params', E.x264Params, '-c:a', E.audioCodec, '-b:a', E.twitchAudioBitrateText, '-ar', E.audioSampleRateText, '-ac', E.audioChannelsText]),
         '-rw_timeout', '2000000', '-rtmp_playpath', target.key, '-f', E.outputMux, target.url];
 }
 /** Secret resolution and process creation happen only on start, inside the worker.
@@ -92,16 +93,16 @@ export function createOutputSender({ destination, profile = resolveDestinationPr
         if (!cachedTarget) {
             const controller = new AbortController();
             try {
-                const value = resolveCredential(credentialRef, { signal: controller.signal });
+                const resolved = resolveCredential(credentialRef, { signal: controller.signal });
+                const value = destination === "custom" ? Promise.resolve(resolved).then(secret=>createOutputTunnel(parseCredential(destination,secret),{signal:controller.signal})) : resolved;
                 if (value && typeof value.then === 'function') {
                     resolving = true;
                     status = 'connecting';
                     credentialController = controller;
                     const timeout = new Promise((_, reject) => { credentialTimer = setTimeout(() => { controller.abort(); reject(Error('Credential deadline')); }, credentialTimeoutMs); });
                     void Promise.race([value, timeout]).then(secret => {
-                        if (terminal)
-                            return;
-                        cachedTarget = parseCredential(destination, secret);
+                        if (terminal){secret?.close?.();return;}
+                        cachedTarget = destination === "custom" ? secret : parseCredential(destination, secret);
                         resolving = false;
                         launch();
                     }).catch(() => { if (!terminal) {
@@ -219,6 +220,7 @@ export function createOutputSender({ destination, profile = resolveDestinationPr
         active = false;
         credentialController?.abort();
         clearTimeout(credentialTimer);
+        cachedTarget?.close?.();
         cachedTarget = undefined;
         clearInterval(timer);
         unsubscribe?.();
@@ -239,7 +241,7 @@ export function createOutputSender({ destination, profile = resolveDestinationPr
 export function createEventOutputs({ configuration, clock, env = process.env, resolveCredential, spawnForDestination = () => spawn, readSecret = resolveOptionalOutputSecret, credentialTimeoutMs = 2000 }) {
     const settings = parseMediaSettings(configuration.mediaSettings);
     const selected = configuration.outputs.find(o => o.id === configuration.outputId);
-    if (!selected || !['vrcdn', 'external_rtmp'].includes(selected.type) || (selected.type === 'external_rtmp' && !selected.twitchSetup) || (selected?.type === 'vrcdn' && selected.twitchSetup))
+    if (!selected || !['vrcdn', 'external_rtmp'].includes(selected.type) || (selected.type === 'external_rtmp' && !selected.twitchSetup && !selected.managedConnection) || (selected?.type === 'vrcdn' && selected.twitchSetup))
         throw Error('Selected output unavailable');
     const optional = configuration.outputs.filter(o => o.id !== selected.id && o.simulcastEnabled === true && o.type === 'external_rtmp' && o.twitchSetup);
     if (optional.length > 1)
@@ -254,7 +256,7 @@ export function createEventOutputs({ configuration, clock, env = process.env, re
         return readSecret({ arn, region: env.AWS_REGION, signal });
     });
     const entries = [selected, ...optional].map(output => {
-        const destination = output.type === 'vrcdn' ? 'vrcdn' : 'twitch';
+        const destination = output.managedConnection?.provider ?? (output.type === 'vrcdn' ? 'vrcdn' : 'twitch');
         const expectedProfile = resolveDestinationProfile({settings,destination});
         const profile = Object.freeze({...(output.profile ?? expectedProfile)});
         const resolve = (ref, options) => {

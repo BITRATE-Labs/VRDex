@@ -45,7 +45,7 @@ export const destinationProfileValidator = v.object({
 });
 export const sessionDestinationProfilesValidator = v.array(v.object({
   outputId: v.id("eventMediaOutputs"),
-  destination: v.union(v.literal("vrcdn"), v.literal("twitch")),
+  destination: v.union(v.literal("vrcdn"), v.literal("twitch"),v.literal("custom")),
   profile: destinationProfileValidator,
 }));
 

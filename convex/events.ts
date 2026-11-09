@@ -1474,7 +1474,7 @@ export async function getOrCreateEventMediaProgram(
   });
 }
 
-async function getLatestEventMediaProgram(
+export async function getLatestEventMediaProgram(
   db: DatabaseReader,
   eventId: Id<"events">,
 ): Promise<Doc<"eventMediaPrograms"> | null> {
@@ -1628,7 +1628,7 @@ async function getOpenEventMediaSession(
 }
 
 /** Configuration is immutable until every session has stopped or released admission. */
-async function eventOutputConfigurationLocked(db: DatabaseReader, program: Doc<"eventMediaPrograms">) {
+export async function eventOutputConfigurationLocked(db: DatabaseReader, program: Doc<"eventMediaPrograms">) {
   if (await getOpenEventMediaSession(db, program)) return true;
   for (const status of ["ended", "error"] as const) {
     const held = await db.query("eventMediaSessions")
@@ -1644,7 +1644,7 @@ async function eventOutputConfigurationLocked(db: DatabaseReader, program: Doc<"
   return false;
 }
 
-async function requireStoppedOutputSessions(db: DatabaseReader, programId: Id<"eventMediaPrograms">) {
+export async function requireStoppedOutputSessions(db: DatabaseReader, programId: Id<"eventMediaPrograms">) {
   const program = await db.get(programId);
   if (program && await eventOutputConfigurationLocked(db, program)) {
     throw new Error("An event media worker session is already active for this event.");
@@ -3833,7 +3833,7 @@ export function createScheduleEventMediaWorker(resolveAllocation: typeof resolve
     const mediaSettings = parseMediaSettings(openSession ? openSession.mediaSettings : program.mediaSettings);
     const configuredOutputs = await ctx.db.query("eventMediaOutputs").withIndex("by_programId_key", q => q.eq("programId", program._id)).take(9);
     const destinationProfiles = configuredOutputs.filter(o => o.eventId === event._id && (o._id === output._id || (o.type === "external_rtmp" && o.twitchSetup && o.simulcastEnabled)) && ["ready", "active"].includes(o.state) && eventOutputIsAuthorized(event,o)).map(o => {
-      const destination = o.type === "vrcdn" ? "vrcdn" as const : "twitch" as const;
+      const destination = o.managedConnection?.provider ?? (o.type === "vrcdn" ? "vrcdn" as const : "twitch" as const);
       return {outputId:o._id,destination,profile:resolveDestinationProfile({settings:mediaSettings,destination})};
     });
     const frozenDestinations = openSession?.destinationProfiles ?? destinationProfiles;

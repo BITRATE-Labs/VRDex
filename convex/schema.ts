@@ -1,3 +1,4 @@
+import {managedConnectionValidator,connectionProvider} from "./_eventBroadcastConnections";
 import { statisticsAdmissionValidator } from "./_groupAdmission";
 import { destinationGroupMetadataValidator } from "./_profileLinkDestination";
 import { collectionScopeValidator, groupObservationDecisionValidator } from "./_communityTelemetry";
@@ -1579,6 +1580,7 @@ export default defineSchema({
     credential: v.optional(eventMediaOutputCredential),
     vrcdnSetup: v.optional(eventMediaVrcdnSetup),
     twitchSetup: v.optional(twitchSetupValidator),
+    managedConnection:v.optional(managedConnectionValidator),
     simulcastEnabled: v.optional(v.boolean()),
     compliance: v.optional(eventMediaOutputCompliance),
     playbackLinks: v.array(eventMediaPublicLinkValidator),
@@ -1588,6 +1590,7 @@ export default defineSchema({
     .index("by_programId_key", ["programId", "key"])
     .index("by_programId_state", ["programId", "state"])
     .index("by_eventId_type", ["eventId", "type"]),
+  eventBroadcastConnectionGrants:defineTable({eventId:v.id("events"),programId:v.id("eventMediaPrograms"),communityProfileId:v.id("profiles"),actor:v.string(),requestId:v.string(),payload:v.string(),provider:connectionProvider,serverUrl:v.string(),playbackUrl:v.string(),replaceKey:v.boolean(),expectedRevision:v.number(),expiresAt:v.number(),outputId:v.optional(v.id("eventMediaOutputs"))}).index("by_event_request",["eventId","requestId"]),
   eventMediaControlRequests: defineTable({
     eventId:v.id("events"), sessionId:v.optional(v.id("eventMediaSessions")), actorKey:v.string(), key:v.string(),
     payload:v.string(), commandId:v.id("eventMediaCommands"), createdAt:v.number(),
