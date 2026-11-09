@@ -4,6 +4,7 @@ import { isInScheduledWatchWindow } from "../../../../convex/_eventRuntime";
 
 type EventIdentity = { eventId: string; eventSlug: string; href: string; title: string; startAt: number; doorsOpenAt?: number; endAt?: number };
 export type PlaybackRequest = EventIdentity & (
+  | { kind: "direct_media"; sourceId: string; src: string; transport: "mpegts" | "video" | "hls" }
   | { kind: "vrcdn"; sourceId: string; src: string; transport: "mpegts" | "video" }
   | { kind: "twitch"; sourceId: string; channel?: string; video?: string; collection?: string }
   | { kind: "performer_sequence"; event: LineupEvent }
@@ -12,13 +13,14 @@ export type PlaybackStatus = "idle" | "loading" | "playing" | "paused" | "blocke
 export type PlaybackSnapshot = { request?: PlaybackRequest; status: PlaybackStatus; volume: number; muted: boolean; lineup?: LineupSnapshot };
 export type PlaybackAdapter = {
   play(): Promise<boolean>; pause(): void; setVolume(value: number): void; setMuted(value: boolean): void;
+  enableControls?(beforeUnmute: () => boolean): void;
   update(request: PlaybackRequest): void; dispose(): void;
   manual?(key: string): void; live?(): void; retryNextPlayback?(): void;
 };
 export type AdapterNotify = (state: Partial<Pick<PlaybackSnapshot, "status" | "lineup">>) => void;
 export function playbackSourceKey(request: PlaybackRequest): string {
   return JSON.stringify(request.kind === "performer_sequence" ? [request.eventId, request.kind] :
-    request.kind === "vrcdn" ? [request.eventId, request.kind, request.sourceId, request.src, request.transport] :
+    (request.kind === "vrcdn" || request.kind === "direct_media") ? [request.eventId, request.kind, request.sourceId, request.src, request.transport] :
       [request.eventId, request.kind, request.sourceId, request.channel, request.video, request.collection]);
 }
 

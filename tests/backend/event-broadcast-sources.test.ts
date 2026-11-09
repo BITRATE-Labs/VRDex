@@ -53,7 +53,7 @@ test("canonical broadcast inputs normalize provider references and reject fetch 
   assert.equal(broadcastInputKey({ kind: "twitch", channel: "basic_bit" }), "twitch:basic_bit");
   assert.deepEqual(parseBroadcastInputUrl("https://www.twitch.tv/Basic_Bit/"), input);
   assert.deepEqual(parseBroadcastInputUrl("https://panel.vrcdn.live/preview/alpha"), { kind: "vrcdn", streamId: "alpha" });
-  for (const value of ["https://twitch.tv/videos", "https://twitch.tv/directory", "https://twitch.tv/basic_bit?token=secret", "https://user@twitch.tv/basic_bit", "https://twitch.tv:444/basic_bit", "https://twitch.tv/basic_bit/videos", "https://evil.test/live.ts", "https://stream.vrcdn.live/live/alpha.mp4"]) assert.throws(() => parseBroadcastInputUrl(value));
+  for (const value of ["https://twitch.tv/videos", "https://twitch.tv/directory", "https://twitch.tv/basic_bit?token=secret", "https://user@twitch.tv/basic_bit", "https://twitch.tv:444/basic_bit", "https://twitch.tv/basic_bit/videos", "https://evil.test/live.ts"]) assert.throws(() => parseBroadcastInputUrl(value));
 });
 
 test("resolution preserves explicit and legacy choices and never falls through unavailable inputs", async () => {

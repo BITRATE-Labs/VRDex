@@ -1,3 +1,4 @@
+import { canonicalDirectMediaUrl } from "./_directMediaUrl";
 import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { DatabaseReader } from "./_generated/server";
@@ -10,6 +11,7 @@ import { twitchLoginFromUrl } from "./_twitchLinks";
 export const broadcastInputValidator = v.union(
   v.object({ kind: v.literal("vrcdn"), streamId: v.string() }),
   v.object({ kind: v.literal("twitch"), channel: v.string() }),
+  v.object({ kind: v.literal("direct_media"), url: v.string() }),
 );
 export type BroadcastInputRef = Infer<typeof broadcastInputValidator>;
 export type BroadcastInputChoice = { input: BroadcastInputRef; key: string; label: string };
@@ -19,11 +21,11 @@ export function parseBroadcastInputUrl(value: string): BroadcastInputRef {
   if (channel !== null) return { kind: "twitch", channel };
   const stream = parseVrcdnStreamLinks(value);
   if (stream !== null && stream.directVideoUrl === undefined) return { kind: "vrcdn", streamId: stream.streamId };
-  throw new Error("Broadcast input must be a canonical VRCDN stream or Twitch channel.");
+  return { kind: "direct_media", url: canonicalDirectMediaUrl(value) };
 }
 
 export function normalizeBroadcastInput(input: BroadcastInputRef): BroadcastInputRef {
-  const normalized = parseBroadcastInputUrl(input.kind === "vrcdn" ? `vrcdn:${input.streamId}` : `https://www.twitch.tv/${input.channel}`);
+  const normalized = parseBroadcastInputUrl(input.kind === "vrcdn" ? `vrcdn:${input.streamId}` : input.kind === "twitch" ? `https://www.twitch.tv/${input.channel}` : input.url);
   if (broadcastInputKey(normalized) !== broadcastInputKey(input)) {
     throw new Error("Broadcast input reference must be canonical.");
   }
@@ -31,12 +33,13 @@ export function normalizeBroadcastInput(input: BroadcastInputRef): BroadcastInpu
 }
 
 export function broadcastInputKey(input: BroadcastInputRef): string {
-  return input.kind === "vrcdn" ? `vrcdn:${input.streamId}` : `twitch:${input.channel}`;
+  return input.kind === "vrcdn" ? `vrcdn:${input.streamId}` : input.kind === "twitch" ? `twitch:${input.channel}` : `direct_media:${input.url}`;
 }
 
 export function broadcastInputPublicUrl(input: BroadcastInputRef): string {
   const canonical = normalizeBroadcastInput(input);
   if (canonical.kind === "twitch") return `https://www.twitch.tv/${canonical.channel}`;
+  if (canonical.kind === "direct_media") return canonical.url;
   const stream = createVrcdnStreamLinks(canonical.streamId);
   if (stream === null) throw new Error("Invalid VRCDN stream.");
   return stream.questUrl;

@@ -57,7 +57,7 @@ async function insertSource(ctx: MutationCtx, args: { currentSlug: string; label
   const revision = (previous?.revision ?? (previous ? 1 : 0)) + 1;
   const sourceId = await ctx.db.insert("eventMediaSources", {
     programId, eventId: event._id, key, position: sources.reduce((max, source) => Math.max(max, source.position + 1), 0),
-    type: input.kind === "vrcdn" ? "vrcdn_link" : "twitch_watch", purpose: "program", state: "ready", label, input, revision,
+    type: input.kind === "vrcdn" ? "vrcdn_link" : input.kind === "twitch" ? "twitch_watch" : "hls_url", purpose: "program", state: "ready", label, input, revision,
     publicUrl: broadcastInputPublicUrl(input), createdAt: now, updatedAt: now,
   });
   await recordEventMediaAuditEvent(ctx.db, { programId, eventId: event._id, sourceId, actor, action: previous ? "source_replaced" : "source_created", privateSummary: previous ? `Replaces ${previous._id}.` : undefined, createdAt: now });
