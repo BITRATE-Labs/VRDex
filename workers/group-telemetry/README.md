@@ -2,7 +2,7 @@
 
 This account-scoped worker polls only explicitly assigned VRChat groups and sends aggregate observations to the Convex control plane. With the corresponding club features enabled, it also reads membership audit events and management data, and executes explicitly queued staff actions. It has no instance-attendance tracking code, strips user IDs embedded in aggregate instance locators, rejects foreign group markers, and never logs the account secret or provider payloads.
 
-Population and live-instance reads use the assigned account's full group-instance endpoint. They preserve the provider's snapshot timestamp, use `n_users` for occupants, and honor explicit closure without discarding occupants still present. The backend must accept the optional aggregate `closedAt` field before this collector is released. See the [observation model](../../docs/backend/community-group-telemetry.md#observation-model).
+Population and live-instance reads use the assigned account's full group-instance endpoint. They preserve the provider's snapshot timestamp, use `n_users` for occupants, and honor explicit closure without discarding occupants still present. The backend must accept the optional aggregate `closedAt`, `userCount`, `queueSize`, and `platforms` fields before this collector is released. Missing diagnostics remain unknown. Release this collector with a new versioned artifact and exact release SHA after the additive backend is deployed. See the [observation model](../../docs/backend/community-group-telemetry.md#observation-model).
 
 ## Club analytics and management
 

@@ -32,6 +32,12 @@ const point = v.object({
   coverage: v.string(),
   breakBefore: v.optional(v.boolean()),
 });
+const instanceSeriesPointValidator = v.object({
+  ...point.fields,
+  userCount: v.optional(v.number()),
+  queueSize: v.optional(v.number()),
+  platforms: v.optional(v.record(v.string(), v.number())),
+});
 const summary = v.object({
   peak: v.union(v.number(), v.null()),
   average: v.union(v.number(), v.null()),
@@ -138,6 +144,14 @@ function instancePoint(
     at: row.observedAt,
     value: row.population,
     coverage: row.coverageState,
+  };
+}
+function instanceSeriesPoint(row: Doc<"instancePopulationObservations">) {
+  return {
+    ...instancePoint(row),
+    ...(row.userCount !== undefined ? { userCount: row.userCount } : {}),
+    ...(row.queueSize !== undefined ? { queueSize: row.queueSize } : {}),
+    ...(row.platforms !== undefined ? { platforms: row.platforms } : {}),
   };
 }
 async function preferencesFor(
@@ -706,7 +720,12 @@ export const getInstanceSeries = query({
     sessionId: v.id("instanceSessions"),
     paginationOpts: paginationOptsValidator,
   },
-  returns: pageReturn,
+  returns: v.object({
+    ...pageReturn.fields,
+    page: v.array(instanceSeriesPointValidator),
+    before: v.union(instanceSeriesPointValidator, v.null()),
+    after: v.union(instanceSeriesPointValidator, v.null()),
+  }),
   handler: async (ctx, args) => {
     checkedRange(args.startAt, args.endAt, Infinity);
     const { state, session } = await requireSession(
@@ -753,11 +772,11 @@ export const getInstanceSeries = query({
       )
       .first();
     return {
-      page: requirePopulationPoints(await projectPopulationPoints(ctx, session.integrationId, Math.max(state.epoch, session.openedAt), result.page.map(instancePoint), session._id)),
+      page: requirePopulationPoints(await projectPopulationPoints(ctx, session.integrationId, Math.max(state.epoch, session.openedAt), result.page.map(instanceSeriesPoint), session._id)),
       isDone: result.isDone,
       continueCursor: result.continueCursor,
-      before: before ? instancePoint(before) : null,
-      after: after ? requirePopulationPoints(await projectPopulationPoints(ctx, session.integrationId, Math.max(state.epoch, session.openedAt), [instancePoint(after)], session._id))[0]! : null,
+      before: before ? instanceSeriesPoint(before) : null,
+      after: after ? requirePopulationPoints(await projectPopulationPoints(ctx, session.integrationId, Math.max(state.epoch, session.openedAt), [instanceSeriesPoint(after)], session._id))[0]! : null,
     };
   },
 });

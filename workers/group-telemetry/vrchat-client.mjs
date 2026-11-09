@@ -45,6 +45,23 @@ function nonNegativeInteger(value, label) {
   return value;
 }
 
+function instanceDiagnostics(item) {
+  const diagnostics = {};
+  for (const key of ["userCount", "queueSize"]) {
+    if (item[key] == null) continue;
+    if (!Number.isSafeInteger(item[key]) || item[key] < 0)
+      throw new VrchatProviderError("Instance diagnostics are malformed.", { category: "schema_drift" });
+    diagnostics[key] = item[key];
+  }
+  if (item.platforms != null) {
+    if (typeof item.platforms !== "object" || Array.isArray(item.platforms) || Object.keys(item.platforms).length > 16 ||
+        Object.entries(item.platforms).some(([key, value]) => !/^(?!usr_)[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(key) || !Number.isSafeInteger(value) || value < 0))
+      throw new VrchatProviderError("Instance platforms are malformed.", { category: "schema_drift" });
+    diagnostics.platforms = item.platforms;
+  }
+  return diagnostics;
+}
+
 function retryAfterMs(response) {
   const value = response.headers.get("retry-after");
   if (!value) return undefined;
@@ -381,6 +398,7 @@ export class VrchatClient {
         providerLocation: sanitizeGroupInstanceLocator(item.location, groupId, "Instance location"),
         vrchatWorldId,
         population: nonNegativeInteger(item.n_users, "Instance population"),
+        ...instanceDiagnostics(item),
         ...(closedAt !== undefined && closedAt <= observedAt ? { closedAt } : !item.active ? { closedAt: observedAt } : {}),
       };
     });
