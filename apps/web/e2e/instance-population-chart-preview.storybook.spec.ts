@@ -64,4 +64,3 @@ test("historical, conflicting and closure states stay explicit @storybook-visual
     await page.screenshot({ path: `../../.cache/artifacts/instance-count-closure-${isMobile ? "mobile" : "desktop"}.png`, fullPage: true });
   }
 });
-
