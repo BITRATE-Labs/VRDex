@@ -2174,6 +2174,7 @@ export default defineSchema({
   }).index("by_runId_key", ["runId", "key"]).index("by_runId_state", ["runId", "state"]),
   communityTelemetryEventRecapJobs: defineTable({
     windowSignature: v.optional(v.string()),
+    refreshRequested: v.optional(v.boolean()),
     failure: v.optional(v.string()),
     calculationVersion: v.optional(v.string()),
     eventId: v.id("events"),

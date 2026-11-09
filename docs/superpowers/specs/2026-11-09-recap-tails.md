@@ -60,7 +60,7 @@ Production verification and private snapshots remain in the operator review pack
 
 ## Implementation traceability
 
-The delivered slice uses `convex/_eventRecapWindow.ts` for creation, continuation checks and private readback. `events.recapEndAt` stores the optional cutoff. `communityTelemetry.setEventRecapEnd` requires event-management permission and recap-category visibility. The existing inline recap UI keeps persisted metric boundaries visible while a requested range is updating.
+The delivered slice uses `convex/_eventRecapWindow.ts` for creation, continuation checks and private readback. `events.recapEndAt` stores the optional cutoff. `communityTelemetry.setEventRecapEnd` requires event-management permission and recap-category visibility. The existing inline recap UI keeps persisted metric boundaries visible while a requested range is updating. Ordinary refreshes coalesce while an active paged calculation finishes its pinned observation window; publication then requests a complete catch-up when necessary. Operator cutoff, schedule, association and connection changes still invalidate the obsolete generation.
 
 The supported calculation range is 93 days, matching private analytics ranges. Reads reject more than 1,000 confirmed associations per event or 2,500 association resolutions per interactive page. Canonical sessions deduplicate repaired aliases. For contradictory retained rows at one canonical-session timestamp, calculation uses the earliest row in index order and leaves the raw rows intact. Distinct confirmed instances continue to sum.
 

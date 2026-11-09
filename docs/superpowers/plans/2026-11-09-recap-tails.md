@@ -37,3 +37,8 @@
 - [x] Add inline Recap end editor using existing date/time primitives and local-time behavior. Show effective range; preserve view-only access. Cover save, clear to Automatic and failure state without new explanatory prose.
 - [x] Run focused backend tests, typechecks, script contracts if affected and local Convex bootstrap. Add/execute desktop/mobile visual assertions respecting PLAYWRIGHT_CAPTURE_SCREENSHOTS.
 - [x] Update public developer docs and approved spec traceability without private IDs or machine-specific links. Self-review, commit, and report evidence. Do not push, merge, deploy or change production data; coordinator handles PR delivery and review.
+
+## Coordinator follow-up
+
+- [ ] Complete independent review and PR delivery, including CI selection.
+- [ ] Inventory recaps affected by the existing recent-event cron and continuing attached observations before any separately authorized rollout.
