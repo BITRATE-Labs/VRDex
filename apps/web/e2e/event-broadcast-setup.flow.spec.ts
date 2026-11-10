@@ -34,6 +34,13 @@ for(const renew of [true,false]) test(`connection save retry ${renew ? "renews a
 test("unsaved connection changes can be retained @flow @fixture",async({page})=>{
  await page.goto("/playwright/event-operator/setup");await page.getByLabel("Stream key",{exact:true}).fill("fixture-not-a-secret");await page.getByRole("link",{name:"Back to broadcast",exact:true}).click();await expect(page.getByRole("dialog")).toBeVisible();await page.getByRole("button",{name:"Keep editing",exact:true}).click();await expect(page.getByLabel("Stream key",{exact:true})).toHaveValue("fixture-not-a-secret");
 });
+test("non-JSON save failures retain details and show the normal retry message @flow @fixture",async({page})=>{
+ await page.route("**/api/event-broadcast/connections",route=>route.fulfill({status:502,contentType:"text/html",body:"<html>Gateway unavailable</html>"}));
+ await page.goto("/playwright/event-operator/setup");await page.getByLabel("Stream key",{exact:true}).fill("fixture-not-a-secret");await page.getByRole("checkbox").check();await page.getByRole("button",{name:"Continue",exact:true}).click();
+ await page.getByLabel("Playback URL",{exact:true}).fill("https://example.com/live");await page.getByRole("button",{name:"Continue",exact:true}).click();
+ await expect(page.getByRole("main").getByRole("alert")).toHaveText("Couldn’t save this connection. Check the details and try again.");
+ await expect(page.getByLabel("Playback URL",{exact:true})).toHaveValue("https://example.com/live");
+});
 test("legacy saved destinations use their preset server during setup @flow @fixture",async({page})=>{
  await page.goto("/playwright/event-operator/setup?legacy=1");
  await expect(page.getByText("rtmp://ingest.vrcdn.live/live",{exact:true})).toBeVisible();
