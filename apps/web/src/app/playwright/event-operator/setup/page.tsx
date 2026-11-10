@@ -1,0 +1,6 @@
+import { notFound } from "next/navigation";
+import { SetupFixture } from "./preview";
+export default async function Page({searchParams}:{searchParams:Promise<{running?:string;legacy?:string;passed?:string}>}){
+ if(process.env.VRDEX_ENABLE_PLAYWRIGHT_FIXTURES!=="true")notFound();
+ const params=await searchParams;return <SetupFixture running={params.running==="1"} legacy={params.legacy==="1"} passed={params.passed==="1"}/>;
+}

@@ -2,15 +2,12 @@
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@convex-generated-api";
 import { Field, Select } from "@/components/ui/field";
+import { broadcastInputKey } from "../../../../../convex/_broadcastInputUrl";
 export type BroadcastChoices = FunctionReturnType<
   typeof api.events.getPersonBroadcastInputChoices
 >;
 type Input = BroadcastChoices[number]["input"];
-function key(input: Input) {
-  return input.kind === "vrcdn"
-    ? `vrcdn:${input.streamId}`
-    : `twitch:${input.channel}`;
-}
+const key = broadcastInputKey;
 export function SlotBroadcastInputSelect({
   value,
   choices,
@@ -43,7 +40,7 @@ export function SlotBroadcastInputSelect({
         ) : null}
         {choices.map((choice) => (
           <option key={choice.key} value={key(choice.input)}>
-            {choice.input.kind === "twitch" ? "Twitch" : "VRCDN"} ·{" "}
+            {choice.input.kind === "twitch" ? "Twitch" : choice.input.kind === "vrcdn" ? "VRCDN" : "Video"} ·{" "}
             {choice.label}
           </option>
         ))}

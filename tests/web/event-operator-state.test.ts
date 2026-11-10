@@ -206,3 +206,11 @@ it("a missing active session never borrows the only live session", () => {
   assert.equal(field(html, "Observed output"), "Unknown");
   assert.match(html, /<button[^>]*disabled=""[^>]*>Cut to slate<\/button>/);
 });
+it("connection tests disable source controls while leaving Stop available",()=>{
+ const status=fixture();
+ Reflect.set(status.sessions[0],"connectionTest",{jobId:"test",revision:1,marker:"fixture",deadlineAt:now+60000});
+ Reflect.set(status.sessions[0],"pendingOperation",null);
+ const html=renderOperator(status);
+ for(const label of ["Cut to slate","Hold current","Return to auto"]) assert.match(html,new RegExp(`<button[^>]*disabled=""[^>]*>${label}</button>`));
+ assert.match(html,/<button(?![^>]*disabled)[^>]*>Stop<\/button>/);
+});

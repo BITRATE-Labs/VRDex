@@ -78,9 +78,8 @@ export function validateAllocationSnapshot(value) {
     };
   });
   if (
-    !destinations.has("vrcdn") ||
     !destinationProfiles.some(
-      (d) => d.destination === "vrcdn" && d.outputId === value.outputId,
+      (d) => d.outputId === value.outputId,
     )
   )
     throw Error("Missing primary snapshot");

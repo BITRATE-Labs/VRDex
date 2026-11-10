@@ -109,7 +109,7 @@ test('host Twitch preview stays local and narrow layouts keep an external link @
  await twitch.getByRole('button',{name:'Preview',exact:true}).click();
  const preview=page.getByRole('region',{name:'Preview Twitch'});await preview.scrollIntoViewIfNeeded();
  const width=await preview.locator('[aria-label="Local preview player"]').evaluate(node=>node.getBoundingClientRect().width);
- if(width<400){await expect(preview.getByRole('link',{name:'Open',exact:true})).toBeVisible();await expect(preview.locator('iframe')).toHaveCount(0);}else{await expect(preview.locator('iframe')).toBeVisible();await expect(preview.locator('[aria-label="Local preview player"]')).toHaveAttribute('inert','');}
+ if(width<400){await expect(preview.getByRole('link',{name:'Open',exact:true})).toBeVisible();await expect(preview.locator('iframe')).toHaveCount(0);}else{await expect(preview.locator('iframe')).toBeVisible();await expect(preview.locator('[aria-label="Local preview player"]')).not.toHaveAttribute('inert','');await expect(preview.locator('[aria-label="Local preview player"]')).toHaveCSS('pointer-events','auto');}
  await page.screenshot({path:info.outputPath('task8-host-twitch-preview.png')});
  await preview.getByRole('button',{name:'Close preview',exact:true}).click();await expect(page.locator('iframe')).toHaveCount(0);
 });

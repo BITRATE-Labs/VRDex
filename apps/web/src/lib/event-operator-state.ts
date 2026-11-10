@@ -41,7 +41,8 @@ export function operatorViewState(
   };
   const intent = session?.committedIntent;
   const pending = session?.pendingOperation;
-  const canOperate = status.canControl && active && !stopPending;
+  const canStop = status.canControl && active && !stopPending;
+  const canOperate = canStop && !session?.connectionTest;
   return {
     session,
     active,
@@ -70,7 +71,7 @@ export function operatorViewState(
     canTake: canOperate && !submitting && !pending,
     canCancel: canOperate && pending?.phase === "preparing",
     canCut: canOperate,
-    canStop: canOperate,
+    canStop,
   };
 }
 export function resourceFresh(

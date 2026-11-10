@@ -202,6 +202,60 @@ async function controlFixture() {
   };
   return { ...f, args, sourceId, take, receipt, begin, promote, ack };
 }
+it("finished direct media durably returns to hold and rejects stale completion", async () => {
+  const f = await controlFixture();
+  await f.t.run(({ db }) => db.patch(f.sourceId, {
+    type: "hls_url", input: { kind: "direct_media", url: "https://media.example.com/announcement.mp4" },
+    publicUrl: "https://media.example.com/announcement.mp4",
+  }));
+  const take = await f.take();
+  await f.begin(take.commandId);
+  await f.promote(take.commandId);
+  await f.ack(take.commandId);
+  const command = await f.receipt(take.commandId);
+  await f.t.mutation(worker("observeProgram"),{...f.args,intentSequence:command.sequence,state:"hold",outputMs:101,publishing:true,outputId:f.output.outputId});
+  assert.equal((await f.receipt(f.args.sessionId)).currentSourceId,undefined,"the slate can be observed before a delayed EOF receipt succeeds");
+  const args = { ...f.args, intentSequence: command.sequence, sourceId: f.sourceId, sourceRevision: 1, slotKey: `manual-${f.sourceId}` };
+  assert.equal((await f.t.mutation(worker("completeSource"), { ...args, sourceRevision: 2 })).kind, "superseded");
+  const result = await f.t.mutation(worker("completeSource"), args);
+  assert.equal(result.kind, "ok");
+  const session = await f.receipt(f.args.sessionId);
+  assert.deepEqual(session.committedIntent, { kind: "slate" });
+  assert.ok(session.intentSequence > command.sequence);
+  assert.equal((await f.t.mutation(worker("completeSource"), args)).kind, "superseded");
+  const recovered = await f.t.mutation(worker("refreshConfiguration"), f.args);
+  assert.deepEqual(recovered.configuration.committedIntent, { kind: "slate" });
+});
+it("automatic direct-media EOF remains consumable after observed output has returned to hold",async()=>{
+ const f=await controlFixture();
+ const slot=await f.t.run(async({db})=>{
+  const now=Date.now();
+  const id=await db.insert("eventSlots",{eventId:f.event.eventId,position:0,startAt:now-1000,endAt:now+60000,displayLabel:"Video",roleLabel:"DJ",sourceType:"manual",sourceLabel:"Owner",confidence:1,reviewState:"confirmed",updatedAt:now});
+  await db.patch(f.sourceId,{eventSlotId:id,type:"hls_url",input:{kind:"direct_media",url:"https://media.example.com/announcement.mp4"},publicUrl:"https://media.example.com/announcement.mp4"});
+  return id;
+ });
+ const next=await f.owner.mutation(api.events.queueEventMediaCommand,{currentSlug:f.event.slug,type:"switch_next",idempotencyKey:crypto.randomUUID()});
+ await f.begin(next.commandId);await f.promote(next.commandId);await f.ack(next.commandId,{slotKey:slot});
+ const command=await f.receipt(next.commandId);
+ await f.t.mutation(worker("observeProgram"),{...f.args,intentSequence:command.sequence,state:"hold",outputMs:101,publishing:true,outputId:f.output.outputId});
+ assert.equal((await f.t.mutation(worker("completeSource"),{...f.args,intentSequence:command.sequence,sourceId:f.sourceId,sourceRevision:1,slotKey:slot})).kind,"ok");
+ assert.deepEqual((await f.receipt(f.args.sessionId)).committedIntent,{kind:"slate"});
+});
+for(const mode of ["manual","automatic"] as const)it(`worker replacement never replays an interrupted ${mode} direct-media selection`,async()=>{
+ const f=await controlFixture();
+ const slot=await f.t.run(async({db})=>{
+  const now=Date.now();
+  const id=mode==="automatic" ? await db.insert("eventSlots",{eventId:f.event.eventId,position:0,startAt:now-1000,endAt:now+60000,displayLabel:"Video",roleLabel:"DJ",sourceType:"manual",sourceLabel:"Owner",confidence:1,reviewState:"confirmed",updatedAt:now}) : undefined;
+  await db.patch(f.sourceId,{eventSlotId:id,type:"hls_url",input:{kind:"direct_media",url:"https://media.example.com/announcement.mp4"},publicUrl:"https://media.example.com/announcement.mp4"});
+  return id;
+ });
+ const take=mode==="manual" ? await f.take() : await f.owner.mutation(api.events.queueEventMediaCommand,{currentSlug:f.event.slug,type:"switch_next",idempotencyKey:crypto.randomUUID()});
+ await f.begin(take.commandId);await f.promote(take.commandId);await f.ack(take.commandId,slot ? {slotKey:slot} : {});
+ await f.t.run(({db})=>db.patch(f.args.sessionId,{leaseExpiresAt:Date.now()-1}));
+ const recovered=await f.t.mutation(worker("acquireSession"),{...f.args,workerId:"replacement-worker"});
+ assert.equal(recovered.granted,true);
+ assert.deepEqual(recovered.configuration.committedIntent,{kind:"slate"},"replacement must not restart a clip whose EOF receipt may have been lost");
+});
 it("scoped idempotency and one pending operation", async () => {
   const f = await controlFixture();
   const a = await f.take();
@@ -219,6 +273,45 @@ it("scoped idempotency and one pending operation", async () => {
   const s = await f.receipt(f.args.sessionId);
   assert.deepEqual(s.committedIntent, { kind: "automatic" });
   assert.equal(s.pendingControlCommandId, a.commandId);
+});
+it("confirmed source revision and intent reject stale submissions without writes", async () => {
+  const f = await controlFixture();
+  const before = await f.receipt(f.args.sessionId);
+  for (const expected of [{expectedSourceRevision:2}, {expectedIntentSequence:1}]) {
+    await assert.rejects(f.owner.mutation(api.events.queueEventMediaCommand, {
+      currentSlug:f.event.slug, type:"switch_source", targetSourceKey:"source_a",
+      idempotencyKey:JSON.stringify(expected), ...expected,
+    }), /changed|stale/i);
+    assert.deepEqual(await f.receipt(f.args.sessionId), before);
+  }
+});
+it("confirmation cannot target a replacement session with the same intent sequence", async () => {
+  const f = await controlFixture();
+  const replacement = await f.schedule();
+  const before = await f.receipt(replacement.args.sessionId);
+  await assert.rejects(f.owner.mutation(api.events.queueEventMediaCommand, {
+    currentSlug:f.event.slug,type:"switch_source",targetSourceKey:"source_a",idempotencyKey:"old-session-confirmation",
+    expectedSessionId:f.args.sessionId,expectedIntentSequence:0,expectedSourceRevision:1,
+  }), /session.*changed/i);
+  assert.deepEqual(await f.receipt(replacement.args.sessionId),before);
+});
+it("Resume is unavailable until a real source was observed before slate", async () => {
+  const f = await controlFixture();
+  await assert.rejects(f.owner.mutation(api.events.queueEventMediaCommand, {currentSlug:f.event.slug,type:"resume_previous",idempotencyKey:"empty-resume"}),/unavailable/i);
+  const take = await f.take(); await f.begin(take.commandId); await f.promote(take.commandId); await f.ack(take.commandId);
+  const cut = await f.owner.mutation(api.events.queueEventMediaCommand,{currentSlug:f.event.slug,type:"switch_hold",idempotencyKey:"cut-for-resume"});
+  const held = await f.receipt(f.args.sessionId);
+  assert.equal(held.resumeSource.sourceId,f.sourceId);
+  await f.begin(cut.commandId);
+  await f.ack(cut.commandId,{observedSourceId:null,sourceRevision:undefined,slotKey:undefined,observedState:"hold",outputMs:200});
+  const resume = await f.owner.mutation(api.events.queueEventMediaCommand,{currentSlug:f.event.slug,type:"resume_previous",idempotencyKey:"resume"});
+  const operation = await f.receipt(resume.commandId);
+  assert.equal(operation.controlTarget.source.sourceId,f.sourceId);
+  assert.equal(operation.controlTarget.mode,"manual");
+  await f.begin(resume.commandId);
+  await f.t.run(({db})=>db.patch(f.sourceId,{revision:2}));
+  assert.equal((await f.promote(resume.commandId)).kind,"failed");
+  assert.equal((await f.receipt(f.args.sessionId)).committedIntent.kind,"slate");
 });
 it("first automatic slate and fallback observations persist policy mode in public status", async () => {
   const f = await controlFixture();
@@ -914,7 +1007,7 @@ it("idempotency scopes stable actors and replacement sessions", async () => {
   assert.notEqual(next.sessionId, f.args.sessionId);
   assert.equal((await f.receipt(next.sessionId)).committedIntent.kind, "slate");
 });
-async function projectedControlFixture() {
+async function projectedControlFixture(mode: "automatic" | "manual" = "automatic") {
   const f = await controlFixture();
   const profile = await f.t.run(async ({ db }) => {
     const person = await db.insert("profiles", {
@@ -960,6 +1053,10 @@ async function projectedControlFixture() {
   const source = config.sources.find(
     (s: { eventSlotId: string }) => s.eventSlotId === profile.slot,
   )!;
+  if (mode === "manual") await f.t.run(({db}) => db.patch(f.args.sessionId, {
+    committedIntent: {kind:"manual", sourceId:f.sourceId, revision:1},
+    broadcastMode:"manual",
+  }));
   const c = await f.owner.mutation(api.events.queueEventMediaCommand, {
     currentSlug: f.event.slug,
     type: "switch_next",
@@ -968,6 +1065,53 @@ async function projectedControlFixture() {
   await f.begin(c.commandId);
   return { ...f, profile, projectedSource: source, operation: c };
 }
+for (const mode of ["automatic", "manual"] as const) {
+  it(`Next projects the authoritative ${mode} target for confirmation`, async () => {
+    const f = await projectedControlFixture(mode);
+    const next = await f.owner.query(api.events.getNextEventMediaSource,{currentSlug:f.event.slug});
+    assert.equal(next?.sourceId,f.projectedSource.id);
+    assert.equal(next?.revision,f.projectedSource.revision);
+  });
+  it(`Next preserves ${mode} mode through preparation and promotion`, async () => {
+    const f = await projectedControlFixture(mode);
+    const before = await f.receipt(f.args.sessionId);
+    const command = await f.receipt(f.operation.commandId);
+    assert.equal(command.controlTarget.mode, mode);
+    assert.equal(before.committedIntent.kind, mode);
+    assert.equal((await f.promote(f.operation.commandId)).kind, "ok");
+    const after = await f.receipt(f.args.sessionId);
+    assert.equal(after.committedIntent.kind, mode);
+    assert.deepEqual(after.lineupCursor, command.controlTarget.source);
+    const recovered = await f.t.mutation(worker("refreshConfiguration"), f.args);
+    assert.deepEqual(recovered.configuration.lineupCursor, command.controlTarget.source);
+    assert.equal(after.currentSourceId, before.currentSourceId);
+  });
+  it(`failed Next retains ${mode} intent and current output`, async () => {
+    const f = await projectedControlFixture(mode);
+    const before = await f.receipt(f.args.sessionId);
+    await f.t.run(({db}) => db.patch(f.profile.person, {outboundLinks:[]}));
+    assert.equal((await f.promote(f.operation.commandId)).kind, "failed");
+    const after = await f.receipt(f.args.sessionId);
+    assert.deepEqual(after.committedIntent, before.committedIntent);
+    assert.equal(after.currentSourceId, before.currentSourceId);
+    assert.equal(after.broadcastMode, before.broadcastMode);
+  });
+}
+it("a custom takeover preserves the lineup cursor used by Next", async () => {
+  const f = await projectedControlFixture("automatic");
+  const projected = await f.receipt(f.operation.commandId);
+  await f.promote(f.operation.commandId);
+  await f.ack(f.operation.commandId, {observedSourceId:f.projectedSource.id,sourceRevision:f.projectedSource.revision,slotKey:projected.controlTarget.source.slotKey});
+  await f.t.run(({db})=>db.patch(f.args.sessionId, {currentSourceId:f.sourceId,observedSlotKey:`manual-${f.sourceId}`,committedIntent:{kind:"manual",sourceId:f.sourceId,revision:1}}));
+  assert.deepEqual((await f.receipt(f.args.sessionId)).lineupCursor,projected.controlTarget.source);
+  assert.equal(await f.owner.query(api.events.getNextEventMediaSource,{currentSlug:f.event.slug}),null,"the only lineup slot remains consumed during a temporary takeover");
+});
+for(const captured of ["source_a","hold-slate"]) it(`Hold rejects a changed captured target (${captured})`,async()=>{
+ const f=await controlFixture();
+ const other=await f.t.run(async({db})=>{const source=(await db.get(f.sourceId))!;const {_id,_creationTime,...copy}=source;return db.insert("eventMediaSources",{...copy,key:"other"});});
+ await f.t.run(({db})=>db.patch(f.args.sessionId,{currentSourceId:other,observedSourceRevision:1}));
+ await assert.rejects(f.owner.mutation(api.events.queueEventMediaCommand,{currentSlug:f.event.slug,type:"hold_current",targetSourceKey:captured,expectedIntentSequence:0,idempotencyKey:crypto.randomUUID()}),/Current source changed/);
+});
 it("profile link removal during preparation is denied without waiting for projection refresh", async () => {
   const f = await projectedControlFixture();
   await f.t.run((ctx) => ctx.db.patch(f.profile.person, { outboundLinks: [] }));
@@ -1254,7 +1398,7 @@ for (const visibility of ["link", "profile"] as const)
   });
 for (const promoted of [false, true])
   it(`removed and reappeared projection cannot restore ${promoted ? "promoting" : "preparing"} pinned revision on takeover`, async () => {
-    const f = await projectedControlFixture();
+    const f = await projectedControlFixture("manual");
     const original = await f.receipt(f.operation.commandId);
     if (promoted) await f.promote(f.operation.commandId);
     const profile = await f.receipt(f.profile.person);
@@ -1287,7 +1431,7 @@ for (const promoted of [false, true])
     const session = await f.receipt(f.args.sessionId);
     assert.equal(
       session.committedIntent.kind,
-      promoted ? "manual" : "automatic",
+      "manual",
     );
     if (promoted)
       assert.equal(

@@ -60,3 +60,16 @@ The separately approved rehearsal uses default-disabled
 policies. It does not change the ordinary hosted enable parameter or existing output
 access. See [the operator procedure](../../../docs/engineering/event-broadcast-rehearsal.md)
 for bootstrap import, bounds, commands and targeted rollback.
+
+## Community output broker
+
+The broker is disabled by default. To create its dedicated Vercel production role, opt in with:
+
+```hcl
+managed_output_secret_namespace = "vrdex/broadcast/"
+vercel_output_broker            = {}
+```
+
+This reuses the existing `oidc.vercel.com/basicbit` provider and restricts trust to the `vr-dex-web` production subject and team audience. The role receives only the generated output-secret namespace write policy; the ECS execution role receives the matching read policy. It creates no secrets or runtime environment variables. Use `output_broker_role_arn` and `managed_output_secret_arn_prefix` for the runtime bindings documented in [Broadcast output credentials](../../../docs/engineering/broadcast-output-credentials.md).
+
+Self-hosted deployments can use `output_broker_role_name` instead of `vercel_output_broker` to attach the policy to an existing workload role. Enabling both is rejected. An unset namespace and null role options create no broker trust, policy or OIDC lookup.

@@ -158,6 +158,16 @@ test('disabled optional destinations are never started and bridge binds each ena
     assert.equal(bindings['ref-twitch'], 'arn:twitch');
     assert.ok(container.secrets.some((s: any) => s.valueFrom === 'arn:main'));
 });
+test('unmapped optional credentials preserve primary startup while unmapped primary credentials fail', async () => {
+    const { taskDefinitionFor } = await import('../../scripts/event-media-ecs-bridge.mjs');
+    const command = { commandId: 'c', eventId: 'e', program: { programId: 'p' }, session: allocatedSession({sessionId:'s',primary:'main',optional:'t'}), output: { outputId: 'main', credentialRef: 'ref-main', playbackLinks: [] }, optionalOutputs: [{ outputId: 't', credentialRef: 'ref-twitch' }] };
+    const config = { baseEnvironment: {}, secretRefMap: { 'ref-main': 'arn:main' }, outputSecretEnvName: 'VRDEX_EVENT_MEDIA_OUTPUT_INGEST_SECRET_JSON', workerTokenSecretArn: 'arn:token' };
+    const container = taskDefinitionFor(command, config, fixtureCapacityResolver).containerDefinitions[0];
+    assert.ok(container.secrets.some((s: any) => s.valueFrom === 'arn:main'));
+    assert.deepEqual(JSON.parse(container.environment.find((e: any) => e.name === 'VRDEX_EVENT_MEDIA_OPTIONAL_SECRET_ARNS_JSON').value), {});
+    assert.throws(() => taskDefinitionFor(command, { ...config, secretRefMap: {} }, fixtureCapacityResolver), /authorized mapping/);
+});
+
 test('VRCDN hold program reserves its declared CBR envelope instead of collapsing on still frames', async (t) => {
     const prerequisite = spawnSync('ffmpeg', ['-hide_banner', '-encoders'], { encoding: 'utf8', timeout: 5000 });
     assert.equal(prerequisite.status, 0, `FFmpeg is required for the real CBR test: ${prerequisite.error?.message ?? prerequisite.stderr}. Install ffmpeg with libx264 and AAC.`);

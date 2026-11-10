@@ -1,5 +1,8 @@
+import { internal } from "./_generated/api";
+import { finishConnectionTest } from "./eventBroadcastConnectionTests";
+export { recordConnectionTestProof } from "./eventBroadcastConnectionTests";
 import { recordResourceSnapshot, computeRuntimeValidator, trustedComputeRuntime } from "./_eventBroadcastResources";
-import {assertWorkerProtocol,beginControlPreparation,promoteControlOperation,completeControlOperation,controlFence,coherentEvidence,writeControlObservation,broadcastModeForIntent,isCut,isControl,settleControl} from "./_eventBroadcastControl";
+import {assertWorkerProtocol,beginControlPreparation,promoteControlOperation,completeControlOperation,controlFence,coherentEvidence,writeControlObservation,broadcastModeForIntent,isCut,isControl,settleControl,supersedePending} from "./_eventBroadcastControl";
 import {controlTargetValidator,controlResultValidator,controlFailureValidator} from "./_eventMediaControl";
 import { parseMediaSettings, resolveDestinationProfile } from "../workers/restream/broadcast-profiles.mjs";
 import { eventProfileBroadcastInputChoices, resolveBroadcastInput, broadcastInputPublicUrl, eventMediaSourceWorkerDescriptor } from "./_eventBroadcastSources";
@@ -39,7 +42,7 @@ async function records(ctx: MutationCtx, args: Request, allowTerminal = false, a
         return null;
     if (!allowRevokedDestination && session.outputId) {
         const selectedOutput = await ctx.db.get(session.outputId);
-        if (!selectedOutput || !eventOutputIsAuthorized(event, selectedOutput)) return null;
+        if (!selectedOutput || !eventOutputIsAuthorized(event, selectedOutput) || (session.connectionTest && selectedOutput.managedConnection?.revision!==session.connectionTest.revision)) return null;
     }
     return { session, program, event };
 }
@@ -81,7 +84,7 @@ export const acquireSession = mutation({
             return reject(ctx, args, "Session is not the active event session.");
         const { session, program, event } = found;
         const now = Date.now();
-        if (event.eventStatus !== "scheduled" || session.stopRequestedAt !== undefined || session.status === "stopping") {
+        if (event.eventStatus !== "scheduled" || (session.runtimeDeadlineAt??Infinity)<=now || session.stopRequestedAt !== undefined || session.status === "stopping") {
             return reject(ctx, args, "Session is stopping or the event is cancelled.");
         }
         if ((session.scheduledStartAt ?? 0) > now)
@@ -96,12 +99,32 @@ export const acquireSession = mutation({
         const epoch = active ? currentEpoch : currentEpoch + 1;
         const acquiredAt = active ? session.acquiredAt ?? now : now;
         const expiresAt = active ? session.leaseExpiresAt! : now + EVENT_BROADCAST_LEASE_MS;
+        if (!active && session.connectionTest) {
+            const job=await ctx.db.get(session.connectionTest.jobId);
+            if(!job || job.cancelRequestedAt!==undefined || now>=job.deadlineAt)return reject(ctx,args,"The stream test expired.");
+            if(job.startedAt===undefined){
+                const deadlineAt=now+60000;
+                await ctx.db.patch(job._id,{startedAt:now,deadlineAt,state:"running",updatedAt:now});
+                await ctx.db.patch(session._id,{connectionTest:{...session.connectionTest,deadlineAt},runtimeDeadlineAt:deadlineAt,readyDeadlineAt:deadlineAt});
+                await ctx.scheduler.runAt(deadlineAt,internal.eventBroadcastConnectionTests.expireConnectionTest,{jobId:job._id});
+            }
+        }
         if (!active) {
             // Check even inconsistent legacy activeSessionId records before granting publication authority.
             const siblings = (await Promise.all((["scheduled", "starting", "live", "hold", "fallback", "stopping"] as const).map(status =>
                 ctx.db.query("eventMediaSessions").withIndex("by_eventId_status_leaseExpiresAt", q => q.eq("eventId", args.eventId).eq("status", status).gt("leaseExpiresAt", now)).take(2)))).flat();
             if (siblings.some(s => s._id !== session._id)) {
                 return reject(ctx, args, "Another event session has an unexpired owner.");
+            }
+            const selectedId = session.committedIntent?.kind === "manual" ? session.committedIntent.sourceId
+                : session.committedIntent?.kind === "automatic" ? session.lineupCursor?.sourceId : undefined;
+            const interrupted = currentEpoch > 0 && selectedId ? await ctx.db.get(selectedId) : null;
+            if (interrupted?.input?.kind === "direct_media") {
+                // A lost EOF receipt must not turn process recovery into a replay.
+                await supersedePending(ctx.db, session);
+                const sequence = await allocateSessionCommandSequence(ctx.db, session._id);
+                await ctx.db.patch(session._id, {committedIntent:{kind:"slate"},intentSequence:sequence,resumeSource:undefined,updatedAt:now});
+                await ctx.db.insert("eventMediaAuditEvents",{programId:program._id,eventId:event._id,sessionId:session._id,sourceId:interrupted._id,actorSurface:"worker",action:"direct_media_recovery_held",createdAt:now});
             }
             await ctx.db.patch(session._id, { workerId: args.workerId, epoch, acquiredAt, leaseExpiresAt: expiresAt, status: "starting", resourceSnapshot:undefined, resourceObservedAt:undefined, programObservedAt:undefined, observedOutputMs:undefined, observedSourceRevision:undefined, observedSlotKey:undefined, outputHealthObservedAt:undefined, outputHealth:[], updatedAt: now });
             await ctx.db.insert("eventMediaAuditEvents", { programId: program._id, eventId: args.eventId, sessionId: session._id, actorSurface: "worker", action: "worker_session_acquired", privateSummary: `Epoch ${epoch}.`, createdAt: now });
@@ -345,7 +368,7 @@ export const acknowledgeCommand = mutation({
             ...(args.observedSceneId === undefined ? {} : { currentSceneId: args.observedSceneId ?? undefined }),
         } : {};
         const observedState = args.outcome === "succeeded" ? args.observedState : undefined;
-        const mode = hasV2Observation ? broadcastModeForIntent(found.session.committedIntent) : command.commandType === "set_automatic_mode" ? "automatic" : ["switch_hold", "show_hold_scene"].includes(command.commandType) ? "hold" : ["hold_current", "switch_source", "switch_next", "next_slot", "switch_previous", "previous_slot"].includes(command.commandType) ? "manual" : undefined;
+        const mode = hasV2Observation ? broadcastModeForIntent(found.session.committedIntent) : command.commandType === "set_automatic_mode" ? "automatic" : ["switch_next", "next_slot"].includes(command.commandType) ? (found.session.broadcastMode === "automatic" || found.session.broadcastMode === undefined ? "automatic" : "manual") : ["switch_hold", "show_hold_scene"].includes(command.commandType) ? "hold" : ["hold_current", "switch_source", "switch_next", "next_slot", "switch_previous", "previous_slot"].includes(command.commandType) ? "manual" : undefined;
         await ctx.db.patch(args.sessionId, { ...(hasV2Observation?{observedOutputMs:args.outputMs,observedSourceRevision:args.sourceRevision,observedSlotKey:args.slotKey}:{}), ...(args.outcome === "succeeded" && mode ? { broadcastMode: mode } : {}), ...observed, ...(args.outcome === "succeeded" && (mode || observedState || args.observedSourceId !== undefined) ? {programObservedAt:now} : {}), ...(observedState === undefined ? {} : { status: observedState }), lastAcknowledgedSequence: args.sequence, updatedAt: now });
         if (args.outcome === "succeeded")
             await ctx.db.patch(found.program._id, { ...observed, ...(args.observedOutputId === undefined ? {} : { currentOutputId: args.observedOutputId ?? undefined }), ...(observedState === undefined ? {} : { state: observedState }), ...(["ended", "error"].includes(observedState ?? "") ? { activeSessionId: undefined } : {}), updatedAt: now });
@@ -408,8 +431,10 @@ async function configuration(ctx: MutationCtx, { session, program, event }: NonN
     if (session.runtimeDeadlineAt === undefined)
         await ctx.db.patch(session._id, { runtimeDeadlineAt: deadline });
     return {
+        connectionTest: session.connectionTest,
         programId: program._id, eventId: event._id, outputId: session.outputId,
         committedIntent:session.committedIntent,intentSequence:session.intentSequence,
+        lineupCursor:session.lineupCursor,
         pendingOperation:session.pendingControlCommandId?await ctx.db.get(session.pendingControlCommandId):null,
         allocation: session.allocation, destinationProfiles: session.destinationProfiles,
         mediaSettings: parseMediaSettings(session.mediaSettings), controlProtocolVersion: session.controlProtocolVersion,
@@ -419,7 +444,7 @@ async function configuration(ctx: MutationCtx, { session, program, event }: NonN
         mode: session.committedIntent ? session.committedIntent.kind === "slate" ? "hold" : session.committedIntent.kind : session.broadcastMode ?? "automatic", policy: effectiveBroadcastPolicy(program.broadcastPolicy), slots,
         sources: sources.filter(s => s.eventId === event._id && s.state !== "disabled" && s.projectionAvailable !== false && (!s.eventSlotId || authored.some(slot => slot._id === s.eventSlotId))).flatMap(source => { const descriptor = eventMediaSourceWorkerDescriptor(source); return descriptor ? [descriptor] : []; }),
         scenes: scenes.filter(s => s.eventId === event._id).map(s => ({ id: s._id, key: s.key, type: s.type, sourceId: s.sourceId })),
-        outputs: outputs.filter(o => o.eventId === event._id && eventOutputIsAuthorized(event, o) && ["ready", "active"].includes(o.state) && (!session.destinationProfiles || session.destinationProfiles.some(d => d.outputId === o._id))).map(o => ({ id: o._id, key: o.key, type: o.type, credential: o.credential, vrcdnSetup: o.vrcdnSetup, twitchSetup: o.twitchSetup, profile: session.destinationProfiles?.find(d => d.outputId === o._id)?.profile ?? resolveDestinationProfile({settings:session.mediaSettings,destination:o.type === "vrcdn" ? "vrcdn" : "twitch"}), simulcastEnabled: session.destinationProfiles ? o._id !== session.outputId : o.simulcastEnabled ?? false, compliance: o.compliance })),
+        outputs: outputs.filter(o => o.eventId === event._id && eventOutputIsAuthorized(event, o) && ["ready", "active"].includes(o.state) && (!session.destinationProfiles || session.destinationProfiles.some(d => d.outputId === o._id))).map(o => ({ id: o._id, key: o.key, type: o.type, playbackLinks:o.playbackLinks, credential: o.credential, vrcdnSetup: o.vrcdnSetup, twitchSetup: o.twitchSetup, managedConnection:o.managedConnection, profile: session.destinationProfiles?.find(d => d.outputId === o._id)?.profile ?? resolveDestinationProfile({settings:session.mediaSettings,destination:o.managedConnection?.provider ?? (o.type === "vrcdn" ? "vrcdn" : "twitch")}), simulcastEnabled: session.destinationProfiles ? o._id !== session.outputId : o.simulcastEnabled ?? false, compliance: o.compliance })),
     };
 }
 export const refreshConfiguration = mutation({ args: workerSessionArgs, handler: async (ctx, args) => {
@@ -429,6 +454,29 @@ export const refreshConfiguration = mutation({ args: workerSessionArgs, handler:
             return reject(ctx, args, "Session ownership is stale or expired.");
         return { granted: true as const, serverNow: Date.now(), configuration: await configuration(ctx, found) };
     } });
+export const completeSource = mutation({
+    args: { ...workerSessionArgs, intentSequence: v.number(), sourceId: v.id("eventMediaSources"), sourceRevision: v.number(), slotKey: v.string() },
+    handler: async (ctx, args) => {
+        authenticate(args);
+        const found = await controlFence(ctx.db, args);
+        if ("result" in found) return found.result;
+        const { session } = found;
+        const source = await ctx.db.get(args.sourceId);
+        const selected = session.committedIntent?.kind === "manual" ? session.committedIntent
+            : session.committedIntent?.kind === "automatic" ? session.lineupCursor : undefined;
+        if (session.pendingControlCommandId || session.intentSequence !== args.intentSequence ||
+            selected?.sourceId !== args.sourceId || selected.revision !== args.sourceRevision ||
+            source?.input?.kind !== "direct_media" || (source.eventSlotId ?? `manual-${source._id}`) !== args.slotKey ||
+            source.eventId !== args.eventId || source.programId !== session.programId ||
+            (source.revision ?? 1) !== args.sourceRevision || source.state === "disabled" || source.projectionAvailable === false ||
+            (session.committedIntent?.kind === "automatic" && session.lineupCursor?.slotKey !== args.slotKey))
+            return { kind: "superseded" as const };
+        const sequence = await allocateSessionCommandSequence(ctx.db, session._id);
+        // Persist the return to hold before acknowledging EOF, so recovery cannot replay the file.
+        await ctx.db.patch(session._id, { committedIntent: { kind: "slate" }, intentSequence: sequence, resumeSource: undefined, updatedAt: Date.now() });
+        return { kind: "ok" as const, intentSequence: sequence };
+    },
+});
 export const observeProgram = mutation({ args: { ...workerSessionArgs, intentSequence:v.optional(v.number()),sourceRevision:v.optional(v.number()),slotKey:v.optional(v.string()), state: observedBroadcastStateValidator, outputMs: v.number(), publishing: v.boolean(), outputId: v.optional(v.id("eventMediaOutputs")), sourceId: v.optional(v.id("eventMediaSources")), mode: v.optional(v.union(v.literal("automatic"), v.literal("manual"), v.literal("hold"))) }, handler: async (ctx, args) => {
         authenticate(args);
         const session=await ctx.db.get(args.sessionId);
@@ -476,7 +524,7 @@ export const admitDispatch = mutation({ args: { bridgeToken: v.string(), eventId
         const event = await ctx.db.get(args.eventId);
         const selectedOutput = session.outputId ? await ctx.db.get(session.outputId) : null;
         if (!event || (session.outputId !== undefined && (!selectedOutput || !eventOutputIsAuthorized(event, selectedOutput)))) return { granted:false };
-        if (session.dispatchStopConfirmedAt !== undefined)
+        if ((session.connectionTest && selectedOutput?.managedConnection?.revision!==session.connectionTest.revision) || session.dispatchStopConfirmedAt !== undefined || (session.runtimeDeadlineAt??Infinity)<=Date.now())
             return { granted: false };
         if (session.dispatchId)
             return { granted: session.dispatchId === args.dispatchId };
@@ -532,6 +580,7 @@ export const releaseUnlaunchedDispatch = mutation({ args: { ...prelaunchArgs, ta
     await ctx.db.patch(found.session._id, { dispatchId: undefined, launchProtocol: undefined, status: "error", workerTaskStatus: "failed", leaseExpiresAt: now, ...(args.taskDefinitionArn ? { workerTaskDefinitionArn: args.taskDefinitionArn, workerTaskCleanupPending: true } : {}), updatedAt: now });
     await ctx.db.patch(found.program._id, { activeSessionId: undefined, state: "error", updatedAt: now });
     await ctx.db.insert("eventMediaAuditEvents", { eventId: args.eventId, programId: found.program._id, sessionId: args.sessionId, commandId: args.commandId, actorSurface: "worker", action: "worker_dispatch_unlaunched_released", createdAt: now });
+    if(!args.taskDefinitionArn)await finishConnectionTest(ctx,found.session);
     return { accepted: true };
 } });
 /** A losing registration can only record bounded private cleanup evidence. */
@@ -547,6 +596,7 @@ export const completeUnlaunchedCleanup = mutation({ args: { bridgeToken: v.strin
     const session = await ctx.db.get(args.sessionId);
     if (!session || session.dispatchId || session.epoch !== undefined || session.workerTaskId || session.launchAttemptedAt !== undefined || session.workerTaskDefinitionArn !== args.taskDefinitionArn || !["ended", "error"].includes(session.status)) return { accepted: false };
     await ctx.db.patch(session._id, { workerTaskCleanupPending: false, updatedAt: Date.now() });
+    await finishConnectionTest(ctx,session);
     return { accepted: true };
 } });
 export const recordDispatchedTask = mutation({ args: { bridgeToken: v.string(), sessionId: v.id("eventMediaSessions"), dispatchId: v.string(), taskArn: v.string(), taskDefinitionArn: v.string(), computeRuntime: v.optional(computeRuntimeValidator) }, handler: async (ctx, args) => {
@@ -595,6 +645,7 @@ export const completeTaskCleanup = mutation({ args: { bridgeToken: v.string(), s
         if (!session || session.workerTaskId !== args.taskArn || (session.dispatchId ? session.dispatchStopConfirmedAt === undefined : session.workerTaskStatus !== "stopped"))
             return { accepted: false };
         await ctx.db.patch(session._id, { workerTaskCleanupPending: false, updatedAt: Date.now() });
+        await finishConnectionTest(ctx,session);
         return { accepted: true };
     } });
 
@@ -605,7 +656,7 @@ export const observeOutputs = mutation({args:{...workerSessionArgs,destinations:
  for(const d of args.destinations){
   if(!Number.isFinite(d.outputMs)||d.outputMs<0||!Number.isSafeInteger(d.queueBytes)||d.queueBytes<0||d.queueBytes>524288||!Number.isSafeInteger(d.restarts)||d.restarts<0) throw Error('Invalid output health.');
   const o=await ctx.db.get(d.outputId);
-  if(!o||!eventOutputIsAuthorized(found.event,o)||o.eventId!==args.eventId||o.programId!==found.program._id||!["ready","active"].includes(o.state)||(found.session.destinationProfiles ? !found.session.destinationProfiles.some(profile=>profile.outputId===o._id && profile.destination===d.destination) : (o._id!==found.session.outputId&&!o.simulcastEnabled))||(d.destination==='twitch'?(o.type!=='external_rtmp'||!o.twitchSetup):(o.type!=='vrcdn'||!!o.twitchSetup))) return {accepted:false};
+  if(!o||!eventOutputIsAuthorized(found.event,o)||o.eventId!==args.eventId||o.programId!==found.program._id||!["ready","active"].includes(o.state)||(found.session.destinationProfiles ? !found.session.destinationProfiles.some(profile=>profile.outputId===o._id && profile.destination===d.destination) : (o._id!==found.session.outputId&&!o.simulcastEnabled))||((o.managedConnection?.provider ?? (o.type==='vrcdn'?'vrcdn':'twitch'))!==d.destination)) return {accepted:false};
  }
  await ctx.db.patch(args.sessionId,{outputHealth:args.destinations,outputHealthObservedAt:Date.now()}); return {accepted:true};
 }});

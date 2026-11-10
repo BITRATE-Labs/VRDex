@@ -38,6 +38,7 @@ export type PlaybackRequest =
   | (ProfileIdentity & VrcdnRequest)
   | (EventIdentity &
       (
+        | { kind: "direct_media"; sourceId: string; src: string; transport: "mpegts" | "video" | "hls" }
         | {
             kind: "vrcdn";
             sourceId: string;
@@ -76,6 +77,7 @@ export type PlaybackAdapter = {
   pause(): void;
   setVolume(value: number): void;
   setMuted(value: boolean): void;
+  enableControls?(beforeUnmute: () => boolean): void;
   update(request: PlaybackRequest): void;
   dispose(): void;
   readonly media?: HTMLMediaElement;
@@ -101,7 +103,7 @@ export function playbackSourceKey(request: PlaybackRequest): string {
   return JSON.stringify(
     request.kind === "performer_sequence"
       ? [playbackContextKey(request), request.kind, request.localOnly ?? false]
-      : request.kind === "vrcdn"
+      : request.kind === "vrcdn" || request.kind === "direct_media"
         ? [
             playbackContextKey(request),
             request.kind,

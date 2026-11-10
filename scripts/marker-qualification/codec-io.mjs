@@ -4,7 +4,7 @@ import { createAcquisitionDeadline } from '../event-marker-native-binding.mjs';
 import { writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { programEncoderArguments } from '../../workers/restream/program-renderer.mjs';
-import { outputArguments } from '../../workers/restream/output-sender.mjs';
+import { outputArguments } from '../../workers/restream/output-arguments.mjs';
 import { VIDEO_PROFILES } from '../../workers/restream/broadcast-profiles.mjs';
 import { captureNativeFeed } from '../event-marker-native-capture.mjs';
 import { createRawCapture } from '../event-marker-raw-capture.mjs';
