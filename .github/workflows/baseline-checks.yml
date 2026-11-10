@@ -331,6 +331,10 @@ jobs:
       - name: Build hosted restream worker image
         run: docker build -f workers/restream/Dockerfile -t vrdex-restream-worker:ci .
 
+      - name: Run required native transport gate
+        timeout-minutes: 7
+        run: node .github/scripts/restream-native.mjs
+
       - name: Verify captured transport with packaged runtime
         timeout-minutes: 5
         run: |
@@ -340,10 +344,6 @@ jobs:
             -e CAPTURED_TRANSPORT_NATIVE=1 \
             -e CAPTURED_TRANSPORT_RUNTIME_ROOT=/app \
             vrdex-restream-worker:ci node --test /tests/scripts/event-captured-transport.test.mjs
-
-      - name: Run required native transport gate
-        timeout-minutes: 7
-        run: node .github/scripts/restream-native.mjs
 
       - name: Install dependencies
         if: steps.changes.outputs.enabled == 'true'
