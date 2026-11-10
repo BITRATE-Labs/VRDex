@@ -180,7 +180,7 @@ test("production admission accepts only measured 320 kbps and rejects a changed 
   const {t, owner, event, output, schedule} = await setupFixture(() => import("../../convex/events"));
   const {scheduled} = await schedule();
   const session = await t.run(ctx => ctx.db.get(scheduled.sessionId));
-  assert.deepEqual(session!.allocation, {cpuUnits:8192,memoryMiB:16384,evidenceId:"task6-bitrate-20261108-320-recovery-v4"});
+  assert.deepEqual(session!.allocation, {cpuUnits:8192,memoryMiB:16384,evidenceId:"task6-br447-primary-20261110g"});
   assert.deepEqual(session!.mediaSettings, {videoPreset:"720p30",audioBitrateKbps:320});
   await t.run(async ctx => {
     const frozen = await ctx.db.get(scheduled.sessionId);

@@ -1,0 +1,435 @@
+{
+  "schemaVersion": 1,
+  "scope": "Exact-image synthetic primary and simulcast capacity plus one real public HTTPS MP4 acquisition. Separate from hosted Convex control, real provider delivery, device compatibility and full-event acceptance.",
+  "sourceRevision": "63c6b361baa36901206a1db3cd639be1fbbc1dec",
+  "imageDigest": "sha256:8ded3a9cffa4c635ca5f71849ef967686e265cc33abfb8f4ee8fcf0523928ebf",
+  "imageConfigDigest": "sha256:cf0858579d766aa442114b6e7f25fa4e176e48405b35203c46ec0b392ef53a50",
+  "platformManifestDigest": "sha256:bac9bca73cd4481d6809141065d0d33697dc0a496565084c068a3b8bc11aa0ec",
+  "publisher": {
+    "workflowRun": 42883207195,
+    "artifactId": 13793824899,
+    "workflowUrl": "https://github.com/BITRATE-Labs/VRDex/actions/runs/42883207195",
+    "sourceFilesVerified": 144,
+    "lockedWheelsVerified": 20,
+    "wheelPayloadFilesVerified": 1854,
+    "registryVerificationSha256": "36754af8ace5a575dc7708dd928cd447bb66ea635d85b2e9ff1637c74fa8d730",
+    "sourceHashListSha256": "614484f3108542570b817e867c69103f7fb042b712ab4d6ee829922508b05e4b"
+  },
+  "exactImagePackagedNativeTests": {
+    "passed": 20,
+    "failed": 0,
+    "skipped": 0
+  },
+  "capacity": {
+    "primary": {
+      "runId": "task6-br447-primary-20261110g",
+      "passed": true,
+      "request": {
+        "settings": {
+          "videoPreset": "720p30",
+          "audioBitrateKbps": 320
+        },
+        "cpuUnits": 8192,
+        "memoryMiB": 16384,
+        "durationSeconds": 300,
+        "simulcastEnabled": false
+      },
+      "actualImageDigest": "sha256:8ded3a9cffa4c635ca5f71849ef967686e265cc33abfb8f4ee8fcf0523928ebf",
+      "steady": {
+        "durationMs": 300001.96697199997,
+        "dualDecodeMs": 300001.978906,
+        "readinessLosses": 0,
+        "samples": 300,
+        "maxSampleGapMs": 1004.570590999996
+      },
+      "resources": {
+        "cpuP95Percent": 30.76843165691095,
+        "memoryPeakBytes": 736014336,
+        "sampleCoverageMs": 300001.351002,
+        "accounting": "whole-cgroup-including-fixtures-and-receivers"
+      },
+      "receiptSha256": "ec40a3dc20c076608e4c8c1ab35542744bd4324040c6ba8487d0d1c774d6f8a4",
+      "terminalSha256": "b6b2015c542edc130dde1ba047090459d597dfdce2d6bf00e40180c8df019856",
+      "allArtifactHashesVerified": true,
+      "artifacts": [
+        {
+          "name": "program.ts",
+          "bytes": 91394884,
+          "sha256": "dac46e9436ecf2ab140516c6dbeca3d5fe828c3fcd7ced4a8a46d51c1d898010",
+          "complete": true
+        },
+        {
+          "name": "receipt.json",
+          "bytes": 95209,
+          "sha256": "ec40a3dc20c076608e4c8c1ab35542744bd4324040c6ba8487d0d1c774d6f8a4",
+          "complete": true
+        },
+        {
+          "name": "samples.ndjson",
+          "bytes": 82626,
+          "sha256": "67c82adbc7d5b510c8b8ad3b26b42a025df0c0c4918663bf565d9877a7c5ce1e",
+          "complete": true
+        },
+        {
+          "name": "vrcdn.ts",
+          "bytes": 90970568,
+          "sha256": "9f4199ee94b6152b1d3664bd8315df383437bec10b5cca303b250ae9fe33c1e4",
+          "complete": true
+        }
+      ],
+      "originalCapacityValidatorPassed": true,
+      "independentFullNativeDecodesPassed": true,
+      "fullDecodeDiagnostics": [
+        {
+          "file": "program.ts",
+          "exitCode": 0,
+          "seconds": 6.5939999999973224,
+          "stderrBytes": 0,
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "completeVideoAndAudio": true
+        },
+        {
+          "file": "vrcdn.ts",
+          "exitCode": 0,
+          "seconds": 6.375,
+          "stderrBytes": 0,
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "completeVideoAndAudio": true
+        }
+      ],
+      "processCleanup": {
+        "closed": true,
+        "liveChildren": 0,
+        "liveGroups": 0,
+        "children": 9
+      },
+      "taskStopped": true,
+      "networkAttachmentDeleted": true,
+      "temporaryTaskDefinitionInactive": true,
+      "rootAcceptanceSha256": "c3086622baf650d2ef3e362eacb52b468658542ca6c5329bbe544ed978d4250e"
+    },
+    "simulcast": {
+      "runId": "task6-br447-twitch-20261110h",
+      "passed": true,
+      "request": {
+        "settings": {
+          "videoPreset": "720p30",
+          "audioBitrateKbps": 320
+        },
+        "cpuUnits": 8192,
+        "memoryMiB": 16384,
+        "durationSeconds": 300,
+        "simulcastEnabled": true
+      },
+      "actualImageDigest": "sha256:8ded3a9cffa4c635ca5f71849ef967686e265cc33abfb8f4ee8fcf0523928ebf",
+      "steady": {
+        "durationMs": 301005.50058500003,
+        "dualDecodeMs": 301005.51074,
+        "readinessLosses": 0,
+        "samples": 301,
+        "maxSampleGapMs": 1006.247755999997
+      },
+      "resources": {
+        "cpuP95Percent": 42.86346492059565,
+        "memoryPeakBytes": 1030823936,
+        "sampleCoverageMs": 301005.049972,
+        "accounting": "whole-cgroup-including-fixtures-and-receivers"
+      },
+      "receiptSha256": "0678a7cf9f14832915e303f9e79d5d434b87fdeabb5de701e15827136de70dc0",
+      "terminalSha256": "0f2b2b1cff42926dae6252968bf5b70e0982247616b19b158597c456d212d1d6",
+      "allArtifactHashesVerified": true,
+      "artifacts": [
+        {
+          "name": "captured-client.rtmp",
+          "bytes": 80529401,
+          "sha256": "29c785c9630892a0a1e84de506b1d0dfd76cde4e1fcddc455120b17185f25c03",
+          "complete": true
+        },
+        {
+          "name": "captured-decode-3.bin",
+          "bytes": 58662,
+          "sha256": "a1ad8b587a8dd7a71a8d1f08a67e89c3fb28588a1040c3f509fc284506a88d7b",
+          "complete": true
+        },
+        {
+          "name": "captured-decode-4.bin",
+          "bytes": 31289344,
+          "sha256": "68367aa2488441caf23ad098cafdf8e5ed47fea955001927cb5a53c5740cae4c",
+          "complete": true
+        },
+        {
+          "name": "captured-decode-5.bin",
+          "bytes": 666503,
+          "sha256": "669e763f7091da29e01e7ea093ce9991257cab776fc6be33f19294cafc902ca5",
+          "complete": true
+        },
+        {
+          "name": "captured-decode-6.bin",
+          "bytes": 1399591,
+          "sha256": "16374b04301416a8f4adcd3cbc7637afdbfe590d189d7279a1542a10c4e8294c",
+          "complete": true
+        },
+        {
+          "name": "captured-decode-proof.json",
+          "bytes": 2167,
+          "sha256": "e2ce056b0a93dea529dd9dad89ddf6689afcdae6279bb2b1eadd36ddd11b4a37",
+          "complete": true
+        },
+        {
+          "name": "captured-decode.stderr",
+          "bytes": 1472,
+          "sha256": "befd25c830074387d714b2fc6824673a647308848f54b94365579ecd854999a7",
+          "complete": true
+        },
+        {
+          "name": "captured-receiver.stderr",
+          "bytes": 57,
+          "sha256": "914ae726d63f5991fa073855523faa2171ec94d8efb3642bae00d6e9dc304550",
+          "complete": true
+        },
+        {
+          "name": "captured-server.rtmp",
+          "bytes": 4291,
+          "sha256": "cf22a7300faf3cdd8d951aec900031ee657252ecd2c03e4e299b022e9edb151a",
+          "complete": true
+        },
+        {
+          "name": "captured-transport-proof.json",
+          "bytes": 1875,
+          "sha256": "11e57479ee2c9c787905aa6d0c2d2734c0b5e5334cf133bedd362b733baf9e7b",
+          "complete": true
+        },
+        {
+          "name": "program.ts",
+          "bytes": 91637968,
+          "sha256": "ad8d984fc813717dc88537f3b7d36dbceec73eb1865cd6626b1d994f520dc3a3",
+          "complete": true
+        },
+        {
+          "name": "receipt.json",
+          "bytes": 193345,
+          "sha256": "0678a7cf9f14832915e303f9e79d5d434b87fdeabb5de701e15827136de70dc0",
+          "complete": true
+        },
+        {
+          "name": "samples.ndjson",
+          "bytes": 82757,
+          "sha256": "b3a636ab3bdeff0d6f1b0a8e6c7e1dc484ea9804b321a7182394846c8d3a17d0",
+          "complete": true
+        },
+        {
+          "name": "twitch.ts",
+          "bytes": 84314240,
+          "sha256": "bcdd73d2269aaf2874b55fe537c867ec620d2a082b63a48a20b559e6d6822880",
+          "complete": true
+        },
+        {
+          "name": "vrcdn.ts",
+          "bytes": 91219480,
+          "sha256": "de6dc5b46c56aac24d29c89bbdbe67434bde624683d5b113ee84f2573f978dbe",
+          "complete": true
+        }
+      ],
+      "originalCapacityValidatorPassed": true,
+      "independentFullNativeDecodesPassed": true,
+      "fullDecodeDiagnostics": [
+        {
+          "file": "program.ts",
+          "exitCode": 0,
+          "seconds": 6.625,
+          "stderrBytes": 0,
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "completeVideoAndAudio": true
+        },
+        {
+          "file": "vrcdn.ts",
+          "exitCode": 0,
+          "seconds": 6.5,
+          "stderrBytes": 0,
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "completeVideoAndAudio": true
+        },
+        {
+          "file": "twitch.ts",
+          "exitCode": 0,
+          "seconds": 6.5310000000026776,
+          "stderrBytes": 108,
+          "stderrSha256": "80f3c8e8e0163ef681aaec001cf0c4e8f1ca74ffb4f8508f974e50f2af0c2645",
+          "completeVideoAndAudio": true
+        }
+      ],
+      "processCleanup": {
+        "closed": true,
+        "liveChildren": 0,
+        "liveGroups": 0,
+        "children": 24
+      },
+      "taskStopped": true,
+      "networkAttachmentDeleted": true,
+      "temporaryTaskDefinitionInactive": true,
+      "rootAcceptanceSha256": "6b040bc17249b137acd9149ddfefa6e2554a2bca8943e8c1026072392d181eef",
+      "fixtureCalibration": {
+        "sourceRevision": "63c6b361baa36901206a1db3cd639be1fbbc1dec",
+        "imageDigest": "sha256:8ded3a9cffa4c635ca5f71849ef967686e265cc33abfb8f4ee8fcf0523928ebf",
+        "wrapperSha256": "8455892592cf9e6e12ed3931e9e2742aeefff51c83dd1e570ab5959f978bd316",
+        "kind": "initial-physical-standby-phase",
+        "periodPts": 90000,
+        "pulseEndPts": 9000,
+        "targetPhasePts": [
+          36000,
+          54000
+        ],
+        "maxWaitMs": 1000,
+        "observedFramePts": 36000,
+        "observedPhasePts": 36000,
+        "returnedFramePts": 36000,
+        "waitMs": 354.5958509999982,
+        "firstCounterAt": 27586.722869,
+        "actualSelection": {
+          "sourcePts": 27129000,
+          "phasePts": 39000,
+          "carryIn": false,
+          "tick": 9310
+        },
+        "passed": true
+      },
+      "capturedTransportReadback": {
+        "verified": true,
+        "manifestBound": true,
+        "domain": {
+          "audio": [
+            1007640,
+            1007880
+          ],
+          "video": [
+            1047000,
+            1047240
+          ]
+        },
+        "fps": 30,
+        "samples": 15644672,
+        "frames": 9777,
+        "audioRows": 15278,
+        "recordingSha256": "bcdd73d2269aaf2874b55fe537c867ec620d2a082b63a48a20b559e6d6822880",
+        "evidence": {
+          "file": "captured-transport-proof.json",
+          "bytes": 1875,
+          "sha256": "11e57479ee2c9c787905aa6d0c2d2734c0b5e5334cf133bedd362b733baf9e7b"
+        },
+        "decoderEvidence": {
+          "file": "captured-decode-proof.json",
+          "bytes": 2167,
+          "sha256": "e2ce056b0a93dea529dd9dad89ddf6689afcdae6279bb2b1eadd36ddd11b4a37"
+        }
+      },
+      "nativeChannelReplay": {
+        "nativeReplayPassed": true,
+        "channels": [
+          {
+            "fd": 2,
+            "bytes": 1431,
+            "sha256": "ae3ea927c265712e8750926e862df68e975ee9df475483d2845fad489bbc7e9b",
+            "matched": false
+          },
+          {
+            "fd": 3,
+            "bytes": 58662,
+            "sha256": "a1ad8b587a8dd7a71a8d1f08a67e89c3fb28588a1040c3f509fc284506a88d7b",
+            "matched": true
+          },
+          {
+            "fd": 4,
+            "bytes": 31289344,
+            "sha256": "68367aa2488441caf23ad098cafdf8e5ed47fea955001927cb5a53c5740cae4c",
+            "matched": true
+          },
+          {
+            "fd": 5,
+            "bytes": 666503,
+            "sha256": "669e763f7091da29e01e7ea093ce9991257cab776fc6be33f19294cafc902ca5",
+            "matched": true
+          },
+          {
+            "fd": 6,
+            "bytes": 1399591,
+            "sha256": "16374b04301416a8f4adcd3cbc7637afdbfe590d189d7279a1542a10c4e8294c",
+            "matched": true
+          }
+        ],
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "scope": "Full native video/audio decode and timestamp metadata equality only. No capacity, provider or image identity acceptance."
+      },
+      "knownDecoderWarning": {
+        "message": "non-existing SPS 0 referenced in buffering period",
+        "retained": true,
+        "completeDecodeSucceeded": true,
+        "universalPlayerAcceptance": false
+      }
+    }
+  },
+  "realHttps": {
+    "runId": "task6-br447-https-20261110i",
+    "functionalPassed": true,
+    "capacityAccepted": false,
+    "url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+    "driverSha256": "36c0ec8287fd6d04a9f452bddc69ceffd2ede1bf16cdb69af79189baa53c13bd",
+    "receiptSha256": "45a9704cd72397f67eb6256c9c071d9ba4a8cb252bb12d133d31616e6cfeb05f",
+    "finiteCompletion": {
+      "finite": true,
+      "ended": true,
+      "healthySelectedMs": 3011.4954970000003,
+      "selectedDurationMs": 4621.521478999999,
+      "selectedOutputDurationMs": 4854.678
+    },
+    "allArtifactHashesVerified": true,
+    "independentFullNativeDecodesPassed": true,
+    "selectedFrameSha256": "2d38442ae22d695e56cddf24d45b485d9cb5af1a37f625d4d0553e67790f4bc3",
+    "recordings": [
+      {
+        "name": "program.ts",
+        "bytes": 1723584,
+        "sha256": "09146386a1ecef5cdc4cf25ab12bbd9edbc99140c96c4b39dd505bca0c85e53e",
+        "fullDecode": true
+      },
+      {
+        "name": "copy.ts",
+        "bytes": 1668312,
+        "sha256": "82a9217ad59f3ef9af17ff947f467e3f687ff4df2de342e17b63f9e3eb3fc202",
+        "fullDecode": true
+      }
+    ],
+    "taskStopped": true,
+    "networkAttachmentDeleted": true,
+    "temporaryTaskDefinitionInactive": true
+  },
+  "qualificationChanges": {
+    "pullRequest": "https://github.com/BITRATE-Labs/VRDex/pull/448",
+    "nativeProgramClockChanged": false,
+    "runtimeTimestampsNormalized": false,
+    "markerThresholdsChanged": false,
+    "sourcePayloadConservationRequired": true,
+    "jointOriginPredicatesRequired": true
+  },
+  "historicalFailures": [
+    {
+      "runId": "task6-br447-twitch-20261110b",
+      "accepted": false,
+      "reason": "Clipped fixture carry-in tone was unclassifiable."
+    },
+    {
+      "runId": "task6-br447-twitch-20261110e",
+      "accepted": false,
+      "reason": "Legacy strict TS clock rejected the verified eight-sample PES boundary overlap. A fresh capture-based run was required."
+    }
+  ],
+  "limits": [
+    "Only 720p30 with 320 kbps program audio is measured. Twitch copy audio remains 160 kbps.",
+    "Synthetic dual inputs are H264 1080p60 without B-frames, continuously encoded AAC.",
+    "The simulcast destinations are owned local RTMP receivers, not live Twitch provider acceptance.",
+    "The captured decoder warning remains visible; PC/Quest and arbitrary-player compatibility are not issued.",
+    "This evidence does not issue hosted wizard, real-provider or full-event acceptance."
+  ]
+}

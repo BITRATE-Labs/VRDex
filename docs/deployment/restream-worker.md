@@ -122,7 +122,7 @@ Each invocation uses a unique worker identity, `once: true` and no drain deadlin
 Completion, timeout or function replacement never triggers global media drain.
 Workers retain their own leases, authorization checks, internal SSM emergency
 publication control and 12-hour event-session limit. The currently deployed
-reviewed image uses 720p30 with 4 CPU/8 GiB and admission cap one. Updating that
+qualified image uses 720p30 with 8 CPU/16 GiB and admission cap one. Updating that
 image for additional presets requires the separate capacity proofs.
 The emergency switch is an internal operations control, not a host prerequisite.
 Preserve its current value during migration.
