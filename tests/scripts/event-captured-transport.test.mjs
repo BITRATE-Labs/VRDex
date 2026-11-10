@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 const runtimeModule=path=>process.env.CAPTURED_TRANSPORT_RUNTIME_ROOT?pathToFileURL(join(process.env.CAPTURED_TRANSPORT_RUNTIME_ROOT,path)).href:new URL('../../'+path,import.meta.url).href;
 const { parseCapturedRtmp, parseCapturedAacConfig, inspectCapturedTransportClock, startCapturedTransportDecode, isCapturedTransportClock, capturedTransportProjection } = await import(runtimeModule('scripts/event-captured-transport.mjs'));
@@ -37,22 +38,38 @@ test('unsupported ADC CRC or multiblock and malformed TS table CRC reject',()=>{
 import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawn } from 'node:child_process';
 const { startCapturedRtmpReceiver, assertCapturedAudioClock, assertCapturedVideoClock } = await import(runtimeModule('scripts/event-captured-transport.mjs'));
 const { programDecodeArguments } = await import(runtimeModule('scripts/event-marker-program-guards.mjs'));
 const { parseMarkerMetadata } = await import(runtimeModule('scripts/event-marker-metadata.mjs'));
-const { outputArguments } = await import(runtimeModule('workers/restream/output-arguments.mjs'));
 const { resolveDestinationProfile } = await import(runtimeModule('workers/restream/broadcast-profiles.mjs'));
-async function runFfmpeg(args,stdio=['ignore','ignore','pipe']){const child=spawn('ffmpeg',args,{stdio});let stderr='';child.stderr.on('data',b=>{stderr+=b;});const result=new Promise((yes,no)=>{child.once('error',no);child.once('close',code=>code===0?yes():no(Error(stderr)));});return {child,result};}
+// Positive provenance cases need a physically complete RTMP session before any
+// mutation is tested. Finite FFmpeg EOF can race the receiver's final deleteStream
+// reply, so use the actual production sender stop fence with ongoing media.
+async function startOwnedFixture(directory,{quiet=false,minimumOutputMs=5000,durationSeconds=6}={}){
+ const {createProcessOwner}=await import(runtimeModule('scripts/event-proof-processes.mjs'));const owner=createProcessOwner();
+ let producer,source,sender,senderClosed,sourceEnded=false,unsubscribed=false;const signals=[],sourceDiagnostics=[],senderDiagnostics=[],spawns=[];let sourceDiagnosticBytes=0,senderDiagnosticBytes=0;
+ const close=async()=>{sender?.stopNow();if(source?.exitCode===null)source.kill('SIGKILL');try{await producer?.close();}finally{const cleanup=await owner.close();await writeFile(join(directory,'fixture-cleanup.json'),JSON.stringify(cleanup,null,2)+'\n');}};
+ try{
+  producer=await startCapturedRtmpReceiver({directory,receiverPort:19743,settings:{videoPreset:'720p30',audioBitrateKbps:320},durationSeconds});
+  const sourceArgs=['-hide_banner','-v','error','-re','-f','lavfi','-i',quiet?'color=c=gray:s=1280x720:r=30':'testsrc2=s=1280x720:r=30','-f','lavfi','-i',quiet?'anullsrc=r=48000:cl=stereo':'sine=frequency=440:sample_rate=48000','-c:v','libx264','-threads','2','-preset','ultrafast','-bf','0','-g','30','-c:a','aac','-ac','2','-b:a','320k','-f','mpegts','pipe:1'];
+  source=owner.start('ffmpeg',sourceArgs,{stdio:['ignore','pipe','pipe']});source.stdout.once('end',()=>{sourceEnded=true;});source.stderr.on('data',b=>{sourceDiagnosticBytes+=b.length;if(sourceDiagnosticBytes>65536)source.kill('SIGKILL');else sourceDiagnostics.push(Buffer.from(b));});
+  const {createOutputSender}=await import(runtimeModule('workers/restream/output-sender.mjs'));
+  sender=createOutputSender({destination:'twitch',profile:resolveDestinationProfile({settings:{videoPreset:'720p30',audioBitrateKbps:320},destination:'twitch'}),credentialRef:'synthetic',resolveCredential:()=>JSON.stringify({rtmpUrl:'rtmp://live.twitch.tv/app',streamKey:'test-key'}),program:{subscribe(fn){source.stdout.on('data',fn);return()=>{unsubscribed=true;source.stdout.off('data',fn);};}},spawnProcess:(command,args,options)=>{const local=[...args];local[local.length-1]=producer.proxyUrl+'/test-key';spawns.push({command,canonicalArgs:args,localArgs:local});const child=owner.start(command,local,options),kill=child.kill.bind(child);child.kill=signal=>{signals.push(signal);return kill(signal);};senderClosed=new Promise(yes=>child.once('close',(code,signal)=>yes({code,signal})));child.stderr.on('data',b=>{senderDiagnosticBytes+=b.length;if(senderDiagnosticBytes>65536)sender.stopNow();else senderDiagnostics.push(Buffer.from(b));});return child;}});
+  await sender.start();const deadline=Date.now()+15000;
+  while(!(sender.getState().publishing&&sender.getState().outputMs>=minimumOutputMs)){assert(Date.now()<deadline,'Fixture sender did not publish within bound');assert.equal(sender.getState().restarts,0);assert(sourceDiagnosticBytes<=65536&&senderDiagnosticBytes<=65536);await sleep(20);}
+  assert.equal(sourceEnded,false,'Fixture Stop must precede upstream EOF');const publishing=sender.getState();sender.stopNow();assert.equal(unsubscribed,true);assert.equal(sender.getState().status,'stopped');assert.equal(sender.getState().publishing,false);sender.enqueue(Buffer.alloc(188));const exit=await senderClosed;assert.equal(exit.signal,'SIGKILL');assert.deepEqual(signals,['SIGKILL']);source.kill('SIGKILL');await source.closed;
+  await producer.drain();const bytes=(await readFile(producer.filenames.client)).length;sender.enqueue(Buffer.alloc(188));await sleep(25);assert.equal((await readFile(producer.filenames.client)).length,bytes);
+  await writeFile(join(directory,'fixture-source.stderr'),Buffer.concat(sourceDiagnostics));await writeFile(join(directory,'fixture-sender.stderr'),Buffer.concat(senderDiagnostics));await writeFile(join(directory,'fixture-stop.json'),JSON.stringify({sourceArgs,spawns,publishing,sourceEndedAtStop:false,unsubscribed,exit,signals},null,2)+'\n');
+  return {producer,close};
+ }catch(error){let cleanupError;try{await close();}catch(failure){cleanupError=failure.message;}await writeFile(join(directory,'fixture-source.stderr'),Buffer.concat(sourceDiagnostics));await writeFile(join(directory,'fixture-sender.stderr'),Buffer.concat(senderDiagnostics));await writeFile(join(directory,'fixture-failure.json'),JSON.stringify({error:error.message,cleanupError,signals,sourceEnded,spawns},null,2)+'\n');if(cleanupError)throw new AggregateError([error,Error(cleanupError)],'Fixture and cleanup failed');throw error;}
+}
+
 test('real owned capture/decode binds native bytes and rejects every cross-binding mutation',{skip:process.env.CAPTURED_TRANSPORT_NATIVE!=='1',timeout:60000},async()=>{
  const directory=process.env.CAPTURED_TRANSPORT_NATIVE_OUTPUT?join(process.env.CAPTURED_TRANSPORT_NATIVE_OUTPUT,'owned-capture'):await mkdtemp(join(tmpdir(),'captured-transport-'));
  if(process.env.CAPTURED_TRANSPORT_NATIVE_OUTPUT)await mkdir(directory);
- const input=join(directory,'input.ts');let producer;
+ let producer,fixture;
  try{
-  const made=await runFfmpeg(['-hide_banner','-v','error','-f','lavfi','-i','testsrc2=s=1280x720:r=30','-f','lavfi','-i','sine=frequency=440:sample_rate=48000','-t','3','-c:v','libx264','-threads','2','-preset','ultrafast','-bf','0','-g','30','-c:a','aac','-ac','2','-b:a','320k','-f','mpegts',input]);await made.result;
-  producer=await startCapturedRtmpReceiver({directory,receiverPort:19743,settings:{videoPreset:'720p30',audioBitrateKbps:320},durationSeconds:3});
-  const args=outputArguments('twitch',{url:producer.proxyUrl,key:'test-key'},resolveDestinationProfile({settings:{videoPreset:'720p30',audioBitrateKbps:320},destination:'twitch'}));
-  const sent=await runFfmpeg(args,['pipe','ignore','pipe','pipe']);sent.child.stdio[3].resume();sent.child.stdin.on('error',()=>{});sent.child.stdin.end(await readFile(input));await sent.result;await producer.drain();
+  fixture=await startOwnedFixture(directory);producer=fixture.producer;
   const file=producer.filenames.recording,original=programDecodeArguments(file,{width:1280,height:720}),stdio=['ignore','ignore','pipe','pipe','pipe','pipe','pipe'];
   assert.throws(()=>startCapturedTransportDecode({...producer},{file,original,stdio}),/unproven/);
   assert.throws(()=>startCapturedTransportDecode(producer,{file,original:[...original,'-shortest'],stdio}),/recipe/);
@@ -66,7 +83,7 @@ test('real owned capture/decode binds native bytes and rejects every cross-bindi
   const badRows=structuredClone(audioRows);badRows[1].pts++;assert.throws(()=>assertCapturedAudioClock(clock,audioChunks,badRows),/binding/);await assert.rejects(inspectCapturedTransportClock(producer,capture),/clock_consumed/);
   await assert.rejects(inspectCapturedTransportClock(producer,{...capture,nativeCapture:{...nativeCapture}}),/clock_consumed/);
   const recorded=await readFile(file);try{await writeFile(file,Buffer.alloc(188));await assert.rejects(inspectCapturedTransportClock(producer,capture),/clock_consumed/);}finally{await writeFile(file,recorded);}
- }finally{await producer?.close();if(!process.env.CAPTURED_TRANSPORT_NATIVE_OUTPUT)await rm(directory,{recursive:true,force:true});}
+ }finally{await fixture?.close();if(!process.env.CAPTURED_TRANSPORT_NATIVE_OUTPUT)await rm(directory,{recursive:true,force:true});}
 });
 
 test('format-3 new message after format-0 inherits the header timestamp delta',()=>{const raw=Buffer.concat([handshake(),message(8,Buffer.from([1]),42),Buffer.from([195,2])]);assert.deepEqual(parseCapturedRtmp(raw).map(x=>x.timestamp),[42,84]);});
@@ -74,11 +91,9 @@ test('format-3 new message after format-0 inherits the header timestamp delta',(
 async function negativeOwnedCapture(mode){
  const base=process.env.CAPTURED_TRANSPORT_NATIVE_OUTPUT,directory=base?join(base,'negative-'+mode):await mkdtemp(join(tmpdir(),'captured-negative-'));
  if(base)await mkdir(directory);
- let producer;
+ let producer,fixture;
  try{
-  const input=join(directory,'input.ts');const made=await runFfmpeg(['-hide_banner','-v','error','-f','lavfi','-i','testsrc2=s=1280x720:r=30','-f','lavfi','-i','sine=frequency=440:sample_rate=48000','-t','1','-c:v','libx264','-threads','2','-preset','ultrafast','-bf','0','-c:a','aac','-ac','2','-f','mpegts',input]);await made.result;
-  producer=await startCapturedRtmpReceiver({directory,receiverPort:19743,settings:{videoPreset:'720p30',audioBitrateKbps:320},durationSeconds:1});
-  const sender=await runFfmpeg(outputArguments('twitch',{url:producer.proxyUrl,key:'test-key'},resolveDestinationProfile({settings:{videoPreset:'720p30',audioBitrateKbps:320},destination:'twitch'})),['pipe','ignore','pipe','pipe']);sender.child.stdio[3].resume();sender.child.stdin.on('error',()=>{});sender.child.stdin.end(await readFile(input));await sender.result;await producer.drain();
+  fixture=await startOwnedFixture(directory,{minimumOutputMs:2500});producer=fixture.producer;
   const file=producer.filenames.recording,decoder=startCapturedTransportDecode(producer,{file,original:programDecodeArguments(file,{width:1280,height:720}),stdio:['ignore','ignore','pipe','pipe','pipe','pipe','pipe']}),parts={};for(const fd of [3,4,5,6]){parts[fd]=[];decoder.child.stdio[fd].on('data',b=>parts[fd].push(b));}
   const nativeCapture=await decoder.finish(),capture={nativeCapture,audioChunks:parts[4],rgb:Buffer.concat(parts[3]),audioRows:parseMarkerMetadata(Buffer.concat(parts[6]).toString(),'audio'),videoRows:parseMarkerMetadata(Buffer.concat(parts[5]).toString(),'video')};
   assert(Object.isFrozen(nativeCapture)&&Object.isFrozen(nativeCapture.channels[4]));
@@ -88,26 +103,24 @@ async function negativeOwnedCapture(mode){
   if(mode==='file'){const original=await readFile(file);await writeFile(file,Buffer.alloc(188));restore=()=>writeFile(file,original);expected=/capture_mutation/;}
   try{await assert.rejects(inspectCapturedTransportClock(producer,capture),expected);}finally{await restore?.();}
   await assert.rejects(inspectCapturedTransportClock(producer,capture),/clock_consumed/);
- }finally{await producer?.close();if(!base)await rm(directory,{recursive:true,force:true});}
+ }finally{await fixture?.close();if(!base)await rm(directory,{recursive:true,force:true});}
 }
 for(const mode of ['native','rows','file'])test('owned factory rejects '+mode+' forgery before issuance and never reopens',{skip:process.env.CAPTURED_TRANSPORT_NATIVE!=='1',timeout:30000},()=>negativeOwnedCapture(mode));
 
 const { decodeCapturedTransportMarkerRecord } = await import(runtimeModule('scripts/event-captured-capacity-media.mjs'));
 const { transportProjectionFromWire } = await import(runtimeModule('scripts/event-marker-transport-wire.mjs'));
-test('common captured marker decoder closes a real quiet six-second segment',{skip:process.env.CAPTURED_TRANSPORT_NATIVE!=='1',timeout:40000},async()=>{
- const base=process.env.CAPTURED_TRANSPORT_NATIVE_OUTPUT,directory=base?join(base,'common-core'):await mkdtemp(join(tmpdir(),'captured-core-'));if(base)await mkdir(directory);let producer;const children=[];
+test('common captured marker decoder closes a real quiet segment',{skip:process.env.CAPTURED_TRANSPORT_NATIVE!=='1',timeout:40000},async()=>{
+ const base=process.env.CAPTURED_TRANSPORT_NATIVE_OUTPUT,directory=base?join(base,'common-core'):await mkdtemp(join(tmpdir(),'captured-core-'));if(base)await mkdir(directory);let producer,fixture;
  const {createProcessOwner}=await import(runtimeModule('scripts/event-proof-processes.mjs'));const owner=createProcessOwner();
  try{
-  const input=join(directory,'input.ts'),made=await runFfmpeg(['-hide_banner','-v','error','-f','lavfi','-i','color=c=gray:s=1280x720:r=30','-f','lavfi','-i','anullsrc=r=48000:cl=stereo','-t','6','-c:v','libx264','-threads','2','-preset','ultrafast','-bf','0','-c:a','aac','-f','mpegts',input]);await made.result;
-  producer=await startCapturedRtmpReceiver({directory,receiverPort:19743,settings:{videoPreset:'720p30',audioBitrateKbps:320},durationSeconds:6});const sent=await runFfmpeg(outputArguments('twitch',{url:producer.proxyUrl,key:'test-key'},resolveDestinationProfile({settings:{videoPreset:'720p30',audioBitrateKbps:320},destination:'twitch'})),['pipe','ignore','pipe','pipe']);sent.child.stdio[3].resume();sent.child.stdin.on('error',()=>{});sent.child.stdin.end(await readFile(input));await sent.result;await producer.drain();
+  fixture=await startOwnedFixture(directory,{quiet:true,minimumOutputMs:7500});producer=fixture.producer;
   const decoded=await decodeCapturedTransportMarkerRecord(owner,producer.filenames.recording,{transportCapture:producer,width:1280,height:720,maxSeconds:10});
   assert.equal(decoded.recordingSha256,producer.evidence().bindings.recording.sha256);assert.equal(decoded.episodes.length,0);assert.equal(decoded.visuals.length,0);assert(decoded.audioMetadataRows>200&&decoded.videoFrames>170);
   const wire=decoded.transportClock;assert(wire,'captured semantic wire must survive common core');transportProjectionFromWire(wire,decoded);
   await writeFile(join(directory,'common-core-summary.json'),JSON.stringify({recordingSha256:decoded.recordingSha256,audioRows:decoded.audioMetadataRows,videoFrames:decoded.videoFrames,transportClock:wire},null,2)+'\n');
- }finally{await producer?.close();await owner.close();if(!base)await rm(directory,{recursive:true,force:true});}
+ }finally{await fixture?.close();await owner.close();if(!base)await rm(directory,{recursive:true,force:true});}
 });
 const {createOutputSender}=await import(runtimeModule('workers/restream/output-sender.mjs'));
-const {setTimeout:sleep}=await import('node:timers/promises');
 test('canonical sender stopNow SIGKILL fence permits complete owned capture drain',{skip:process.env.CAPTURED_TRANSPORT_NATIVE!=='1',timeout:40000},async()=>{
  const base=process.env.CAPTURED_TRANSPORT_NATIVE_OUTPUT,directory=base?join(base,'production-stop'):await mkdtemp(join(tmpdir(),'captured-stop-'));if(base)await mkdir(directory);
  const {createProcessOwner}=await import(runtimeModule('scripts/event-proof-processes.mjs'));const owner=createProcessOwner();let capture,sender,source,senderProcess,senderClosed;const signals=[],health=[];let sourceEnded=false,unsubscribed=false;
@@ -124,4 +137,14 @@ test('canonical sender stopNow SIGKILL fence permits complete owned capture drai
   await writeFile(join(directory,'production-stop-summary.json'),JSON.stringify({passed:true,scope:'Actual canonical sender stopNow with ongoing input; complete observed segment only',publishing,afterStop:sender.getState(),senderExit:exit,signals,unsubscribed,recordingSha256:decoded.recordingSha256,videoFrames:decoded.videoFrames,audioRows:decoded.audioMetadataRows,transportClock:decoded.transportClock},null,2)+'\n');
  }catch(error){await writeFile(join(directory,'production-stop-failure.json'),JSON.stringify({passed:false,error:String(error.message),signals,health:health.slice(-8),sourceEnded},null,2)+'\n');throw error;}
  finally{sender?.stopNow();if(source?.exitCode===null)source.kill('SIGKILL');await capture?.close();const cleanup=await owner.close();if(base)await writeFile(join(directory,'cleanup.json'),JSON.stringify({captureCloseCompleted:true,owner:cleanup},null,2)+'\n');if(!base)await rm(directory,{recursive:true,force:true});}
+});
+test('incomplete RTMP handshake reset cannot establish capture closure',{skip:process.env.CAPTURED_TRANSPORT_NATIVE!=='1',timeout:15000},async()=>{
+ const {connect}=await import('node:net');const {processTable}=await import(runtimeModule('scripts/event-proof-processes.mjs'));
+ const base=process.env.CAPTURED_TRANSPORT_NATIVE_OUTPUT,directory=base?join(base,'incomplete-close'):await mkdtemp(join(tmpdir(),'captured-incomplete-'));if(base)await mkdir(directory);
+ const original=new Set((await processTable()).map(row=>row.pid));let producer,socket;
+ try{
+  producer=await startCapturedRtmpReceiver({directory,receiverPort:19743,settings:{videoPreset:'720p30',audioBitrateKbps:320},durationSeconds:1});
+  socket=connect(producer.proxyPort,'127.0.0.1');socket.on('error',()=>{});await new Promise((yes,no)=>{socket.once('connect',yes);socket.once('error',no);});const closed=new Promise(yes=>socket.once('close',yes));const partial=Buffer.alloc(128);partial[0]=3;await new Promise((yes,no)=>socket.write(partial,error=>error?no(error):yes()));socket.resetAndDestroy();await closed;
+  await assert.rejects(producer.drain(),/captured_transport_(?:(?:client|server)_socket_(?:error|incomplete)|receiver_exit|capture_closure)/);assert.throws(()=>producer.evidence(),/not_drained/);
+ }finally{socket?.destroy();await producer?.close();const live=(await processTable()).filter(row=>row.live&&row.parent===process.pid&&!original.has(row.pid));assert.deepEqual(live,[]);if(base)await writeFile(join(directory,'cleanup.json'),JSON.stringify({closed:true,liveNewChildren:live},null,2)+'\n');else await rm(directory,{recursive:true,force:true});}
 });
