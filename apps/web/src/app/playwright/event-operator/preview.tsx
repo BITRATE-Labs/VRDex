@@ -35,8 +35,11 @@ function fixtureQuery(ref:FunctionReference<"query">,args:Record<string,unknown>
 }
 Object.defineProperty(fixtureClient,"query",{value:async(ref:FunctionReference<"query">,args:Record<string,unknown>)=>fixtureQuery(ref,args)});
 Object.defineProperty(fixtureClient,"watchQuery",{value:(ref:FunctionReference<"query">,args:Record<string,unknown>)=>({localQueryResult:()=>fixtureQuery(ref,args),onUpdate:()=>()=>{},journal:()=>undefined})});
-export function EventOperatorFixture() {
-  const [status, setStatus] = useState<FixtureStatus>(initial);
+export function EventOperatorFixture({ legacySettings = false }: { legacySettings?: boolean }) {
+  const [status, setStatus] = useState<FixtureStatus>(() => legacySettings ? {
+    ...initial,
+    program: { ...initial.program, mediaSettings: { videoPreset: "480p60", audioBitrateKbps: 160 } },
+  } : initial);
   const [count, setCount] = useState(0);
   const [preparationKeys, setPreparationKeys] = useState<string[]>([]);
   const [startedOutput, setStartedOutput] = useState("");

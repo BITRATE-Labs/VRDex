@@ -25,6 +25,8 @@ export function EventStreamSettings({
   const [draft, setDraft] = useState<StreamSettings | undefined>();
   const value = draft ?? settings,
     profile = VIDEO_PROFILES[value.videoPreset];
+  // shortcut: only 720p30/320 is qualified, expand choices with the capacity map.
+  const supported = value.videoPreset === "720p30" && value.audioBitrateKbps === 320;
   const [busy, setBusy] = useState(false),
     [failed, setFailed] = useState(false);
   const lock = useRef(false);
@@ -70,12 +72,12 @@ export function EventStreamSettings({
           Resolution
           <Select
             value={profile.height}
-            onChange={(event) =>
-              choose(Number(event.target.value), profile.frameRate)
-            }
+            onChange={(event) => {
+              if (event.target.value === "720") choose(720, profile.frameRate);
+            }}
           >
             {[480, 720, 1080].map((height) => (
-              <option key={height} value={height}>
+              <option key={height} value={height} disabled={height !== 720}>
                 {height}p
               </option>
             ))}
@@ -85,12 +87,12 @@ export function EventStreamSettings({
           Frame rate
           <Select
             value={profile.frameRate}
-            onChange={(event) =>
-              choose(profile.height, Number(event.target.value))
-            }
+            onChange={(event) => {
+              if (event.target.value === "30") choose(profile.height, 30);
+            }}
           >
             {[30, 60].map((rate) => (
-              <option key={rate} value={rate}>
+              <option key={rate} value={rate} disabled={rate !== 30}>
                 {rate} fps
               </option>
             ))}
@@ -100,21 +102,19 @@ export function EventStreamSettings({
           Audio bitrate
           <Select
             value={value.audioBitrateKbps}
-            onChange={(event) =>
-              setDraft({
-                ...value,
-                audioBitrateKbps: event.target.value === "320" ? 320 : 160,
-              })
-            }
+            onChange={(event) => {
+              if (event.target.value === "320") setDraft({ ...value, audioBitrateKbps: 320 });
+            }}
           >
-            <option value="160">160 kbps</option>
+            <option value="160" disabled>160 kbps</option>
             <option value="320">320 kbps</option>
           </Select>
         </Field>
         <Button
           variant="secondary"
+          disabled={!supported}
           onClick={async () => {
-            if (lock.current || !canControl) return;
+            if (lock.current || !canControl || !supported) return;
             lock.current = true;
             setBusy(true);
             setFailed(false);

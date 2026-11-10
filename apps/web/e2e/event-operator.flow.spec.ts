@@ -36,7 +36,7 @@ test("stopped broadcast starts a chosen destination without claiming observed li
 test("replacing or removing live inputs requires confirmation and quality applies next start @flow @fixture",async({page})=>{
  await page.goto("/playwright/event-operator");await page.getByRole("button",{name:"Replace Custom",exact:true}).click();await page.getByLabel("Source label",{exact:true}).fill("Replacement");await page.getByLabel("Video or stream link",{exact:true}).fill("https://www.twitch.tv/replacement");await page.getByRole("button",{name:"Replace source",exact:true}).click();await expect(page.getByRole("article",{name:"Replacement",exact:true})).toHaveCount(0);await confirm(page,"Replace source");
  const source=page.getByRole("article",{name:"Replacement",exact:true});await expect(source).toBeVisible();await source.getByRole("button",{name:"Remove Replacement",exact:true}).click();await confirm(page,"Remove source");await expect(source).toHaveCount(0);
- await page.getByText("Stream settings",{exact:true}).click();await page.getByRole("combobox",{name:"Resolution",exact:true}).selectOption("1080");await page.getByRole("button",{name:"Save settings",exact:true}).click();await expect(page.getByText("Next start",{exact:true}).locator("..")).toContainText("1080p30");await expect(page.getByText("Active",{exact:true}).first().locator("..")).toContainText("720p30");
+ await page.getByText("Stream settings",{exact:true}).click();await page.getByRole("combobox",{name:"Resolution",exact:true}).selectOption("720");await page.getByRole("combobox",{name:"Audio bitrate",exact:true}).selectOption("320");await page.getByRole("button",{name:"Save settings",exact:true}).click();await expect(page.getByText("Next start",{exact:true}).locator("..")).toContainText("720p30 · 320 kbps");await expect(page.getByText("Active",{exact:true}).first().locator("..")).toContainText("720p30");
 });
 test("custom source validates links, supports direct video, and removal confirms @flow @fixture",async({page})=>{
  await page.goto("/playwright/event-operator");await page.getByText("Add input",{exact:true}).click();await page.getByLabel("Source label",{exact:true}).fill("New source");await page.getByLabel("Video or stream link",{exact:true}).fill("https://example.invalid/private");await page.getByRole("button",{name:"Add source",exact:true}).click();await expect(page.getByText("Save failed",{exact:true})).toBeVisible();
@@ -105,4 +105,29 @@ test("Quick switch keeps uncertain request IDs and renews completed checks @flow
  await page.getByRole("button",{name:"Check source",exact:true}).click();await expect(page.getByRole("button",{name:"Check source",exact:true})).toBeEnabled();
  const keys=(await page.getByLabel("Preparation request keys",{exact:true}).textContent())!.split(",");
  expect(keys).toHaveLength(3);expect(keys[0]).toBe(keys[1]);expect(keys[2]).not.toBe(keys[1]);
+});
+
+test("legacy stream settings stay visible until an admitted profile is saved @flow @fixture",async({page},info)=>{
+ await page.goto("/playwright/event-operator?legacySettings=1");
+ await page.getByText("Stream settings",{exact:true}).click();
+ const resolution=page.getByRole("combobox",{name:"Resolution",exact:true});
+ const rate=page.getByRole("combobox",{name:"Frame rate",exact:true});
+ const audio=page.getByRole("combobox",{name:"Audio bitrate",exact:true});
+ const save=page.getByRole("button",{name:"Save settings",exact:true});
+ const nextStart=page.getByText("Next start",{exact:true}).locator("..");
+ await expect(nextStart).toContainText("480p60 · 160 kbps");
+ await expect(resolution).toHaveValue("480");await expect(rate).toHaveValue("60");await expect(audio).toHaveValue("160");await expect(save).toBeDisabled();
+ for(const height of ["480","1080"]) await expect(resolution.locator(`option[value="${height}"]`)).toHaveAttribute("disabled", "");
+ await expect(rate.locator('option[value="60"]')).toHaveAttribute("disabled", "");await expect(audio.locator('option[value="160"]')).toHaveAttribute("disabled", "");
+ await page.getByRole("complementary",{name:"Destination",exact:true}).screenshot({path:info.outputPath("legacy-settings.png")});
+ await resolution.selectOption("720");await expect(rate).toHaveValue("60");await expect(save).toBeDisabled();
+ await rate.selectOption("30");await expect(audio).toHaveValue("160");await expect(save).toBeDisabled();
+ await audio.selectOption("320");await expect(save).toBeEnabled();
+ await resolution.press("ArrowUp");await expect(resolution).toHaveValue("720");
+ await rate.press("ArrowDown");await expect(rate).toHaveValue("30");
+ await audio.press("ArrowUp");await expect(audio).toHaveValue("320");
+ await expect(nextStart).toContainText("480p60 · 160 kbps");await save.click();
+ await expect(nextStart).toContainText("720p30 · 320 kbps");
+ await expect(page.getByText("Active",{exact:true}).first().locator("..")).toContainText("720p30 · 160 kbps");
+ await page.getByRole("complementary",{name:"Destination",exact:true}).screenshot({path:info.outputPath("qualified-settings.png")});
 });

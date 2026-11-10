@@ -5,11 +5,16 @@ import { parseAllocation } from "./worker-allocation.mjs";
 /** @typedef {(input: CapacityInput) => import("./worker-allocation.mjs").WorkerAllocation} CapacityResolver */
 /** Passing candidate receipts populate this map after actual-image measurement. */
 const MEASURED_ALLOCATIONS = Object.freeze({
-  // B0 synthetic baseline only; real B2 input rehearsal remains a separate gate.
+  // Synthetic capacity only; live input and provider acceptance remain separate.
   "720p30:320:false": Object.freeze({
     cpuUnits: 8192,
     memoryMiB: 16384,
-    evidenceId: "task6-bitrate-20261108-320-recovery-v4",
+    evidenceId: "task6-br447-primary-20261110g",
+  }),
+  "720p30:320:true": Object.freeze({
+    cpuUnits: 8192,
+    memoryMiB: 16384,
+    evidenceId: "task6-br447-twitch-20261110h",
   }),
 });
 /** Pure fixture seam for unit tests. No environment or client resource authority.
