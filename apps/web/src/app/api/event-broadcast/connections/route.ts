@@ -1,6 +1,6 @@
 import { ConvexHttpClient } from "convex/browser";
 import { makeFunctionReference } from "convex/server";
-import { SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
+import { eventOutputSecretsClient } from "../../../../lib/server/event-output-secret-store";
 import { convexAuthToken } from "../../../../lib/server/auth";
 import { provisionConnection } from "../../../../../../../scripts/event-output-secret-broker.mjs";
 export const runtime = "nodejs";
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     const prepare = makeFunctionReference<"mutation">("eventBroadcastConnections:prepareConnection");
     const commit = makeFunctionReference<"mutation">("eventBroadcastConnections:commitConnection");
     const abandon = makeFunctionReference<"mutation">("eventBroadcastConnections:abandonConnection");
-    const result = await provisionConnection({ input, brokerToken: process.env.VRDEX_EVENT_OUTPUT_BROKER_TOKEN, secrets: new SecretsManagerClient({}), abandon: (args: Record<string, unknown>) => client.mutation(abandon, args), prepare: (args: Record<string, unknown>) => client.mutation(prepare, args), commit: (args: Record<string, unknown>) => client.mutation(commit, args) });
+    const result = await provisionConnection({ input, brokerToken: process.env.VRDEX_EVENT_OUTPUT_BROKER_TOKEN, secrets: eventOutputSecretsClient(), abandon: (args: Record<string, unknown>) => client.mutation(abandon, args), prepare: (args: Record<string, unknown>) => client.mutation(prepare, args), commit: (args: Record<string, unknown>) => client.mutation(commit, args) });
     return Response.json(result, { headers });
   } catch (error) {
     const knownErrors=["Enter a valid stream server URL.","Enter a valid RTMP or RTMPS server URL.","Enter a VRCDN ingest server URL.","Enter a Twitch ingest server URL.","Enter a valid playback URL.","Enter an HTTPS playback URL.","Enter a stream key for this connection.","Enter a valid stream key.","Connection changed. Reload and try again.","An event media worker session is already active for this event."];

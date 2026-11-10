@@ -70,3 +70,13 @@ Current main was merged before the final PR run. The resolution preserves browse
 The broader Windows backend run stopped at a native process-group cleanup failure; the matching packaged Linux check passed. Normal PR CI independently passed the complete backend suite, types, lint, Terraform and CodeQL on the preceding integration head. Documentation syntax, generated declarations and the offline import boundary were corrected. Current-head jobs and review follow-ups are tracked on [PR 447](https://github.com/BITRATE-Labs/VRDex/pull/447).
 
 No real stream, provider publication, credential write or deployment has been performed.
+
+## Hosted release preflight, November 10
+
+All CI lanes passed on `6f0c386`, including serial browser flows, composed-media checks, visual checks, Terraform and CodeQL. Codex review completed without findings. Claude and Copilot remain unavailable because of size and quota limits.
+
+Hosted configuration review found that the new credential broker needed the existing Vercel OIDC credential pattern and an explicit Secrets Manager region. The follow-up uses a dedicated production role, keeps the default infrastructure posture disabled, and derives the dispatcher's managed-secret prefix through Terraform. Seven broker regressions, eight mocked broker infrastructure tests, 25 existing bridge infrastructure tests and web types pass.
+
+Read-only production checks confirmed the intended AWS account and Convex deployment, no open sessions or unresolved provider cleanup, no running/pending ECS tasks, and the retained rehearsal output at 720p30/AAC320. The broker role, namespace permissions and runtime bindings remain unprovisioned. A saved Terraform plan contains exactly three IAM additions and no changes or deletions; its application requires the separate security-posture approval.
+
+Merge/deployment authority is confirmed. New-image qualification, scoped provisioning, migration and actual provider/browser acceptance remain release gates.
