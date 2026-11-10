@@ -570,6 +570,11 @@ capacity map remained empty at that checkpoint. See the measured allocation stat
 
 ## Source-identified proof candidate
 
+The ordinary Twitch capacity path also requires
+[captured transport clock verification](./captured-broadcast-transport.md) for
+its millisecond FLV timestamps and copied MPEG-TS recording. That evidence has a
+separate scope from the native source-marker qualification below.
+
 The next proof schema uses independent700/1300-Hz source identity, original integer
 PTS, complete interval accounting and strict compact evidence. Its explicit image
 manifest now contains85 files; this source count has not yet been verified in an

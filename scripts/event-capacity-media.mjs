@@ -334,12 +334,12 @@ export async function decodeQualifiedMediaMarkerRecord(owner, file, options) {
  * resolver is required and supplied only by the two module-owned wrappers.
  * @param {(capture:DecodedCapture)=>ProgramClock|undefined|Promise<ProgramClock|undefined>} resolveClock
  */
-async function decodeMarkerRecord(
+export async function collectMarkerDecodeObservations(
   owner,
   file,
   { width, height, maxSeconds, startCapture, finalProbe=probe },
-  resolveClock,
 ) {
+  if(!Number.isSafeInteger(width)||width<2||width>3840||!Number.isSafeInteger(height)||height<2||height>2160||!Number.isFinite(maxSeconds)||maxSeconds<=0||maxSeconds>2048)throw Error('marker_decode_bounds');
   const original=programDecodeArguments(file,{width,height});
   const stdio=["ignore", "ignore", "pipe", "pipe", "pipe", "pipe", "pipe"];
   const captured=startCapture?await startCapture({original,stdio}):null;
@@ -398,25 +398,26 @@ async function decodeMarkerRecord(
   const video = parseMarkerMetadata(videoMetadata, "video"),
     audio = parseMarkerMetadata(audioMetadata, "audio");
   const info = await finalProbe(owner, file);
-  const clock=await resolveClock({audioChunks: parts[2], audioRows: audio, videoRows: video, rgb, nativeCapture,finalProbe:info});
-  const decoded = {
-    ...decodeSourceAudio(parts[2], audio,clock),
-    ...decodeMarkerVisuals(rgb, video,clock),
-    watermarks: [],
-    audioMetadataRows: audio.length,
-    ...(clock === undefined ? {} : {clock, assurance:clock.assurance}),
-  };
-  decoded.episodes.forEach((episode, id) => { episode.id = id; });
   const hash = createHash("sha256");
   for await (const chunk of createReadStream(file)) hash.update(chunk);
-  decoded.recordingSha256 = hash.digest("hex");
-  if (clock !== undefined) {
-    const checked = assertProgramClock(clock);
-    if (decoded.recordingSha256 !== clock.inputSHA || decoded.recordingSha256 !== checked.file.sha256)
-      throw Error('marker_clock_binding');
+  return {audioChunks:parts[2],audioRows:audio,videoRows:video,rgb,nativeCapture,finalProbe:info,recordingSha256:hash.digest("hex")};
+}
+async function decodeMarkerRecord(owner,file,options,resolveClock) {
+  const capture=await collectMarkerDecodeObservations(owner,file,options);
+  const clock=await resolveClock(capture);
+  const decoded={...decodeSourceAudio(capture.audioChunks,capture.audioRows,clock),...decodeMarkerVisuals(capture.rgb,capture.videoRows,clock),watermarks:[],audioMetadataRows:capture.audioRows.length,
+    ...(clock===undefined?{}:{clock,assurance:clock.assurance}),recordingSha256:capture.recordingSha256};
+  decoded.episodes.forEach((episode,id)=>{episode.id=id;});
+  if(clock!==undefined) {
+    // Bind the current file after the qualified observer has returned.
+    const currentHash=createHash("sha256");
+    for await(const chunk of createReadStream(file))currentHash.update(chunk);
+    decoded.recordingSha256=currentHash.digest("hex");
+    const checked=assertProgramClock(clock);
+    if(decoded.recordingSha256!==clock.inputSHA||decoded.recordingSha256!==checked.file.sha256)throw Error('marker_clock_binding');
   }
-  decoded.videoStreamIndex = info.streams.find(s => s.codec_type === "video")?.index;
-  decoded.audioStreamIndex = info.streams.find(s => s.codec_type === "audio")?.index;
+  decoded.videoStreamIndex=capture.finalProbe.streams.find(s=>s.codec_type==='video')?.index;
+  decoded.audioStreamIndex=capture.finalProbe.streams.find(s=>s.codec_type==='audio')?.index;
   return decoded;
 }
 /** @typedef {Parameters<typeof buildMarkerContexts>[1]} ContextOptions
@@ -426,7 +427,11 @@ async function decodeMarkerRecord(
  */
 export async function measureMediaMarkers(owner, file, options) {
   const decoded = await decodeMediaMarkerRecord(owner, file, options);
-  const bound = buildMarkerContexts(decoded, options);
+  return summarizeDecodedMarkerFacts(decoded,options);
+}
+/** Summarize observed facts only; clock/capture authority belongs to the decoder. */
+export function summarizeDecodedMarkerFacts(decoded,options,comparison) {
+  const bound = buildMarkerContexts(decoded, options,comparison);
   decoded.contexts = bound.contexts;
   const markerEvidence = packMarkerRecord(decoded);
   validateMarkerRecord(markerEvidence);
@@ -450,7 +455,7 @@ export async function measureMediaMarkers(owner, file, options) {
   };
 }
 
-export async function verifyMedia(
+export async function observeMediaOutputFacts(
   owner,
   file,
   request,
@@ -526,19 +531,6 @@ export async function verifyMedia(
       10 * Math.log10((255 * 255) / Math.max(mse, 0.00001)),
     );
   }
-  const markers = await measureMediaMarkers(owner, file, {
-    width: p.width,
-    height: p.height,
-    selections,
-    maxSeconds: request.durationSeconds + 180,
-    windows: phases
-      .filter((phase) => phase.identity !== "slate")
-      .map((phase) => ({
-        identity: phase.identity,
-        start: Number(info.format.start_time) + phase.atSeconds,
-        end: Number(info.format.start_time) + phase.atSeconds + 6,
-      })),
-  });
   return {
     ...facts,
     destination,
@@ -552,9 +544,18 @@ export async function verifyMedia(
     sampleRate: Number(audio?.sample_rate),
     identities,
     visualPsnrDb: psnr,
-    ...markers,
     internalDelayMs,
+    info,
   };
+}
+export function markerMeasurementOptions(info,request,phases,selections,destination) {
+  const p=resolveDestinationProfile({settings:request.settings,destination});
+  return {width:p.width,height:p.height,selections,maxSeconds:request.durationSeconds+180,windows:phases.filter(phase=>phase.identity!=="slate").map(phase=>({identity:phase.identity,start:Number(info.format.start_time)+phase.atSeconds,end:Number(info.format.start_time)+phase.atSeconds+6}))};
+}
+export async function verifyMedia(owner,file,request,destination,phases,references,internalDelayMs,selections) {
+  const {info,...facts}=await observeMediaOutputFacts(owner,file,request,destination,phases,references,internalDelayMs);
+  const markers=await measureMediaMarkers(owner,file,markerMeasurementOptions(info,request,phases,selections,destination));
+  return {...facts,...markers};
 }
 export async function referenceFrames(owner, file) {
   return owner.run(

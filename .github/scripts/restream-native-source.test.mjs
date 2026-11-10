@@ -36,7 +36,7 @@ test('every PR path retains unconditional setup, build and full native gate in t
   assert.match(job, /timeout-minutes: 20/);
   const steps = job.split('      - name: ').slice(1);
   const named = name => steps.find(step => step.startsWith(name + '\n'));
-  for (const name of ['Setup pnpm', 'Setup Node.js', 'Check native CI contracts', 'Build hosted restream worker image', 'Run required native transport gate']) {
+  for (const name of ['Setup pnpm', 'Setup Node.js', 'Check native CI contracts', 'Build hosted restream worker image', 'Run required native transport gate', 'Verify captured transport with packaged runtime']) {
     const step = named(name); assert.ok(step, name);
     assert.doesNotMatch(step, /\n        if:|continue-on-error/);
   }
@@ -44,6 +44,15 @@ test('every PR path retains unconditional setup, build and full native gate in t
   assert.match(gate, /timeout-minutes: 7/);
   assert.match(gate, /node \.github\/scripts\/restream-native.mjs/);
   assert.equal(steps.indexOf(gate), steps.indexOf(named('Build hosted restream worker image')) + 1);
+  const captured = named('Verify captured transport with packaged runtime');
+  assert.equal(steps.indexOf(captured), steps.indexOf(gate) + 1);
+  assert.match(captured, /timeout-minutes: 5/);
+  assert.match(captured, /--network none --read-only --cap-drop ALL/);
+  assert.match(captured, /tests:\/tests:ro/);
+  assert.match(captured, /CAPTURED_TRANSPORT_NATIVE=1/);
+  assert.match(captured, /CAPTURED_TRANSPORT_RUNTIME_ROOT=\/app/);
+  assert.match(captured, /vrdex-restream-worker:ci node --test \/tests\/scripts\/event-captured-transport.test.mjs/);
+  assert.doesNotMatch(captured, /(?:-v|--volume|--mount)[^\n]*:\/app(?:[:\s]|$)/);
   assert.match(named('Build hosted restream worker image'), /docker build -f workers\/restream\/Dockerfile -t vrdex-restream-worker:ci \./);
   assert.match(workflow.split('  build-web:')[1].split('    steps:')[0], /- restream-local-checks/);
   assert.match(workflow, /run: pnpm verify:vrdex-mcp/);
