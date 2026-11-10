@@ -1,9 +1,10 @@
 # Event broadcast quality and capacity
 
-Status: candidate implementation; measured production allocation is unavailable.
-No preset is admitted to a new production session until its checked-in evidence
-covers both audio settings and its frozen destination membership. Local media
-proofs are functional diagnostics, not Fargate capacity evidence.
+Status: 720p30 with 320-kbps audio is qualified at 8 CPU / 16 GiB for primary
+output alone or with optional Twitch simulcast. Other combinations remain
+unadmitted. Each admitted combination requires checked-in evidence for its
+exact image, settings and destination membership. Local media proofs are
+functional diagnostics, not Fargate capacity evidence.
 
 The [retained codec matrix](authority/reviews/codec-diagnostic/matrix/README.md)
 records twelve completed synthetic encodes, the reviewed CodeBuild setup fixes,
@@ -21,6 +22,18 @@ The [source qualification accounting](source-marker-qualification.md) describes
 the exact scope, mandatory amendment original and bounded resolver obligations.
 
 ## Required native CI coverage
+
+Complete-capture fixtures use finite media and an owned half-open relay. Every
+publisher byte reaches the capture unchanged. After publisher EOF, the relay
+finishes its outgoing stream and consumes the receiver's remaining controls
+through receiver EOF. Publisher and receiver exits, physical closure, original
+RTMP parsing, decoded populations and lineage checks must all pass.
+
+Production Stop is a separate lifecycle guarantee: it fences input, unsubscribes
+and kills the sender. An arbitrary kill can split an RTMP message even when both
+sockets close cleanly. Stop tests verify that fence and cleanup; they do not
+promise a complete capture or a clock certificate. Truncated originals and
+broken connections must still reject.
 
 Every **Restream Local Checks** job builds the current production worker image
 and runs the full deterministic transport gate with network isolation. The
