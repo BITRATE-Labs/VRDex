@@ -78,6 +78,77 @@ it("doesNotCarryUnknownEndsForward", async () => {
   assert.deepEqual(items[0]?.schedule, { kind: "open_end", startAt });
 });
 
+it("keeps no-end contributor events through confirmed lineup timing without authoring an end", async () => {
+  const t = setup();
+  const id = await t.run(async ({ db }) => {
+    const eventId = await db.insert("events", { ...eventBase, sourceType: "contributor", startAt: startAt - 4 * hour, endAt: undefined });
+    for (let i = 0; i < 81; i++) await db.insert("eventSlots", { ...slotBase, eventId, position: i, startAt: startAt - 4 * hour, endAt: startAt - 3 * hour });
+    await db.insert("eventSlots", { ...slotBase, eventId, position: 81, startAt: startAt - hour, endAt: startAt + hour });
+    await db.insert("eventSlots", { ...slotBase, eventId, reviewState: "draft", startAt: startAt + 3 * hour, endAt: startAt + 4 * hour });
+    return eventId;
+  });
+  const items = await all(t);
+  assert.deepEqual(items.map(item => item.id), [id]);
+  assert.deepEqual(items[0]?.schedule, { kind: "open_end", startAt: startAt - 4 * hour, lastSetStartAt: startAt - hour, lineupEndAt: startAt + hour });
+  assert.deepEqual(await all(t, { ...range, startAt: startAt + hour }), []);
+  assert.equal((await t.run(({ db }) => db.get(id)))?.endAt, undefined);
+  assert.deepEqual((await t.query(resolve, { references: [{ kind: "event", eventId: id }] }))[0]?.kind, "available");
+});
+
+it("retains a final DJ's known start without inventing their end or extending explicit event ends", async () => {
+  const t = setup();
+  const ids = await t.run(async ({ db }) => {
+    const open = await db.insert("events", { ...eventBase, startAt: startAt - 4 * hour, endAt: undefined });
+    const explicit = await db.insert("events", { ...eventBase, startAt: startAt - 4 * hour, endAt: startAt });
+    for (const eventId of [open, explicit]) {
+      await db.insert("eventSlots", { ...slotBase, eventId, startAt: startAt - 2 * hour, endAt: startAt - hour });
+      await db.insert("eventSlots", { ...slotBase, eventId, startAt, endAt: undefined });
+    }
+    return { open, explicit };
+  });
+  assert.deepEqual((await all(t)).map(item => item.id), [ids.open]);
+  assert.deepEqual(await all(t, { ...range, startAt: startAt + 1 }), []);
+});
+
+it("finds ongoing lineups without paging through expired no-end events and deduplicates tied sets", async () => {
+  const t = setup();
+  const id = await t.run(async ({ db }) => {
+    for (let i = 0; i < 450; i++) {
+      const eventId = await db.insert("events", { ...eventBase, slug: `old-${i}`, startAt: startAt - 96 * hour, endAt: undefined });
+      await db.insert("eventSlots", { ...slotBase, eventId, startAt: startAt - 96 * hour, endAt: startAt - 95 * hour });
+    }
+    const eventId = await db.insert("events", { ...eventBase, startAt: startAt - 72 * hour, endAt: undefined });
+    for (let i = 0; i < 2; i++) await db.insert("eventSlots", { ...slotBase, eventId, position: i, startAt: startAt - hour, endAt: startAt + hour });
+    return eventId;
+  });
+  const items: TimelineEvent[] = [];
+  let cursor: string | undefined;
+  for (let pages = 0; pages < 6; pages++) {
+    const page = await t.query(list, { range, limit: 50, ...(cursor ? { cursor } : {}) });
+    items.push(...page.items);
+    if (page.complete) { assert.deepEqual(items.map(item => item.id), [id]); return; }
+    cursor = page.cursor ?? undefined;
+  }
+  assert.fail("Expired lineups consumed the current window's page budget");
+});
+
+it("lineup candidates retain public event eligibility and reflect set edits immediately", async () => {
+  const t = setup();
+  const { id, slot } = await t.run(async ({ db }) => {
+    const host = await db.insert("profiles", { ...personBase, profileType: "community", person: undefined, community: { categoryTags: [] }, publicSurfacingState: "suppressed" });
+    const id = await db.insert("events", { ...eventBase, startAt: startAt - hour, endAt: undefined });
+    const slot = await db.insert("eventSlots", { ...slotBase, eventId: id, endAt: startAt + hour });
+    for (const fields of [{ communityProfileId: host }, { publicationState: "draft_private" as const }, { eventStatus: "cancelled" as const }]) {
+      const hidden = await db.insert("events", { ...eventBase, startAt: startAt - hour, endAt: undefined, ...fields });
+      await db.insert("eventSlots", { ...slotBase, eventId: hidden });
+    }
+    return { id, slot };
+  });
+  assert.deepEqual((await all(t)).map(item => item.id), [id]);
+  await t.run(({ db }) => db.patch(slot, { reviewState: "draft" }));
+  assert.deepEqual(await all(t), []);
+});
+
 it("uses authored dates touched by the half-open viewer interval", async () => {
   const t = setup();
   await t.run(async ({ db }) => {

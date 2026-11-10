@@ -44,6 +44,7 @@ export const create = mutation({
         v.literal("discovery-roster"),
         v.literal("timeline-visual"),
         v.literal("short-sets"),
+        v.literal("lineup-end"),
       ),
     ),
   },
@@ -424,7 +425,7 @@ export const create = mutation({
           "A night of deep rhythms beneath the orbital lights.\n\nHosted by Prism Collective, with sets from Aurora and Neon Harbor.",
         communityProfileId: i === 4 ? undefined : profiles[0],
         startAt: i === 7 ? undefined : startAt,
-        endAt: i >= 6 ? undefined : startAt + duration * h,
+        endAt: i >= 6 || (args.scenario === "lineup-end" && i === 0) ? undefined : startAt + duration * h,
         scheduleKind: i === 7 ? "date_only" : "timed",
         eventDate:
           i === 7
@@ -432,7 +433,7 @@ export const create = mutation({
             : undefined,
         eventStatus: "scheduled",
         publicationState: "published",
-        sourceType: "community",
+        sourceType: args.scenario === "lineup-end" && i === 0 ? "contributor" : "community",
         sourceLabel: args.runId,
         updatedAt: Date.now(),
       });

@@ -21,7 +21,7 @@ export function timelineLimit(limit = 8): number {
   return Math.max(1, Math.min(50, limit));
 }
 
-export type EventPhase = "starts" | "ongoing" | "dates";
+export type EventPhase = "starts" | "ongoing" | "dates" | "lineupStarts" | "lineupEnds";
 export type RosterPhase = "slots" | "lineup" | "participants";
 type Phase = EventPhase | RosterPhase;
 type Cursor<P extends Phase> = { phase: P; databaseCursor: string | null };
@@ -62,7 +62,9 @@ export function timelineDateBounds(range: TimelineRange) {
 export function overlapsTimeline(schedule: TimelineSchedule, range: TimelineRange): boolean {
   switch (schedule.kind) {
     case "timed": return schedule.startAt < range.endAt && schedule.endAt > range.startAt;
-    case "open_end": return schedule.startAt >= range.startAt && schedule.startAt < range.endAt;
+    case "open_end": return schedule.startAt < range.endAt && (
+      (schedule.lastSetStartAt ?? schedule.startAt) >= range.startAt ||
+      (schedule.lineupEndAt !== undefined && schedule.lineupEndAt > range.startAt));
     case "date_only": {
       const { first, last } = timelineDateBounds(range);
       return schedule.eventDate >= first && schedule.eventDate <= last;
@@ -72,10 +74,21 @@ export function overlapsTimeline(schedule: TimelineSchedule, range: TimelineRang
 export async function timelineEventIdentity(db: DatabaseReader, event: Doc<"events">, options: { includeCancelled?: boolean; includeHostImage?: boolean } = {}): Promise<TimelineEventIdentity | null> {
   if (event.publicationState !== "published" || event.slug === undefined ||
       (event.eventStatus !== "scheduled" && !(options.includeCancelled && event.eventStatus === "cancelled"))) return null;
-  const schedule = timelineSchedule(event);
+  let schedule = timelineSchedule(event);
   if (schedule === null) return null;
   const community = await getPublishedCommunity(db, event);
   if (event.communityProfileId !== undefined && community === undefined) return null;
+  if (schedule.kind === "open_end") {
+    const startAt = schedule.startAt;
+    const [lastStart, lastEnd] = await Promise.all([
+      db.query("eventSlots").withIndex("by_eventId_reviewState_startAt", q => q.eq("eventId", event._id).eq("reviewState", "confirmed").gte("startAt", startAt)).order("desc").first(),
+      db.query("eventSlots").withIndex("by_eventId_reviewState_endAt", q => q.eq("eventId", event._id).eq("reviewState", "confirmed").gt("endAt", startAt)).order("desc").first(),
+    ]);
+    schedule = { ...schedule,
+      ...(lastStart === null ? {} : { lastSetStartAt: lastStart.startAt }),
+      ...(lastEnd?.endAt === undefined ? {} : { lineupEndAt: lastEnd.endAt }),
+    };
+  }
   const host = community === undefined ? undefined : {
     id: community._id, slug: community.slug, displayName: community.displayName,
     ...(options.includeHostImage === false ? {} : { imageUrl: await getPublicEventCommunityImage(db, community) }),

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { it } from "node:test";
 import {
   createTimelineController,
+  inRange,
   windowsForRange,
 } from "../../apps/web/src/lib/timeline/window-cache";
 import type {
@@ -11,6 +12,15 @@ import type {
   TimelineRosterPage,
 } from "../../convex/_eventTimelineTypes";
 const h = 3_600_000;
+
+it("keeps an open-end event in the viewport through authored lineup timing", () => {
+  const schedule = { kind: "open_end" as const, startAt: 8 * h, lastSetStartAt: 10 * h, lineupEndAt: 11 * h };
+  const viewport = { startAt: 10.5 * h, endAt: 18 * h, timeZone: "UTC" };
+  assert.equal(inRange({ schedule }, viewport), true);
+  assert.equal(inRange({ schedule }, { ...viewport, startAt: 11 * h }), false);
+  assert.equal(inRange({ schedule: { ...schedule, lineupEndAt: undefined } }, { ...viewport, startAt: 10 * h }), true);
+  assert.equal(inRange({ schedule: { ...schedule, lineupEndAt: undefined } }, viewport), false);
+});
 const range = { startAt: 12 * h, endAt: 20 * h, timeZone: "UTC" };
 const event = (id: string): TimelineEvent => ({
   id,

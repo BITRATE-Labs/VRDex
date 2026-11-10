@@ -80,7 +80,9 @@ export function inRange(
   }
   return s.kind === "timed"
     ? s.startAt < range.endAt && s.endAt > range.startAt
-    : s.startAt >= range.startAt && s.startAt < range.endAt;
+    : s.startAt < range.endAt && (
+        (s.lastSetStartAt ?? s.startAt) >= range.startAt ||
+        (s.lineupEndAt !== undefined && s.lineupEndAt > range.startAt));
 }
 const byId = <T extends { id: string }>(items: T[]) => [
   ...new Map(items.map((item) => [item.id, item])).values(),

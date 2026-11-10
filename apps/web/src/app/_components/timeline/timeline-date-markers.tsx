@@ -20,7 +20,7 @@ export function TimelineDateMarkers({ records, range, origin, ...actions }: Time
     const day = schedule.kind === "date_only"
       ? days.find((day) => formatZonedDateTimeInput(day.startAt, range.timeZone).slice(0, 10) === schedule.eventDate)
       : undefined;
-    const startAt = schedule.kind === "open_end" ? schedule.startAt : day?.startAt;
+    const startAt = schedule.kind === "open_end" ? Math.max(schedule.startAt, range.startAt) : day?.startAt;
     if (startAt === undefined) return null;
     const reference = { kind: "event" as const, eventId: event.id };
     return (

@@ -9,7 +9,7 @@ const referenceValidator = v.union(
   v.object({ kind: v.literal("event"), eventId: v.string() }),
   v.object({ kind: v.literal("set"), eventId: v.string(), slotId: v.string() }),
 );
-const eventPhases: readonly EventPhase[] = ["starts", "ongoing", "dates"];
+const eventPhases: readonly EventPhase[] = ["starts", "ongoing", "dates", "lineupStarts", "lineupEnds"];
 const rosterPhases: readonly RosterPhase[] = ["slots", "lineup", "participants"];
 // Native pagination is shared with nested queries. Read rosters in separate client calls.
 
@@ -19,6 +19,35 @@ export const listPublic = query({
     validateTimelineRange(args.range);
     const limit = timelineLimit(args.limit);
     const state = readTimelineCursor(args.cursor, "events", args.range, eventPhases, "starts");
+    const next = eventPhases[eventPhases.indexOf(state.phase) + 1] ?? null;
+    // shortcut: candidate pages include unrelated future sets, index event coverage if these exhaust the viewport budget.
+    if (state.phase === "lineupStarts" || state.phase === "lineupEnds") {
+      const starts = state.phase === "lineupStarts";
+      const source = starts
+        ? ctx.db.query("eventSlots").withIndex("by_reviewState_startAt", q => q.eq("reviewState", "confirmed").gte("startAt", args.range.startAt))
+        : ctx.db.query("eventSlots").withIndex("by_reviewState_endAt", q => q.eq("reviewState", "confirmed").gt("endAt", args.range.startAt));
+      const page = await source.paginate({ numItems: limit, cursor: state.databaseCursor, maximumRowsRead: limit });
+      const items: TimelinePage["items"] = [];
+      for (const slot of page.page) {
+        const event = await ctx.db.get(slot.eventId);
+        if (event === null || event.scheduleKind === "date_only" || event.endAt !== undefined ||
+            event.startAt === undefined || event.startAt >= args.range.startAt) continue;
+        const identity = await timelineEventIdentity(ctx.db, event);
+        if (identity === null || identity.schedule.kind !== "open_end" || !overlapsTimeline(identity.schedule, args.range)) continue;
+        // One representative per event and phase, including tied set times.
+        if (!starts && (identity.schedule.lastSetStartAt ?? event.startAt) >= args.range.startAt) continue;
+        const representative = starts
+          ? await ctx.db.query("eventSlots").withIndex("by_eventId_reviewState_startAt", q => q.eq("eventId", event._id).eq("reviewState", "confirmed")).order("desc").first()
+          : await ctx.db.query("eventSlots").withIndex("by_eventId_reviewState_endAt", q => q.eq("eventId", event._id).eq("reviewState", "confirmed")).order("desc").first();
+        if (representative?._id !== slot._id) continue;
+        items.push({ ...identity, slots: [], performers: [],
+          rosterCursor: encodeTimelineCursor(`roster:${event._id}`, args.range, { phase: "slots", databaseCursor: null }) });
+      }
+      const cursor = page.isDone
+        ? next === null ? null : encodeTimelineCursor("events", args.range, { phase: next, databaseCursor: null })
+        : encodeTimelineCursor("events", args.range, { phase: state.phase, databaseCursor: page.continueCursor });
+      return { items, cursor, complete: cursor === null };
+    }
     const { first, last } = timelineDateBounds(args.range);
     const source = state.phase === "starts"
       ? ctx.db.query("events").withIndex("by_publicationState_eventStatus_startAt", q => q.eq("publicationState", "published").eq("eventStatus", "scheduled").gte("startAt", args.range.startAt).lt("startAt", args.range.endAt))
@@ -29,12 +58,12 @@ export const listPublic = query({
     const items: TimelinePage["items"] = [];
     for (const event of page.page) {
       const schedule = timelineSchedule(event);
-      if (schedule === null || !overlapsTimeline(schedule, args.range)) continue;
+      if (schedule === null) continue;
       // Phases are disjoint even when a record has both an authored date and start.
       if (state.phase === "dates" ? schedule.kind !== "date_only"
         : schedule.kind === "date_only" || (state.phase === "ongoing" && schedule.startAt >= args.range.startAt)) continue;
       const identity = await timelineEventIdentity(ctx.db, event);
-      if (identity === null) continue;
+      if (identity === null || !overlapsTimeline(identity.schedule, args.range)) continue;
       items.push({
         ...identity,
         slots: [],
@@ -42,7 +71,6 @@ export const listPublic = query({
         rosterCursor: encodeTimelineCursor(`roster:${event._id}`, args.range, { phase: "slots", databaseCursor: null }),
       });
     }
-    const next = state.phase === "starts" ? "ongoing" : state.phase === "ongoing" ? "dates" : null;
     const cursor = page.isDone
       ? next === null ? null : encodeTimelineCursor("events", args.range, { phase: next, databaseCursor: null })
       : encodeTimelineCursor("events", args.range, { phase: state.phase, databaseCursor: page.continueCursor });

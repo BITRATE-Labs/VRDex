@@ -1510,6 +1510,9 @@ export default defineSchema({
     .index("by_eventId_startAt", ["eventId", "startAt"])
     .index("by_eventId_personProfileId_reviewState", ["eventId", "personProfileId", "reviewState"])
     .index("by_eventId_reviewState_startAt", ["eventId", "reviewState", "startAt"])
+      .index("by_eventId_reviewState_endAt", ["eventId", "reviewState", "endAt"])
+      .index("by_reviewState_startAt", ["reviewState", "startAt"])
+      .index("by_reviewState_endAt", ["reviewState", "endAt"])
     .index("by_personProfileId_reviewState_startAt", [
       "personProfileId",
       "reviewState",
