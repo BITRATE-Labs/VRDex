@@ -101,23 +101,36 @@ Geometry uses absolute elapsed time, so a daylight-saving day may contain
 23 or 25 hours. Repeated local hours show an offset in exact-time detail.
 The Now line means current time, not verified streaming or attendance.
 
-Locked decision, updated by BASIC on November 10, 2026: events with no authored
-end remain discoverable through the last scheduled DJ. Use confirmed lineup
-timing, including the latest known set end, to retain them across later windows.
-Keep the event's end unknown. An explicit event end remains authoritative.
+Locked decision, revised by BASIC on November 10, 2026: alongside upcoming
+and overlapping events, retain an event when its start, explicit end, or a
+confirmed DJ set start or end falls within the past 24 elapsed hours. Include
+the exact 24-hour boundary and exclude future timestamps from recent activity.
+This replaces the earlier final-DJ coverage proposal. Recently finished events
+will remain discoverable; retention does not mean they are still live.
 
-If the final DJ has no end time, retain the known final start without inventing
-a duration. Their actual finish remains unresolved. Events with no confirmed
-set times retain start-only membership. Known set ends use exclusive upper
-boundaries; known starts include the lower boundary. Query indexed set times
-rather than scanning historical no-end events, and deduplicate event identities
-across candidate phases.
+Keep the timeline's authored geometry, visible hours and navigation unchanged.
+While its viewport includes Now, show retained events outside those hours in a
+compact Recent list below the chart, with the matching actual time labeled as
+Start, End, Set start or Set end. Do not duplicate an event already shown in the
+viewport. Panning to another historical or future range hides Recent; Now
+restores it. Favorites apply to both surfaces.
 
-No-end events remain start markers with an unresolved-end indication. While
-their lineup overlaps the visible window, keep the marker at the viewport's
-leading edge if its original start has scrolled away. Preserve the authored
-start in event details. Do not use the six-hour runtime eligibility fallback or
-reserve a fabricated multi-hour bar.
+```mermaid
+flowchart LR
+  Home[Home or Now] --> Schedule[Upcoming and overlapping events]
+  Home --> Recent[Recent actual timestamps]
+  Schedule --> Detail[Event details]
+  Recent --> Detail
+  Schedule --> Pan[Pan or select a date]
+  Pan --> Range[Selected range only]
+  Range -->|Now| Home
+```
+
+Keep explicit timestamps and unknown ends unchanged. Do not infer an event
+end from its lineup or use a fixed runtime fallback. No-end events in the chart
+remain start markers. Query bounded indexed timestamps and deduplicate events
+across phases. Date-only records retain calendar-date behavior without gaining
+an invented start instant.
 
 Date-only events live in a
 compact untimed group under their authored date. Sets with unresolved times

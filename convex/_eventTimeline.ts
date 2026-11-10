@@ -62,33 +62,25 @@ export function timelineDateBounds(range: TimelineRange) {
 export function overlapsTimeline(schedule: TimelineSchedule, range: TimelineRange): boolean {
   switch (schedule.kind) {
     case "timed": return schedule.startAt < range.endAt && schedule.endAt > range.startAt;
-    case "open_end": return schedule.startAt < range.endAt && (
-      (schedule.lastSetStartAt ?? schedule.startAt) >= range.startAt ||
-      (schedule.lineupEndAt !== undefined && schedule.lineupEndAt > range.startAt));
+    case "open_end": return schedule.startAt >= range.startAt && schedule.startAt < range.endAt;
     case "date_only": {
       const { first, last } = timelineDateBounds(range);
       return schedule.eventDate >= first && schedule.eventDate <= last;
     }
   }
 }
+/** Discovery includes actual end timestamps as well as interval overlap. */
+export function touchesTimeline(schedule: TimelineSchedule, range: TimelineRange): boolean {
+  return overlapsTimeline(schedule, range) || (schedule.kind === "timed" &&
+    schedule.endAt >= range.startAt && schedule.endAt < range.endAt);
+}
 export async function timelineEventIdentity(db: DatabaseReader, event: Doc<"events">, options: { includeCancelled?: boolean; includeHostImage?: boolean } = {}): Promise<TimelineEventIdentity | null> {
   if (event.publicationState !== "published" || event.slug === undefined ||
       (event.eventStatus !== "scheduled" && !(options.includeCancelled && event.eventStatus === "cancelled"))) return null;
-  let schedule = timelineSchedule(event);
+  const schedule = timelineSchedule(event);
   if (schedule === null) return null;
   const community = await getPublishedCommunity(db, event);
   if (event.communityProfileId !== undefined && community === undefined) return null;
-  if (schedule.kind === "open_end") {
-    const startAt = schedule.startAt;
-    const [lastStart, lastEnd] = await Promise.all([
-      db.query("eventSlots").withIndex("by_eventId_reviewState_startAt", q => q.eq("eventId", event._id).eq("reviewState", "confirmed").gte("startAt", startAt)).order("desc").first(),
-      db.query("eventSlots").withIndex("by_eventId_reviewState_endAt", q => q.eq("eventId", event._id).eq("reviewState", "confirmed").gt("endAt", startAt)).order("desc").first(),
-    ]);
-    schedule = { ...schedule,
-      ...(lastStart === null ? {} : { lastSetStartAt: lastStart.startAt }),
-      ...(lastEnd?.endAt === undefined ? {} : { lineupEndAt: lastEnd.endAt }),
-    };
-  }
   const host = community === undefined ? undefined : {
     id: community._id, slug: community.slug, displayName: community.displayName,
     ...(options.includeHostImage === false ? {} : { imageUrl: await getPublicEventCommunityImage(db, community) }),

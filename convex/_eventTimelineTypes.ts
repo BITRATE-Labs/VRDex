@@ -5,7 +5,7 @@ export type PlanReference =
   | { kind: "set"; eventId: string; slotId: string };
 export type TimelineSchedule =
   | { kind: "timed"; startAt: number; endAt: number }
-  | { kind: "open_end"; startAt: number; lastSetStartAt?: number; lineupEndAt?: number }
+  | { kind: "open_end"; startAt: number }
   | { kind: "date_only"; eventDate: string };
 type TimelinePerson = { id: string; slug: string; displayName: string };
 export type TimelineSlot = {

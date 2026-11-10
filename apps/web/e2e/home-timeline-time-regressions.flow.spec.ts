@@ -1,31 +1,43 @@
 import { expect } from "@playwright/test";
 import { test, TIMELINE_NOW } from "./home-timeline-fixture";
 
-test.describe("open-end lineup coverage @flow @fixture", () => {
-  test.use({ timelineScenario: "lineup-end" });
+test.describe("recent event timestamps @flow @fixture", () => {
+  test.use({ timelineScenario: "recent-timestamps" });
 
-  test("keeps the event discoverable during its last DJ set without claiming an event end", async ({ page }, info) => {
+  test("retains recent starts, ends and DJ times without moving them into the current timeline", async ({ page }, info) => {
     const hour = 3_600_000;
-    const eventStart = TIMELINE_NOW - 2.5 * hour;
+    const finalSetEnd = TIMELINE_NOW - 0.5 * hour;
     await page.clock.setFixedTime(TIMELINE_NOW);
-    await page.goto(`/?at=${eventStart + 1.5 * hour}&tz=UTC`);
+    await page.goto("/?tz=UTC");
     await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready");
-    const event = page.getByRole("button", { name: "Open Soft Focus, Time TBA", exact: true });
-    await expect.poll(() => event.evaluate((element) => {
-      const marker = element.getBoundingClientRect();
-      const chart = element.closest('[aria-label="Timeline chart"]')!.getBoundingClientRect();
-      return marker.left >= chart.left - 1 && marker.right <= chart.right + 1;
-    })).toBe(true);
-    await event.scrollIntoViewIfNeeded();
-    await expect(event).toBeInViewport();
-    await page.screenshot({ path: info.outputPath("open-end-during-final-set.png"), fullPage: true });
-    await event.click();
+    const recent = page.getByRole("region", { name: "Recent events", exact: true });
+    const softFocus = recent.getByRole("button", { name: "Open Soft Focus", exact: true });
+    await expect(softFocus).toBeVisible();
+    await expect(recent.getByRole("button", { name: "Open Afterimage", exact: true })).toBeVisible();
+    await expect(softFocus.locator("time")).toHaveAttribute("datetime", new Date(finalSetEnd).toISOString());
+    await expect(softFocus).toContainText("Set end");
+    await expect(recent.getByText(/live/i)).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Timeline chart", exact: true }).getByRole("button", { name: "Open Signal Room", exact: true })).toBeVisible();
+    await softFocus.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath("recent-event-timestamps.png"), fullPage: true });
+    await softFocus.click();
     const detail = page.getByRole("region", { name: "Event details", exact: true });
-    await expect(detail).toBeVisible();
     await expect(detail.locator("p").filter({ hasText: "Time TBA" }).first()).toBeVisible();
-    await page.goto(`/?at=${eventStart + 2 * hour}&tz=UTC`);
+
+    await page.goto(`/?at=${TIMELINE_NOW - 72 * hour}&tz=UTC`);
     await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready");
-    await expect(event).toHaveCount(0);
+    await expect(recent).toHaveCount(0);
+    await page.getByRole("button", { name: "Now", exact: true }).click();
+    await expect(softFocus).toBeVisible();
+
+    await page.clock.setFixedTime(finalSetEnd + 24 * hour);
+    await page.goto("/?tz=UTC");
+    await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready");
+    await expect(softFocus).toBeVisible();
+    await page.clock.setFixedTime(finalSetEnd + 24 * hour + 1);
+    await page.goto("/?tz=UTC");
+    await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready");
+    await expect(softFocus).toHaveCount(0);
   });
 });
 

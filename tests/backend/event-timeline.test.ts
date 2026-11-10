@@ -59,7 +59,7 @@ it("includesEarlierOngoingEvents", async () => {
     const ids = [];
     for (let i = 0; i < 60; i++) ids.push(await db.insert("events", { ...eventBase, slug: `ongoing-${i}`, startAt: startAt - (24 + i) * hour, endAt: startAt + 1 }));
     ids.push(await db.insert("events", { ...eventBase, slug: "lower-bound" }));
-    await db.insert("events", { ...eventBase, slug: "ended", startAt: startAt - hour, endAt: startAt });
+    ids.push(await db.insert("events", { ...eventBase, slug: "ended-at-lower-bound", startAt: startAt - hour, endAt: startAt }));
     await db.insert("events", { ...eventBase, slug: "upper-bound", startAt: range.endAt, endAt: range.endAt + hour });
     return ids;
   });
@@ -78,36 +78,30 @@ it("doesNotCarryUnknownEndsForward", async () => {
   assert.deepEqual(items[0]?.schedule, { kind: "open_end", startAt });
 });
 
-it("keeps no-end contributor events through confirmed lineup timing without authoring an end", async () => {
+it("includes actual event and confirmed DJ timestamps at the recent-window boundary", async () => {
   const t = setup();
-  const id = await t.run(async ({ db }) => {
-    const eventId = await db.insert("events", { ...eventBase, sourceType: "contributor", startAt: startAt - 4 * hour, endAt: undefined });
-    for (let i = 0; i < 81; i++) await db.insert("eventSlots", { ...slotBase, eventId, position: i, startAt: startAt - 4 * hour, endAt: startAt - 3 * hour });
-    await db.insert("eventSlots", { ...slotBase, eventId, position: 81, startAt: startAt - hour, endAt: startAt + hour });
-    await db.insert("eventSlots", { ...slotBase, eventId, reviewState: "draft", startAt: startAt + 3 * hour, endAt: startAt + 4 * hour });
-    return eventId;
-  });
-  const items = await all(t);
-  assert.deepEqual(items.map(item => item.id), [id]);
-  assert.deepEqual(items[0]?.schedule, { kind: "open_end", startAt: startAt - 4 * hour, lastSetStartAt: startAt - hour, lineupEndAt: startAt + hour });
-  assert.deepEqual(await all(t, { ...range, startAt: startAt + hour }), []);
-  assert.equal((await t.run(({ db }) => db.get(id)))?.endAt, undefined);
-  assert.deepEqual((await t.query(resolve, { references: [{ kind: "event", eventId: id }] }))[0]?.kind, "available");
-});
-
-it("retains a final DJ's known start without inventing their end or extending explicit event ends", async () => {
-  const t = setup();
-  const ids = await t.run(async ({ db }) => {
-    const open = await db.insert("events", { ...eventBase, startAt: startAt - 4 * hour, endAt: undefined });
-    const explicit = await db.insert("events", { ...eventBase, startAt: startAt - 4 * hour, endAt: startAt });
-    for (const eventId of [open, explicit]) {
-      await db.insert("eventSlots", { ...slotBase, eventId, startAt: startAt - 2 * hour, endAt: startAt - hour });
-      await db.insert("eventSlots", { ...slotBase, eventId, startAt, endAt: undefined });
+  const recent = { startAt, endAt: startAt + 24 * hour + 1, timeZone: "UTC" };
+  const expected = await t.run(async ({ db }) => {
+    const ids = [];
+    ids.push(await db.insert("events", { ...eventBase, sourceType: "contributor", endAt: undefined }));
+    ids.push(await db.insert("events", { ...eventBase, startAt: startAt - 4 * hour, endAt: startAt }));
+    for (const timing of [{ startAt, endAt: undefined }, { startAt: startAt - hour, endAt: startAt }]) {
+      const eventId = await db.insert("events", { ...eventBase, startAt: startAt - 48 * hour, endAt: undefined });
+      await db.insert("eventSlots", { ...slotBase, eventId, ...timing });
+      // A later future DJ must not conceal the qualifying recent timestamp.
+      await db.insert("eventSlots", { ...slotBase, eventId, position: 1, startAt: recent.endAt + hour, endAt: recent.endAt + 2 * hour });
+      ids.push(eventId);
     }
-    return { open, explicit };
+    await db.insert("events", { ...eventBase, startAt: startAt - hour, endAt: startAt - 1 });
+    const draft = await db.insert("events", { ...eventBase, startAt: startAt - 48 * hour, endAt: undefined });
+    await db.insert("eventSlots", { ...slotBase, eventId: draft, reviewState: "draft" });
+    return ids;
   });
-  assert.deepEqual((await all(t)).map(item => item.id), [ids.open]);
-  assert.deepEqual(await all(t, { ...range, startAt: startAt + 1 }), []);
+  const items = await all(t, recent, 1);
+  assert.deepEqual(items.map(item => item.id).sort(), expected.sort());
+  assert.deepEqual(items.find(item => item.id === expected[2])?.schedule, { kind: "open_end", startAt: startAt - 48 * hour });
+  const later = await all(t, { ...recent, startAt: startAt + 1 });
+  assert.ok(!later.some(item => item.id === expected[1] || item.id === expected[2] || item.id === expected[3]));
 });
 
 it("finds ongoing lineups without paging through expired no-end events and deduplicates tied sets", async () => {
@@ -118,7 +112,7 @@ it("finds ongoing lineups without paging through expired no-end events and dedup
       await db.insert("eventSlots", { ...slotBase, eventId, startAt: startAt - 96 * hour, endAt: startAt - 95 * hour });
     }
     const eventId = await db.insert("events", { ...eventBase, startAt: startAt - 72 * hour, endAt: undefined });
-    for (let i = 0; i < 2; i++) await db.insert("eventSlots", { ...slotBase, eventId, position: i, startAt: startAt - hour, endAt: startAt + hour });
+    for (let i = 0; i < 2; i++) await db.insert("eventSlots", { ...slotBase, eventId, position: i, startAt, endAt: startAt + hour });
     return eventId;
   });
   const items: TimelineEvent[] = [];
@@ -319,7 +313,7 @@ it("preserves canonical host identity and revokes existing roster and saved refe
   assert.deepEqual(await t.query(resolve, { references: [reference] }), [{ reference, kind: "unavailable" }]);
 });
 
-it("bounds event identities and separately reads only overlapping authored slot times", async () => {
+it("bounds event identities and separately reads authored slot times touching the range", async () => {
   const t = setup();
   const ids = await t.run(async ({ db }) => {
     const events = [];
@@ -329,8 +323,8 @@ it("bounds event identities and separately reads only overlapping authored slot 
       events.push(eventId);
       const lower = await db.insert("eventSlots", { ...slotBase, eventId, endAt: undefined });
       const earlier = await db.insert("eventSlots", { ...slotBase, eventId, startAt: startAt - hour, endAt: startAt + 1 });
-      slots.push([lower, earlier]);
-      await db.insert("eventSlots", { ...slotBase, eventId, startAt: startAt - hour, endAt: startAt });
+      const ending = await db.insert("eventSlots", { ...slotBase, eventId, startAt: startAt - hour, endAt: startAt });
+      slots.push([lower, earlier, ending]);
       await db.insert("eventSlots", { ...slotBase, eventId, startAt: range.endAt, endAt: undefined });
     }
     return { events, slots };

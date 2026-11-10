@@ -3,6 +3,8 @@ import { it } from "node:test";
 import {
   createTimelineController,
   inRange,
+  recentEventTime,
+  timelineQueryRange,
   windowsForRange,
 } from "../../apps/web/src/lib/timeline/window-cache";
 import type {
@@ -13,14 +15,6 @@ import type {
 } from "../../convex/_eventTimelineTypes";
 const h = 3_600_000;
 
-it("keeps an open-end event in the viewport through authored lineup timing", () => {
-  const schedule = { kind: "open_end" as const, startAt: 8 * h, lastSetStartAt: 10 * h, lineupEndAt: 11 * h };
-  const viewport = { startAt: 10.5 * h, endAt: 18 * h, timeZone: "UTC" };
-  assert.equal(inRange({ schedule }, viewport), true);
-  assert.equal(inRange({ schedule }, { ...viewport, startAt: 11 * h }), false);
-  assert.equal(inRange({ schedule: { ...schedule, lineupEndAt: undefined } }, { ...viewport, startAt: 10 * h }), true);
-  assert.equal(inRange({ schedule: { ...schedule, lineupEndAt: undefined } }, viewport), false);
-});
 const range = { startAt: 12 * h, endAt: 20 * h, timeZone: "UTC" };
 const event = (id: string): TimelineEvent => ({
   id,
@@ -540,4 +534,26 @@ it("including an earlier prefetch window does not repack an established ongoing 
     c.getSnapshot().eventLanes.find((l) => l.eventId === "ongoing")?.lane,
     0,
   );
+});
+
+it("retains actual timestamps for exactly 24 elapsed hours and excludes future times", () => {
+  const now = 100 * h;
+  const candidate = { ...event("recent"), schedule: { kind: "open_end" as const, startAt: now - 25 * h }, slots: [
+    { id: "recent-set", eventId: "recent", displayLabel: "DJ", schedule: { kind: "timed" as const, startAt: now - 25 * h, endAt: now - 24 * h } },
+    { id: "future-set", eventId: "recent", displayLabel: "DJ", schedule: { kind: "open_end" as const, startAt: now + h } },
+  ] };
+  assert.deepEqual(recentEventTime(candidate, now), { at: now - 24 * h, label: "Set end" });
+  assert.equal(recentEventTime(candidate, now + 1), undefined);
+  assert.deepEqual(recentEventTime({ ...candidate, schedule: { kind: "timed", startAt: now - 48 * h, endAt: now } }, now), { at: now, label: "End" });
+  assert.equal(recentEventTime({ ...event("future"), schedule: { kind: "open_end", startAt: now + 1 } }, now), undefined);
+});
+
+it("loads recent events only while browsing Now and preserves upcoming and historical geometry", () => {
+  const now = 15 * h;
+  assert.deepEqual(timelineQueryRange(range, now), { ...range, startAt: now - 24 * h });
+  const future = { ...range, startAt: 24 * h, endAt: 32 * h };
+  assert.deepEqual(timelineQueryRange(future, now), future);
+  const past = { ...range, startAt: 0, endAt: 8 * h };
+  assert.deepEqual(timelineQueryRange(past, now), past);
+  assert.equal(inRange({ schedule: { kind: "timed", startAt: 10 * h, endAt: 11 * h } }, range), false);
 });

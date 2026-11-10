@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { encodeTimelineCursor, overlapsTimeline, readTimelineCursor, timelineDateBounds, timelineEventIdentity, timelineLimit, timelinePerformer, timelineSchedule, timelineSlot, validateTimelineRange } from "./_eventTimeline";
+import { encodeTimelineCursor, readTimelineCursor, timelineDateBounds, timelineEventIdentity, timelineLimit, timelinePerformer, timelineSchedule, timelineSlot, touchesTimeline, validateTimelineRange } from "./_eventTimeline";
 import type { EventPhase, RosterPhase } from "./_eventTimeline";
 import type { SavedResolution, TimelinePage, TimelineRosterPage } from "./_eventTimelineTypes";
 
@@ -20,25 +20,25 @@ export const listPublic = query({
     const limit = timelineLimit(args.limit);
     const state = readTimelineCursor(args.cursor, "events", args.range, eventPhases, "starts");
     const next = eventPhases[eventPhases.indexOf(state.phase) + 1] ?? null;
-    // shortcut: candidate pages include unrelated future sets, index event coverage if these exhaust the viewport budget.
     if (state.phase === "lineupStarts" || state.phase === "lineupEnds") {
       const starts = state.phase === "lineupStarts";
       const source = starts
-        ? ctx.db.query("eventSlots").withIndex("by_reviewState_startAt", q => q.eq("reviewState", "confirmed").gte("startAt", args.range.startAt))
-        : ctx.db.query("eventSlots").withIndex("by_reviewState_endAt", q => q.eq("reviewState", "confirmed").gt("endAt", args.range.startAt));
+        ? ctx.db.query("eventSlots").withIndex("by_reviewState_startAt", q => q.eq("reviewState", "confirmed").gte("startAt", args.range.startAt).lt("startAt", args.range.endAt))
+        : ctx.db.query("eventSlots").withIndex("by_reviewState_endAt", q => q.eq("reviewState", "confirmed").gte("endAt", args.range.startAt).lt("endAt", args.range.endAt));
       const page = await source.paginate({ numItems: limit, cursor: state.databaseCursor, maximumRowsRead: limit });
       const items: TimelinePage["items"] = [];
       for (const slot of page.page) {
         const event = await ctx.db.get(slot.eventId);
-        if (event === null || event.scheduleKind === "date_only" || event.endAt !== undefined ||
-            event.startAt === undefined || event.startAt >= args.range.startAt) continue;
+        if (event === null || event.scheduleKind === "date_only") continue;
         const identity = await timelineEventIdentity(ctx.db, event);
-        if (identity === null || identity.schedule.kind !== "open_end" || !overlapsTimeline(identity.schedule, args.range)) continue;
-        // One representative per event and phase, including tied set times.
-        if (!starts && (identity.schedule.lastSetStartAt ?? event.startAt) >= args.range.startAt) continue;
+        if (identity === null || touchesTimeline(identity.schedule, args.range)) continue;
+        // Each event appears once, even with tied times or timestamps in both phases.
+        const startsInRange = ctx.db.query("eventSlots").withIndex("by_eventId_reviewState_startAt", q =>
+          q.eq("eventId", event._id).eq("reviewState", "confirmed").gte("startAt", args.range.startAt).lt("startAt", args.range.endAt));
+        if (!starts && await startsInRange.first() !== null) continue;
         const representative = starts
-          ? await ctx.db.query("eventSlots").withIndex("by_eventId_reviewState_startAt", q => q.eq("eventId", event._id).eq("reviewState", "confirmed")).order("desc").first()
-          : await ctx.db.query("eventSlots").withIndex("by_eventId_reviewState_endAt", q => q.eq("eventId", event._id).eq("reviewState", "confirmed")).order("desc").first();
+          ? await startsInRange.order("desc").first()
+          : await ctx.db.query("eventSlots").withIndex("by_eventId_reviewState_endAt", q => q.eq("eventId", event._id).eq("reviewState", "confirmed").gte("endAt", args.range.startAt).lt("endAt", args.range.endAt)).order("desc").first();
         if (representative?._id !== slot._id) continue;
         items.push({ ...identity, slots: [], performers: [],
           rosterCursor: encodeTimelineCursor(`roster:${event._id}`, args.range, { phase: "slots", databaseCursor: null }) });
@@ -52,7 +52,7 @@ export const listPublic = query({
     const source = state.phase === "starts"
       ? ctx.db.query("events").withIndex("by_publicationState_eventStatus_startAt", q => q.eq("publicationState", "published").eq("eventStatus", "scheduled").gte("startAt", args.range.startAt).lt("startAt", args.range.endAt))
       : state.phase === "ongoing"
-        ? ctx.db.query("events").withIndex("by_publicationState_eventStatus_endAt", q => q.eq("publicationState", "published").eq("eventStatus", "scheduled").gt("endAt", args.range.startAt))
+        ? ctx.db.query("events").withIndex("by_publicationState_eventStatus_endAt", q => q.eq("publicationState", "published").eq("eventStatus", "scheduled").gte("endAt", args.range.startAt))
         : ctx.db.query("events").withIndex("by_publicationState_eventStatus_eventDate", q => q.eq("publicationState", "published").eq("eventStatus", "scheduled").gte("eventDate", first).lte("eventDate", last));
     const page = await source.paginate({ numItems: limit, cursor: state.databaseCursor, maximumRowsRead: limit });
     const items: TimelinePage["items"] = [];
@@ -63,7 +63,7 @@ export const listPublic = query({
       if (state.phase === "dates" ? schedule.kind !== "date_only"
         : schedule.kind === "date_only" || (state.phase === "ongoing" && schedule.startAt >= args.range.startAt)) continue;
       const identity = await timelineEventIdentity(ctx.db, event);
-      if (identity === null || !overlapsTimeline(identity.schedule, args.range)) continue;
+      if (identity === null || !touchesTimeline(identity.schedule, args.range)) continue;
       items.push({
         ...identity,
         slots: [],
@@ -104,7 +104,7 @@ export const listPublicRoster = query({
           const slot = await timelineSlot(ctx.db, row);
           if (slot === null) continue;
           if (slot.performer !== undefined) people.set(slot.performer.id, slot.performer);
-          if (args.detail || overlapsTimeline(slot.schedule, args.range)) items.push(slot);
+          if (args.detail || touchesTimeline(slot.schedule, args.range)) items.push(slot);
           if (args.detail) rows.push({kind: "slot", key: slot.id, position: row.position, displayLabel: slot.displayLabel,
             roleLabel: row.roleLabel || undefined, startAt: slot.schedule.startAt,
             ...(slot.schedule.kind === "timed" ? {endAt: slot.schedule.endAt} : {}),
