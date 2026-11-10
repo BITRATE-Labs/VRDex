@@ -132,6 +132,14 @@ function classify(samples,length,edges,scratch,counters) {
 
 /** Chunk boundaries are irrelevant; RMS blocks restart at EACH metadata row. */
 export function decodeSourceAudio(chunks,rows,clock) {
+  return decodeObservedRows(chunks,rows,clock,false);
+}
+/** Pure classification facts only. This does not establish continuity, create
+ * a clock, or authorize any native/ordinary decoder acceptance. */
+export function classifyObservedSourceAudio(chunks,rows) {
+  return decodeObservedRows(chunks,rows,undefined,true);
+}
+function decodeObservedRows(chunks,rows,clock,observed) {
   if(!Array.isArray(chunks)||!Array.isArray(rows)||!rows.length) throw Error('marker_audio_metadata');
   if(clock!==undefined)assertAudioClock(clock,chunks,rows);
   let bytes=0,total=0,lastEnd;
@@ -139,7 +147,7 @@ export function decodeSourceAudio(chunks,rows,clock) {
   for(let i=0;i<rows.length;i++) {
     const r=rows[i];
     if(r.index!==i||!Number.isSafeInteger(r.pts)||!Number.isSafeInteger(r.samples)||r.samples<=0) throw Error('marker_audio_metadata');
-    if(clock===undefined&&lastEnd!==undefined&&r.pts!==lastEnd) throw Error('marker_audio_continuity');
+    if(!observed&&clock===undefined&&lastEnd!==undefined&&r.pts!==lastEnd) throw Error('marker_audio_continuity');
     lastEnd=safe(r.pts+r.samples);total=safe(total+r.samples);
   }
   if(safe(total*2)!==bytes) throw Error('marker_pcm_length');
