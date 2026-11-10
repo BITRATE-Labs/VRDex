@@ -5,6 +5,7 @@ import {
 import { validateShape } from "../workers/restream/worker-allocation.mjs";
 import { MARKER_SCHEMA } from "./event-source-markers.mjs";
 import { validateMarkerRecord, assertMarkerEvidenceSize } from "./event-marker-evidence.mjs";
+import {CAPTURED_TRANSPORT_ARTIFACTS,CAPTURED_TRANSPORT_ARTIFACT_LIMITS,isCapturedTransportApplicable} from './event-captured-transport-artifacts.mjs';
 export const BENCHMARK_SHAPES = Object.freeze([
   "4096:8192",
   "8192:16384",
@@ -106,6 +107,8 @@ export function validateOutputFacts(facts, settings, destination) {
   )
     throw Error("Output format/packet contract failed");
   if (facts.markerSchema !== MARKER_SCHEMA) throw Error("marker_schema");
+  if(facts.markerEvidence?.transportClock&&destination!=='twitch')throw Error('marker_transport_destination');
+  if(facts.markerEvidence?.transportClock&&(settings.videoPreset!=='720p30'||settings.audioBitrateKbps!==320||facts.markerEvidence.transportClock.fps!==p.frameRate))throw Error('marker_transport_profile');
   const proof = validateMarkerRecord(facts.markerEvidence);
   const transitions = proof.contexts.filter(c => c.kind === 'transition');
   const steady = proof.contexts.filter(c => c.kind === 'steady');
@@ -240,6 +243,10 @@ export function validateCapacityReceipt(r) {
     )
   )
     throw Error("Missing or duplicate output destination");
+  const captureApplicable=r.request.simulcastEnabled&&isCapturedTransportApplicable(r.request);
+  const capturedOutput=r.outputs.find(output=>output.destination==='twitch')?.markerEvidence?.transportClock;
+  if(captureApplicable&&(!capturedOutput||r.capturedTransport?.kind!=='physically-closed-transport'))throw Error('marker_transport_required');
+  if(capturedOutput&&!captureApplicable)throw Error('marker_transport_profile');
   for (const output of r.outputs)
     validateOutputFacts(output, r.request.settings, output.destination);
   assertMarkerEvidenceSize(r.outputs.map(output => output.markerEvidence));
@@ -250,14 +257,24 @@ export function validateCapacityReceipt(r) {
       (a) =>
         typeof a.sha256 !== "string" ||
         !/^([0-9a-f]{64})$/.test(a.sha256) ||
-        !positive(a.bytes) ||
+        !(positive(a.bytes)||(CAPTURED_TRANSPORT_ARTIFACTS.includes(a.name)&&a.name.endsWith('.stderr')&&a.bytes===0&&a.sha256==='e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')) ||
         a.complete !== true,
     )
   )
     throw Error("Incomplete evidence artifacts");
+  if(r.artifacts.reduce((sum,a)=>sum+a.bytes,0)>Math.ceil((r.request.durationSeconds+180)*1500000))throw Error('Incomplete evidence artifacts: total artifact budget');
   for (const output of r.outputs) {
     const artifacts = r.artifacts.filter(a => a.name === `${output.destination}.ts`);
     if (artifacts.length !== 1 || artifacts[0].sha256 !== output.markerEvidence.recordingSha256) throw Error('marker_artifact_binding');
+    const clock=output.markerEvidence.transportClock;
+    if(clock) {
+      const artifact=name=>{const rows=r.artifacts.filter(a=>a.name===name);if(rows.length!==1)throw Error('marker_transport_artifact');return rows[0];};
+      for(const name of CAPTURED_TRANSPORT_ARTIFACTS)if(artifact(name).bytes>CAPTURED_TRANSPORT_ARTIFACT_LIMITS[name])throw Error('marker_transport_artifact');
+      for(const ref of [clock.evidence,clock.decoderEvidence]){const a=artifact(ref.file);if(a.sha256!==ref.sha256||a.bytes!==ref.bytes)throw Error('marker_transport_artifact');}
+      if(artifact('captured-decode-4.bin').sha256!==clock.audioSha256||artifact('captured-decode-3.bin').sha256!==clock.videoSha256)throw Error('marker_transport_artifact');
+      if(r.capturedTransport?.kind!=='physically-closed-transport')throw Error('marker_transport_artifact');
+      for(const binding of Object.values(r.capturedTransport.bindings??{})){const a=artifact(binding.file.split(/[\\/]/).at(-1));if(a.sha256!==binding.sha256||a.bytes!==binding.bytes)throw Error('marker_transport_artifact');}
+    }
   }
   return r;
 }
