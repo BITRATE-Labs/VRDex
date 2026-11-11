@@ -1195,6 +1195,21 @@ for (const priorObservation of [false, true]) it(`R5_REVIEW legacy ${priorObserv
   assert.equal(attempts, cleanedAttempts); assert.deepEqual(await publication(), before);
 });
 
+it('Stop supersedes an in-flight progress report without fencing the owner before acknowledgement', async () => {
+  const f = await admittedBeforeAcquisition();
+  const lease = await f.t.mutation(worker('acquireSession'), f.args);
+  const request = {...f.args, epoch: lease.epoch};
+  const stop = await f.owner.mutation(api.events.stopEventMediaWorker, {currentSlug:f.event.slug,sessionId:f.args.sessionId});
+  const report = {...request,intentSequence:0,outputId:f.output.outputId,state:'hold',outputMs:1000,publishing:true};
+  assert.deepEqual(await f.t.mutation(worker('observeProgram'), report), {kind:'superseded'});
+  assert.equal((await f.t.mutation(worker('observeProgram'), {...report,epoch:lease.epoch-1})).kind,'fenced');
+  assert.equal((await f.t.run(({db})=>db.get(f.args.sessionId)))?.status,'stopping');
+  const claims = await f.t.mutation(worker('claimCommands'), request);
+  const command = claims.commands.find(row=>row._id===stop.stopCommandId)!;
+  await f.t.mutation(worker('acknowledgeCommand'), {...request,commandId:command._id,sequence:command.sequence,outcome:'succeeded',observedState:'ended'});
+  assert.equal((await f.t.run(({db})=>db.get(f.args.sessionId)))?.status,'ended');
+});
+
 for (const optionalActive of [false, true]) it(`R6F1 abrupt exact-task STOPPED permits replacement without resaving (optional active=${optionalActive})`, async () => {
   const f = await admittedBeforeAcquisition();
   const lease = await f.t.mutation(worker('acquireSession'), f.args);

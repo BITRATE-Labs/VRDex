@@ -669,7 +669,7 @@ jobs:
         run: pnpm --filter web exec playwright test --grep @flow --project=desktop-chromium --workers=1
 
       - name: Install synthetic media tools
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
           bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
           sudo apt-get update && sudo apt-get install -y ffmpeg pulseaudio pulseaudio-utils

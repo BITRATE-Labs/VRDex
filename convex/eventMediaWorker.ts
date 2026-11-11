@@ -481,7 +481,10 @@ export const observeProgram = mutation({ args: { ...workerSessionArgs, intentSeq
         authenticate(args);
         const session=await ctx.db.get(args.sessionId);
         if(session?.controlProtocolVersion===2 && !["ended","error"].includes(args.state)) {
-          const found=await controlFence(ctx.db,args);if("result" in found)return found.result;
+          const stopping = session.stopRequestedAt !== undefined && session.status === "stopping";
+          const found=await controlFence(ctx.db,args,stopping);if("result" in found)return found.result;
+          // Stop supersedes in-flight output evidence; the owner must still acknowledge Stop.
+          if(stopping)return {kind:"superseded" as const};
           if(["live","hold"].includes(args.state) && (!args.publishing || !Number.isFinite(args.outputMs) || args.outputMs<=0))throw Error("Publishing progress is required.");
           const evidence={...args,state:args.state};
           // Committed intent can lead encoded output during Take/Cut. Completion
