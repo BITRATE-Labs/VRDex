@@ -46,7 +46,7 @@ If any of the three Vercel secrets is missing, the run fails and names the missi
 
 When `CONVEX_DEPLOY_KEY_PREVIEW` exists, the workflow creates or updates the
 `pr-<number>` Convex deployment for manual previews, or a run-owned
-`ci-pr-<number>-<head-sha>` deployment for acceptance with `convex deploy --preview-create` before the
+`ci-pr-<number>` deployment for acceptance with `convex deploy --preview-create` before the
 Vercel build. It writes only the resulting `NEXT_PUBLIC_CONVEX_URL` as a step
 output. The project preview deploy key remains confined to GitHub Actions and is
 never injected into Vercel, written to an artifact, or posted in a PR comment.
@@ -95,19 +95,23 @@ target. Shared staging remains useful for deployed health, not PR acceptance.
 
 Acceptance and manual previews have separate concurrency groups and Convex
 names. A manual request cannot cancel the required lane or rotate its helper
-secret. Acceptance names include the full head so a new commit cannot rewrite an older
-commit's backend. Retries of the same head reuse one deployment. Manual dispatch
-with acceptance enabled uses a separate `manual-accept-pr-<number>-<head-sha>`
-backend and event-scoped concurrency group, so it cannot cancel PR acceptance. Acceptance suppresses the manual PR comments and
+secret. Acceptance serialises per PR instead of cancelling its predecessor. It reuses
+one `ci-pr-<number>` backend across heads and retries. A manual dispatch with
+acceptance enabled uses its own `manual-accept-pr-<number>` backend and
+event-scoped group, so it cannot cancel or rewrite PR acceptance.
+Historical preview URLs can point at a backend advanced by a later head. Use
+the full-head, timestamped run artifact as point-in-time evidence and the latest
+run for current acceptance.
+Acceptance suppresses the manual PR comments and
 unrelated MCP smoke; its deployment and browser results feed PR verification.
 
 CI preview deployments consume the existing project's preview quota. No numeric
 cap is assumed here because it is provider/account configuration. After retaining
-the run artifacts and confirming that no task uses a completed head's backend,
-reclaim that exact `ci-pr-<number>-<head-sha>` deployment in the Convex
+the run artifacts and confirming that no task uses a closed PR's backend,
+reclaim that exact `ci-pr-<number>` deployment in the Convex
 Dashboard's preview deployment controls. Check the run's recorded name and URL
-before deletion. Retain the current head while a PR is open; reclaim superseded
-heads and closed PR previews after active uses finish. Leave staging, production and manual `pr-<number>` previews alone.
+before deletion. Retain its backend while a PR is open; reclaim closed PR previews after active
+uses finish. Leave staging, production and manual `pr-<number>` previews alone.
 The installed Convex CLI exposes no preview-deletion command, so this change does
 not invent a deletion API or automate reclamation. A quota failure stops the lane;
 it does not purchase capacity or fall back to shared staging.

@@ -106,6 +106,21 @@ describe("fork-aware preview workflows", () => {
     );
   });
 
+  it("rejects explicitly requested private browser acceptance for a fork before deployment", async () => {
+    const resolve = deploySteps.find(step => step.name === "Resolve pull request");
+    let failure = "";
+    const outputs: Record<string, unknown> = {};
+    const execute = new Function("core", "github", "context", "process", `return (async () => { ${resolve?.with?.script} })()`);
+    await execute(
+      { notice() {}, setFailed(message: string) { failure = message; }, setOutput(name: string, value: unknown) { outputs[name] = value; } },
+      { rest: { pulls: { async get() { return { data: { number: 456, state: "open", head: { sha: "a".repeat(40), ref: "fork", repo: { full_name: "fork/VRDex" } } } }; } } } },
+      { repo: { owner: "BITRATE-Labs", repo: "VRDex" }, eventName: "workflow_dispatch", runId: 1 },
+      { env: { INPUT_PULL_NUMBER: "456", INPUT_HEAD_SHA: "a".repeat(40), BROWSER_ACCEPTANCE: "true" } },
+    );
+    assert.match(failure, /fork/i);
+    assert.equal(outputs.head_sha, undefined, "Do not report a successful acceptance request over skipped private coverage");
+  });
+
   it("withholds hosted e2e secrets from fork heads", () => {
     const hosted = [
       "VRDEX_HOSTED_E2E_BROWSER_TOKEN",
@@ -163,7 +178,7 @@ describe("fork-aware preview workflows", () => {
   });
 
   it("names the deployed SHA in the preview comment", () => {
-    const post = deploySteps.find((step) => step.name === "Post preview comment");
+    const post = deploy.jobs["preview-comments"].steps?.find((step) => step.name === "Post preview comment");
     assert.ok(post);
     assert.ok(JSON.stringify(post).includes("head_sha"));
   });
@@ -214,7 +229,13 @@ describe("optional browser and visual evidence contract", () => {
     const resolve = preview.jobs["deploy-preview"].steps.find((step: { id?: string }) => step.id === "pr");
     assert.ok(preview.concurrency.group.includes("github.event_name"));
     assert.ok(resolve.with.script.includes('context.eventName === "pull_request" ? "ci" : "manual-accept"'));
-    assert.ok(resolve.with.script.includes("${purpose}-pr-${pull.number}-${pull.head.sha}"));
+    assert.ok(resolve.with.script.includes("${purpose}-pr-${pull.number}`"));
+    assert.equal(preview.concurrency["cancel-in-progress"], "${{ !inputs.browser_acceptance }}");
+    for (const job of [preview.jobs["deploy-preview"], preview.jobs["candidate-browser-acceptance"]]) {
+      assert.deepEqual(job.permissions, { contents: "read", "pull-requests": "read" });
+    }
+    assert.equal(preview.jobs["preview-comments"].permissions.issues, "write");
+    assert.ok(preview.jobs["preview-comments"].if.includes("!inputs.browser_acceptance"));
     assert.ok(preview.jobs["hosted-mcp-preview-smoke"].if.includes("!inputs.browser_acceptance"));
     const browser = preview.jobs["candidate-browser-acceptance"];
     assert.ok(browser.if.includes("is_fork == 'false'"));

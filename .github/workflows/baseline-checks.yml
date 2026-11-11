@@ -725,6 +725,8 @@ jobs:
 
   playwright-hosted-data-flow:
     name: Candidate Preview Acceptance
+    # Upper bound for the reusable manual-report jobs; its PR build/test jobs
+    # explicitly restrict their own tokens to read-only.
     if: github.event_name == 'pull_request' && needs.visual-selection.outputs.browsers == 'true' && github.event.pull_request.head.repo.fork == false
     needs: [build-web, visual-selection]
     permissions:

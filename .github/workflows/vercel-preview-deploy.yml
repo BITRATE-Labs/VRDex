@@ -73,21 +73,20 @@ on:
 
 permissions:
   contents: read
-  issues: write
   pull-requests: read
 
-# Workflow scope, not job scope. Two jobs sharing one group with
-# cancel-in-progress, both eligible to start, can reverse-cancel: a newer deploy
-# acquires the group and is then killed by an older run's newly eligible smoke,
-# discarding the most recent human request. At workflow scope a newer request
-# cancels the entire older run, which is the intended behaviour.
+# Keep deployment and its consumers in one group. Manual refreshes replace old
+# manual runs; acceptance queues so a backend writer finishes before reuse.
 concurrency:
   group: on-demand-vercel-preview-${{ inputs.pull_number }}-${{ inputs.browser_acceptance && 'acceptance' || 'manual' }}-${{ github.event_name }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ !inputs.browser_acceptance }}
 
 jobs:
   deploy-preview:
     name: Deploy On-Demand Preview
+    permissions:
+      contents: read
+      pull-requests: read
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
@@ -96,6 +95,7 @@ jobs:
       convex_preview_enabled: ${{ steps.convex-preview-gate.outputs.enabled }}
       convex_preview_url: ${{ steps.convex-preview.outputs.convex_url }}
       deployment_url: ${{ steps.deploy.outputs.url }}
+      head_ref: ${{ steps.pr.outputs.head_ref }}
       head_sha: ${{ steps.pr.outputs.head_sha }}
       is_fork: ${{ steps.pr.outputs.is_fork }}
       pr_number: ${{ steps.pr.outputs.pr_number }}
@@ -128,6 +128,10 @@ jobs:
             if (isFork) {
               core.notice(`Fork head ${pull.head.repo?.full_name}@${pull.head.sha}: hosted E2E helpers withheld.`);
             }
+            if (isFork && process.env.BROWSER_ACCEPTANCE === "true") {
+              core.setFailed("Private browser acceptance is unavailable for fork heads. Request a manual preview without browser acceptance.");
+              return;
+            }
 
             if (pull.state !== "open") {
               core.setFailed(
@@ -154,7 +158,7 @@ jobs:
 
             const purpose = context.eventName === "pull_request" ? "ci" : "manual-accept";
             core.setOutput("preview_name", process.env.BROWSER_ACCEPTANCE === "true"
-              ? `${purpose}-pr-${pull.number}-${pull.head.sha}`
+              ? `${purpose}-pr-${pull.number}`
               : `pr-${pull.number}`);
             core.setOutput("head_sha", requestedSha || pull.head.sha);
             core.setOutput("head_ref", pull.head.ref);
@@ -366,19 +370,29 @@ jobs:
             echo "- Deployment identity: $deployment_url/api/deployment"
           } >> "$GITHUB_STEP_SUMMARY"
 
+
+  preview-comments:
+    name: Report Manual Preview
+    timeout-minutes: 5
+    needs: [deploy-preview]
+    if: always() && !inputs.browser_acceptance && needs.deploy-preview.outputs.pr_number != ''
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
       # Non-fatal: a live preview must not be reported as a failed deploy just
       # because the comment API call did not land.
       - name: Post preview comment
-        if: success() && !inputs.browser_acceptance
+        if: needs.deploy-preview.result == 'success'
         continue-on-error: true
         uses: actions/github-script@v9
         env:
           COMMENT_ID: ${{ inputs.comment_id }}
-          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
-          HEAD_REF: ${{ steps.pr.outputs.head_ref }}
-          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
-          IS_FORK: ${{ steps.pr.outputs.is_fork }}
-          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          DEPLOYMENT_URL: ${{ needs.deploy-preview.outputs.deployment_url }}
+          HEAD_REF: ${{ needs.deploy-preview.outputs.head_ref }}
+          HEAD_SHA: ${{ needs.deploy-preview.outputs.head_sha }}
+          IS_FORK: ${{ needs.deploy-preview.outputs.is_fork }}
+          PR_NUMBER: ${{ needs.deploy-preview.outputs.pr_number }}
         with:
           script: |
             const marker = "<!-- on-demand-vercel-preview-comment -->";
@@ -399,7 +413,7 @@ jobs:
               isFork
                 ? "Hosted MCP preview smoke is skipped for fork heads; it needs the hosted end-to-end credentials this build runs without."
                 : `Hosted MCP preview smoke runs after this deploy in the same run: ${runUrl}`,
-              "This workflow is dispatched, so its jobs do not appear as pull request status checks. Open the run to read the smoke result.",
+              "Open the linked workflow run to read the manual preview smoke result.",
               "",
               "Comment `@vrdex preview` or `/vercel-preview` on this pull request for a fresh deployment.",
             ].join("\n");
@@ -435,11 +449,11 @@ jobs:
             }
 
       - name: Report failure on pull request
-        if: failure() && !inputs.browser_acceptance && steps.pr.outcome == 'success'
+        if: needs.deploy-preview.result == 'failure'
         uses: actions/github-script@v9
         env:
           COMMENT_ID: ${{ inputs.comment_id }}
-          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          PR_NUMBER: ${{ needs.deploy-preview.outputs.pr_number }}
         with:
           script: |
             const marker = "<!-- on-demand-vercel-preview-failure-comment -->";
@@ -489,6 +503,9 @@ jobs:
 
   candidate-browser-acceptance:
     name: Candidate Browser and Backend Acceptance
+    permissions:
+      contents: read
+      pull-requests: read
     needs: [deploy-preview]
     if: inputs.browser_acceptance && needs.deploy-preview.outputs.is_fork == 'false'
     runs-on: ubuntu-24.04
