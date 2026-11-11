@@ -184,3 +184,65 @@ Each target and mutation needs direct owner approval before these steps:
 
 Actual S3 transfer, Clerk sessions, Codex/Claude rendering, hosted multi-user load,
 costs, cleanup-lag measurements and reviewer staffing remain unverified gates.
+
+## Implementation validation, November 11, 2026
+
+The approved role policy and review fixes are implemented on the isolated local
+branch `codex/simple-contribution-policy`. No push, merge, account-role change,
+production deployment, or logo publication was performed for this change.
+
+Validation on the implementation:
+
+| Check | Result |
+| --- | --- |
+| Backend regression set | 3,278 passed across 180 test modules |
+| Excluded backend modules | Four unchanged Windows/FFmpeg or stalled-teardown modules, listed below |
+| Targeted web/MCP adapters | 27 passed |
+| API contracts | 85 passed |
+| MCP package | 13 passed |
+| Desktop/mobile contribution form | Four Storybook browser checks passed |
+| Backend, web, contracts, MCP types | Passed |
+| Local Convex compile and health | Passed on isolated local ports 34910/34911 |
+| Markdown and changed web-module lint | Passed |
+
+The unrestricted backend run was not green. Excluded modules are
+`event-broadcast-output.test.ts`, `event-broadcast-renderer.test.ts`,
+`event-twitch-input.test.ts`, and `now-playing-artwork.test.ts`. Observed failures
+were an FFmpeg encoder pipe closure, renderer timing, Windows descendant-process
+teardown, and Windows absolute-path ESM loading. Their source was unchanged.
+Test children belonging to the stalled runs were stopped after identity checks.
+This exclusion is a verification limit, not proof those modules are healthy.
+
+A fresh independent branch review found three Important issues. All three have
+regressions observed failing before their fixes and passing afterward:
+
+- Replacement review now uses bounded resumable source/replacement pagination.
+  Tests traverse 20 and 55 proposals, page size one, split windows, authority
+  revocation, malformed/foreign cursors, and source changes without duplication.
+- Browser completion rechecks current claim/public-profile eligibility before
+  writes, matching the existing authenticated MCP paths.
+- Capacity discovery reports effective shared ceilings, aggregate deployment and
+  published-byte usage, and shared remaining bytes/concurrency, including lower
+  stored operational limits.
+
+Implementation decisions and limits:
+
+- Native worktree creation returned no result twice. Git fallback provided an
+  isolated checkout, which is not app-managed. The shared checkout was untouched.
+- The existing shared profile editor already supports the approved public fields.
+  Reusing it avoids a redundant admin editor, without adding new field privileges.
+- Nullable quota enforcement and allowance removal were committed together to keep
+  callers consistent. They should be reviewed as one change.
+- Already admitted uploads may finish privately after media-kit intake is hidden
+  or disabled. Claims and loss of public profile eligibility still block
+  completion, and a private candidate cannot bypass publication checks.
+- The latest operator PR-readiness instructions supersede the plan's old fixed
+  waiting-window wording. No pushed-head or merge-ready claim is made here.
+- The approved numerical budgets have not been proven against hosted workloads.
+- Hosted deployment, current account grants, installed Executor tool-definition
+  refresh, and signed-in browser/account acceptance remain unverified. They must
+  be checked after separately authorized deployment. Fixture authentication and
+  local compilation do not establish live-account proof.
+
+Source evidence: implementation commits `514eb77c2`, `5863577cd`, `5f79b8471`,
+and `d9d2cc5af`, based on `440f37c80aecb3d2b867592ef0470b3f7200df90`.
