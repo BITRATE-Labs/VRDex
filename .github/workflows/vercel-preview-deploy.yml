@@ -507,7 +507,7 @@ jobs:
           PLAYWRIGHT_OUTPUT_DIR: test-results-candidate-mutation
           PLAYWRIGHT_HTML_REPORT_DIR: playwright-report-candidate-mutation
           PLAYWRIGHT_JSON_REPORT_FILE: playwright-artifacts/candidate-mutation.json
-        run: pnpm exec playwright test profile-submission.flow.spec.ts --grep "^profile submission writes through" --project=desktop-chromium
+        run: pnpm exec playwright test profile-submission.flow.spec.ts --grep "profile submission writes through to public profile and discovery" --project=desktop-chromium
       - name: Development-instance auth on desktop and mobile
         working-directory: apps/web
         env:
