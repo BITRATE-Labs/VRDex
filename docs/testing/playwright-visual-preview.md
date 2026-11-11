@@ -341,7 +341,14 @@ Hosted adapter E2E additionally requires `VRDEX_ENABLE_E2E_ADAPTER_HELPERS=true`
   per-delegation capability the VRCLinking adapter verifies as
   `VRDEX_VRCLINKING_CAPABILITY_KEY`. Keep it distinct from the bearer token
 
-GitHub Actions only runs hosted extended profile, auth, adapter, and developer-credential flows when repository variables `VRDEX_HOSTED_E2E_EXTENDED_PROFILE_FLOW=true`, `VRDEX_HOSTED_E2E_AUTH_HELPERS=true`, `VRDEX_HOSTED_E2E_ADAPTER_HELPERS=true`, `VRDEX_HOSTED_E2E_DEVELOPER_CREDENTIALS=true`, and `VRDEX_HOSTED_E2E_CLERK_AUTH=true` are set. Keep the optional variables unset until the matching hosted app and Convex capabilities are configured. `VRDEX_HOSTED_E2E_CLERK_AUTH` is the one that is not merely a skip switch: once it is `true`, absent Clerk keys fail the run.
+Selected same-repository PR browser coverage requires
+`VRDEX_HOSTED_E2E_AUTH_HELPERS=true`, `VRDEX_HOSTED_E2E_CLERK_AUTH=true`, the
+matching development Clerk keys, browser token and Convex preview deploy key.
+Configure them before enabling selected candidate runs. Their absence fails
+candidate acceptance, it does not skip coverage. Other deployed-health features
+retain their separate optional switches: extended profile fields, provider
+adapters and developer credentials. Keep those switches unset until their
+matching capabilities are configured.
 
 `VERCEL_ENV=production` blocks the E2E route unless `VRDEX_ALLOW_PRODUCTION_E2E_HELPERS=true` is explicitly set. Keep that override unset for VRDex production.
 

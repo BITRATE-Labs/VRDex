@@ -46,7 +46,7 @@ async function main() {
   assert.equal(env.VRDEX_ENABLE_E2E_CLERK_AUTH, "true", "Clerk auth acceptance must be enabled");
   assert.equal(env.VRDEX_ENABLE_E2E_AUTH_HELPERS, "true", "Preview auth helpers must be enabled");
   assert.ok(env.VRDEX_E2E_BROWSER_TOKEN, "Browser helper token is required");
-  assert.match(env.CLERK_SECRET_KEY ?? "", /^sk_test_/, "Only a development Clerk secret is permitted");
+  assert.ok(env.CLERK_SECRET_KEY?.startsWith("sk_test_"), "Only a development Clerk secret is permitted");
   const target = new URL(env.PLAYWRIGHT_BASE_URL);
   assert.equal(target.protocol, "https:");
   assert.equal(target.origin, env.PLAYWRIGHT_BASE_URL, "An exact HTTPS preview origin is required");
@@ -57,7 +57,7 @@ async function main() {
     backend: env.CANDIDATE_CONVEX_URL ?? "",
     clerkKey: env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "",
   });
-  const evidence = { head: env.CANDIDATE_HEAD_SHA, deployment: target.origin, ...identity, observedAt: new Date().toISOString() };
+  const evidence = { previewName: env.CANDIDATE_PREVIEW_NAME, head: env.CANDIDATE_HEAD_SHA, deployment: target.origin, ...identity, observedAt: new Date().toISOString() };
   if (process.argv[2] === "report") {
     const read = name => JSON.parse(readFileSync(`apps/web/playwright-artifacts/${name}.json`, "utf8"));
     evidence.coverage = {
@@ -76,4 +76,12 @@ async function main() {
   console.log(JSON.stringify(evidence));
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    await main();
+  } catch (error) {
+    mkdirSync("apps/web/playwright-artifacts", { recursive: true });
+    writeFileSync("apps/web/playwright-artifacts/candidate-failure.json", `${JSON.stringify({ status: "failed", stage: process.argv[2], observedAt: new Date().toISOString() })}\n`);
+    throw error;
+  }
+}

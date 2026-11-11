@@ -32,7 +32,7 @@ const REPORT_ROWS = [
   {
     artifact: "playwright-hosted-data-flow",
     job: "playwright-hosted-data-flow",
-    label: "Hosted data flow",
+    label: "Candidate preview acceptance",
   },
   {
     artifact: "playwright-public-preview",

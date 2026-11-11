@@ -114,9 +114,9 @@ test("a Clerk session resolves to a verified Convex identity and clears on sign-
         headers: { "x-vrdex-e2e-token": e2eToken },
         data: { email: account.email },
       });
-      await expect(cleanup).toBeOK();
+      await expect.soft(cleanup).toBeOK();
       const deleted = await deleteClerkTestAccount(account);
-      expect(deleted?.ok || deleted?.status === 404, "Clerk disposable account must be deleted").toBe(true);
+      expect.soft(deleted?.ok || deleted?.status === 404, "Clerk disposable account must be deleted").toBe(true);
     }
 
     await context.close();

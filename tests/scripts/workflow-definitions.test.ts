@@ -208,6 +208,12 @@ describe("optional browser and visual evidence contract", () => {
     assert.equal(candidate.with.browser_acceptance, true);
     assert.equal(candidate.with.capture_screenshots, "${{ needs.visual-selection.outputs.visuals == 'true' }}");
     const preview = parseYaml(readFileSync(".github/workflows/vercel-preview-deploy.yml", "utf8"));
+    assert.notEqual(candidate.secrets, "inherit");
+    assert.deepEqual(Object.keys(candidate.secrets).sort(), Object.keys(preview.on.workflow_call.secrets).sort());
+    assert.ok(preview.concurrency.group.includes("inputs.browser_acceptance"));
+    const resolve = preview.jobs["deploy-preview"].steps.find((step: { id?: string }) => step.id === "pr");
+    assert.ok(resolve.with.script.includes("ci-pr-${pull.number}-${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}"));
+    assert.ok(preview.jobs["hosted-mcp-preview-smoke"].if.includes("!inputs.browser_acceptance"));
     const browser = preview.jobs["candidate-browser-acceptance"];
     assert.ok(browser.if.includes("is_fork == 'false'"));
     assert.equal(browser.env.GITHUB_SHA, undefined, "GitHub reserves its triggering merge SHA");
@@ -221,6 +227,7 @@ describe("optional browser and visual evidence contract", () => {
     assert.ok(preflight >= 0 && mutation > preflight && report > mutation);
     assert.ok(steps.some((step: { run?: string }) => step.run?.includes("auth-session.flow.spec.ts --project=desktop-chromium --project=mobile-chromium")));
     assert.ok(steps.some((step: { run?: string }) => step.run === "pnpm test:e2e:hosted:account-visual"));
+    assert.ok(steps.some((step: { run?: string }) => step.run?.includes("--check-captures apps/web/playwright-artifacts/screenshots")));
     assert.equal(new Set(steps.map((step: { env?: Record<string,string> }) => step.env?.PLAYWRIGHT_JSON_REPORT_FILE).filter(Boolean)).size, 3);
   });
   it("requires real current-branch claim coverage on a local backend without exposing keys to forks", () => {

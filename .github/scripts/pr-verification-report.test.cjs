@@ -18,7 +18,7 @@ test("default report marks every browser and Storybook build NOT SELECTED withou
   const report = buildReport(fixture(false, false));
   assert.match(report, /All required checks and selected coverage passed/);
   assert.match(report, /Browsers selected for this run: no/);
-  for (const label of ["Storybook build", "Public route smoke", "Mutation data flow", "Hosted data flow", "Public route preview", "Storybook preview", "Public route image diff", "Storybook image diff"]) {
+  for (const label of ["Storybook build", "Public route smoke", "Mutation data flow", "Candidate preview acceptance", "Public route preview", "Storybook preview", "Public route image diff", "Storybook image diff"]) {
     assert.match(report, new RegExp(`${label} \\| NOT SELECTED \\| Not requested`));
   }
   assert.match(report, /Web build \| PASSED/);
@@ -32,7 +32,7 @@ test("browsers-only report keeps assertion success distinct from unselected capt
   assert.match(report, /Public route assertions only \| PASSED \| \[Open artifact\]/);
   assert.match(report, /Storybook assertions only \| PASSED/);
   assert.match(report, /Public route image diff \| NOT SELECTED/);
-  assert.match(report, /Hosted data flow \| PASSED \|/);
+  assert.match(report, /Candidate preview acceptance \| PASSED \|/);
   assert.doesNotMatch(report, /need attention|screenshots \| PASSED/);
 });
 
