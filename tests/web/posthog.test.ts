@@ -12,6 +12,17 @@ import {
 } from "../../apps/web/src/lib/posthog";
 
 describe("PostHog privacy", () => {
+  it("redacts bearer tokens in real SDK previous-page and session-entry fields", () => {
+    const token = "synthetic-bearer-token";
+    const event = sanitizePostHogEvent({ properties: {
+      $prev_pageview_pathname: `/handoff/${token}`,
+      $session_entry_url: `https://vrdex.example/handoff/${token}?secret=private`,
+      $session_entry_pathname: `/claim/${token}`,
+      $session_entry_referrer: `https://vrdex.example/handoff/${token}`,
+    } });
+    assert.equal(JSON.stringify(event).includes(token), false);
+    assert.equal(JSON.stringify(event).includes("secret=private"), false);
+  });
   for (const token of ["A_b-0123Zz", "ab".repeat(32)]) it(`redacts ${token.length}-character club invitation tokens from analytics and replay URLs`, () => {
     const invitation = `https://vrdex.example/account/communities/afterhours/invite/${token}?source=invite`;
     const redacted = "https://vrdex.example/account/communities/afterhours/invite/redacted";

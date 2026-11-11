@@ -1,7 +1,9 @@
 import { v } from "convex/values";
+import { currentUserOrNull } from "./_identity";
+import { analyticsDeploymentCategory } from "./_analyticsPreference";
 
 import { internal } from "./_generated/api";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
 export const claimAnalyticsEntrySource = v.union(
@@ -24,6 +26,8 @@ export type ClaimAnalyticsOutcome =
 export type ClaimAnalyticsContext = {
   journeyId: string;
   entrySource: ClaimAnalyticsEntrySource;
+  browserRestriction?: "off" | "on";
+  ownerUserId?: Id<"users">;
 };
 
 export type ClaimAnalyticsMilestone = {
@@ -46,12 +50,14 @@ export function validClaimAnalyticsJourneyId(value: string | undefined): value i
 export function claimAnalyticsContext(
   journeyId: string | undefined,
   entrySource: ClaimAnalyticsEntrySource | undefined,
+  browserRestriction?: "off" | "on",
 ): ClaimAnalyticsContext {
   const validJourneyId = validClaimAnalyticsJourneyId(journeyId) ? journeyId : undefined;
 
   return {
     journeyId: validJourneyId ?? crypto.randomUUID(),
     entrySource: entrySource ?? "profile",
+    browserRestriction,
   };
 }
 
@@ -96,6 +102,19 @@ export async function enqueueClaimAnalyticsEvent(
   analytics: ClaimAnalyticsContext,
   milestone: ClaimAnalyticsMilestone,
 ): Promise<void> {
+  const first = await ctx.db.query("claimAnalyticsOutbox")
+    .withIndex("by_journeyId", (q) => q.eq("journeyId", analytics.journeyId)).first();
+  const caller = await currentUserOrNull(ctx);
+  const ownerUserId = analytics.ownerUserId ?? caller?._id;
+  if (!ownerUserId || (caller && caller._id !== ownerUserId)
+    || (first && first.ownerUserId !== ownerUserId)) return;
+  const user = caller ?? await ctx.db.get(ownerUserId);
+  if (!user || user.analyticsPreference?.choice !== "on" || !user.analyticsId) return;
+  if (analytics.browserRestriction === "off") return;
+  if (first ? first.preferenceRevision !== user.analyticsPreference.revision || first.state === "suppressed"
+    : analytics.browserRestriction !== "on") return;
+  const category = first?.deploymentCategory ?? analyticsDeploymentCategory();
+  if (!category) return;
   const eventKey = `${analytics.journeyId}:${milestone.event}`;
   const existing = await ctx.db
     .query("claimAnalyticsOutbox")
@@ -108,6 +127,10 @@ export async function enqueueClaimAnalyticsEvent(
 
   const now = Date.now();
   await ctx.db.insert("claimAnalyticsOutbox", {
+    ownerUserId: user._id,
+    preferenceRevision: user.analyticsPreference.revision,
+    analyticsId: user.analyticsId,
+    deploymentCategory: category,
     eventKey,
     journeyId: analytics.journeyId,
     event: milestone.event,
@@ -134,24 +157,26 @@ export async function enqueueClaimAnalyticsEvent(
 }
 
 export function analyticsContextFromAttempt(
-  attempt: Pick<Doc<"profileVerificationAttempts">, "analyticsJourneyId" | "analyticsEntrySource">,
+  attempt: Pick<Doc<"profileVerificationAttempts">, "analyticsJourneyId" | "analyticsEntrySource" | "userId">,
 ): ClaimAnalyticsContext | null {
   return attempt.analyticsJourneyId === undefined
     ? null
     : {
         journeyId: attempt.analyticsJourneyId,
         entrySource: attempt.analyticsEntrySource ?? "profile",
+        ownerUserId: attempt.userId,
       };
 }
 
 export function analyticsContextFromRequest(
-  request: Pick<Doc<"profileClaimRequests">, "analyticsJourneyId" | "analyticsEntrySource">,
+  request: Pick<Doc<"profileClaimRequests">, "analyticsJourneyId" | "analyticsEntrySource" | "userId">,
 ): ClaimAnalyticsContext | null {
   return request.analyticsJourneyId === undefined
     ? null
     : {
         journeyId: request.analyticsJourneyId,
         entrySource: request.analyticsEntrySource ?? "profile",
+        ownerUserId: request.userId,
       };
 }
 
@@ -159,6 +184,7 @@ export async function enqueueAttemptResolution(
   ctx: MutationCtx,
   attempt: Pick<
     Doc<"profileVerificationAttempts">,
+    | "userId"
     | "analyticsJourneyId"
     | "analyticsEntrySource"
     | "createdAt"
@@ -187,6 +213,7 @@ export async function enqueueRequestResolution(
   ctx: MutationCtx,
   request: Pick<
     Doc<"profileClaimRequests">,
+    | "userId"
     | "analyticsJourneyId"
     | "analyticsEntrySource"
     | "createdAt"

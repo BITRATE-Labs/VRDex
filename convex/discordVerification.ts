@@ -1,3 +1,4 @@
+import { analyticsChoice } from "./_analyticsPreference";
 import { ConvexError, v } from "convex/values";
 
 import {
@@ -148,6 +149,7 @@ export const createVerificationState = internalMutation({
     returnTo: v.string(),
     analyticsJourneyId: v.optional(v.string()),
     analyticsEntrySource: v.optional(claimAnalyticsEntrySource),
+    analyticsBrowserRestriction: v.optional(analyticsChoice),
     analyticsProfileType: v.optional(v.union(v.literal("person"), v.literal("community"))),
   },
   handler: async (ctx, args) => {
@@ -171,7 +173,7 @@ export const createVerificationState = internalMutation({
 
     const analytics = args.analyticsJourneyId === undefined
       ? null
-      : claimAnalyticsContext(args.analyticsJourneyId, args.analyticsEntrySource);
+      : claimAnalyticsContext(args.analyticsJourneyId, args.analyticsEntrySource, args.analyticsBrowserRestriction);
 
     // Opportunistically clear expired rows so the table stays small without
     // needing a dedicated cron.
@@ -572,6 +574,7 @@ export const startGuildVerification = action({
     returnTo: v.string(),
     analyticsJourneyId: v.optional(v.string()),
     analyticsEntrySource: v.optional(claimAnalyticsEntrySource),
+    analyticsBrowserRestriction: v.optional(analyticsChoice),
     analyticsProfileType: v.optional(v.union(v.literal("person"), v.literal("community"))),
   },
   handler: async (ctx, args): Promise<{ authorizeUrl: string }> => {
@@ -585,6 +588,7 @@ export const startGuildVerification = action({
       returnTo: args.returnTo,
       analyticsJourneyId: args.analyticsJourneyId,
       analyticsEntrySource: args.analyticsEntrySource,
+      analyticsBrowserRestriction: args.analyticsBrowserRestriction,
       analyticsProfileType: args.analyticsProfileType,
     })) as { state: string };
     const params = new URLSearchParams({

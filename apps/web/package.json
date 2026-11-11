@@ -69,7 +69,7 @@
     "lucide-react": "^1.24.0",
     "mpegts.js": "^1.8.1",
     "next": "16.1.6",
-    "posthog-js": "^1.376.2",
+    "posthog-js": "1.376.2",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-is": "19.2.3",

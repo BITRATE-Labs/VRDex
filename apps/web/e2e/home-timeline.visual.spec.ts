@@ -1,5 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import { test, TIMELINE_NOW } from "./home-timeline-fixture";
+import { test, TIMELINE_NOW, loadCompleteSchedule } from "./home-timeline-fixture";
 import { initializeDiscovery, usableDiscovery } from "./home-discovery-fixture";
 import { prepareVisualPage, waitForVisualReady } from "./public-routes";
 
@@ -239,11 +239,7 @@ test.describe("Home schedule images @visual @snapshot @fixture", () => {
       page,
     }) => {
       await page.goto("/");
-      await expect(page.getByLabel("Schedule data state")).toHaveAttribute(
-        "data-state",
-        "ready",
-        { timeout: 20000 },
-      );
+      await loadCompleteSchedule(page);
       await page
         .getByRole("button", {
           name: "Open Later-page guest at ORBIT: Interstellar Bassline Orchestra",

@@ -1,4 +1,6 @@
 import { v } from "convex/values";
+import { currentUserOrNull } from "./_identity";
+import { analyticsChoice } from "./_analyticsPreference";
 
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
@@ -15,6 +17,21 @@ const LIFECYCLE_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
 const LIFECYCLE_CLEANUP_BATCH = 200;
 
 type DeliveryClaim = { row: Doc<"claimAnalyticsOutbox"> | null };
+
+export const restrictBrowserJourney = internalMutation({
+  args: { journeyId: v.string(), browserRestriction: v.optional(analyticsChoice) },
+  handler: async (ctx, args) => {
+    if (args.browserRestriction !== "off") return;
+    const caller = await currentUserOrNull(ctx);
+    if (!caller) return;
+    const rows = await ctx.db.query("claimAnalyticsOutbox")
+      .withIndex("by_journeyId", (q) => q.eq("journeyId", args.journeyId)).collect();
+    // Keep the original receipt suppressed so later asynchronous milestones cannot revive this journey.
+    for (const row of rows) if (row.ownerUserId === caller._id) {
+      await ctx.db.patch(row._id, { state: "suppressed", leaseUntil: undefined });
+    }
+  },
+});
 
 export const claimNextForDelivery = internalMutation({
   args: {},
@@ -37,6 +54,14 @@ export const claimNextForDelivery = internalMutation({
     const row = abandonedLease ?? pending;
 
     if (row === null) {
+      return { row: null };
+    }
+
+    const owner = row.ownerUserId ? await ctx.db.get(row.ownerUserId) : null;
+    if (!owner || owner.analyticsPreference?.choice !== "on" || !row.analyticsId || !row.deploymentCategory
+      || row.preferenceRevision !== owner.analyticsPreference.revision) {
+      await ctx.db.patch(row._id, { state: "suppressed", leaseUntil: undefined });
+      await ctx.scheduler.runAfter(0, internal.claimAnalyticsDelivery.deliverPending, {});
       return { row: null };
     }
 
@@ -148,23 +173,14 @@ export const sweepDeliveredEvents = internalMutation({
         query.eq("state", "delivered").lt("deliveredAt", cutoff),
       )
       .take(DELIVERED_CLEANUP_BATCH);
-    const disabled = delivered.length < DELIVERED_CLEANUP_BATCH
-      ? await ctx.db
-          .query("claimAnalyticsOutbox")
-          .withIndex("by_state_occurredAt", (query) =>
-            query.eq("state", "disabled").lt("occurredAt", cutoff),
-          )
-          .take(DELIVERED_CLEANUP_BATCH - delivered.length)
-      : [];
-    const failed = delivered.length + disabled.length < DELIVERED_CLEANUP_BATCH
-      ? await ctx.db
-          .query("claimAnalyticsOutbox")
-          .withIndex("by_state_occurredAt", (query) =>
-            query.eq("state", "failed").lt("occurredAt", cutoff),
-          )
-          .take(DELIVERED_CLEANUP_BATCH - delivered.length - disabled.length)
-      : [];
-    const expired = [...delivered, ...disabled, ...failed];
+    const expired = [...delivered];
+    for (const state of ["disabled", "failed", "suppressed"] as const) {
+      if (expired.length >= DELIVERED_CLEANUP_BATCH) break;
+      const rows = await ctx.db.query("claimAnalyticsOutbox")
+        .withIndex("by_state_occurredAt", (q) => q.eq("state", state).lt("occurredAt", cutoff))
+        .take(DELIVERED_CLEANUP_BATCH - expired.length);
+      expired.push(...rows);
+    }
 
     await Promise.all(expired.map(async (row) => await ctx.db.delete(row._id)));
     if (expired.length === DELIVERED_CLEANUP_BATCH) {
@@ -206,6 +222,9 @@ export const deliveryOperationalHealth = internalQuery({
       ),
     );
     const [pending, delivering, failed, disabled] = rowsByState;
+    const blockedDeletions = await ctx.db.query("analyticsDeletionRequests")
+      .withIndex("by_state", (q) => q.eq("state", "blocked_authorization"))
+      .take(HEALTH_SCAN_LIMIT + 1);
     const oldestOutstanding = [...pending, ...delivering]
       .sort((left, right) => left.occurredAt - right.occurredAt)[0];
 
@@ -214,11 +233,12 @@ export const deliveryOperationalHealth = internalQuery({
       deliveringCount: Math.min(delivering.length, HEALTH_SCAN_LIMIT),
       failedCount: Math.min(failed.length, HEALTH_SCAN_LIMIT),
       disabledCount: Math.min(disabled.length, HEALTH_SCAN_LIMIT),
+      blockedDeletionCount: Math.min(blockedDeletions.length, HEALTH_SCAN_LIMIT),
       oldestPendingAgeMs:
         oldestOutstanding === undefined
           ? null
           : Math.max(0, args.now - oldestOutstanding.occurredAt),
-      scanLimitReached: rowsByState.some((rows) => rows.length > HEALTH_SCAN_LIMIT),
+      scanLimitReached: blockedDeletions.length > HEALTH_SCAN_LIMIT || rowsByState.some((rows) => rows.length > HEALTH_SCAN_LIMIT),
     };
   },
 });

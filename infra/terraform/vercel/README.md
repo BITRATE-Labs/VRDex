@@ -13,6 +13,11 @@ It manages shared application variables for the existing Vercel project:
 
 - `NEXT_PUBLIC_POSTHOG_KEY`
 - `NEXT_PUBLIC_POSTHOG_HOST`
+- `NEXT_PUBLIC_POSTHOG_DEPLOYMENT_CATEGORY`, assigned by target rather than `NODE_ENV`
+
+Interim Limited collection is not enabled here. Eligibility and production recording
+activation remain separate dependencies in the analytics acceptance record.
+
 - `TEMPORAL_INPUT_HASH_KEY`
 - `TWITCH_CLIENT_ID` when both optional Twitch variables are set
 - `TWITCH_CLIENT_SECRET` when both optional Twitch variables are set

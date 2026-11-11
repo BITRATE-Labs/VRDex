@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import path from "node:path";
 
 test.beforeEach(async ({ page }) => {
+  await page.route("**/ingest/**", route => route.fulfill({ json: { status: 1, featureFlags: {}, sessionRecording: false } }));
   await page.route("https://stream.vrcdn.live/live/synthetic.live.ts", route => route.fulfill({ contentType: "video/mp2t", path: path.resolve("e2e/fixtures/persistent-synthetic.mpegts"), headers: { "access-control-allow-origin": "*" } }));
   await page.route("**/playwright-projection.json", route => route.fulfill({ json: { revoked: false } }));
 });
