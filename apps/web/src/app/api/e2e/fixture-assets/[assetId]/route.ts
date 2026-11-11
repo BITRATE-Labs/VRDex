@@ -22,6 +22,10 @@ type FixtureAsset = {
 };
 
 const fixtureAssets: Record<string, FixtureAsset> = {
+  "fixture-neon-harbor-world-image": {
+    title: "Neon Harbor", subtitle: "World artwork fixture", initials: "NH",
+    width: 1600, height: 900, from: "#071b31", to: "#145f73", accent: "#c272b4",
+  },
   "fixture-low-tide-discovery-poster": {
     title: "LOW TIDE", subtitle: "Nori / Liquid DnB", initials: "LT",
     width: 900, height: 1200, from: "#102630", to: "#164655", accent: "#79d9ed",
@@ -143,7 +147,6 @@ function renderSvg(asset: FixtureAsset) {
   const title = escapeSvgText(asset.title);
   const subtitle = escapeSvgText(asset.subtitle);
   const initials = escapeSvgText(asset.initials);
-  const radius = Math.min(asset.width, asset.height) * 0.24;
 
   const text = asset.showText === false
     ? ""
@@ -164,8 +167,8 @@ function renderSvg(asset: FixtureAsset) {
       <stop offset="1" stop-color="${asset.accent}" stop-opacity="0"/>
     </radialGradient>
   </defs>
-  <rect width="${asset.width}" height="${asset.height}" fill="url(#bg)" rx="${radius}"/>
-  <rect width="${asset.width}" height="${asset.height}" fill="url(#glow)" rx="${radius}"/>
+  <rect width="${asset.width}" height="${asset.height}" fill="url(#bg)"/>
+  <rect width="${asset.width}" height="${asset.height}" fill="url(#glow)"/>
   <circle cx="${asset.width * 0.18}" cy="${asset.height * 0.2}" r="${Math.min(asset.width, asset.height) * 0.16}" fill="none" stroke="white" stroke-opacity="0.26" stroke-width="10"/>
   ${text}
 </svg>`;

@@ -143,11 +143,9 @@ test("profile submission writes through to public profile and discovery @flow", 
     ]);
     await expect(page.getByRole("heading", { name: displayName })).toBeVisible();
     if (!process.env.PLAYWRIGHT_BASE_URL) {
-      // Provenance is rendered now, in the ownership aside rather than above the
-      // display name where it read as a label on the person. This asserted its
-      // absence while nothing rendered it at all.
+      // Unclaimed listings keep ownership clear without submission metadata.
       await expect(
-        page.getByRole("complementary", { name: "Profile ownership" }).getByText("Community submitted"),
+        page.getByRole("complementary", { name: "Profile ownership" }).getByText("Unclaimed", { exact: true }),
       ).toBeVisible();
     }
     await expect(page.getByLabel("Verified profile")).toHaveCount(0);
@@ -155,11 +153,11 @@ test("profile submission writes through to public profile and discovery @flow", 
     // Canonicalized on the way in: the panel preview URL that was typed is read
     // for its stream id and stored as the `vrcdn:<id>` identifier. A community
     // submission cannot support a liveness claim, but it still gets the
-    // permanent Watch controls: `Open preview` plus the copyable stream URLs.
+    // permanent compact copy controls, without an external preview link.
     if (submittedStreamId !== undefined) {
       const questUrl = `https://stream.vrcdn.live/live/${submittedStreamId}.live.ts`;
-      const previewLink = page.getByRole("link", { name: "Open preview" });
-      const rendersWatchControls = (await previewLink.count()) > 0;
+      const questCopy = page.getByRole("button", { name: "Copy Quest", exact: true });
+      const rendersWatchControls = (await questCopy.count()) > 0;
 
       if (targetRunsCurrentRevision) {
         expect(
@@ -169,10 +167,8 @@ test("profile submission writes through to public profile and discovery @flow", 
       }
 
       if (rendersWatchControls) {
-        await expect(previewLink).toHaveAttribute(
-          "href",
-          `https://panel.vrcdn.live/preview/${submittedStreamId}`,
-        );
+        await expect(questCopy).toBeVisible();
+        await expect(page.getByRole("link", { name: "Open preview" })).toHaveCount(0);
         const playbackLinks = page.getByText("Playback links", { exact: true });
         if (await playbackLinks.count()) await playbackLinks.click();
         await expect(page.getByText(questUrl, { exact: true })).toBeVisible();

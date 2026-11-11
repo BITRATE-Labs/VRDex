@@ -13,6 +13,7 @@ import type {
 import type { PublicEvent } from "@/app/_components/event-public-page";
 import type { PublicWorld } from "@/app/_components/world-public-page";
 import { buildGroupPopulationSeries } from "../../../../convex/_groupPopulationSeries";
+import type { PublicProfileMediaDetails } from "@vrdex/api-contracts";
 import { PublicCommunityTelemetrySchema } from "@vrdex/api-contracts";
 
 const personSlug = "playwright-dj-aurora";
@@ -241,6 +242,7 @@ const personProfile: FixturePersonProfile = {
     {
       slug: worldSlug,
       displayName: "Neon Harbor",
+      heroImageUrl: "/api/e2e/fixture-assets/fixture-neon-harbor-world-image",
       roles: ["media_credit"],
       tags: ["Club world", "Cyberpunk", "Dance floor"],
       summary: "Cyberpunk harbor club world with layered dance floors and quiet balcony corners.",
@@ -741,6 +743,7 @@ const personProfiles = [
 ];
 
 const communityProfile: PublicProfile = {
+  bannerImageUrl: "/api/e2e/fixture-assets/fixture-afterglow-event-banner",
   id: "fixture-profile-afterglow",
   profileType: "community",
   slug: communitySlug,
@@ -776,6 +779,7 @@ const communityProfile: PublicProfile = {
     {
       slug: worldSlug,
       displayName: "Neon Harbor",
+      heroImageUrl: "/api/e2e/fixture-assets/fixture-neon-harbor-world-image",
       roles: ["world_author"],
       tags: ["Club world", "Cyberpunk", "Dance floor"],
       summary: "Cyberpunk harbor club world with layered dance floors and quiet balcony corners.",
@@ -791,6 +795,7 @@ const communityProfile: PublicProfile = {
 };
 
 const worldProfile: PublicWorld = {
+  heroImageUrl: "/api/e2e/fixture-assets/fixture-neon-harbor-world-image",
   slug: worldSlug,
   displayName: "Neon Harbor",
   tags: ["Club world", "Cyberpunk", "Dance floor"],
@@ -1700,3 +1705,24 @@ export const playwrightPublicProfilePaths = {
   eventPath: `/${communitySlug}/events/${eventSlug}`,
   eventWatchPath: `/${communitySlug}/events/${eventWatchSlug}`,
 };
+
+
+/** Synthetic preview provenance only; never returned for a hosted production page. */
+export function getPlaywrightPublicMediaDetailsFixture(slug: string, assetId: string): PublicProfileMediaDetails | null {
+  if (process.env.NODE_ENV === "production" || process.env.VRDEX_ENABLE_PLAYWRIGHT_FIXTURES !== "true" || slug !== personSlug) return null;
+  const asset = [auroraProfileImage, auroraPrimaryLogo, auroraAdditionalLogo, auroraUncreditedMedia].find(asset => asset.assetId === assetId);
+  if (!asset) return null;
+  const uploader = { displayName: "Afterglow Social", profileSlug: communitySlug, profileUrl: `/${communitySlug}` };
+  const publisher = { displayName: "DJ Aurora", profileSlug: personSlug, profileUrl: `/${personSlug}` };
+  return {
+    profileSlug: slug, asset,
+    referenceUrl: "creditUrl" in asset && typeof asset.creditUrl === "string" ? asset.creditUrl : null,
+    credit: "credit" in asset && typeof asset.credit === "string" ? asset.credit : null,
+    uploadedBy: uploader,
+    history: [
+      { kind: "uploaded", at: Date.UTC(2026, 9, 1, 12, 30), actor: uploader },
+      { kind: "approved", at: Date.UTC(2026, 9, 2, 14), actor: publisher },
+      { kind: "published", at: Date.UTC(2026, 9, 2, 14, 15), actor: publisher },
+    ],
+  };
+}

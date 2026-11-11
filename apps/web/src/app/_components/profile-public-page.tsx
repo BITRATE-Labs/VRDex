@@ -2,13 +2,13 @@ import type { PublicVerifiedConnection } from "@vrdex/api-contracts";
 import { mergeVerifiedVrchatLinks, isVerifiedVrchatLink } from "@/lib/profile-link-verification";
 import Link from "next/link";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-import { ExternalLink } from "lucide-react";
-import { profileLinkHasCustomLabel, profileLinkPresentation, type ProfileLinkDestinationMetadata } from "../../../../../convex/_profileLinkPresentation";
+import { profileLinkHasCustomLabel,profileLinkPresentation,type ProfileLinkDestinationMetadata } from "../../../../../convex/_profileLinkPresentation";
 import { parseProfileLinkDestination } from "../../../../../convex/_profileLinkDestination";
 import { Fragment, type CSSProperties, type ReactNode } from "react";
 
 import { EventPreviewCard, type PublicEventPreview } from "./event-public-page";
 import { PublicMediaAssetCard } from "./public-media-asset-card";
+import { EntityImage } from "@/components/ui/entity-image";
 import { ProfileAvatarImage } from "./profile-avatar-image";
 import { ProfileVrcdnStreams } from "./profile-vrcdn-streams";
 import { ProfilePrivateRecord } from "./profile-private-record";
@@ -166,6 +166,7 @@ type PublicProfileBase = {
     slug: string;
     displayName: string;
     roles: WorldCreatorRole[];
+    heroImageUrl?: string;
     tags: string[];
     summary?: string;
     sourceLabel?: string;
@@ -420,7 +421,6 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
   });
   const creatorLinks = validLinks.filter(
     (item) =>
-      item !== twitchLink &&
       !discordHandles.some((discord) => discord.item === item) &&
       !vrcdnStreams.some((vrcdn) => vrcdn.item === item),
   );
@@ -451,8 +451,10 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
   const secondarySections: Partial<Record<ProfilePublicSectionKey, ReactNode>> = {
     events: eventPreviews.length > 0 || !isPerson ? (
       <section className="border-t border-border py-8">
-        <SectionHeading>{isPerson ? "Upcoming events" : "Hosted events"}</SectionHeading>
-        {!isPerson ? <Link className={buttonVariants({ variant: "secondary", size: "sm" })} href={`/events/new?community=${encodeURIComponent(profile.slug)}`}>Add event</Link> : null}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <SectionHeading>{isPerson ? "Upcoming events" : "Hosted events"}</SectionHeading>
+          {!isPerson ? <Link className={buttonVariants({ variant: "secondary", size: "sm" })} href={`/events/new?community=${encodeURIComponent(profile.slug)}`}>Add event</Link> : null}
+        </div>
         <div className="mt-5 grid gap-3 lg:grid-cols-2">
           {eventPreviews.map((event) => (
             <EventPreviewCard event={event} key={`${event.slug ?? event.title}-${event.startAt}`} />
@@ -504,13 +506,16 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
         <div className="mt-5 grid gap-3 lg:grid-cols-2">
           {profile.worldCredits.map((world) => (
             <Link
-              className="rounded-card border border-border bg-surface-strong px-4 py-4 text-sm transition hover:border-border-strong"
+              className="flex min-w-0 items-start gap-4 rounded-card border border-border bg-surface-strong p-4 text-sm transition hover:border-border-strong"
               href={`/${world.slug}`}
               key={world.slug}
             >
+              <EntityImage label={world.displayName} src={world.heroImageUrl} className="h-16 w-24 rounded-control" sizes="96px" />
+              <span className="min-w-0">
               <span className="block text-lg font-semibold">{world.displayName}</span>
               <span className="mt-1 block text-muted">{world.roles.map(roleLabel).join(", ")}</span>
               {world.summary ? <span className="mt-3 line-clamp-2 block leading-6 text-muted">{world.summary}</span> : null}
+              </span>
             </Link>
           ))}
         </div>
@@ -522,7 +527,6 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
   return (
     <Shell>
       <PageContainer>
-
 
         <section
           aria-labelledby={`profile-title-${profile.slug}`}
@@ -587,27 +591,9 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
           </div>
         </section>
 
-        {canClaim || profile.source ? (
+        {canClaim ? (
           <aside aria-label="Profile ownership" className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 py-2">
-            {/* Provenance describes the record, not the person. Sitting above
-                the display name it read as a label on them; here it is one of
-                the facts about how this listing came to exist, as plain text
-                with the date beside it.
-                A published import carries no `sourceAttribution` -- deliberately,
-                since "Community submitted" would be false provenance for an
-                operator import -- so it needs its own line rather than none.
-                Every unclaimed listing says so, which is what the repo means by
-                labelling an unclaimed profile as unverified. */}
-            {profile.source ? (
-              <p className="text-sm text-muted">
-                {profile.source.label}
-                {profile.source.submittedAt !== undefined ? (
-                  <span className="ml-2">{formatSubmittedDate(profile.source.submittedAt)}</span>
-                ) : null}
-              </p>
-            ) : profile.trustLabel === "unclaimed" ? (
-              <p className="text-sm text-muted">Unclaimed</p>
-            ) : null}
+            <p className="text-sm text-muted">Unclaimed</p>
 
             {canClaim ? (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -645,9 +631,11 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
               isVerifiedVrchatLink(link.url, [{ ...connection, verified: true }]));
             const display = profileLinkPresentation(link, connection?.assetExternalId);
             return {
-              href, key: `${link.type}-${link.url}`, ...display,
-              label: connection && !profileLinkHasCustomLabel(link)
+              href, type: link.type, key: `${link.type}-${link.url}`, ...display,
+              platform: link.type === "twitch" ? "Twitch" : display.platform,
+              label: link.type === "twitch" ? twitchLoginFromUrl(link.url) ?? display.label : connection && !profileLinkHasCustomLabel(link)
                 ? connection.displayName || display.label : display.label,
+              live: link === twitchLink?.link && profile.twitchLive?.status === "live",
               verifiedAt: link.verifiedAt,
             };
           })}
@@ -659,25 +647,11 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
             key: `${item.link.type}-${item.link.url}`,
             label,
             pcUrl: stream.pcUrl,
-            previewUrl: stream.previewUrl,
             questUrl: stream.questUrl,
             directVideoUrl: stream.directVideoUrl,
             streamId: stream.streamId,
           }))}
-          twitchContent={twitchLink ? (
-            <div className="border-b border-border pb-5">
-              {profile.twitchLive?.status === "live" ? (
-                <span className="text-sm font-medium text-success">Live now</span>
-              ) : null}
-              {profile.twitchLive?.status === "live" ? (
-                <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted">{profile.twitchLive.title}</p>
-              ) : null}
-              <a className={cn(buttonVariants({ variant: "primary" }), "w-full gap-2", profile.twitchLive?.status === "live" && "mt-4")} href={twitchLink.href} rel="noreferrer" target="_blank">
-                Watch on Twitch
-                <ExternalLink aria-hidden="true" className="size-3.5" />
-              </a>
-            </div>
-          ) : undefined}
+
         />
 
         {!isPerson ? <CommunityActivity profile={profile} /> : null}

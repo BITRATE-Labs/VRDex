@@ -38,3 +38,28 @@ it("public details REST handler rejects query tokens and unavailable assets and 
     assert.doesNotMatch(JSON.stringify(await invalid.json()), /privateNotes|secret|Karly/);
   `], { cwd: process.cwd(), env: { ...process.env, TSX_TSCONFIG_PATH: "apps/web/tsconfig.json", CONVEX_URL: "http://127.0.0.1:3230", VRDEX_RATE_LIMIT_STORE: "memory" }, stdio: "pipe" });
 });
+for (const fixtureEnv of [
+  { NODE_ENV: "development", VRDEX_ENABLE_PLAYWRIGHT_FIXTURES: "false" },
+  { NODE_ENV: "production", VRDEX_ENABLE_PLAYWRIGHT_FIXTURES: "true" },
+]) {
+  it(`synthetic media IDs use the real backend with fixtures ${fixtureEnv.VRDEX_ENABLE_PLAYWRIGHT_FIXTURES} in ${fixtureEnv.NODE_ENV}`, () => {
+    execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", `
+      import assert from "node:assert/strict";
+      import { GET } from "./apps/web/src/app/api/v0/profiles/[slug]/assets/[assetId]/route.ts";
+      let calls = 0;
+      globalThis.fetch = async (_url, init) => {
+        const body = JSON.parse(init.body);
+        assert.equal(body.path, "profileAssets:getPublicAssetDetails");
+        assert.deepEqual(body.args[0], { slug: "playwright-dj-aurora", assetId: "fixture-aurora-profile-image" });
+        calls++;
+        return new Response(JSON.stringify({ status: "success", value: null }), { headers: { "content-type": "application/json" } });
+      };
+      const response = await GET(new Request("https://app.example.test/api/v0/profiles/playwright-dj-aurora/assets/fixture-aurora-profile-image"), {
+        params: Promise.resolve({ slug: "playwright-dj-aurora", assetId: "fixture-aurora-profile-image" }),
+      });
+      assert.equal(response.status, 404);
+      assert.equal(calls, 1);
+      assert.doesNotMatch(JSON.stringify(await response.json()), /Afterglow|Uploaded|Published/);
+    `], { cwd: process.cwd(), env: { ...process.env, ...fixtureEnv, VRDEX_DEPLOYMENT_ENV: "staging", TSX_TSCONFIG_PATH: "apps/web/tsconfig.json", CONVEX_URL: "http://127.0.0.1:3230", VRDEX_RATE_LIMIT_STORE: "memory" }, stdio: "pipe" });
+  });
+}

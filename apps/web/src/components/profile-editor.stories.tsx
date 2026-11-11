@@ -104,7 +104,7 @@ export const EmbeddedPreview: Story = {
 export const Playback: Story = {
   render: () => <ProfileVrcdnStreams profileSlug="example" discordHandles={[]} links={[]}
     streams={[{ claimable: false, key: "example", label: "VRCDN", streamId: "example",
-      previewUrl: "https://panel.vrcdn.live/preview/example", pcUrl: "rtspt://stream.vrcdn.live/live/example",
+      pcUrl: "rtspt://stream.vrcdn.live/live/example",
       questUrl: "https://stream.vrcdn.live/live/example.live.ts" }]} />,
 };
 

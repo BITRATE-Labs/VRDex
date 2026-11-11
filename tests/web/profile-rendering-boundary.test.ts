@@ -47,7 +47,7 @@ it("keeps server-only media-kit configuration out of the client-compatible profi
   }
 });
 
-it("renders a neutral source and collapsed disclosure without exposing freeform credit", async () => {
+it("keeps file metadata and source inside the media disclosure", async () => {
   const { execFileSync } = await import("node:child_process");
   execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", `
     import assert from "node:assert/strict";
@@ -55,13 +55,16 @@ it("renders a neutral source and collapsed disclosure without exposing freeform 
     import { renderToStaticMarkup } from "./apps/web/node_modules/react-dom/server.node.js";
     import { PublicMediaAssetCardView } from "./apps/web/src/app/_components/public-media-asset-card.tsx";
     const asset = { assetId: "asset", detailsUrl: "/profile#media-asset", imageUrl: "/image.png", downloadUrl: "/file", mimeType: "image/png", byteSize: 1024, credit: "Shared by Karly", creditUrl: "https://example.test/source" };
-    const render = (a) => renderToStaticMarkup(React.createElement(PublicMediaAssetCardView, { asset: a, label: "Image", state: { kind: "closed" }, open: false }));
+    const render = (a, open = false) => renderToStaticMarkup(React.createElement(PublicMediaAssetCardView, { asset: a, label: "Image", state: { kind: "closed" }, open }));
     const html = render(asset);
-    assert.match(html, /View source/);
+    assert.doesNotMatch(html, /View source|PNG.*1 KB/);
+    const expanded = render(asset, true);
+    assert.match(expanded.slice(expanded.indexOf("<details")), /View source/);
+    assert.match(expanded.slice(expanded.indexOf("<details")), /PNG.*1 KB/);
     assert.match(html, /Details &amp; history/);
     assert.doesNotMatch(html, /Karly|Uploaded by/);
-    assert.doesNotMatch(render({ ...asset, detailsUrl: undefined }), /Details &amp; history/);
-    for (const creditUrl of [undefined, "javascript:alert(1)", "https://user:pass@example.test", "//example.test"]) assert.doesNotMatch(render({ ...asset, creditUrl }), /View source/);
+    assert.match(render({ ...asset, detailsUrl: undefined }, true), /View source/);
+    for (const creditUrl of [undefined, "javascript:alert(1)", "https://user:pass@example.test", "//example.test"]) assert.doesNotMatch(render({ ...asset, creditUrl }, true), /View source/);
   `], { cwd: process.cwd(), env: { ...process.env, TSX_TSCONFIG_PATH: "apps/web/tsconfig.json" }, stdio: "pipe" });
 });
 

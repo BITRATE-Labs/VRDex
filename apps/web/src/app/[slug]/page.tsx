@@ -6,8 +6,8 @@ import { EntityBackendNotice } from "./entity-backend-notice";
 import { ProfilePublicPage } from "../_components/profile-public-page";
 import { ProfileLinkRefresh } from "../_components/profile-link-refresh";
 import { parseProfileLinkDestination } from "../../../../../convex/_profileLinkDestination";
-import { WorldPublicPage } from "../_components/world-public-page";
-import { fetchPublicEntityBySlug } from "@/convex/server";
+import { WorldPublicPage, type PublicWorld } from "../_components/world-public-page";
+import { fetchPublicEntityBySlug, fetchPublicProfileBySlug } from "@/convex/server";
 import { profileShareMetadata } from "@/lib/profile-share-card";
 
 export const dynamic = "force-dynamic";
@@ -65,7 +65,16 @@ export default async function EntityPage({ params }: EntityPageProps) {
         {process.env.NEXT_PUBLIC_CONVEX_URL && result.entity.profile.outboundLinks.some(link => parseProfileLinkDestination(link)) ? <ProfileLinkRefresh slug={slug} /> : null}
         <ProfilePublicPage profile={result.entity.profile} mediaKitGalleryEnabled={process.env.VRDEX_PROFILE_MEDIA_KIT_ENABLED === "true" || process.env.VRDEX_ENABLE_PLAYWRIGHT_FIXTURES === "true"} />
       </>;
-    case "world":
-      return <WorldPublicPage world={result.entity.world} />;
+    case "world": {
+      const world: PublicWorld = result.entity.world;
+      const creatorAttributions = await Promise.all(world.creatorAttributions.map(async attribution => {
+        if (!attribution.profileSlug || !attribution.profileType) return attribution;
+        const creator = await fetchPublicProfileBySlug(attribution.profileSlug, attribution.profileType, { includeLiveState: false });
+        return creator.kind === "live" && creator.profile !== null && creator.profile.profileType === attribution.profileType
+          ? { ...attribution, imageUrl: creator.profile.avatarImageUrl }
+          : attribution;
+      }));
+      return <WorldPublicPage world={{ ...world, creatorAttributions }} />;
+    }
   }
 }

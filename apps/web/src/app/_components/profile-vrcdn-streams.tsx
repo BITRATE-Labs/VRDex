@@ -2,15 +2,16 @@
 
 import type { PlaybackStatus } from "@/lib/event-playback-owner";
 import { ExternalLink } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePostHog } from "posthog-js/react";
 
 import { WatchPlayPoster } from "./vrcdn-stream-player";
 import { useEventPlayback } from "./event-playback-provider";
+import { LinkTypeIcon, hostLabel } from "./public-profile-links";
 import { ProfileDestinationArtwork } from "./profile-destination-artwork";
 import { buttonVariants } from "@/components/ui/button";
 import { ConnectionVerification } from "@/components/ui/connection-verification";
-import { SectionHeading } from "@/components/ui/card";
+import { Card, SectionHeading } from "@/components/ui/card";
 import { CopyValueRow } from "@/components/ui/copy-value-row";
 import { cn } from "@/lib/cn";
 import {
@@ -30,14 +31,18 @@ export type ProfileVrcdnStream = {
   key: string;
   label: string;
   pcUrl: string;
-  previewUrl: string;
   questUrl: string;
   directVideoUrl?: string;
   streamId: string;
 };
 
+const profileLinkCardClassName = "h-full min-h-20 w-full justify-start gap-3 whitespace-normal rounded-card px-4 py-3 text-left text-sm";
+const profileLinkIconClassName = "flex size-12 shrink-0 items-center justify-center [&>span]:bg-transparent";
+
 type ProfileVrcdnLink = {
+  type?: Parameters<typeof LinkTypeIcon>[0]["type"];
   verifiedAt?: number;
+  live?: boolean;
   href: string;
   key: string;
   label: string;
@@ -59,7 +64,6 @@ type ProfileVrcdnStreamsProps = {
   profileId?: string;
   displayName?: string;
   streams: ProfileVrcdnStream[];
-  twitchContent?: ReactNode;
 };
 
 function responseStates(value: unknown): VrcdnLiveStates | null {
@@ -78,7 +82,6 @@ export function ProfileVrcdnStreams({
   profileId,
   displayName,
   streams,
-  twitchContent,
 }: ProfileVrcdnStreamsProps) {
   const posthog = usePostHog();
   const playback = useEventPlayback();
@@ -193,45 +196,51 @@ export function ProfileVrcdnStreams({
   },[playback,profileId]);
 
   const hasLinks = links.length > 0 || discordHandles.length > 0;
-  const hasWatchSurface = Boolean(twitchContent || streams.length > 0);
+  const hasWatchSurface = streams.length > 0;
 
   return (
-    <div className={cn("grid gap-x-10", hasWatchSurface ? "lg:grid-cols-[minmax(0,1fr)_32rem]" : undefined)}>
+    <div className={cn("grid min-w-0 grid-cols-1 gap-x-10", hasWatchSurface ? "lg:grid-cols-[minmax(0,1fr)_24rem]" : undefined)}>
       <div>
         {hasLinks ? (
           <section className="py-8">
             <SectionHeading>Links</SectionHeading>
-            {links.length > 0 ? (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {links.map((link) => (
-                  <a
-                    className={cn(buttonVariants({ variant: "secondary" }), "max-w-full justify-start gap-3 whitespace-normal text-left")}
-                    href={link.href}
-                    key={link.key}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    {link.kind ? <ProfileDestinationArtwork kind={link.kind} src={link.artworkUrl} /> : null}
-                    <span className="min-w-0 [overflow-wrap:anywhere]">
-                      <span className="block">{link.label}</span>
-                      {link.verifiedAt !== undefined ? <ConnectionVerification at={link.verifiedAt} group={link.kind === "vrchat_group"} /> : link.platform ? <span className="mt-0.5 block text-xs font-normal text-muted">{link.platform}</span> : null}
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {links.map((link) => {
+                const vrchat = link.kind === "vrchat_user" || link.kind === "vrchat_group" || link.type === "vrchat_profile";
+                const service = vrchat ? link.platform ?? "VRChat" : link.type === "twitch" ? "Twitch" : null;
+                const label = vrchat ? link.label.replace(/^VRChat\s*:\s*/i, "").trim() || link.label : link.label;
+                return (
+                  <a className={cn(buttonVariants({ variant: "secondary" }), profileLinkCardClassName)} href={link.href} key={link.key} rel="noreferrer" target="_blank">
+                    <span aria-hidden="true" className={cn(profileLinkIconClassName, vrchat ? "[&>svg]:size-10" : "[&>svg]:size-6")}>
+                      {link.kind && link.artworkUrl ? <ProfileDestinationArtwork kind={link.kind} src={link.artworkUrl} /> : <LinkTypeIcon type={link.kind === "discord_guild" ? "discord" : vrchat ? "vrchat_profile" : link.type ?? "website"} />}
                     </span>
-                    <ExternalLink aria-hidden="true" className="size-3.5 shrink-0" />
+                    <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+                      <span className="block font-medium">{service ?? label}</span>
+                      {service ? <span className="mt-0.5 block text-xs font-normal text-muted">{label}</span> : null}
+                      {link.live ? <span className="mt-0.5 block text-xs font-normal text-success">Live now</span> : null}
+                      {link.verifiedAt !== undefined ? <ConnectionVerification at={link.verifiedAt} group={link.kind === "vrchat_group"} /> : !service ? <span className="mt-0.5 block text-xs font-normal text-muted">{link.platform ?? hostLabel(link.href)}</span> : null}
+                    </span>
+                    <ExternalLink aria-hidden="true" className="size-4 shrink-0" />
                   </a>
-                ))}
-              </div>
-            ) : null}
-            {discordHandles.map(({ handle, key }) => (
-              <CopyValueRow compact className="mt-4" key={key} label="Discord" value={handle} />
-            ))}
+                );
+              })}
+              {discordHandles.map(({ handle, key }) => (
+                <CopyValueRow actionOnly className={profileLinkCardClassName} key={key} label="Discord" value={handle}>
+                  <span aria-hidden="true" className={cn(profileLinkIconClassName, "[&>svg]:size-6")}><LinkTypeIcon type="discord" /></span>
+                  <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+                    <span className="block font-medium">Discord</span>
+                    <span className="mt-0.5 block text-xs font-normal text-muted">{handle}</span>
+                  </span>
+                </CopyValueRow>
+              ))}
+            </div>
           </section>
         ) : null}
       </div>
 
       {hasWatchSurface ? (
-        <aside className="border-t border-border py-8 lg:border-t-0 lg:border-l lg:pl-8">
-          {twitchContent}
-          {streams.map(({ claimable, key, label, pcUrl, previewUrl, questUrl, directVideoUrl, streamId }, index) => {
+        <aside className="min-w-0 space-y-3 py-8">
+          {streams.map(({ claimable, key, label, pcUrl, questUrl, directVideoUrl, streamId }) => {
             const lifecycle = lifecycles[streamId];
             const live = claimable && lifecycle?.presentation === "live";
             const playbackActive = activePlaybackStreamIds.has(streamId);
@@ -241,34 +250,25 @@ export function ProfileVrcdnStreams({
             const title = streams.length > 1 ? `${label} ${streamId}` : label;
 
             return (
-              <div className={cn("pt-5", index > 0 && "mt-5 border-t border-border")} key={key}>
-                <div className="flex items-center gap-3 pb-3">
+              <Card className="min-w-0" padding="sm" aria-label={title} key={key}>
+                <div className="flex items-center gap-3 pb-2">
                   <p className="font-medium">{label}</p>
                   {live ? <span className="text-sm font-medium text-success">Live now</span> : null}
                 </div>
-                <a
-                  aria-label={`Open preview for ${title}`}
-                  className={cn(buttonVariants({ variant: "secondary" }), "mb-4 gap-2")}
-                  href={previewUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Open preview
-                  <ExternalLink aria-hidden="true" className="size-3.5" />
-                </a>
-                <div className="mb-4">
-                  <CopyValueRow label="Quest" value={questUrl} />
-                  <CopyValueRow label="PC" value={pcUrl} />
+
+                <div>
+                  <CopyValueRow className="grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-0 py-1 [&_code]:truncate [&_code]:break-normal" label="Quest" value={questUrl} />
+                  <CopyValueRow className="grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-0 py-1 [&_code]:truncate [&_code]:break-normal" label="PC" value={pcUrl} />
                 </div>
                 {showPlayer ? (
-                  <div className="mt-4 overflow-hidden rounded-control border border-border">
+                  <div className="mt-3 overflow-hidden rounded-control border border-border">
                     <div data-event-playback-inline={`profile:${profileId}:${streamId}`}>
                       {retained?.streamId === streamId ? <div aria-hidden="true"><div className="aspect-video" /><div className="h-[152px]" />{(retained.status === "blocked" || retained.status === "unavailable") && <div className="h-11" />}</div> : <button type="button" aria-label={`Play ${title}`} className="block w-full" disabled={!playback || !profileId}
                         onClick={()=>{if(playback && profileId)void playback.play({kind:"vrcdn",profileId,profileSlug,title:`${displayName ?? profileSlug} - VRDex`,href:`/${profileSlug}`,sourceId:streamId,src:directVideoUrl??questUrl,transport:directVideoUrl?"video":"mpegts"});}}><WatchPlayPoster /></button>}
                     </div>
                   </div>
                 ) : null}
-              </div>
+              </Card>
             );
           })}
         </aside>

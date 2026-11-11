@@ -25,7 +25,7 @@ for (const state of ["collapsed", "expanded"]) {
 
 
 for (const story of ["no-destination", "invalid-destination"]) {
-  test(`connected media card ${story} has no unavailable disclosure or reads @storybook-visual`, async ({ page }, testInfo) => {
+  test(`connected media card ${story} shows local details without history reads @storybook-visual`, async ({ page }, testInfo) => {
     let reads = 0;
     await page.route("**/api/v0/profiles/*/assets/*", async route => { reads++; await route.fulfill({ status: 404 }); });
     await page.goto(`/iframe.html?id=public-media-asset-card--${story}&viewMode=story#media-synthetic-portrait`);
@@ -34,7 +34,7 @@ for (const story of ["no-destination", "invalid-destination"]) {
     await expect(card.locator("img")).toHaveClass(/opacity-100/);
     await expect(card.getByRole("link", { name: "View source" })).toBeVisible();
     await expect(card.getByRole("link", { name: "Download Aurora press portrait" })).toBeVisible();
-    await expect(card.locator("details, summary")).toHaveCount(0);
+    await expect(card.locator("details")).toHaveAttribute("open", "");
     await page.evaluate(() => { window.location.hash = "other"; window.location.hash = "media-synthetic-portrait"; });
     await expect(card.getByRole("status")).toHaveCount(0);
     await expect(card.locator("details, summary")).toHaveCount(0);

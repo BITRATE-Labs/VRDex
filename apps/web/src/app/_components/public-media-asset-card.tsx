@@ -71,6 +71,7 @@ export function PublicMediaAssetCardView({ asset, label, featured = false, state
   const mimeType = asset.downloadMimeType ?? asset.mimeType;
   const byteSize = asset.downloadByteSize ?? asset.byteSize;
   const size = byteSize === undefined ? null : byteSize >= 1024 * 1024 ? `${(byteSize / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(byteSize / 1024))} KB`;
+  const hasHistory = publicDetailsSlug(asset) !== null;
   return <article id={`media-${asset.assetId}`} className={cn("group grid min-w-0 scroll-mt-6 overflow-hidden rounded-card border border-border bg-surface-strong text-sm transition hover:-translate-y-0.5 hover:shadow-panel", featured ? "lg:grid-cols-[minmax(0,1.35fr)_minmax(16rem,0.65fr)]" : undefined)}>
     <div className={cn("relative bg-canvas-muted", featured ? "min-h-72" : "aspect-[4/3]")}>
       <MediaPreviewImage alt={asset.altText || title} className="absolute inset-0 size-full object-contain" src={asset.imageUrl ?? ""} />
@@ -78,12 +79,14 @@ export function PublicMediaAssetCardView({ asset, label, featured = false, state
     <div className="grid min-w-0 content-start gap-2 p-4">
       <h3 className={cn("break-words font-medium", featured ? "text-xl" : undefined)}>{title}</h3>
       {asset.caption ? <p className="break-words leading-6 text-muted">{asset.caption}</p> : null}
-      {creditUrl ? <a className="w-fit text-xs text-muted underline underline-offset-4" href={creditUrl}>View source</a> : null}
-      <p className="text-xs text-muted">{[mimeType?.replace(/^image\//, "").replace("svg+xml", "svg").toUpperCase(), size].filter(Boolean).join(" / ")}</p>
       <a aria-label={`Download ${title}`} className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "mt-2 w-fit")} download href={asset.downloadUrl}>Download</a>
-      {publicDetailsSlug(asset) !== null ? <details className="mt-3 min-w-0 border-t border-border pt-3" open={open}>
+      {hasHistory || mimeType || size || creditUrl ? <details className="mt-3 min-w-0 border-t border-border pt-3" open={open}>
         <summary onClick={onOpenChange ? event => { event.preventDefault(); onOpenChange(!open); } : undefined} className="cursor-pointer rounded-sm py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent">Details &amp; history</summary>
-        {open ? <div className="pt-4"><MediaDetails state={state} /></div> : null}
+        {open ? <div className="grid gap-3 pt-4">
+        <p className="text-xs text-muted">{[mimeType?.replace(/^image\//, "").replace("svg+xml", "svg").toUpperCase(), size].filter(Boolean).join(" / ")}</p>
+        {creditUrl ? <a className="w-fit text-xs text-muted underline underline-offset-4" href={creditUrl}>View source</a> : null}
+        {hasHistory ? <MediaDetails state={state} /> : null}
+        </div> : null}
       </details> : null}
     </div>
   </article>;

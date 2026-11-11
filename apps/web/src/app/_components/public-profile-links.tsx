@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import { Globe2 } from "lucide-react";
 
 import { LookupCopyButton } from "./lookup-copy-button";
 import { ProfileDestinationArtwork } from "./profile-destination-artwork";
@@ -13,7 +14,7 @@ import { parseVrcdnStreamLinks } from "../../../../../convex/_vrcdnLinks";
 
 type PublicProfileLink = PublicSearchPerson["outboundLinks"][number];
 
-function hostLabel(url: string): string {
+export function hostLabel(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
   } catch {
@@ -91,7 +92,8 @@ function BrandIcon({ type }: { type: "discord" | "twitch" | "vrchat_profile" }) 
   );
 }
 
-function LinkTypeIcon({ type }: { type: PublicProfileLink["type"] }) {
+export function LinkTypeIcon({ type }: { type: string }) {
+  if (type === "website") return <Globe2 aria-hidden="true" className="size-5" />;
   if (type === "discord" || type === "twitch" || type === "vrchat_profile") {
     return <BrandIcon type={type} />;
   }

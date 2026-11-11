@@ -1,6 +1,6 @@
 import type { Doc } from "./_generated/dataModel";
 import type { DatabaseReader } from "./_generated/server";
-import { optionalField } from "./_publicFields";
+import { optionalField, safeHttpsUrl } from "./_publicFields";
 
 const PROFILE_WORLD_CREDIT_LIMIT = 6;
 const PROFILE_WORLD_CREDIT_QUERY_LIMIT = 50;
@@ -20,6 +20,7 @@ export type PublicProfileWorldCredit = {
   roles: WorldCreatorRole[];
   tags: string[];
   summary?: string;
+  heroImageUrl?: string;
   sourceLabel?: string;
 };
 
@@ -56,6 +57,7 @@ export function createPublicProfileWorldCredits(
       roles: [...new Set(credits.map((credit) => credit.role))],
       tags: world.tags,
       ...optionalField("summary", world.summary),
+      ...optionalField("heroImageUrl", safeHttpsUrl(world.heroImageUrl)),
       ...optionalField("sourceLabel", credits.find((credit) => credit.sourceLabel)?.sourceLabel),
     }))
     .sort((first, second) => first.displayName.localeCompare(second.displayName))

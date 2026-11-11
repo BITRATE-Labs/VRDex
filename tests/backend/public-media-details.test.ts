@@ -472,7 +472,8 @@ it("advertises only destinations rendered by the real public profile page", asyn
         trustLabel: "Unclaimed", mediaKit: scenario.kit };
       const html = renderToStaticMarkup(React.createElement(ProfilePublicPage, { profile, embedded: true, mediaKitGalleryEnabled: scenario.galleryEnabled }));
       assert.equal(html.includes('id="media-' + scenario.assetId + '"'), scenario.card, scenario.name);
-      assert.equal(html.includes('Details &amp; history'), scenario.link, scenario.name);
+      assert.equal(html.includes('Details &amp; history'), scenario.card, scenario.name);
+      assert.doesNotMatch(html, /Uploaded by/);
     }
   `], { cwd: process.cwd(), input: JSON.stringify(renders), env: { ...process.env, TSX_TSCONFIG_PATH: "apps/web/tsconfig.json" }, stdio: ["pipe", "pipe", "inherit"] });
 });
