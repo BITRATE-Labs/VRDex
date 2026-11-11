@@ -10,6 +10,7 @@ test('mirror preparation executes safely for absent, empty, unterminated and rep
   const mirrors=path.join(dir,'mirrors.txt');
   const helper=path.resolve('.github/scripts/prepare-browser-apt.sh');
   const preferred='https://mirrors.edge.kernel.org/ubuntu/\tpriority:1';
+  const fallback='https://archive.ubuntu.com/ubuntu';
   try {
     await writeFile(path.join(dir,'sudo'),'#!/bin/sh\nexec "$@"\n',{mode:0o700});
     const prepare=()=>execFileSync('bash',[helper,mirrors],{encoding:'utf8',env:{...process.env,PATH:`${dir}:${process.env.PATH}`}});
@@ -21,7 +22,7 @@ test('mirror preparation executes safely for absent, empty, unterminated and rep
       const first=await readFile(mirrors,'utf8');
       assert.equal(first.split('\n').filter(line=>line===preferred).length,1);
       assert.doesNotMatch(first,/azure\.archive/);
-      if(initial.includes('https://archive.ubuntu.com'))assert.ok(first.split('\n').includes('https://archive.ubuntu.com/ubuntu'));
+      if(initial.split('\n').some(line=>line===fallback))assert.ok(first.split('\n').some(line=>line===fallback));
       prepare();
       assert.equal(await readFile(mirrors,'utf8'),first);
     }
