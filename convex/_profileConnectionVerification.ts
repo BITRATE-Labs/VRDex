@@ -37,6 +37,7 @@ export async function getProfileConnectionVerifications(
   db: DatabaseReader,
   profileId: Id<"profiles">,
   links: readonly Doc<"profileExternalLinks">[],
+  proofLimit?: number,
 ): Promise<Map<Id<"profileExternalLinks">, number>> {
   const verified = new Map<Id<"profileExternalLinks">, number>();
   const owner = await getActiveProfileOwner(db, profileId);
@@ -61,7 +62,10 @@ export async function getProfileConnectionVerifications(
         q.eq("userId", owner.userId).eq("assetType", link.assetType).eq("assetExternalId", link.assetExternalId),
       );
     let selected: Doc<"externalControlProofs"> | undefined;
-    for await (const proof of proofs) {
+    // Activity pages bound proof history too; overflow cannot select a partial match.
+    const bounded = proofLimit === undefined ? null : await proofs.take(proofLimit + 1);
+    if (bounded && proofLimit !== undefined && bounded.length > proofLimit) continue;
+    for await (const proof of bounded ?? proofs) {
       const enoughControl = link.assetType === "vrchat_user"
         ? proof.controlLevel === "self"
         : proof.controlLevel !== "self" && meetsControlLevel(proof.controlLevel, MINIMUM_COMMUNITY_CONTROL_LEVEL);

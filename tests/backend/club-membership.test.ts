@@ -594,3 +594,39 @@ it("rejects foreign scopes, stale epochs and conflicting provider IDs without de
     1,
   );
 });
+
+it("resolves latest cached names without overwriting recorded role and actor evidence", async () => {
+  const { t, owner, integrationId } = await setup();
+  const targetUserId = "usr_00000000-0000-4000-8000-000000000001";
+  const actorUserId = "usr_00000000-0000-4000-8000-000000000002";
+  const roleId = "grol_00000000-0000-4000-8000-000000000003";
+  await t.run(async ctx => {
+    await ctx.db.insert("communityMembershipEvents", { integrationId, epochStartedAt: start, groupId: "grp_test", auditId: "named-role", eventType: "group.member.role.assign", occurredAt: start + 1, targetUserId, targetDisplayName: "Old member", actorUserId, actorDisplayName: "Old staff", roleId, roleName: "DJ", receivedAt: start + 2, verified: true });
+    for (const [id, name] of [[targetUserId, "Latest member"], [actorUserId, "Latest staff"]]) {
+      await ctx.db.insert("profileLinkDestinations", { key: `vrchat_user:${id}`, locator: id, kind: "vrchat_user", provider: "vrchat", status: "resolved", entityId: id, name, observedAt: start + 100 });
+    }
+  });
+  const args = { communitySlug: "club", startAt: start, endAt: end, paginationOpts: { numItems: 25, cursor: null } };
+  const result = await owner.query(activity, args);
+  const row = result.page[0];
+  assert.equal(row.targetIdentity.displayName, "Latest member");
+  assert.equal(row.actorIdentity.displayName, "Latest staff");
+  assert.equal(row.targetIdentity.vrchatUrl, `https://vrchat.com/home/user/${targetUserId}`);
+  assert.equal(row.targetIdentity.vrdexUrl, undefined);
+  assert.equal(row.targetDisplayName, "Old member");
+  assert.equal(row.actorDisplayName, "Old staff");
+  assert.equal(row.roleName, "DJ");
+  await assert.rejects(t.query(activity, args), /access/);
+});
+
+it("replayed optional evidence preserves the first record and core conflicts still fail", async () => {
+  const { t, owner } = await setup();
+  const scanId = await t.mutation(begin, { startAt: start, endAt: end });
+  const core = { auditId: "replay-role", eventType: "group.member.role.assign", occurredAt: start + 1, targetUserId: "usr_00000000-0000-4000-8000-000000000001" };
+  const page = { scanId, pageNumber: 0, phase: "collect", rawAuditIds: [core.auditId], events: [{ ...core, roleId: "grol_00000000-0000-4000-8000-000000000003", roleName: "Original DJ" }], exhausted: true };
+  await t.mutation(ingest, page);
+  await t.mutation(ingest, { ...page, phase: "verify", events: [{ ...core, roleName: "Renamed role" }] });
+  await finishScan(t, scanId);
+  const result = await owner.query(activity, { communitySlug: "club", startAt: start, endAt: end, paginationOpts: { numItems: 25, cursor: null } });
+  assert.equal(result.page[0].roleName, "Original DJ");
+});

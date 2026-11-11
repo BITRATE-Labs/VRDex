@@ -1,3 +1,4 @@
+import { membershipActivityIdentities, membershipIdentity } from "./_membershipActivityIdentity";
 import { readCollectionSubject, readManagedIntegration, resolveGroupObservationPolicy } from "./_groupObservationPolicy";
 import { assertAutomaticOperationAllowed } from "./_communityTelemetry";
 import { v } from "convex/values";
@@ -27,6 +28,10 @@ const event = v.object({
   occurredAt: v.number(),
   targetUserId: v.optional(v.string()),
   targetDisplayName: v.optional(v.string()),
+    actorUserId: v.optional(v.string()),
+    actorDisplayName: v.optional(v.string()),
+    roleId: v.optional(v.string()),
+    roleName: v.optional(v.string()),
 });
 const scope = {
   integrationId: v.id("communityVrchatIntegrations"),
@@ -247,7 +252,9 @@ export const ingestBatch = internalMutation({
         !item.eventType ||
         item.eventType.length > 200 ||
         (item.targetUserId?.length ?? 0) > 200 ||
-        (item.targetDisplayName?.length ?? 0) > 200 ||
+        [item.targetDisplayName, item.actorDisplayName, item.roleName].some(name => name !== undefined && (!name.trim() || name.length > 200 || /[\u0000-\u001f\u007f]/u.test(name))) ||
+        (item.actorUserId !== undefined && !/^usr_[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(item.actorUserId)) ||
+        (item.roleId !== undefined && !/^grol_[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(item.roleId)) ||
         !Number.isSafeInteger(item.occurredAt) ||
         item.occurredAt < scan.startAt ||
         item.occurredAt >= scan.endAt
@@ -507,7 +514,7 @@ export const listActivity = query({
     paginationOpts: paginationOptsValidator,
   },
   returns: v.object({
-    page: v.array(event),
+    page: v.array(v.object({ ...event.fields, targetIdentity: v.optional(membershipIdentity), actorIdentity: v.optional(membershipIdentity) })),
     isDone: v.boolean(),
     continueCursor: v.string(),
   }),
@@ -533,24 +540,15 @@ export const listActivity = query({
       )
       .order("desc")
       .paginate(args.paginationOpts);
+    const identities = await membershipActivityIdentities(ctx, result.page.flatMap(row => [row.targetUserId, row.actorUserId].filter((id): id is string => !!id)));
     return {
       isDone: result.isDone,
       continueCursor: result.continueCursor,
-      page: result.page.map(
-        ({
-          auditId,
-          eventType,
-          occurredAt,
-          targetUserId,
-          targetDisplayName,
-        }) => ({
-          auditId,
-          eventType,
-          occurredAt,
-          ...(targetUserId ? { targetUserId } : {}),
-          ...(targetDisplayName ? { targetDisplayName } : {}),
-        }),
-      ),
+      page: result.page.map(({ _id, _creationTime, integrationId, epochStartedAt, groupId, receivedAt, verified, ...row }) => ({
+        ...row,
+        ...(row.targetUserId && identities.has(row.targetUserId.toLowerCase()) ? { targetIdentity: identities.get(row.targetUserId.toLowerCase()) } : {}),
+        ...(row.actorUserId && identities.has(row.actorUserId.toLowerCase()) ? { actorIdentity: identities.get(row.actorUserId.toLowerCase()) } : {}),
+      })),
     };
   },
 });
