@@ -285,7 +285,7 @@ export const cleanupAnalytics = internalMutation({
     for (const list of rows)
       for (const row of list) await ctx.db.delete(row._id);
     for (const row of preferences) await ctx.db.delete(row._id);
-    await ctx.db.delete(sessions[0]!._id);
+    for (const session of sessions) await ctx.db.delete(session._id);
     await ctx.db.delete(integration._id);
     return null;
   },

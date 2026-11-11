@@ -176,6 +176,8 @@ it("isolates synthetic analytics behind local opt-in and preserves unexpected ro
     }),
   );
   await t.mutation(ref("cleanupAnalytics"), args);
+  const remaining = await t.run(ctx => ctx.db.query("instanceSessions").withIndex("by_integrationId_state", q => q.eq("integrationId", data.integrationId)).collect());
+  assert.deepEqual(remaining, []);
   await t.mutation(ref("cleanup"), args);
   assert.equal(await t.mutation(ref("lookup"), base), null);
 });
