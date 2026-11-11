@@ -16,6 +16,10 @@ export const set = mutation({
       throw new ConvexError({ code: "ANALYTICS_POLICY_CHANGED" });
     }
     const previous = user.analyticsPreference;
+    // Withdrawal is immediate; throttle only rapid re-enablement so deletion targets cannot be spammed.
+    if (args.choice === "on" && previous?.choice === "off" && Date.now() - previous.changedAt < 60_000) {
+      throw new ConvexError({ code: "ANALYTICS_RETRY_LATER" });
+    }
     const preference = {
       choice: args.choice,
       changedAt: previous?.choice === args.choice ? previous.changedAt : Date.now(),

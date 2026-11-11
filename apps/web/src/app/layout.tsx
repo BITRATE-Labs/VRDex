@@ -48,18 +48,18 @@ export default async function RootLayout({
       <body
         className={`${spaceGrotesk.variable} ${ibmPlexMono.variable} flex min-h-screen flex-col antialiased`}
       >
+        <EventPlaybackProvider>
         <ConvexClientProvider>
         <AnalyticsPreferencesProvider>
         <PostHogProvider>
-          <EventPlaybackProvider>
             {children}
             {/* Outside the page's `<main>`, and here rather than in `PageShell`,
                 so a route that renders its own shell still gets a way out. */}
             <SiteFooter />
-          </EventPlaybackProvider>
         </PostHogProvider>
         </AnalyticsPreferencesProvider>
         </ConvexClientProvider>
+        </EventPlaybackProvider>
       </body>
     </html>
   );

@@ -102,7 +102,7 @@ resource "posthog_insight" "auth_restore_outcomes" {
 
 resource "posthog_insight" "auth_restore_latency" {
   name        = "Authentication restore latency"
-  description = "Completed authentication restoration grouped by coarse latency bucket."
+  description = "Measured authentication restoration grouped by coarse latency bucket. Excludes receipts without a latency measurement."
   query_json = jsonencode({
     kind = "InsightVizNode"
     source = {
@@ -112,7 +112,7 @@ resource "posthog_insight" "auth_restore_latency" {
       }
       interval   = "day"
       kind       = "TrendsQuery"
-      properties = local.production_full_properties
+      properties = concat(local.production_full_properties, [{ key = "latency_bucket", operator = "is_set", type = "event" }])
       series = [{
         event = "auth_session_restore_completed"
         kind  = "EventsNode"

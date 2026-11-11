@@ -7,7 +7,8 @@ const baseURL = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   ...base,
-  testMatch: enabled ? "analytics-preference.spec.ts" : "analytics-gate.spec.ts",
+  testMatch: enabled ? ["analytics-preference.spec.ts", "event-persistent-playback.flow.spec.ts"] : "analytics-gate.spec.ts",
+  outputDir: `test-results/analytics-${enabled ? "enabled" : "disabled"}`,
   reporter: [["list"], ["json", { outputFile: `playwright-artifacts/results-analytics-${enabled ? "enabled" : "disabled"}.json` }]],
   use: { ...base.use, baseURL },
   webServer: {

@@ -64,6 +64,11 @@ it("saves only the caller's binary choice with a stable UUID and monotonic revis
   assert.equal(off.preference.revision, on.preference.revision + 1);
   const rows = await t.run(async (ctx) => ctx.db.query("users").collect());
   assert.equal(rows.find((u) => u.clerkUserId === "analytics-b")?.analyticsPreference, undefined);
+  await assert.rejects(a.mutation(api.analyticsPreferences.set, { choice: "on", policyVersion: "2026-11-10" }));
+  await t.run(async (ctx) => {
+    const stored = await ctx.db.query("users").withIndex("clerkUserId", (q) => q.eq("clerkUserId", "analytics-a")).unique();
+    await ctx.db.patch(stored!._id, { analyticsPreference: { ...stored!.analyticsPreference!, changedAt: Date.now() - 60_001 } });
+  });
   const again = await a.mutation(api.analyticsPreferences.set, { choice: "on", policyVersion: "2026-11-10" });
   assert.notEqual(again.analyticsId, on.analyticsId);
   assert.equal(again.preference.revision, off.preference.revision + 1);
@@ -91,6 +96,10 @@ it("withdrawal never revives a queued generation after On returns", async () => 
   assert.equal(JSON.stringify(health).includes(pending[0].analyticsId), false);
   await user.mutation(api.analyticsPreferences.set, { choice: "off", policyVersion: "2026-11-10" });
   assert.equal((await t.run(async (ctx) => ctx.db.query("analyticsDeletionRequests").collect())).length, 1);
+  await t.run(async (ctx) => {
+    const stored = await ctx.db.query("users").withIndex("clerkUserId", (q) => q.eq("clerkUserId", "generation-user")).unique();
+    await ctx.db.patch(stored!._id, { analyticsPreference: { ...stored!.analyticsPreference!, changedAt: Date.now() - 60_001 } });
+  });
   await user.mutation(api.analyticsPreferences.set, { choice: "on", policyVersion: "2026-11-10" });
   assert.equal((await t.mutation(internal.claimAnalytics.claimNextForDelivery, {})).row, null);
   await user.run(async (ctx) => {

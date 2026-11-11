@@ -4,6 +4,13 @@ run "production_full_reports" {
   command = plan
 
   assert {
+    condition = contains(jsondecode(posthog_insight.auth_restore_latency.query_json).source.properties, {
+      key = "latency_bucket", operator = "is_set", type = "event"
+    })
+    error_message = "Latency reports must exclude receipts without measured latency."
+  }
+
+  assert {
     condition = alltrue([
       for insight in [
         posthog_insight.auth_restore_outcomes,
