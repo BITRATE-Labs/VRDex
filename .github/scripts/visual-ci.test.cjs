@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { selectEvidence, evaluateVerification } = require("./visual-ci.cjs");
 const coreJobs = ["lint-web", "verify-docs", "verify-api-mcp", "typecheck-web", "typecheck-backend", "verify-backend-local", "restream-local-checks", "build-web"];
-const browserJobs = ["playwright-public-smoke", "playwright-data-flow", "playwright-public-preview", "storybook-component-preview"];
+const browserJobs = ["playwright-public-smoke", "playwright-data-flow", "broadcast-native-acceptance", "playwright-public-preview", "storybook-component-preview"];
 const comparisons = ["playwright-image-diff", "storybook-image-diff"];
 function fixture({ browsers = false, visuals = false } = {}) {
   const needs = Object.fromEntries(coreJobs.map(job => [job, { result: "success" }]));

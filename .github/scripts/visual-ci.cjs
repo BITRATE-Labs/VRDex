@@ -1,7 +1,7 @@
 "use strict";
 
 const CORE_JOBS = ["lint-web", "verify-docs", "verify-api-mcp", "typecheck-web", "typecheck-backend", "verify-backend-local", "restream-local-checks", "build-web"];
-const BROWSER_JOBS = ["playwright-public-smoke", "playwright-data-flow", "playwright-hosted-data-flow", "playwright-public-preview", "storybook-component-preview"];
+const BROWSER_JOBS = ["playwright-public-smoke", "playwright-data-flow", "broadcast-native-acceptance", "playwright-hosted-data-flow", "playwright-public-preview", "storybook-component-preview"];
 const COMPARISON_JOBS = new Set(["playwright-image-diff", "storybook-image-diff"]);
 
 function selectEvidence(eventName, labels) {

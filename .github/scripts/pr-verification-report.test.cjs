@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { LEGACY_MARKERS, REPORT_MARKER, buildReport, updatePrVerificationReport } = require("./pr-verification-report.cjs");
 const coreJobs = ["lint-web", "verify-docs", "verify-api-mcp", "typecheck-web", "typecheck-backend", "verify-backend-local", "restream-local-checks", "build-web"];
-const browserJobs = ["playwright-public-smoke", "playwright-data-flow", "playwright-public-preview", "storybook-component-preview"];
+const browserJobs = ["playwright-public-smoke", "playwright-data-flow", "broadcast-native-acceptance", "playwright-public-preview", "storybook-component-preview"];
 function fixture(browsers = true, visuals = true) {
   const needs = Object.fromEntries(coreJobs.map(job => [job, { result: "success" }]));
   needs["visual-selection"] = { result: "success", outputs: { browsers: String(browsers), visuals: String(visuals) } };

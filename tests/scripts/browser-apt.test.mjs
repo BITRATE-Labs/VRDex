@@ -17,7 +17,7 @@ test('every browser dependency install prepares mirrors within a bounded step', 
       }
     }
   }
-  assert.equal(installs, 12);
+  assert.equal(installs, 13);
   const helper = await readFile('.github/scripts/prepare-browser-apt.sh', 'utf8');
   assert.match(helper, /priority:1/);
   assert.match(helper, /grep -Fxq/);

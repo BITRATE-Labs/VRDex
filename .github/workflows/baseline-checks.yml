@@ -1297,6 +1297,61 @@ jobs:
             apps/web/playwright-artifacts
             apps/web/e2e/__screenshots__/storybook-*
 
+  broadcast-native-acceptance:
+    name: Broadcast Candidate Acceptance
+    if: github.event_name == 'pull_request' && needs.visual-selection.outputs.browsers == 'true' && github.event.pull_request.head.repo.fork == false
+    needs: [visual-selection]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install native browser prerequisites
+        timeout-minutes: 10
+        run: |
+          bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes ffmpeg
+          pnpm --filter web exec playwright install --with-deps chromium
+      - name: Build candidate packaged worker
+        timeout-minutes: 7
+        run: docker build -f workers/restream/Dockerfile -t vrdex-broadcast-native:ci .
+      - name: Run isolated candidate broadcast acceptance
+        env:
+          BROADCAST_NATIVE_ACCEPTANCE: "true"
+          BROADCAST_CANDIDATE_HEAD: ${{ github.event.pull_request.head.sha }}
+          VRDEX_ENABLE_E2E_HELPERS: "true"
+          VRDEX_ENABLE_E2E_AUTH_HELPERS: "true"
+          VRDEX_ENABLE_E2E_CLERK_AUTH: "true"
+          VRDEX_E2E_BROWSER_TOKEN: local-playwright-token
+          VRDEX_E2E_CONVEX_SECRET: local-convex-e2e-secret
+          CLERK_SECRET_KEY: ${{ secrets.VRDEX_HOSTED_E2E_CLERK_SECRET_KEY }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.VRDEX_HOSTED_E2E_CLERK_PUBLISHABLE_KEY }}
+          CLERK_JWT_ISSUER_DOMAIN: ${{ vars.VRDEX_STAGING_CLERK_JWT_ISSUER_DOMAIN }}
+          PLAYWRIGHT_OUTPUT_DIR: playwright-artifacts/broadcast-native/results
+          PLAYWRIGHT_HTML_REPORT_DIR: playwright-artifacts/broadcast-native/report
+          PLAYWRIGHT_JSON_REPORT_FILE: playwright-artifacts/broadcast-native/results.json
+        run: |
+          case "$CLERK_SECRET_KEY" in sk_test_*) ;; *) exit 1 ;; esac
+          node scripts/check-clerk-issuer-match.mjs --issuer "$CLERK_JWT_ISSUER_DOMAIN" --publishable-key "$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"
+          pnpm --filter web exec playwright test event-broadcast-native.flow.spec.ts --project=desktop-chromium --workers=1
+          node -e "const r=require('./apps/web/playwright-artifacts/broadcast-native/results.json');if(r.stats.expected!==1||r.stats.skipped||r.stats.unexpected)process.exit(1)"
+      - name: Upload candidate broadcast evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: broadcast-native-acceptance
+          path: apps/web/playwright-artifacts/broadcast-native
+          if-no-files-found: error
+          retention-days: 7
+
   pr-verification-report:
     name: PR Verification Report
     if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
@@ -1316,6 +1371,7 @@ jobs:
       - visual-selection
       - playwright-public-smoke
       - playwright-data-flow
+      - broadcast-native-acceptance
       - playwright-hosted-data-flow
       - playwright-public-preview
       - playwright-image-diff

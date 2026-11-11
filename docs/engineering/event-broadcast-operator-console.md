@@ -94,6 +94,28 @@ nonvisible placements expose an external link; they do not create a clipped embe
 
 ## Verification boundary
 
+Selected browser CI includes a separate candidate broadcast acceptance job. It
+starts a fresh local Convex deployment and the candidate Next app, authenticates
+through the retained Clerk development tenant, and drives the real operator route.
+A packaged worker build uses the production control loop, renderer, input manager,
+and output sender against a local native RTMP receiver. There are no intercepted
+application requests or synthetic control replies in this job.
+
+The normal case switches a public video through Quick switch, pauses a real worker
+observation, requests Stop through its confirmation, then releases the observation.
+Acceptance requires a superseded report, a succeeded Stop command, an ended session,
+physical worker/receiver exit, and independently decoded video/audio from the capture.
+Cancelled-event and revoked-output cases require the report to remain fenced and
+publication to stop. All cases use disposable local data and delete their Clerk test
+account. The CI report fails on a missing job, artifact or executed test.
+
+This environment uses a development identity tenant, a local receiver instead of
+VRCDN, and Docker with 4 CPU/4 GiB instead of the qualified ECS 8 CPU/16 GiB.
+Its enabled gate and process lifecycle are local, so it does not exercise SSM,
+ECS admission, cloud IAM or live provider credentials. It proves the candidate
+browser/backend/native control path; retained cloud/provider/capacity evidence
+and a separate deployed smoke remain distinct. It creates no new AWS resources.
+
 Pure view, route, editor persistence, foreground and fake SDK tests exercise source
 contracts without services. Guarded browser fixtures exercise production components
 with synthetic control receipts and intercepted playback; they are not authenticated
