@@ -148,6 +148,28 @@ it("activeSessionId wins over newer terminal sessions and missing active ID neve
   assert.equal(field(renderOperator(status), "Observed output"), "Unknown");
 });
 
+it("completed connection tests do not replace broadcast status or hide a real broadcast failure", async () => {
+  const { operatorFixture, fixtureId } =
+    await import("../../apps/web/src/app/playwright/event-operator/fixture-state");
+  const { operatorViewState } =
+    await import("../../apps/web/src/lib/event-operator-state");
+  const status = operatorFixture();
+  status.program.activeSessionId = undefined;
+  status.sessions[0].status = "error";
+  status.sessions[0].connectionTest = {
+    jobId: fixtureId("eventBroadcastConnectionTests", "test"),
+    revision: 1,
+    marker: "test",
+    deadlineAt: status.serverNow,
+  };
+  assert.equal(operatorViewState(status, 0).session, undefined);
+  const broadcast = { ...status.sessions[0], connectionTest: undefined };
+  status.sessions.push(broadcast);
+  assert.equal(operatorViewState(status, 0).session, broadcast);
+  status.program.activeSessionId = status.sessions[0].sessionId;
+  assert.equal(operatorViewState(status, 0).session, status.sessions[0]);
+});
+
 it("status windows prioritize current, next, preview and visible sources without treating custom sources as a missing next slot", async () => {
   const { operatorFixture, fixtureSource, fixtureId } =
     await import("../../apps/web/src/app/playwright/event-operator/fixture-state");

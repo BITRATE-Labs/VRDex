@@ -24,9 +24,10 @@ the exact scope, mandatory amendment original and bounded resolver obligations.
 ## Required native CI coverage
 
 Complete-capture fixtures use finite media and an owned half-open relay. Every
-publisher byte reaches the capture unchanged. After publisher EOF, the relay
-finishes its outgoing stream and consumes the receiver's remaining controls
-through receiver EOF. Publisher and receiver exits, physical closure, original
+publisher byte reaches the capture unchanged. After the complete `Publish.Start`
+response, the relay owns the receiver's remaining controls. Publisher EOF
+finishes its outgoing stream; the relay consumes controls through receiver EOF.
+Publisher and receiver exits, physical closure, original
 RTMP parsing, decoded populations and lineage checks must all pass.
 
 Production Stop is a separate lifecycle guarantee: it fences input, unsubscribes
@@ -34,6 +35,12 @@ and kills the sender. An arbitrary kill can split an RTMP message even when both
 sockets close cleanly. Stop tests verify that fence and cleanup; they do not
 promise a complete capture or a clock certificate. Truncated originals and
 broken connections must still reject.
+
+Finite capture positives exercise the production codec/mux recipe and strict
+provenance, rather than the sender's queue-to-certificate path. The separate
+native Stop case covers that sender's queue and fence; accepted capacity runs
+provide their own integrated sender, capture and decoder evidence. These scopes
+do not substitute for one another.
 
 Every **Restream Local Checks** job builds the current production worker image
 and runs the full deterministic transport gate with network isolation. The

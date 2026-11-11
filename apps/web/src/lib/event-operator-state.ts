@@ -12,7 +12,9 @@ export function operatorViewState(
     ? status.sessions.find(
         (row) => row.sessionId === status.program?.activeSessionId,
       )
-    : status.sessions.find((row) => ["ended", "error"].includes(row.status));
+    : status.sessions.find(
+        (row) => !row.connectionTest && ["ended", "error"].includes(row.status),
+      );
   const active = Boolean(
     session && !["ended", "error"].includes(session.status),
   );
