@@ -56,7 +56,8 @@ export async function deletePosthogIdentity(config: ManagementConfig, target: De
     const deletion = await request(`${base}bulk_delete/`, { ids: [personId], delete_events: true, delete_recordings: true });
     if (deletion.status === 401 || deletion.status === 403) return { kind: "authorization" };
     const data = deletion.data;
-    if (deletion.status !== 202 || !record(data) || data.persons_found !== 1 || data.persons_queued_for_deletion !== 1
+    if (![200, 202].includes(deletion.status) || !record(data) || data.persons_found !== 1
+      || (data.persons_queued_for_deletion !== 1 && data.persons_deleted !== 1)
       || data.events_queued_for_deletion !== true || data.recordings_queued_for_deletion !== true
       || !Array.isArray(data.deletion_errors) || data.deletion_errors.length !== 0) return { kind: "retry" };
     return { kind: "accepted", personId };
@@ -136,6 +137,10 @@ export const sweepCompleted = internalMutation({
     const rows = await ctx.db.query("analyticsDeletionRequests")
       .withIndex("by_state_completedAt", (q) => q.eq("state", "completed").lte("completedAt", now - 30 * 86_400_000)).take(100);
     for (const row of rows) {
+      const owner = row.ownerUserId ? await ctx.db.get(row.ownerUserId) : null;
+      if (owner?.analyticsPreference?.choice === "off" && owner.analyticsId === row.analyticsId) {
+        await ctx.db.patch(owner._id, { analyticsId: undefined });
+      }
       const guest = await ctx.db.query("analyticsGuestReceipts").withIndex("by_analyticsId", (q) => q.eq("analyticsId", row.analyticsId)).unique();
       if (guest?.withdrawnAt !== undefined) await ctx.db.patch(guest._id, { analyticsId: undefined });
       await ctx.db.delete(row._id);

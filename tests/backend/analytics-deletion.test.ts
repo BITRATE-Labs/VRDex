@@ -9,6 +9,7 @@ const schema = (schemaModule as unknown as { default?: typeof schemaModule }).de
 const modules = {
   "../../convex/analyticsDeletion.ts": () => import("../../convex/analyticsDeletion"),
   "../../convex/analyticsGuest.ts": () => import("../../convex/analyticsGuest"),
+  "../../convex/analyticsPreferences.ts": () => import("../../convex/analyticsPreferences"),
   "../../convex/_generated/api.ts": () => import("../../convex/_generated/api"),
 };
 const claim = makeFunctionReference<"mutation">("analyticsDeletion:claimNext");
@@ -48,6 +49,14 @@ it("requests event and recording deletion for the exact stored identity, recordi
   assert.deepEqual(await deletePosthogIdentity(config, { analyticsId: "opaque-consent-id" }), { kind: "accepted", personId: "person-uuid" });
   assert.match(requests[0].url, /distinct_id=opaque-consent-id/);
   assert.deepEqual(JSON.parse(String(requests[1].init?.body)), { ids: ["person-uuid"], delete_events: true, delete_recordings: true });
+});
+
+it("accepts a synchronous person deletion while still awaiting event completion", async () => {
+  for (const status of [200, 202]) {
+    responses([{ body: { results: [{ id: 123, uuid: "person-uuid", distinct_ids: ["opaque-consent-id"] }] } },
+      { status, body: { ...acknowledged, persons_deleted: 1, persons_queued_for_deletion: 0 } }]);
+    assert.deepEqual(await deletePosthogIdentity(config, { analyticsId: "opaque-consent-id" }), { kind: "accepted", personId: "person-uuid" });
+  }
 });
 
 it("does not treat 202 errors, missing acknowledgements or unmatched identities as success", async () => {
@@ -208,4 +217,20 @@ it("does not run provider deletion merely because a management key is provisione
       if (value === undefined) delete process.env[name]; else process.env[name] = value;
     }
   }
+});
+
+it("retires only an Off account's matching completed identity so repeated Off remains idempotent after cleanup", async () => {
+  const t = convexTest({ schema, modules });
+  const owner = await t.run(async (ctx) => {
+    const ownerUserId = await ctx.db.insert("users", { clerkUserId: "retired-owner", analyticsId: "retired-id", analyticsPreference: { choice: "off", changedAt: 1, policyVersion: "2026-11-10", source: "account", revision: 1 } });
+    await ctx.db.insert("analyticsDeletionRequests", { ownerUserId, analyticsId: "retired-id", requestedAt: 0, state: "completed", completedAt: 1 });
+    const renewedUserId = await ctx.db.insert("users", { clerkUserId: "renewed-owner", analyticsId: "new-period", analyticsPreference: { choice: "on", changedAt: 2, policyVersion: "2026-11-10", source: "account", revision: 2 } });
+    await ctx.db.insert("analyticsDeletionRequests", { ownerUserId: renewedUserId, analyticsId: "old-period", requestedAt: 0, state: "completed", completedAt: 1 });
+    return { ownerUserId, renewedUserId };
+  });
+  await t.mutation(sweep, { now: 31 * 86_400_000 });
+  assert.equal((await t.run(async (ctx) => ctx.db.get(owner.ownerUserId)))?.analyticsId, undefined);
+  assert.equal((await t.run(async (ctx) => ctx.db.get(owner.renewedUserId)))?.analyticsId, "new-period");
+  await t.withIdentity({ subject: "retired-owner" }).mutation(makeFunctionReference<"mutation">("analyticsPreferences:set"), { choice: "off", policyVersion: "2026-11-10" });
+  assert.equal((await t.run(async (ctx) => ctx.db.query("analyticsDeletionRequests").collect())).length, 0);
 });

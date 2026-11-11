@@ -78,9 +78,13 @@ Completed analytics mappings expire after 30 days. Retired guest receipt hashes
 remain as unlinked acknowledgements, without an analytics ID, so old browser
 retries can be recognized. Unknown receipts are rejected and retained client-side.
 Pending, accepted, blocked and failed targets are never swept.
+Cleanup also clears an Off account's analytics ID only if it still matches the
+completed period, preserving repeated-Off idempotency without touching a new On period.
 Only a validated acknowledgement of every requested deletion step permits status
 polling to mark completion. Unacknowledged submissions retry all steps against the
 remembered person UUID; event-only status cannot prove profile or replay deletion.
+Acknowledgement accepts either a queued or synchronous person deletion, while
+still requiring event/recording acknowledgements and no reported errors.
 
 Consented backend claim events also create the opaque account person profile,
 so withdrawal covers accounts whose browser ingestion was blocked. Operational
