@@ -26,7 +26,9 @@ Other configurations still require their own admitted capacity evidence.
    retains both RTMP directions. Capture runs inside the measured cgroup.
 2. Production Stop fences publication through the existing sender. The proof
    allows a bounded receiver drain after that fence, then requires both socket
-   ends and the receiver process to close. An incomplete captured tail rejects.
+   ends and the receiver process to close. Drain allows buffered pre-fence bytes
+   to finish; acceptance still requires complete originals. Production Stop
+   does not guarantee that condition. An incomplete captured tail rejects.
 3. The verifier joins every observed AAC and video unit to the copied TS
    recording. Codec configuration, payload order, counts and timestamps must
    match the declared transport conversion.
@@ -73,6 +75,14 @@ units, configuration changes, raw timestamp mutations, forged or cross-recording
 handles, altered decoder output and clock-domain boundary cases. A separate
 required CI step runs the owned capture and decoder with the packaged Linux
 runtime, mounting tests read-only and leaving `/app` untouched.
+
+Positive capture fixtures use finite publisher EOF and an owned relay that
+consumes receiver controls after the complete `Publish.Start` response. They
+test the production codec/mux arguments and strict
+capture provenance, not the production sender's queue-to-certificate path.
+The separate native Stop case tests that sender's queue and immediate fence
+without claiming a certificate. Accepted capacity runs retain their own
+integrated sender, capture and decoder evidence.
 
 A short local test does not admit an allocation. A new full-length, exact-image
 capacity receipt must pass before its evidence ID enters the measured map.

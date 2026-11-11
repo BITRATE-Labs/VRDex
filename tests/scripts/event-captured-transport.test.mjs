@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
+import { createServer, connect } from 'node:net';
+import { createHash } from 'node:crypto';
+import { spawn as spawnSocketPublisher } from 'node:child_process';
 const runtimeModule=path=>process.env.CAPTURED_TRANSPORT_RUNTIME_ROOT?pathToFileURL(join(process.env.CAPTURED_TRANSPORT_RUNTIME_ROOT,path)).href:new URL('../../'+path,import.meta.url).href;
 const { parseCapturedRtmp, parseCapturedAacConfig, inspectCapturedTransportClock, startCapturedTransportDecode, isCapturedTransportClock, capturedTransportProjection } = await import(runtimeModule('scripts/event-captured-transport.mjs'));
 const handshake=()=>{const b=Buffer.alloc(3073);b[0]=3;return b;};
@@ -42,26 +45,209 @@ const { startCapturedRtmpReceiver, assertCapturedAudioClock, assertCapturedVideo
 const { programDecodeArguments } = await import(runtimeModule('scripts/event-marker-program-guards.mjs'));
 const { parseMarkerMetadata } = await import(runtimeModule('scripts/event-marker-metadata.mjs'));
 const { resolveDestinationProfile } = await import(runtimeModule('workers/restream/broadcast-profiles.mjs'));
-// Positive provenance cases need a physically complete RTMP session before any
-// mutation is tested. Finite FFmpeg EOF can race the receiver's final deleteStream
-// reply, so use the actual production sender stop fence with ongoing media.
-async function startOwnedFixture(directory,{quiet=false,minimumOutputMs=5000,durationSeconds=6}={}){
- const {createProcessOwner}=await import(runtimeModule('scripts/event-proof-processes.mjs'));const owner=createProcessOwner();
- let producer,source,sender,senderClosed,sourceEnded=false,unsubscribed=false;const signals=[],sourceDiagnostics=[],senderDiagnostics=[],spawns=[];let sourceDiagnosticBytes=0,senderDiagnosticBytes=0;
- const close=async()=>{sender?.stopNow();if(source?.exitCode===null)source.kill('SIGKILL');try{await producer?.close();}finally{const cleanup=await owner.close();await writeFile(join(directory,'fixture-cleanup.json'),JSON.stringify(cleanup,null,2)+'\n');}};
+// This test endpoint forwards setup through a complete local FFmpeg
+// Publish.Start response, then owns subsequent receiver controls. Publisher
+// EOF may be withheld by backpressure, so it is not the phase boundary.
+const PUBLISH_START_PREFIX=Buffer.from('0200086f6e5374617475730000000000000000000503','hex');
+function isPublishStart(message){
+ if(message?.type!==20||message.streamId<1||!message.payload.subarray(0,PUBLISH_START_PREFIX.length).equals(PUBLISH_START_PREFIX))return false;
+ const fields=new Map(),raw=message.payload;let at=PUBLISH_START_PREFIX.length;
+ while(at+3<=raw.length&&!raw.subarray(at,at+3).equals(Buffer.from([0,0,9]))){
+  const keyBytes=raw.readUInt16BE(at);at+=2;assert(keyBytes>0&&at+keyBytes+3<=raw.length,'Malformed onStatus key');
+  const key=raw.subarray(at,at+keyBytes).toString('utf8');at+=keyBytes;assert.equal(raw[at++],2,'Only the local FFmpeg string-valued onStatus object is supported');
+  const valueBytes=raw.readUInt16BE(at);at+=2;assert(at+valueBytes<=raw.length&&!fields.has(key),'Malformed onStatus value');
+  fields.set(key,raw.subarray(at,at+valueBytes).toString('utf8'));at+=valueBytes;
+ }
+ assert(at+3===raw.length&&raw.subarray(at).equals(Buffer.from([0,0,9])),'Malformed onStatus object end');
+ return fields.get('level')==='status'&&fields.get('code')==='NetStream.Publish.Start';
+}
+const publishStartReply=()=>Buffer.concat([handshake(),message(20,Buffer.concat([PUBLISH_START_PREFIX,Buffer.from('00056c6576656c0200067374617475730004636f64650200174e657453747265616d2e5075626c6973682e5374617274000009','hex')]))]);
+async function startFinitePublisherRelay(capturePort,durationSeconds,{holdPublisherReads=false}={}){
+ let hold=holdPublisherReads;
+ assert(Number.isInteger(durationSeconds)&&durationSeconds>=1&&durationSeconds<=CAPTURED_TRANSPORT_LIMITS.durationSeconds);
+ const sockets=new Set(),joins=[],errors=[];
+ const publisherHash=createHash('sha256'),reverseHash=createHash('sha256');
+ let connections=0,publisherBytes=0,forwardedBytes=0,reverseBytes=0,consumedAfterEof=0,consumedAfterPublish=0;
+ let setup=Buffer.alloc(0),setupScan=3073,published=false,setupBoundary,publisherSocket,pauseNotice,controlNotice;
+ const paused=new Promise(resolve=>{pauseNotice=resolve;}),controlConsumed=new Promise(resolve=>{controlNotice=resolve;});
+ let publisherEof=false,captureEof=false,publisherFinished=false,captureFinished=false,closedSockets=0;
+ let timer;
+ const listener=createServer({allowHalfOpen:true},publisher=>{
+  if(++connections!==1){publisher.destroy();fail('relay_connection_population');return;}
+  listener.close();publisherSocket=publisher;
+  const capture=connect({host:'127.0.0.1',port:capturePort,allowHalfOpen:true});
+  for(const [name,socket]of [['publisher',publisher],['capture',capture]]){
+   sockets.add(socket);
+   joins.push(new Promise(resolve=>socket.once('close',hadError=>{sockets.delete(socket);closedSockets++;if(hadError)fail(name+'_close_error');resolve();})));
+   socket.on('error',error=>fail(name+'_'+error.code));
+  }
+  publisher.on('data',bytes=>{
+   publisherBytes+=bytes.length;
+   if(publisherBytes>CAPTURED_TRANSPORT_LIMITS.clientBytes){fail('relay_publisher_bound');return;}
+   publisherHash.update(bytes);
+   if(!capture.write(bytes,error=>{if(error)fail('relay_forward_'+error.code);else forwardedBytes+=bytes.length;})){publisher.pause();pauseNotice();}
+  });
+  capture.on('drain',()=>{if(!hold)publisher.resume();});
+  capture.on('data',bytes=>{
+   reverseBytes+=bytes.length;
+   if(reverseBytes>CAPTURED_TRANSPORT_LIMITS.serverBytes){fail('relay_reverse_bound');return;}
+   reverseHash.update(bytes);
+   function consume(bytes){if(!bytes)return;consumedAfterPublish+=bytes;if(publisherEof)consumedAfterEof+=bytes;controlNotice({bytes,publisherPaused:publisher.isPaused(),publisherEof,published});}
+   if(published){consume(bytes.length);return;}
+   const before=setup.length;
+   if(before+bytes.length>16384){fail('relay_setup_bound');return;}
+   setup=Buffer.concat([setup,bytes]);
+   for(;setupScan<=setup.length;setupScan++){
+    let messages;
+    try{messages=parseCapturedRtmp(setup.subarray(0,setupScan));}
+    catch(error){if(/^captured_transport_(?:chunk_truncated|message_incomplete)$/.test(error.message))continue;fail('relay_setup_parse_'+error.message);return;}
+    try{if(isPublishStart(messages.at(-1))){published=true;setupBoundary=setupScan;break;}}
+    catch(error){fail('relay_setup_status_'+error.message);return;}
+   }
+   const forward=published?bytes.subarray(0,setupBoundary-before):bytes;
+   if(forward.length&&!publisher.write(forward,error=>{if(error)fail('relay_reverse_'+error.code);}))capture.pause();
+   if(published){consume(bytes.length-forward.length);setup=Buffer.alloc(0);}
+  });
+  publisher.on('drain',()=>capture.resume());
+  publisher.once('end',()=>{
+   publisherEof=true;if(!published){fail('relay_setup_incomplete');return;}
+   // end() flushes all queued publisher bytes before sending capture-side FIN.
+   capture.end();publisher.end();capture.resume();
+  });
+  capture.once('end',()=>{captureEof=true;if(!publisherEof)fail('relay_premature_capture_eof');});
+  publisher.once('finish',()=>{publisherFinished=true;});
+  capture.once('finish',()=>{captureFinished=true;});
+  if(hold){publisher.pause();pauseNotice();}
+ });
+ const listenerClosed=new Promise(resolve=>listener.once('close',resolve));
+ function fail(reason){errors.push(reason);for(const socket of sockets)socket.destroy();if(listener.listening)listener.close();}
+ listener.on('error',error=>fail('relay_listener_'+error.code));
+ await new Promise((resolve,reject)=>{listener.once('error',reject);listener.listen(0,'127.0.0.1',resolve);});
+ timer=setTimeout(()=>fail('relay_deadline'),durationSeconds*1000+15000);
+ const receipt=()=>({connections,publisherBytes,forwardedBytes,reverseBytes,consumedAfterEof,consumedAfterPublish,published,setupBoundary,publisherEof,captureEof,publisherFinished,captureFinished,closedSockets,errors:[...errors]});
+ async function close(){
+  clearTimeout(timer);
+  if(listener.listening)listener.close();
+  for(const socket of sockets)socket.destroy();
+  await Promise.all(joins);await listenerClosed;
+ }
+ return {
+  proxyUrl:`rtmp://127.0.0.1:${listener.address().port}/live`,
+  paused,controlConsumed,publisherPaused:()=>publisherSocket?.isPaused()??false,
+  releasePublisherReads(){hold=false;publisherSocket?.resume();},
+  async finish(){
+   try{
+    await Promise.all(joins);await listenerClosed;
+    assert.deepEqual(errors,[]);assert.equal(connections,1);assert.equal(closedSockets,2);
+    assert(published&&publisherEof&&captureEof&&publisherFinished&&captureFinished,'Relay requires Publish.Start, both EOFs and completed writable halves');
+    assert(publisherBytes>3073&&reverseBytes>=3073);assert.equal(forwardedBytes,publisherBytes);
+    return {...receipt(),publisherSha256:publisherHash.digest('hex'),reverseSha256:reverseHash.digest('hex')};
+   }finally{clearTimeout(timer);}
+  },close,
+ };
+}
+
+test('finite test relay preserves bytes through setup and consumes post-publish replies',{timeout:5000},async()=>{
+ // Actual local FFmpeg onStatus shape from the retained cf085 native capture.
+ const nativeStatus=Buffer.from('0200086f6e537461747573000000000000000000050300056c6576656c0200067374617475730004636f64650200174e657453747265616d2e5075626c6973682e5374617274000b6465736372697074696f6e020019746573742d6b6579206973206e6f77207075626c6973686564000764657461696c73020008746573742d6b6579000009','hex');
+ assert.equal(isPublishStart({type:20,streamId:1,payload:nativeStatus}),true);assert.throws(()=>isPublishStart({type:20,streamId:1,payload:nativeStatus.subarray(0,-1)}),/Malformed/);
+ const received=[],publisherReceived=[],receiverErrors=[],publisherErrors=[],receiverSockets=new Set();
+ const initialReply=publishStartReply(),lateReply=Buffer.from('receiver controls after publisher EOF');
+ let lateTimer,relay,publisher;
+ const receiver=createServer({allowHalfOpen:true},socket=>{
+  receiverSockets.add(socket);receiver.close();
+  socket.on('error',error=>receiverErrors.push(error.code));socket.once('close',()=>receiverSockets.delete(socket));
+  socket.write(initialReply);socket.pause();setTimeout(()=>socket.resume(),50);
+  socket.on('data',bytes=>received.push(Buffer.from(bytes)));
+  socket.once('end',()=>{lateTimer=setTimeout(()=>socket.end(lateReply),20);});
+ });
+ const receiverClosed=new Promise(resolve=>receiver.once('close',resolve));
+ await new Promise((resolve,reject)=>{receiver.once('error',reject);receiver.listen(0,'127.0.0.1',resolve);});
+ try{
+  relay=await startFinitePublisherRelay(receiver.address().port,1);
+  publisher=connect({host:'127.0.0.1',port:Number(new URL(relay.proxyUrl).port),allowHalfOpen:true});
+  publisher.on('error',error=>publisherErrors.push(error.code));
+  const publisherClosed=new Promise(resolve=>publisher.once('close',resolve));
+  await new Promise((resolve,reject)=>{publisher.on('data',bytes=>{publisherReceived.push(Buffer.from(bytes));if(Buffer.concat(publisherReceived).length>=initialReply.length)resolve();});publisher.once('error',reject);});
+  const bytes=Buffer.alloc(4*1024*1024,73);publisher.end(bytes);
+  const receipt=await relay.finish();await publisherClosed;await receiverClosed;
+  assert.deepEqual(Buffer.concat(received),bytes);assert.deepEqual(Buffer.concat(publisherReceived),initialReply);
+  assert.equal(receipt.publisherSha256,createHash('sha256').update(bytes).digest('hex'));
+  assert.equal(receipt.reverseSha256,createHash('sha256').update(initialReply).update(lateReply).digest('hex'));
+  assert.equal(receipt.publisherBytes,bytes.length);assert.equal(receipt.forwardedBytes,bytes.length);assert.equal(receipt.reverseBytes,initialReply.length+lateReply.length);
+  assert.equal(receipt.consumedAfterEof,lateReply.length);assert.deepEqual(receiverErrors,[]);assert.deepEqual(publisherErrors,[]);
+ }finally{clearTimeout(lateTimer);publisher?.destroy();await relay?.close();for(const socket of receiverSockets)socket.destroy();if(receiver.listening)receiver.close();await receiverClosed;}
+});
+
+for(const closeMode of ['exit','destroy'])test('post-publish controls are consumed while a full-closed publisher EOF is paused: '+closeMode,{timeout:7000},async t=>{
+ const initialReply=publishStartReply(),control=Buffer.from('control during paused publisher EOF'),received=[],errors=[];
+ let target,relay,child,childClosed,phase='setup';const phases=[];
+ const receiver=createServer({allowHalfOpen:true},socket=>{
+  target=socket;receiver.close();socket.on('error',error=>errors.push(error.code));socket.pause();socket.write(initialReply);
+  socket.on('data',bytes=>received.push(Buffer.from(bytes)));socket.once('end',()=>socket.end());
+ });
+ const receiverClosed=new Promise(resolve=>receiver.once('close',resolve));
+ await new Promise(resolve=>receiver.listen(0,'127.0.0.1',resolve));
+ let timer;const deadline=new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Socket regression deadline while awaiting '+phase)),5000);});
+ async function guard(promise,name){phase=name;phases.push({phase:name,state:'waiting'});const value=await Promise.race([promise,deadline]);phases.push({phase:name,state:'completed'});return value;}
+ try{
+  relay=await guard(startFinitePublisherRelay(receiver.address().port,1,{holdPublisherReads:true}),'relay setup');
+  const code="const net=require('node:net');let n=0,started=false;const s=net.connect({host:'127.0.0.1',port:Number(process.argv[1]),allowHalfOpen:true});s.on('error',()=>process.exit(2));s.on('data',b=>{n+=b.length;if(!started&&n>=Number(process.argv[2])){started=true;s.end(Buffer.alloc(1048576,73),()=>{if(process.argv[3]==='exit')process.exit(0);else s.destroySoon();});}});s.on('close',()=>process.exit(0));";
+  child=spawnSocketPublisher(process.execPath,['-e',code,String(new URL(relay.proxyUrl).port),String(initialReply.length),closeMode],{stdio:['ignore','ignore','ignore']});
+  childClosed=new Promise(resolve=>child.once('close',(code,signal)=>resolve({code,signal})));
+  await guard(relay.paused,'explicit publisher pause barrier');const exit=await guard(childClosed,'publisher native close');assert.deepEqual(exit,{code:0,signal:null});assert.equal(relay.publisherPaused(),true,'The full-close regression must hold EOF behind an explicit read barrier');
+  target.write(control);const consumed=await guard(relay.controlConsumed,'positive post-publish control consumption');assert.deepEqual(consumed,{bytes:control.length,publisherPaused:true,publisherEof:false,published:true});assert.equal(relay.publisherPaused(),true);relay.releasePublisherReads();target.resume();
+  const receipt=await guard(relay.finish(),'full byte/hash and EOF join');assert.equal(receipt.published,true);assert.equal(receipt.setupBoundary,initialReply.length);assert.equal(receipt.consumedAfterPublish,control.length);assert.equal(receipt.publisherBytes,1048576);assert.equal(receipt.forwardedBytes,1048576);assert.equal(receipt.publisherSha256,createHash('sha256').update(Buffer.alloc(1048576,73)).digest('hex'));assert.deepEqual(Buffer.concat(received),Buffer.alloc(1048576,73));assert.deepEqual(errors,[]);t.diagnostic(JSON.stringify({closeMode,phases,publisherExit:exit,consumed,receipt}));
+ }catch(error){t.diagnostic(JSON.stringify({closeMode,phases,awaiting:phase,error:error.message}));throw error;}finally{clearTimeout(timer);if(child?.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');await childClosed;await relay?.close();target?.destroy();if(receiver.listening)receiver.close();await receiverClosed;}
+});
+
+for(const mode of ['malformed','bound'])test('relay rejects invalid setup without reaching published phase: '+mode,{timeout:5000},async()=>{
+ const invalid=mode==='malformed'?publishStartReply():Buffer.concat([handshake(),message(1,Buffer.from([0,0,128,0])),message(20,Buffer.alloc(32768))]).subarray(0,16385);
+ if(mode==='malformed')invalid[invalid.length-1]=8;
+ let target,relay,publisher;const socketErrors=[];
+ const receiver=createServer({allowHalfOpen:true},socket=>{target=socket;receiver.close();socket.on('error',error=>socketErrors.push(error.code));socket.end(invalid);});
+ const receiverClosed=new Promise(resolve=>receiver.once('close',resolve));await new Promise(resolve=>receiver.listen(0,'127.0.0.1',resolve));
+ try{
+  relay=await startFinitePublisherRelay(receiver.address().port,1);publisher=connect(new URL(relay.proxyUrl).port,'127.0.0.1');publisher.resume();publisher.on('error',error=>socketErrors.push(error.code));
+  await new Promise(resolve=>publisher.once('close',resolve));await assert.rejects(relay.finish(),mode==='malformed'?/relay_setup_status_/:/relay_setup_bound/);assert(socketErrors.every(code=>['ECONNRESET','EPIPE'].includes(code)),'Unexpected negative-setup cleanup error');
+ }finally{publisher?.destroy();await relay?.close();target?.destroy();if(receiver.listening)receiver.close();await receiverClosed;}
+});
+
+// Positive provenance uses finite native source/publisher EOF, never an arbitrary
+// canonical stop cut. The canonical publisher codec/mux recipe stays unchanged.
+async function startOwnedFixture(directory,{quiet=false,durationSeconds=6}={}){
+ const {createProcessOwner}=await import(runtimeModule('scripts/event-proof-processes.mjs'));
+ const {outputArguments}=await import(runtimeModule('workers/restream/output-arguments.mjs'));
+ const owner=createProcessOwner(),diagnostics={source:[],publisher:[]},stderrBytes={source:0,publisher:0},stderrEof={source:false,publisher:false},errors=[];
+ let producer,relay,source,publisher,timer;
+ const close=async()=>{clearTimeout(timer);if(source?.exitCode===null)source.kill('SIGKILL');if(publisher?.exitCode===null)publisher.kill('SIGKILL');try{await relay?.close();await producer?.close();}finally{const cleanup=await owner.close();await writeFile(join(directory,'fixture-cleanup.json'),JSON.stringify(cleanup,null,2)+'\n');}};
+ function diagnostic(name,child){child.stderr.on('data',bytes=>{stderrBytes[name]+=bytes.length;if(stderrBytes[name]>65536){errors.push(name+'_stderr_bound');child.kill('SIGKILL');}else diagnostics[name].push(Buffer.from(bytes));});child.stderr.once('end',()=>{stderrEof[name]=true;});child.once('error',error=>errors.push(name+'_'+error.code));}
+ async function saveDiagnostics(){await writeFile(join(directory,'fixture-source.stderr'),Buffer.concat(diagnostics.source));await writeFile(join(directory,'fixture-sender.stderr'),Buffer.concat(diagnostics.publisher));}
  try{
   producer=await startCapturedRtmpReceiver({directory,receiverPort:19743,settings:{videoPreset:'720p30',audioBitrateKbps:320},durationSeconds});
-  const sourceArgs=['-hide_banner','-v','error','-re','-f','lavfi','-i',quiet?'color=c=gray:s=1280x720:r=30':'testsrc2=s=1280x720:r=30','-f','lavfi','-i',quiet?'anullsrc=r=48000:cl=stereo':'sine=frequency=440:sample_rate=48000','-c:v','libx264','-threads','2','-preset','ultrafast','-bf','0','-g','30','-c:a','aac','-ac','2','-b:a','320k','-f','mpegts','pipe:1'];
-  source=owner.start('ffmpeg',sourceArgs,{stdio:['ignore','pipe','pipe']});source.stdout.once('end',()=>{sourceEnded=true;});source.stderr.on('data',b=>{sourceDiagnosticBytes+=b.length;if(sourceDiagnosticBytes>65536)source.kill('SIGKILL');else sourceDiagnostics.push(Buffer.from(b));});
-  const {createOutputSender}=await import(runtimeModule('workers/restream/output-sender.mjs'));
-  sender=createOutputSender({destination:'twitch',profile:resolveDestinationProfile({settings:{videoPreset:'720p30',audioBitrateKbps:320},destination:'twitch'}),credentialRef:'synthetic',resolveCredential:()=>JSON.stringify({rtmpUrl:'rtmp://live.twitch.tv/app',streamKey:'test-key'}),program:{subscribe(fn){source.stdout.on('data',fn);return()=>{unsubscribed=true;source.stdout.off('data',fn);};}},spawnProcess:(command,args,options)=>{const local=[...args];local[local.length-1]=producer.proxyUrl+'/test-key';spawns.push({command,canonicalArgs:args,localArgs:local});const child=owner.start(command,local,options),kill=child.kill.bind(child);child.kill=signal=>{signals.push(signal);return kill(signal);};senderClosed=new Promise(yes=>child.once('close',(code,signal)=>yes({code,signal})));child.stderr.on('data',b=>{senderDiagnosticBytes+=b.length;if(senderDiagnosticBytes>65536)sender.stopNow();else senderDiagnostics.push(Buffer.from(b));});return child;}});
-  await sender.start();const deadline=Date.now()+15000;
-  while(!(sender.getState().publishing&&sender.getState().outputMs>=minimumOutputMs)){assert(Date.now()<deadline,'Fixture sender did not publish within bound');assert.equal(sender.getState().restarts,0);assert(sourceDiagnosticBytes<=65536&&senderDiagnosticBytes<=65536);await sleep(20);}
-  assert.equal(sourceEnded,false,'Fixture Stop must precede upstream EOF');const publishing=sender.getState();sender.stopNow();assert.equal(unsubscribed,true);assert.equal(sender.getState().status,'stopped');assert.equal(sender.getState().publishing,false);sender.enqueue(Buffer.alloc(188));const exit=await senderClosed;assert.equal(exit.signal,'SIGKILL');assert.deepEqual(signals,['SIGKILL']);source.kill('SIGKILL');await source.closed;
-  await producer.drain();const bytes=(await readFile(producer.filenames.client)).length;sender.enqueue(Buffer.alloc(188));await sleep(25);assert.equal((await readFile(producer.filenames.client)).length,bytes);
-  await writeFile(join(directory,'fixture-source.stderr'),Buffer.concat(sourceDiagnostics));await writeFile(join(directory,'fixture-sender.stderr'),Buffer.concat(senderDiagnostics));await writeFile(join(directory,'fixture-stop.json'),JSON.stringify({sourceArgs,spawns,publishing,sourceEndedAtStop:false,unsubscribed,exit,signals},null,2)+'\n');
-  return {producer,close};
- }catch(error){let cleanupError;try{await close();}catch(failure){cleanupError=failure.message;}await writeFile(join(directory,'fixture-source.stderr'),Buffer.concat(sourceDiagnostics));await writeFile(join(directory,'fixture-sender.stderr'),Buffer.concat(senderDiagnostics));await writeFile(join(directory,'fixture-failure.json'),JSON.stringify({error:error.message,cleanupError,signals,sourceEnded,spawns},null,2)+'\n');if(cleanupError)throw new AggregateError([error,Error(cleanupError)],'Fixture and cleanup failed');throw error;}
+  relay=await startFinitePublisherRelay(producer.proxyPort,durationSeconds);
+  const sourceArgs=['-hide_banner','-v','error','-re','-f','lavfi','-i',quiet?'color=c=gray:s=1280x720:r=30':'testsrc2=s=1280x720:r=30','-f','lavfi','-i',quiet?'anullsrc=r=48000:cl=stereo':'sine=frequency=440:sample_rate=48000','-t',String(durationSeconds),'-c:v','libx264','-threads','2','-preset','ultrafast','-bf','0','-g','30','-c:a','aac','-ac','2','-b:a','320k','-f','mpegts','pipe:1'];
+  const publisherArgs=outputArguments('twitch',{url:relay.proxyUrl,key:'test-key'},resolveDestinationProfile({settings:{videoPreset:'720p30',audioBitrateKbps:320},destination:'twitch'}));
+  publisher=owner.start('ffmpeg',publisherArgs,{stdio:['pipe','ignore','pipe','pipe']});diagnostic('publisher',publisher);
+  source=owner.start('ffmpeg',sourceArgs,{stdio:['ignore','pipe','pipe']});diagnostic('source',source);
+  let sourceEof=false,sourceBytes=0,progressBytes=0;
+  source.stdout.once('end',()=>{sourceEof=true;});
+  source.stdout.on('data',bytes=>{sourceBytes+=bytes.length;if(sourceBytes>CAPTURED_TRANSPORT_LIMITS.recordingBytes){errors.push('source_byte_bound');source.kill('SIGKILL');publisher.kill('SIGKILL');}});
+  publisher.stdin.on('error',error=>{errors.push('publisher_stdin_'+error.code);source.kill('SIGKILL');publisher.kill('SIGKILL');});
+  publisher.stdio[3].on('data',bytes=>{progressBytes+=bytes.length;if(progressBytes>65536){errors.push('publisher_progress_bound');publisher.kill('SIGKILL');}});
+  source.stdout.pipe(publisher.stdin);
+  timer=setTimeout(()=>{errors.push('fixture_deadline');source.kill('SIGKILL');publisher.kill('SIGKILL');},durationSeconds*1000+15000);
+  const [sourceExit,publisherExit]=await Promise.all([source.closed,publisher.closed]);
+  assert.equal(sourceExit,0);assert.equal(publisherExit,0);assert.equal(sourceEof,true);assert.equal(publisher.stdin.writableFinished,true);assert.deepEqual(stderrEof,{source:true,publisher:true});assert.deepEqual(errors,[]);
+  const relayReceipt=await relay.finish();
+  // Keep the strict factory drain and subsequent full native population join.
+  await producer.drain();
+  const evidence=producer.evidence();
+  assert.equal(evidence.bindings.client.bytes,relayReceipt.publisherBytes);assert.equal(evidence.bindings.client.sha256,relayReceipt.publisherSha256);
+  assert.equal(evidence.bindings.server.bytes,relayReceipt.reverseBytes);assert.equal(evidence.bindings.server.sha256,relayReceipt.reverseSha256);
+  await saveDiagnostics();await writeFile(join(directory,'fixture-finite.json'),JSON.stringify({sourceArgs,publisherArgs,sourceExit,publisherExit,sourceEof,sourceBytes,stderrEof,progressBytes,relay:relayReceipt},null,2)+'\n');
+  clearTimeout(timer);return {producer,close};
+ }catch(error){let cleanupError;try{await close();}catch(failure){cleanupError=failure.message;}await saveDiagnostics();await writeFile(join(directory,'fixture-failure.json'),JSON.stringify({error:error.message,cleanupError,errors,stderrEof},null,2)+'\n');if(cleanupError)throw new AggregateError([error,Error(cleanupError)],'Fixture and cleanup failed');throw error;}
 }
 
 test('real owned capture/decode binds native bytes and rejects every cross-binding mutation',{skip:process.env.CAPTURED_TRANSPORT_NATIVE!=='1',timeout:60000},async()=>{
@@ -88,12 +274,14 @@ test('real owned capture/decode binds native bytes and rejects every cross-bindi
 
 test('format-3 new message after format-0 inherits the header timestamp delta',()=>{const raw=Buffer.concat([handshake(),message(8,Buffer.from([1]),42),Buffer.from([195,2])]);assert.deepEqual(parseCapturedRtmp(raw).map(x=>x.timestamp),[42,84]);});
 
+test('format-3 AAC header with zero of eight inherited payload bytes rejects',()=>{const prefix=Buffer.concat([handshake(),message(8,Buffer.from('af012110045608c1','hex'),21)]);assert.equal(parseCapturedRtmp(prefix)[0].payload.length,8);assert.throws(()=>parseCapturedRtmp(Buffer.concat([prefix,Buffer.from([195])])),/captured_transport_chunk_truncated/);});
+
 async function negativeOwnedCapture(mode){
  const base=process.env.CAPTURED_TRANSPORT_NATIVE_OUTPUT,directory=base?join(base,'negative-'+mode):await mkdtemp(join(tmpdir(),'captured-negative-'));
  if(base)await mkdir(directory);
  let producer,fixture;
  try{
-  fixture=await startOwnedFixture(directory,{minimumOutputMs:2500});producer=fixture.producer;
+  fixture=await startOwnedFixture(directory,{durationSeconds:3});producer=fixture.producer;
   const file=producer.filenames.recording,decoder=startCapturedTransportDecode(producer,{file,original:programDecodeArguments(file,{width:1280,height:720}),stdio:['ignore','ignore','pipe','pipe','pipe','pipe','pipe']}),parts={};for(const fd of [3,4,5,6]){parts[fd]=[];decoder.child.stdio[fd].on('data',b=>parts[fd].push(b));}
   const nativeCapture=await decoder.finish(),capture={nativeCapture,audioChunks:parts[4],rgb:Buffer.concat(parts[3]),audioRows:parseMarkerMetadata(Buffer.concat(parts[6]).toString(),'audio'),videoRows:parseMarkerMetadata(Buffer.concat(parts[5]).toString(),'video')};
   assert(Object.isFrozen(nativeCapture)&&Object.isFrozen(nativeCapture.channels[4]));
@@ -113,7 +301,7 @@ test('common captured marker decoder closes a real quiet segment',{skip:process.
  const base=process.env.CAPTURED_TRANSPORT_NATIVE_OUTPUT,directory=base?join(base,'common-core'):await mkdtemp(join(tmpdir(),'captured-core-'));if(base)await mkdir(directory);let producer,fixture;
  const {createProcessOwner}=await import(runtimeModule('scripts/event-proof-processes.mjs'));const owner=createProcessOwner();
  try{
-  fixture=await startOwnedFixture(directory,{quiet:true,minimumOutputMs:7500});producer=fixture.producer;
+  fixture=await startOwnedFixture(directory,{quiet:true,durationSeconds:8});producer=fixture.producer;
   const decoded=await decodeCapturedTransportMarkerRecord(owner,producer.filenames.recording,{transportCapture:producer,width:1280,height:720,maxSeconds:10});
   assert.equal(decoded.recordingSha256,producer.evidence().bindings.recording.sha256);assert.equal(decoded.episodes.length,0);assert.equal(decoded.visuals.length,0);assert(decoded.audioMetadataRows>200&&decoded.videoFrames>170);
   const wire=decoded.transportClock;assert(wire,'captured semantic wire must survive common core');transportProjectionFromWire(wire,decoded);
@@ -121,20 +309,20 @@ test('common captured marker decoder closes a real quiet segment',{skip:process.
  }finally{await fixture?.close();await owner.close();if(!base)await rm(directory,{recursive:true,force:true});}
 });
 const {createOutputSender}=await import(runtimeModule('workers/restream/output-sender.mjs'));
-test('canonical sender stopNow SIGKILL fence permits complete owned capture drain',{skip:process.env.CAPTURED_TRANSPORT_NATIVE!=='1',timeout:40000},async()=>{
+test('canonical sender stopNow SIGKILL is a lifecycle fence, not capture provenance',{skip:process.env.CAPTURED_TRANSPORT_NATIVE!=='1',timeout:40000},async()=>{
  const base=process.env.CAPTURED_TRANSPORT_NATIVE_OUTPUT,directory=base?join(base,'production-stop'):await mkdtemp(join(tmpdir(),'captured-stop-'));if(base)await mkdir(directory);
- const {createProcessOwner}=await import(runtimeModule('scripts/event-proof-processes.mjs'));const owner=createProcessOwner();let capture,sender,source,senderProcess,senderClosed;const signals=[],health=[];let sourceEnded=false,unsubscribed=false;
+ const {createProcessOwner}=await import(runtimeModule('scripts/event-proof-processes.mjs'));const owner=createProcessOwner();let capture,sender,source,senderProcess,senderClosed;const signals=[],health=[],spawns=[];let sourceEnded=false,unsubscribed=false;
  try{
   capture=await startCapturedRtmpReceiver({directory,receiverPort:19743,settings:{videoPreset:'720p30',audioBitrateKbps:320},durationSeconds:12});
   source=owner.start('ffmpeg',['-hide_banner','-v','error','-re','-f','lavfi','-i','color=c=gray:s=1280x720:r=30','-f','lavfi','-i','anullsrc=r=48000:cl=stereo','-c:v','libx264','-threads','2','-preset','ultrafast','-bf','0','-g','30','-c:a','aac','-ac','2','-b:a','320k','-f','mpegts','pipe:1'],{stdio:['ignore','pipe','pipe']});source.stderr.resume();source.stdout.once('end',()=>{sourceEnded=true;});
-  sender=createOutputSender({destination:'twitch',profile:resolveDestinationProfile({settings:{videoPreset:'720p30',audioBitrateKbps:320},destination:'twitch'}),credentialRef:'synthetic',resolveCredential:()=>JSON.stringify({rtmpUrl:'rtmp://live.twitch.tv/app',streamKey:'test-key'}),program:{subscribe(fn){source.stdout.on('data',fn);return()=>{unsubscribed=true;source.stdout.off('data',fn);};}},onHealth:state=>health.push({...state}),spawnProcess:(command,args,options)=>{const local=[...args];local[local.length-1]=capture.proxyUrl+'/test-key';const child=owner.start(command,local,options);senderProcess=child;const kill=child.kill.bind(child);child.kill=signal=>{signals.push(signal);return kill(signal);};senderClosed=new Promise(yes=>child.once('close',(code,signal)=>yes({code,signal})));return child;}});
+  sender=createOutputSender({destination:'twitch',profile:resolveDestinationProfile({settings:{videoPreset:'720p30',audioBitrateKbps:320},destination:'twitch'}),credentialRef:'synthetic',resolveCredential:()=>JSON.stringify({rtmpUrl:'rtmp://live.twitch.tv/app',streamKey:'test-key'}),program:{subscribe(fn){source.stdout.on('data',fn);return()=>{unsubscribed=true;source.stdout.off('data',fn);};}},onHealth:state=>health.push({...state}),spawnProcess:(command,args,options)=>{const local=[...args];local[local.length-1]=capture.proxyUrl+'/test-key';spawns.push({command,args:[...local]});const child=owner.start(command,local,options);senderProcess=child;const kill=child.kill.bind(child);child.kill=signal=>{signals.push(signal);return kill(signal);};senderClosed=new Promise(yes=>child.once('close',(code,signal)=>yes({code,signal})));return child;}});
   await sender.start();const deadline=Date.now()+15000;
   while(!(sender.getState().publishing&&sender.getState().outputMs>=5000)){assert(Date.now()<deadline,'Canonical sender did not publish within bound');assert.equal(sender.getState().restarts,0);await sleep(20);}
-  const publishing=sender.getState();assert.equal(sourceEnded,false,'Stop must occur with ongoing upstream input, not finite EOF');sender.stopNow();assert.equal(sender.getState().status,'stopped');assert.equal(sender.getState().publishing,false);assert.equal(unsubscribed,true);sender.enqueue(Buffer.alloc(188));
+  const publishing=sender.getState();assert.equal(spawns.length,1);assert.equal(sourceEnded,false,'Stop must occur with ongoing upstream input, not finite EOF');sender.stopNow();assert.equal(sender.getState().status,'stopped');assert.equal(sender.getState().publishing,false);assert.equal(unsubscribed,true);sender.enqueue(Buffer.alloc(188));
   const exit=await senderClosed;assert.equal(exit.signal,'SIGKILL');assert(signals.includes('SIGKILL'));source.kill('SIGKILL');await source.closed;
-  await capture.drain();const fencedBytes=(await readFile(capture.filenames.client)).length;sender.enqueue(Buffer.alloc(188));await sleep(50);assert.equal((await readFile(capture.filenames.client)).length,fencedBytes);
-  const decoded=await decodeCapturedTransportMarkerRecord(owner,capture.filenames.recording,{transportCapture:capture,width:1280,height:720,maxSeconds:20});assert(decoded.videoFrames>60&&decoded.audioMetadataRows>90);transportProjectionFromWire(decoded.transportClock,decoded);
-  await writeFile(join(directory,'production-stop-summary.json'),JSON.stringify({passed:true,scope:'Actual canonical sender stopNow with ongoing input; complete observed segment only',publishing,afterStop:sender.getState(),senderExit:exit,signals,unsubscribed,recordingSha256:decoded.recordingSha256,videoFrames:decoded.videoFrames,audioRows:decoded.audioMetadataRows,transportClock:decoded.transportClock},null,2)+'\n');
+  await capture.close();assert.throws(()=>capture.evidence(),/not_drained/);
+  const fencedBytes=(await readFile(capture.filenames.client)).length;sender.enqueue(Buffer.alloc(188));await sleep(50);assert.equal((await readFile(capture.filenames.client)).length,fencedBytes);assert.equal(sender.getState().restarts,0);assert.equal(spawns.length,1);assert.equal(sender.getState().status,'stopped');assert.equal(unsubscribed,true);
+  await writeFile(join(directory,'production-stop-summary.json'),JSON.stringify({passed:true,scope:'Lifecycle fence only: canonical SIGKILL/unsubscribe and stable bytes after owned child/socket close; no capture or clock provenance',publishing,afterStop:sender.getState(),senderExit:exit,signals,spawnCount:spawns.length,spawns,unsubscribed,fencedBytes},null,2)+'\n');
  }catch(error){await writeFile(join(directory,'production-stop-failure.json'),JSON.stringify({passed:false,error:String(error.message),signals,health:health.slice(-8),sourceEnded},null,2)+'\n');throw error;}
  finally{sender?.stopNow();if(source?.exitCode===null)source.kill('SIGKILL');await capture?.close();const cleanup=await owner.close();if(base)await writeFile(join(directory,'cleanup.json'),JSON.stringify({captureCloseCompleted:true,owner:cleanup},null,2)+'\n');if(!base)await rm(directory,{recursive:true,force:true});}
 });
