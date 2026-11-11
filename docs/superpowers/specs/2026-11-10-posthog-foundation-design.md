@@ -10,7 +10,7 @@ Latest user direction supersedes the earlier three-option control: Limited is an
 
 Current target: Limited while no choice exists; a saved choice is either Off or On. On enables Full analytics, including account linking and masked replay when available. Use the same behavior everywhere, without location lookup, jurisdiction tables or a custom consent platform. The blanket Off-before-choice proposal is rejected. Before activating interim Limited, verify that its actual data flow qualifies for collection without prior consent. This is an implementation acceptance check, not a new regional product policy or a claim already established by the label.
 
-This is the current approved design and supersedes the earlier, larger foundation proposal. The [audit](../../planning/posthog-usage-audit-2026-11-10.md) remains the evidence record. The current request authorizes implementation planning; implementation and production activation have not started.
+This is the current approved design and supersedes the earlier, larger foundation proposal. The [audit](../../planning/posthog-usage-audit-2026-11-10.md) remains the evidence record. BASIC subsequently approved the implementation plan and native execution. Production activation remains separate. See the [acceptance record](../../testing/posthog-foundation-acceptance.md) for current implementation evidence and unresolved activation dependencies.
 
 ## User experience
 

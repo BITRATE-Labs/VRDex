@@ -32,7 +32,9 @@ export function posthogClaimEvent(row: Doc<"claimAnalyticsOutbox">) {
     event: row.event,
     timestamp: new Date(row.occurredAt).toISOString(),
     properties: {
-      distinct_id: `claim:${row.journeyId}`,
+      distinct_id: row.analyticsId,
+      analytics_mode: "full",
+      deployment_category: row.deploymentCategory,
       journey_id: row.journeyId,
       $insert_id: row.eventKey,
       $process_person_profile: false,

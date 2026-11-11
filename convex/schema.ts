@@ -2,6 +2,7 @@ import {managedConnectionValidator,connectionProvider} from "./_eventBroadcastCo
 import { mediaRelayTables } from "./_mediaRelayTables";
 import { statisticsAdmissionValidator } from "./_groupAdmission";
 import { admissionDiagnosticsValidator } from "./_groupObservationMonitoring";
+import { analyticsPreference, deploymentCategory } from "./_analyticsPreference";
 import { destinationGroupMetadataValidator } from "./_profileLinkDestination";
 import { collectionScopeValidator, groupObservationDecisionValidator } from "./_communityTelemetry";
 import { resourceSnapshotValidator, computeRuntimeValidator } from "./_eventBroadcastResources";
@@ -784,10 +785,18 @@ export default defineSchema({
     phone: v.optional(v.string()),
     phoneVerificationTime: v.optional(v.number()),
     defaultEventTimezone: v.optional(v.string()),
+    analyticsPreference: v.optional(analyticsPreference),
+    analyticsId: v.optional(v.string()),
   })
     .index("clerkUserId", ["clerkUserId"])
     .index("email", ["email"])
     .index("phone", ["phone"]),
+  analyticsDeletionRequests: defineTable({
+    ownerUserId: v.id("users"),
+    analyticsId: v.string(),
+    requestedAt: v.number(),
+    state: v.literal("blocked_authorization"),
+  }).index("by_analyticsId", ["analyticsId"]),
   profiles: defineTable(
     v.union(
       v.object({
@@ -2853,6 +2862,10 @@ export default defineSchema({
     .index("by_event_targetType_createdAt", ["event", "targetType", "createdAt"])
     .index("by_attemptId_createdAt", ["attemptId", "createdAt"]),
   claimAnalyticsOutbox: defineTable({
+    ownerUserId: v.optional(v.id("users")),
+    preferenceRevision: v.optional(v.number()),
+    analyticsId: v.optional(v.string()),
+    deploymentCategory: v.optional(deploymentCategory),
     eventKey: v.string(),
     journeyId: v.string(),
     event: v.union(
@@ -2899,6 +2912,7 @@ export default defineSchema({
       v.literal("delivered"),
       v.literal("failed"),
       v.literal("disabled"),
+      v.literal("suppressed"),
     ),
     attemptCount: v.number(),
     nextAttemptAt: v.number(),
@@ -2906,6 +2920,7 @@ export default defineSchema({
     deliveredAt: v.optional(v.number()),
   })
     .index("by_eventKey", ["eventKey"])
+    .index("by_journeyId", ["journeyId"])
     .index("by_state_occurredAt", ["state", "occurredAt"])
     .index("by_state_deliveredAt", ["state", "deliveredAt"])
     .index("by_state_nextAttemptAt", ["state", "nextAttemptAt"])

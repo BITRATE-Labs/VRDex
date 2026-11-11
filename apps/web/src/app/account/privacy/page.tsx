@@ -1,4 +1,5 @@
 import { PrivacyPanel } from "./privacy-panel";
+import { AnalyticsSettingsButton } from "../../_components/analytics-preferences";
 import { DEMO_WORKSPACE_PROFILES, ProfileWorkspace } from "../profile-workspace";
 import { Card } from "@/components/ui/card";
 import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
@@ -23,6 +24,7 @@ export default async function PrivacyPage({
           <BrandLink />
         </PageNav>
 
+        <Card className="mb-6" padding="lg"><h1 className="mb-3 text-xl font-semibold">Analytics</h1><AnalyticsSettingsButton /></Card>
         <ProfileWorkspace
           activeProfileId={initialProfileId}
           mediaKitEnabled={mediaKitEnabled}

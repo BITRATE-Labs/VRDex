@@ -10,6 +10,7 @@
 
 import type * as _accountFeatureModel from "../_accountFeatureModel.js";
 import type * as _accountFeatures from "../_accountFeatures.js";
+import type * as _analyticsPreference from "../_analyticsPreference.js";
 import type * as _apiPlatformObservability from "../_apiPlatformObservability.js";
 import type * as _apiRateLimitEvents from "../_apiRateLimitEvents.js";
 import type * as _apiTokens from "../_apiTokens.js";
@@ -168,6 +169,7 @@ import type * as _worldPublic from "../_worldPublic.js";
 import type * as _worldSlugs from "../_worldSlugs.js";
 import type * as accountFeatureGrants from "../accountFeatureGrants.js";
 import type * as accounts from "../accounts.js";
+import type * as analyticsPreferences from "../analyticsPreferences.js";
 import type * as apiPlatformObservability from "../apiPlatformObservability.js";
 import type * as apiRateLimitEvents from "../apiRateLimitEvents.js";
 import type * as apiTokens from "../apiTokens.js";
@@ -280,6 +282,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   _accountFeatureModel: typeof _accountFeatureModel;
   _accountFeatures: typeof _accountFeatures;
+  _analyticsPreference: typeof _analyticsPreference;
   _apiPlatformObservability: typeof _apiPlatformObservability;
   _apiRateLimitEvents: typeof _apiRateLimitEvents;
   _apiTokens: typeof _apiTokens;
@@ -438,6 +441,7 @@ declare const fullApi: ApiFromModules<{
   _worldSlugs: typeof _worldSlugs;
   accountFeatureGrants: typeof accountFeatureGrants;
   accounts: typeof accounts;
+  analyticsPreferences: typeof analyticsPreferences;
   apiPlatformObservability: typeof apiPlatformObservability;
   apiRateLimitEvents: typeof apiRateLimitEvents;
   apiTokens: typeof apiTokens;

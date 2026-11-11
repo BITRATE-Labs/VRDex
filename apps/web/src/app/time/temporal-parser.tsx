@@ -1,6 +1,8 @@
 "use client";
 
 import { api } from "@convex-generated-api";
+import { useAnalyticsPreferences } from "../_components/analytics-preferences";
+import { analyticsRolloutEnabled } from "@/lib/analytics-preference";
 import type {
   TemporalParseCompletedResponse,
   TemporalParsePendingResponse,
@@ -122,6 +124,7 @@ function ConnectedTemporalParser() {
   const setRetention = useMutation(api.temporalParsing.setRetentionPreference);
   const posthog = usePostHog();
   const uiFlag = useFeatureFlagEnabled(TEMPORAL_PARSING_UI_FLAG);
+  const { mode: analyticsMode } = useAnalyticsPreferences();
   const [text, setText] = useState("");
   const [timeZone, setTimeZone] = useState("America/New_York");
   const [locale, setLocale] = useState("en-US");
@@ -133,9 +136,8 @@ function ConnectedTemporalParser() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const pageOpened = useRef(false);
-  const enabled = access?.allowed === true && access.emailVerified && (
-    !posthogConfigured || uiFlag === true
-  );
+  const enabled = access?.allowed === true && access.emailVerified
+    && analyticsRolloutEnabled(analyticsMode, uiFlag, posthogConfigured);
 
   useEffect(() => {
     setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York");

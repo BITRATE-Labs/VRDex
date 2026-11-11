@@ -1,3 +1,4 @@
+import { analyticsChoice } from "./_analyticsPreference";
 import { v } from "convex/values";
 
 import {
@@ -164,6 +165,7 @@ export const claimCommunityWithVerifiedGuild = mutation({
     guildId: v.string(),
     analyticsJourneyId: v.optional(v.string()),
     analyticsEntrySource: v.optional(claimAnalyticsEntrySource),
+    analyticsBrowserRestriction: v.optional(analyticsChoice),
   },
   handler: async (ctx, args) => {
     const { subject, user } = await requireVerifiedActiveBrowserSession(ctx);
@@ -237,7 +239,7 @@ export const claimCommunityWithVerifiedGuild = mutation({
     // writes. An unverified owner whose guild *is* on record still falls
     // through, since that is exactly the upgrade this mutation exists to do.
     const wouldUpgrade = profile.claimState !== "claimed_verified" && guildBacksThisProfile;
-    const analytics = claimAnalyticsContext(args.analyticsJourneyId, args.analyticsEntrySource);
+    const analytics = claimAnalyticsContext(args.analyticsJourneyId, args.analyticsEntrySource, args.analyticsBrowserRestriction);
 
     if (activeOwner !== null && !wouldUpgrade) {
       await linkGuild(proof._id);

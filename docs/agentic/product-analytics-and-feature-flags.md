@@ -13,6 +13,26 @@ Use it when deciding whether a feature should ship directly, behind a flag, with
 - `Langfuse` is not a substitute for product analytics or feature flags; it is a separate LLM and agent observability concern
 - trivial or obviously low-risk work should not be forced through heavyweight instrumentation or rollout ceremony
 
+## Analytics preference foundation, November 2026
+
+The public choice is Off / On. No saved choice derives internal Limited; it is not a third control. The nonmodal offer appears once. Footer Usage & privacy and Account Privacy reopen it. Missing analytics configuration skips the automatic offer. The app remains usable in every mode.
+
+Guests keep their browser choice. Signed-in choices use `analyticsPreferences.set`. Browser Off or account Off wins. On waits for successful account persistence, including adoption of a saved guest On choice. Malformed storage notifications cannot clear a known restriction. Local Off applies before the remote save; a failed save does not claim to have stopped disconnected backend work.
+
+Full uses a random UUID in the existing user record, never an email or provider/database ID. Repeated On saves preserve that UUID. On after withdrawal rotates it so deleting the old consent period cannot affect the new period. Old UUIDs remain in deletion requests, currently `blocked_authorization`. Runtime management authorization and a supported deletion worker are activation dependencies, not successful deletion.
+
+Limited admits a small event/enum allowlist and replaces SDK identity with an independent ID per event. It strips URLs, person buckets, session/device IDs and workflow identifiers, disables replay/autocapture/flags and suppresses geo-IP enrichment. Eligibility without prior consent and provider contractual reuse conditions remain unverified. `NEXT_PUBLIC_POSTHOG_LIMITED_ENABLED` defaults false until those checks pass. The internal state remains Limited while collection is unenabled.
+
+Full retains ordinary product events, masked autocapture, navigation and current authentication-state receipts. Authentication latency is omitted when unmeasured. Existing temporal, search, discovery, lookup and claim events retain their contracts. A single Next.js pathname/search observer handles soft navigation, with one initial pageview when a mode becomes active. Existing event-editor history instrumentation stays intact.
+
+Browser captures use supported beacon transport without SDK event retries. A synthetic 503 test reproduced old fetch requests returning after Off/On despite opt-out. Beacon capture trades transient-failure recovery for discarding that retry history. Backend delivery retains its transactional outbox, retries, timestamps and insert IDs.
+
+The first eligible outbox row records original owner, preference revision, UUID and deployment category for its journey. Later milestones inherit that context. Enqueue and delivery require account On and the original revision. Initial browser restriction must explicitly permit On. Legacy rows and revoked generations become terminally suppressed and cannot return after a later On. Authoritative claim/proof records remain unchanged. Suppressed rows use the existing 30-day cleanup.
+
+Granted lookup/temporal features remain usable in Off/Limited through backend authorization and checked-in defaults. Full honors resolved rollout flags. Featured remains disabled. Surveys, experiments, heatmaps, new error tracking and performance metrics are not enabled.
+
+See the [acceptance record](../testing/posthog-foundation-acceptance.md). This implementation does not activate production recording, apply provider changes, create credentials or access real session content.
+
 ## Current recommendation
 
 - use `PostHog` as the first-pass default for product analytics, feature flags, and basic experiments

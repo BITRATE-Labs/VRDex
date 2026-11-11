@@ -505,6 +505,7 @@ jobs:
             exit 1
           fi
           printf '%s' "$POSTHOG_PROJECT_API_KEY" | pnpm exec convex env set POSTHOG_PROJECT_API_KEY
+          pnpm exec convex env set POSTHOG_DEPLOYMENT_CATEGORY production
 
       - name: Deploy Convex functions and schema
         if: steps.gate.outputs.enabled == 'true'

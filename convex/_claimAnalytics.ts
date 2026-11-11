@@ -1,4 +1,6 @@
 import { v } from "convex/values";
+import { currentUserOrNull } from "./_identity";
+import { analyticsDeploymentCategory } from "./_analyticsPreference";
 
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
@@ -24,6 +26,7 @@ export type ClaimAnalyticsOutcome =
 export type ClaimAnalyticsContext = {
   journeyId: string;
   entrySource: ClaimAnalyticsEntrySource;
+  browserRestriction?: "off" | "on";
 };
 
 export type ClaimAnalyticsMilestone = {
@@ -46,12 +49,14 @@ export function validClaimAnalyticsJourneyId(value: string | undefined): value i
 export function claimAnalyticsContext(
   journeyId: string | undefined,
   entrySource: ClaimAnalyticsEntrySource | undefined,
+  browserRestriction?: "off" | "on",
 ): ClaimAnalyticsContext {
   const validJourneyId = validClaimAnalyticsJourneyId(journeyId) ? journeyId : undefined;
 
   return {
     journeyId: validJourneyId ?? crypto.randomUUID(),
     entrySource: entrySource ?? "profile",
+    browserRestriction,
   };
 }
 
@@ -96,6 +101,15 @@ export async function enqueueClaimAnalyticsEvent(
   analytics: ClaimAnalyticsContext,
   milestone: ClaimAnalyticsMilestone,
 ): Promise<void> {
+  const first = await ctx.db.query("claimAnalyticsOutbox")
+    .withIndex("by_journeyId", (q) => q.eq("journeyId", analytics.journeyId)).first();
+  const user = first?.ownerUserId ? await ctx.db.get(first.ownerUserId) : await currentUserOrNull(ctx);
+  if (!user || user.analyticsPreference?.choice !== "on" || !user.analyticsId) return;
+  if (analytics.browserRestriction === "off") return;
+  if (first ? first.preferenceRevision !== user.analyticsPreference.revision || first.state === "suppressed"
+    : analytics.browserRestriction !== "on") return;
+  const category = first?.deploymentCategory ?? analyticsDeploymentCategory();
+  if (!category) return;
   const eventKey = `${analytics.journeyId}:${milestone.event}`;
   const existing = await ctx.db
     .query("claimAnalyticsOutbox")
@@ -108,6 +122,10 @@ export async function enqueueClaimAnalyticsEvent(
 
   const now = Date.now();
   await ctx.db.insert("claimAnalyticsOutbox", {
+    ownerUserId: user._id,
+    preferenceRevision: user.analyticsPreference.revision,
+    analyticsId: user.analyticsId,
+    deploymentCategory: category,
     eventKey,
     journeyId: analytics.journeyId,
     event: milestone.event,

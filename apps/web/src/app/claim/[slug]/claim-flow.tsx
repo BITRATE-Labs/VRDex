@@ -1,4 +1,5 @@
 "use client";
+import { useAnalyticsPreferences } from "../../_components/analytics-preferences";
 
 import { useAuth } from "@clerk/nextjs";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -201,6 +202,7 @@ export function ClaimFlowContent({
   const verifyDiscord = useAction(api.profileClaims.verifyDiscordCommunityAdminClaim);
   const verifyVrchat = useAction(api.profileClaims.verifyVrchatProofViaAdapter);
   const posthog = usePostHog();
+  const { mode: analyticsMode } = useAnalyticsPreferences();
   const [analyticsJourneyId, setAnalyticsJourneyId] = useState(initialAnalyticsJourneyId);
   const [reservedAnalyticsJourneyId, setReservedAnalyticsJourneyId] = useState(
     initialReservedAnalyticsJourneyId,
@@ -379,6 +381,7 @@ export function ClaimFlowContent({
     const destination = new URL(discordVerifyHref, "https://vrdex.invalid");
     destination.searchParams.set("analyticsJourneyId", journeyId);
     destination.searchParams.set("analyticsEntrySource", source);
+    destination.searchParams.set("analyticsBrowserRestriction", analyticsMode === "full" ? "on" : "off");
     destination.searchParams.set("analyticsProfileType", profile.profileType);
     return `${destination.pathname}${destination.search}`;
   }
@@ -535,6 +538,7 @@ export function ClaimFlowContent({
           targetExternalId: String(form.get("targetExternalId") ?? ""),
           analyticsJourneyId: journeyId,
           analyticsEntrySource: source,
+          analyticsBrowserRestriction: analyticsMode === "full" ? "on" : "off",
         });
 
         journeyId = started.analyticsJourneyId;
@@ -553,6 +557,7 @@ export function ClaimFlowContent({
           targetExternalId: String(form.get("targetExternalId") ?? ""),
           analyticsJourneyId: journeyId,
           analyticsEntrySource: source,
+          analyticsBrowserRestriction: analyticsMode === "full" ? "on" : "off",
         });
         journeyId = started.analyticsJourneyId;
         setAnalyticsJourneyId(journeyId);
@@ -569,6 +574,7 @@ export function ClaimFlowContent({
           profileSlug: profile.slug,
           analyticsJourneyId: journeyId,
           analyticsEntrySource: source,
+          analyticsBrowserRestriction: analyticsMode === "full" ? "on" : "off",
         });
         const alreadyOwned = "state" in result && result.state === "already_owned";
         setStatus({
@@ -594,6 +600,7 @@ export function ClaimFlowContent({
         guildId: String(form.get("discordGuildId") ?? ""),
         analyticsJourneyId: journeyId,
         analyticsEntrySource: source,
+          analyticsBrowserRestriction: analyticsMode === "full" ? "on" : "off",
       });
       // Server control is proved either way. Whether it verifies *this listing*
       // depends on the server already being on record for it, so report what the

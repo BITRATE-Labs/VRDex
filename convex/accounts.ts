@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
 import { claimError } from "./_claimErrors";
+import { analyticsPreference } from "./_analyticsPreference";
 
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -112,6 +113,9 @@ export const viewer = query({
         emailVerified: v.boolean(),
         image: v.optional(v.string()),
         defaultEventTimezone: v.optional(v.string()),
+        analyticsPreference: v.optional(analyticsPreference),
+        analyticsId: v.optional(v.string()),
+        analyticsAuthSubject: v.string(),
       }),
     }),
   ),
@@ -141,6 +145,9 @@ export const viewer = query({
         emailVerified: identity.emailVerified,
         image: user.image,
         defaultEventTimezone: user.defaultEventTimezone,
+        analyticsPreference: user.analyticsPreference,
+        analyticsId: user.analyticsPreference?.choice === "on" ? user.analyticsId : undefined,
+        analyticsAuthSubject: user.clerkUserId,
       },
     };
   },

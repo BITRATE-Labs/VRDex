@@ -139,10 +139,10 @@ describe("API platform review boundaries", () => {
     assert.match(retentionSurface, /TemporalRetentionControl/);
   });
 
-  it("fails the temporal UI closed while its configured PostHog flag is unresolved", () => {
+  it("keeps temporal authorization separate from the analytics rollout decision", () => {
     const temporalPage = source("apps/web/src/app/time/temporal-parser.tsx");
 
-    assert.match(temporalPage, /!posthogConfigured \|\| uiFlag === true/);
-    assert.doesNotMatch(temporalPage, /uiFlag !== false/);
+    assert.match(temporalPage, /access\?\.allowed === true && access.emailVerified/);
+    assert.match(temporalPage, /analyticsRolloutEnabled\(analyticsMode, uiFlag, posthogConfigured\)/);
   });
 });

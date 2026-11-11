@@ -1,6 +1,8 @@
 "use client";
 
 import { useConvex } from "convex/react";
+import { useAnalyticsPreferences } from "./analytics-preferences";
+import { analyticsRolloutEnabled } from "@/lib/analytics-preference";
 import type { FunctionReference } from "convex/server";
 import Link from "next/link";
 import { useFeatureFlagEnabled, usePostHog } from "posthog-js/react";
@@ -511,6 +513,7 @@ function ProfileLookupPageContent({
 }: ProfileLookupPageProps & { queryPrivateResults: QueryPrivateResults | null }) {
   const posthog = usePostHog();
   const privateUiFlag = useFeatureFlagEnabled(PRIVATE_SEED_LOOKUP_UI_FLAG);
+  const { mode: analyticsMode } = useAnalyticsPreferences();
   const [displayQuery, setDisplayQuery] = useState(query);
   const [displayResults, setDisplayResults] = useState(results);
   const [displayPrivateResults, setDisplayPrivateResults] = useState(privateResults);
@@ -526,7 +529,8 @@ function ProfileLookupPageContent({
   const bulkPrivateRefreshAttemptedRef = useRef(privateUiFlag === true);
   const [isPending, startTransition] = useTransition();
   const isSearching = pendingLabel !== null || isPending;
-  const privateUiEnabled = seedViewerAccess.source === "super_admin" || privateUiFlag === true;
+  const privateUiEnabled = seedViewerAccess.allowed && (seedViewerAccess.source === "super_admin"
+    || analyticsRolloutEnabled(analyticsMode, privateUiFlag, Boolean(process.env.NEXT_PUBLIC_POSTHOG_KEY)));
   const visibleResults = mergeLookupSuggestions(
     displayResults,
     seedViewerAccess.allowed && privateUiEnabled ? displayPrivateResults : [],

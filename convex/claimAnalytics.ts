@@ -40,6 +40,14 @@ export const claimNextForDelivery = internalMutation({
       return { row: null };
     }
 
+    const owner = row.ownerUserId ? await ctx.db.get(row.ownerUserId) : null;
+    if (!owner || owner.analyticsPreference?.choice !== "on" || !row.analyticsId || !row.deploymentCategory
+      || row.preferenceRevision !== owner.analyticsPreference.revision) {
+      await ctx.db.patch(row._id, { state: "suppressed", leaseUntil: undefined });
+      await ctx.scheduler.runAfter(0, internal.claimAnalyticsDelivery.deliverPending, {});
+      return { row: null };
+    }
+
     await ctx.db.patch(row._id, {
       state: "delivering",
       attemptCount: row.attemptCount + 1,
@@ -148,23 +156,14 @@ export const sweepDeliveredEvents = internalMutation({
         query.eq("state", "delivered").lt("deliveredAt", cutoff),
       )
       .take(DELIVERED_CLEANUP_BATCH);
-    const disabled = delivered.length < DELIVERED_CLEANUP_BATCH
-      ? await ctx.db
-          .query("claimAnalyticsOutbox")
-          .withIndex("by_state_occurredAt", (query) =>
-            query.eq("state", "disabled").lt("occurredAt", cutoff),
-          )
-          .take(DELIVERED_CLEANUP_BATCH - delivered.length)
-      : [];
-    const failed = delivered.length + disabled.length < DELIVERED_CLEANUP_BATCH
-      ? await ctx.db
-          .query("claimAnalyticsOutbox")
-          .withIndex("by_state_occurredAt", (query) =>
-            query.eq("state", "failed").lt("occurredAt", cutoff),
-          )
-          .take(DELIVERED_CLEANUP_BATCH - delivered.length - disabled.length)
-      : [];
-    const expired = [...delivered, ...disabled, ...failed];
+    const expired = [...delivered];
+    for (const state of ["disabled", "failed", "suppressed"] as const) {
+      if (expired.length >= DELIVERED_CLEANUP_BATCH) break;
+      const rows = await ctx.db.query("claimAnalyticsOutbox")
+        .withIndex("by_state_occurredAt", (q) => q.eq("state", state).lt("occurredAt", cutoff))
+        .take(DELIVERED_CLEANUP_BATCH - expired.length);
+      expired.push(...rows);
+    }
 
     await Promise.all(expired.map(async (row) => await ctx.db.delete(row._id)));
     if (expired.length === DELIVERED_CLEANUP_BATCH) {

@@ -93,6 +93,27 @@ locals {
   }
 }
 
+
+resource "vercel_project_environment_variable" "posthog_category" {
+  for_each   = local.standard_posthog_targets
+  project_id = data.vercel_project.web.id
+  team_id    = var.vercel_team_id
+  key        = "NEXT_PUBLIC_POSTHOG_DEPLOYMENT_CATEGORY"
+  value      = each.key
+  target     = each.value
+  comment    = local.posthog_comment
+}
+
+resource "vercel_project_environment_variable" "posthog_category_staging" {
+  for_each               = toset(var.staging_custom_environment_ids)
+  project_id             = data.vercel_project.web.id
+  team_id                = var.vercel_team_id
+  key                    = "NEXT_PUBLIC_POSTHOG_DEPLOYMENT_CATEGORY"
+  value                  = "staging"
+  custom_environment_ids = [each.value]
+  comment                = local.posthog_comment
+}
+
 resource "vercel_project_environment_variable" "posthog_standard" {
   for_each = {
     for pair in setproduct(keys(local.posthog_values), keys(local.standard_posthog_targets)) : "${pair[0]}_${pair[1]}" => {

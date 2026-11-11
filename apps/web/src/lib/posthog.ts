@@ -221,7 +221,7 @@ type ProductAnalyticsEvents = {
   auth_session_restore_completed: {
     browser_family?: "chromium" | "firefox" | "other" | "safari";
     deployment_category?: "development" | "preview" | "production" | "staging";
-    latency_bucket: "over_10s" | "under_10s" | "under_1s" | "under_3s";
+    latency_bucket?: "over_10s" | "under_10s" | "under_1s" | "under_3s";
     os_family?: "android" | "ios" | "linux" | "macos" | "other" | "windows";
     outcome: "anonymous" | "authenticated";
     route_class: "auth" | "protected" | "public";
@@ -345,6 +345,7 @@ export function mirrorTemporalParsingAccess(
   posthog: PostHog | undefined,
   canUseTemporalParsing: boolean,
 ) {
+  if (posthog?.config?.person_profiles === "never" || posthog?.has_opted_out_capturing?.()) return;
   const properties = {
     temporal_parsing_beta: canUseTemporalParsing ? "true" : "false",
   };
@@ -357,6 +358,7 @@ export function mirrorPrivateSeedLookupAccess(
   posthog: PostHog | undefined,
   canViewPrivateSeedLookup: boolean,
 ) {
+  if (posthog?.config?.person_profiles === "never" || posthog?.has_opted_out_capturing?.()) return;
   const properties = {
     seed_lookup_beta: canViewPrivateSeedLookup ? "true" : "false",
   };

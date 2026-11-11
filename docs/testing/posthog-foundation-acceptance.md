@@ -24,4 +24,14 @@ Executor discovers `persons-bulk-delete`, accepting distinct IDs with `delete_ev
 
 ## Evidence
 
+Synthetic browser acceptance intercepts all PostHog transport with a fake key. Desktop and mobile checks cover independent Limited envelopes, absence of SDK visitor IDs in local/session storage, Off silence, Full navigation, opaque guest continuity across reload, cross-tab withdrawal and a delayed flag/recording configuration response after Off. A 503 regression test verifies old captures do not retry after Off/On. Supported beacon capture is intentionally best effort; server outbox retries are unchanged.
+
+The Account Privacy entry is available without a profile selection in the local fixture. This is not proof of hosted account switching, failed authenticated saves or cross-device propagation. Those remain acceptance dependencies.
+
+Focused Convex checks cover preference authorization, stable UUIDs within a consent period, UUID rotation after withdrawal, idempotent blocked deletion requests, legacy-row suppression, On/Off/On queue invalidation and bounded suppressed-row cleanup. Existing proof/claim tests preserve authoritative outcomes while explicitly distinguishing consented and legacy telemetry.
+
+Terraform validates locally and its mocked-provider test checks production/Full filters on every existing trend plus journey-based milestone joins. No provider plan was applied. Executor's current project read confirms recording remains disabled and replay retention remains 30 days. Effective billing limits are not yet verified.
+
+Visual inspection found that the initial translucent panel let footer text show through. The final panel uses the shared opaque surface token and fits desktop/mobile widths. Keyboard Escape returns focus to the explicit opener. Real replay contents and hosted masking/mobile-player performance are unverified.
+
 Existing analytics/sanitizer/route baseline: 28 tests passed. Dependency installation completed using the frozen lockfile; an earlier attempt ran before installation completed and failed to resolve tsx, then passed after installation.

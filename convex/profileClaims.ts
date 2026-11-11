@@ -1,3 +1,4 @@
+import { analyticsChoice } from "./_analyticsPreference";
 import { queueProfileLinkDestinations } from "./_profileLinkDestinationCache";
 import { v } from "convex/values";
 
@@ -731,6 +732,7 @@ export const claimExistingPersonWithDiscord = mutation({
     profileSlug: v.string(),
     analyticsJourneyId: v.optional(v.string()),
     analyticsEntrySource: v.optional(claimAnalyticsEntrySource),
+    analyticsBrowserRestriction: v.optional(analyticsChoice),
   },
   handler: async (ctx, args) => {
     const { subject, user } = await requireVerifiedActiveBrowserSession(ctx);
@@ -753,7 +755,7 @@ export const claimExistingPersonWithDiscord = mutation({
     }
 
     const now = Date.now();
-    const analytics = claimAnalyticsContext(args.analyticsJourneyId, args.analyticsEntrySource);
+    const analytics = claimAnalyticsContext(args.analyticsJourneyId, args.analyticsEntrySource, args.analyticsBrowserRestriction);
     const claimRequestId = await ctx.db.insert("profileClaimRequests", {
       profileId: profile._id,
       profileSlug: profile.slug,
@@ -885,6 +887,7 @@ export const requestCommunityDiscordAdminClaim = mutation({
     discordGuildName: v.optional(v.string()),
     analyticsJourneyId: v.optional(v.string()),
     analyticsEntrySource: v.optional(claimAnalyticsEntrySource),
+    analyticsBrowserRestriction: v.optional(analyticsChoice),
   },
   handler: async (ctx, args) => {
     const { user } = await requireVerifiedActiveBrowserSession(ctx);
@@ -910,7 +913,7 @@ export const requestCommunityDiscordAdminClaim = mutation({
     }
 
     const now = Date.now();
-    const analytics = claimAnalyticsContext(args.analyticsJourneyId, args.analyticsEntrySource);
+    const analytics = claimAnalyticsContext(args.analyticsJourneyId, args.analyticsEntrySource, args.analyticsBrowserRestriction);
     const existingRequest = await ctx.db
       .query("profileClaimRequests")
       .withIndex("by_profileId_userId_state_updatedAt", (q) =>
@@ -1276,6 +1279,7 @@ export const startVrchatProof = mutation({
     targetExternalId: v.string(),
     analyticsJourneyId: v.optional(v.string()),
     analyticsEntrySource: v.optional(claimAnalyticsEntrySource),
+    analyticsBrowserRestriction: v.optional(analyticsChoice),
   },
   handler: async (ctx, args) => {
     const { user } = await requireVerifiedActiveBrowserSession(ctx);
@@ -1307,6 +1311,7 @@ export const startVrchatProof = mutation({
     const requestedAnalytics = claimAnalyticsContext(
       args.analyticsJourneyId,
       args.analyticsEntrySource,
+      args.analyticsBrowserRestriction,
     );
 
     const pendingAttempts = await ctx.db
