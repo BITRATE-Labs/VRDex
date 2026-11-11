@@ -352,6 +352,14 @@ matching capabilities are configured.
 
 `VERCEL_ENV=production` blocks the E2E route unless `VRDEX_ALLOW_PRODUCTION_E2E_HELPERS=true` is explicitly set. Keep that override unset for VRDex production.
 
+The signed-in auth/account suites reserve the disposable email before creation
+and stop browser activity before cleanup. Their shared helper requires a
+successful deletion followed by an empty response before deleting an
+authenticated Clerk identity. A bounded three-pass drain cannot cancel already
+accepted backend work. Unsettled or failed cleanup fails the test and preserves
+the known Clerk identity for recovery. Browser-close failures are recorded while
+cleanup is still attempted.
+
 Each data-flow run uses a unique `VRDEX_E2E_RUN_ID` prefix and creates only `e2e:`-attributed profiles. Cleanup deletes by slug on the happy path and can fall back to deleting profiles for the run ID if the slug was not captured.
 
 ## CI behavior

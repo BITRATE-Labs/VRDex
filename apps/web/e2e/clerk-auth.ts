@@ -435,6 +435,28 @@ export async function cleanupClerkTestAccountData(
   });
 }
 
+export const CLEANUP_DRAIN_PASSES = 3;
+
+// An empty pass after deletion drains provisioning already accepted before the browser closed.
+export async function drainClerkTestAccountData(
+  request: APIRequestContext,
+  e2eToken: string,
+  account: Pick<ClerkTestAccount, "email"> | undefined,
+) {
+  let lastCleanup: Awaited<ReturnType<typeof cleanupClerkTestAccountData>>;
+  let cleaned = false;
+  let drained = false;
+  for (let pass = 0; pass < CLEANUP_DRAIN_PASSES; pass += 1) {
+    lastCleanup = await cleanupClerkTestAccountData(request, e2eToken, account).catch(() => undefined);
+    const body: unknown = lastCleanup?.ok() ? await lastCleanup.json().catch(() => undefined) : undefined;
+    if (!body || typeof body !== "object" || !("deleted" in body)) break;
+    if (body.deleted === true) { cleaned = true; continue; }
+    drained = body.deleted === false;
+    break;
+  }
+  return { lastCleanup, cleaned, drained };
+}
+
 /**
  * Deletes any Clerk user holding this email, for when no user id was ever
  * returned.

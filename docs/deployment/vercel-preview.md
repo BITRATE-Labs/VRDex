@@ -91,6 +91,15 @@ not a claim about production accounts, worker/provider behavior or real devices.
 Broadcast retains its separate integrated rehearsal. Production data is not a
 target. Shared staging remains useful for deployed health, not PR acceptance.
 
+## Automatic-build trust boundary
+
+Selecting browser coverage on a same-repository PR authorizes a credentialed
+build and preview deployment of its latest head. It is a freshness check, not
+an independent human approval. The existing Vercel account token and Convex
+preview deploy key stay in Actions; only trusted repository writers and
+operators should control this path. Forks do not receive private browser
+credentials or automatic acceptance. No new approval environment is introduced.
+
 ## On-demand preview deploy
 
 Acceptance and manual previews have separate concurrency groups and Convex
@@ -115,6 +124,16 @@ uses finish. Leave staging, production and manual `pr-<number>` previews alone.
 The installed Convex CLI exposes no preview-deletion command, so this change does
 not invent a deletion API or automate reclamation. A quota failure stops the lane;
 it does not purchase capacity or fall back to shared staging.
+
+### Preview release checklist
+
+- [ ] Before merge, retain the current exact-head report and confirm its required
+  browser coverage passed.
+- [ ] When a PR closes, confirm no active run or operator still uses its CI or
+  manual-acceptance backend.
+- [ ] Sweep closed PRs in the Convex dashboard and reclaim their exact
+  `ci-pr-<number>` and `manual-accept-pr-<number>` deployments. Check the recorded
+  name and URL; leave production, staging and ordinary manual previews alone.
 
 The preview deploy implementation is reused by selected same-repository PR browser runs. Two workflows also expose manual requests:
 
