@@ -22,6 +22,9 @@ test('candidate browser, real Convex and packaged native worker settle Stop and 
   if (!availability.available) throw Error(availability.reason);
   const root = path.resolve('../..');
   const config = JSON.parse(await readFile(path.join(root,'.convex/local/default/config.json'),'utf8'));
+  const applicationBuildId=(await readFile('.next/BUILD_ID','utf8')).trim();
+  const image=(await run('docker',['image','inspect','vrdex-broadcast-native:ci','--format','{{.Id}}'],{timeout:10000})).stdout.trim();
+  if(!applicationBuildId||!/^sha256:[a-f0-9]{64}$/.test(image))throw Error('Built candidate application and immutable worker image required.');
   const admin = new ConvexHttpClient('http://127.0.0.1:3210');
   if (!('setAdminAuth' in admin) || typeof admin.setAdminAuth !== 'function') throw Error('Local admin client unavailable.');
   admin.setAdminAuth(config.adminKey);
@@ -72,7 +75,7 @@ test('candidate browser, real Convex and packaged native worker settle Stop and 
       const sink=spawn('ffmpeg',['-hide_banner','-loglevel','error','-listen','1','-i','rtmp://127.0.0.1:1935/live/local-acceptance','-c','copy','-f','flv',capture],{stdio:'ignore'});
       const sinkExit=new Promise<number|null>(resolve=>sink.once('exit',resolve));
       const name=`vrdex-native-${scenario}-${randomUUID()}`;
-      const child=spawn('docker',['run','--rm','-i','--name',name,'--network','host','--add-host','ingest.vrcdn.live:127.0.0.1','--cpus','4','--memory','4g','--mount',`type=bind,source=${path.join(root,'scripts/broadcast-native-acceptance-worker.mjs')},target=/acceptance.mjs,readonly`,'vrdex-broadcast-native:ci','node','/acceptance.mjs'],{stdio:['pipe','pipe','pipe']});
+      const child=spawn('docker',['run','--rm','-i','--name',name,'--network','host','--add-host','ingest.vrcdn.live:127.0.0.1','--cpus','4','--memory','4g','--mount',`type=bind,source=${path.join(root,'scripts/broadcast-native-acceptance-worker.mjs')},target=/acceptance.mjs,readonly`,image,'node','/acceptance.mjs'],{stdio:['pipe','pipe','pipe']});
       const closed=new Promise<number|null>(resolve=>child.once('exit',resolve));
       child.stdin.on('error',()=>{});
       const events:Record<string,unknown>[]=[];let buffer='';
@@ -94,14 +97,15 @@ test('candidate browser, real Convex and packaged native worker settle Stop and 
         child.stdin.write('{"arm":true}\n');
         await expect.poll(()=>events.some(e=>e.event==='observation-paused'),{timeout:5000}).toBe(true);
         await page.getByRole('dialog').getByRole('button',{name:'Stop broadcast',exact:true}).click();
+        await expect.poll(async()=>(await owner.query(api.events.getEventMediaControlStatus,{currentSlug:event.slug})).sessions.find(s=>s.sessionId===sessionId)?.status,{timeout:1500,intervals:[20,40,80]}).toBe('stopping');
         if(scenario==='cancelled')await owner.mutation(api.events.setCommunityEventCancelled,{currentSlug:event.slug,cancelled:true,reason:'Isolated native acceptance'});
         if(scenario==='revoked')await localEnv('VRDEX_VRCDN_OUTPUT_ACCOUNTS_JSON','[]');
         child.stdin.write('{"release":true}\n');
         await expect.poll(()=>events.some(e=>e.event==='native-worker-closed'),{timeout:20000}).toBe(true);
         await expect.poll(()=>child.exitCode,{timeout:10000}).toBe(0);
         await expect.poll(()=>sink.exitCode,{timeout:10000}).toBe(0);
-        await workerMutation('recordProcessStatus',{sessionId,taskArn:dispatchId,stopped:true});
-        await workerMutation('completeTaskCleanup',{sessionId,taskArn:dispatchId});
+        expect((await workerMutation('recordProcessStatus',{sessionId,taskArn:dispatchId,stopped:true})).accepted).toBe(true);
+        expect((await workerMutation('completeTaskCleanup',{sessionId,taskArn:dispatchId})).accepted).toBe(true);
         const terminal=await status();
         const session=terminal.sessions.find(s=>s.sessionId===sessionId)!;
         expect(session.status).toBe(scenario==='stop'?'ended':'error');
@@ -129,7 +133,7 @@ test('candidate browser, real Convex and packaged native worker settle Stop and 
       }
     }
   } finally {
-    await writeFile(info.outputPath('native-acceptance.json'),JSON.stringify({candidate:process.env.BROADCAST_CANDIDATE_HEAD,checkedOut:process.env.GITHUB_SHA,environment:'isolated-local',differences:['development Clerk','local native RTMP receiver instead of VRCDN','Docker 4 CPU/4 GiB instead of qualified ECS 8 CPU/16 GiB','local enabled gate, no SSM/ECS admission APIs'],receipts},null,2));
+    await writeFile(info.outputPath('native-acceptance.json'),JSON.stringify({candidate:process.env.BROADCAST_CANDIDATE_HEAD,checkedOut:process.env.GITHUB_SHA,applicationBuildId,workerImage:image,nextMode:'production-build',environment:'isolated-local',differences:['development Clerk','local native RTMP receiver instead of VRCDN','Docker 4 CPU/4 GiB instead of qualified ECS 8 CPU/16 GiB','local enabled gate, no SSM/ECS admission APIs'],receipts},null,2));
     for(const email of emails){const cleanup=await deleteClerkTestAccountByEmail(email);expect(cleanup.checked&&cleanup.failed===0).toBe(true);}
   }
 });
