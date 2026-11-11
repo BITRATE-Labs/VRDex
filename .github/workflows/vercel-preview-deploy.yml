@@ -474,7 +474,6 @@ jobs:
     env:
       CANDIDATE_HEAD_SHA: ${{ needs.deploy-preview.outputs.head_sha }}
       CANDIDATE_CONVEX_URL: ${{ needs.deploy-preview.outputs.convex_preview_url }}
-      GITHUB_SHA: ${{ needs.deploy-preview.outputs.head_sha }}
       PLAYWRIGHT_BASE_URL: ${{ needs.deploy-preview.outputs.deployment_url }}
       PLAYWRIGHT_SKIP_WEBSERVERS: "true"
       PLAYWRIGHT_CAPTURE_SCREENSHOTS: ${{ inputs.capture_screenshots }}
