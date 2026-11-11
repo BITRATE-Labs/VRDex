@@ -82,7 +82,6 @@ const writeToolResourceScopes: Record<string, string> = {
   vrdex_profile_media_submit: "assets:contribute",
   vrdex_profile_update: "profile:write",
   vrdex_profile_submit: "profile:contribute",
-  vrdex_contribution_capacity_request: "assets:contribute",
   vrdex_contribution_batch_create: "assets:contribute",
   vrdex_contribution_batch_append: "assets:contribute",
   vrdex_contribution_batch_archive: "assets:contribute",
@@ -101,7 +100,6 @@ const writeToolResourceScopes: Record<string, string> = {
 };
 const writeToolNames = Object.keys(writeToolResourceScopes);
 const contributionCollectionWriteToolNames = new Set([
-  "vrdex_contribution_capacity_request",
   "vrdex_contribution_batch_create",
   "vrdex_contribution_batch_append",
   "vrdex_contribution_batch_archive",
@@ -143,7 +141,6 @@ const ownedReadToolScopes: Record<string, string | string[]> = {
   vrdex_event_intake_draft_get: "events:contribute",
   vrdex_event_intake_event_get: "events:contribute",
   vrdex_contribution_capacity: contributionCollectionReadScopes,
-  vrdex_contribution_capacity_requests: contributionCollectionReadScopes,
   vrdex_contribution_status: contributionCollectionReadScopes,
   vrdex_contribution_batch_get: contributionCollectionReadScopes,
   vrdex_contribution_batch_items: contributionCollectionReadScopes,
@@ -163,7 +160,6 @@ const hostedOnlyOwnedReadToolNames = new Set([
   "vrdex_event_intake_draft_get",
   "vrdex_event_intake_event_get",
   "vrdex_contribution_capacity",
-  "vrdex_contribution_capacity_requests",
   "vrdex_contribution_status",
   "vrdex_contribution_batch_get",
   "vrdex_contribution_batch_items",

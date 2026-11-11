@@ -9,7 +9,7 @@ import {
   validateProfileAssetByteSize,
 } from "./_profileAssets";
 
-// Conservative baseline ceilings. Higher tiers are a separate rollout.
+// Accounting validation defaults. Admission uses the current role policy.
 export const CONTRIBUTION_CAPACITY = {
   actorProcessing: 3,
   targetProcessing: 2,
@@ -47,11 +47,9 @@ export async function effectiveContributionPolicy(
 ) {
   const policy = resolveContributionPolicy();
   const grants = await getAccountFeatureAccess(db, actor);
-  return {
-    ...policy,
-    tier: grants.canContributeBulk ? "trusted" : "ordinary",
-    limits: grants.canContributeBulk ? policy.trusted : policy.ordinary,
-  };
+  const tier = grants.superAdmin ? "superadmin" :
+    grants.canContributeBulk || grants.canReviewMedia || grants.canPublishMedia ? "trusted" : "ordinary";
+  return { ...policy, tier, limits: policy[tier] };
 }
 export async function contributionChargeRefusal(
   db: DatabaseReader,
@@ -61,14 +59,13 @@ export async function contributionChargeRefusal(
   >,
   bytes: number,
   processing: number,
-  allowanceBytes = 0,
 ) {
   const policy = await effectiveContributionPolicy(db, reservation.actorUserId);
   if (policy.paused) return "CONTRIBUTION_INTAKE_PAUSED";
   for (const [scope, maxBytes, maxProcessing, category] of [
     [
       `actor:${reservation.actorUserId}`,
-      policy.limits.actorBytes + allowanceBytes,
+      policy.limits.actorBytes,
       policy.limits.actorProcessing,
       "ACTOR",
     ],
@@ -97,50 +94,29 @@ export async function contributionChargeRefusal(
             .unique()
         : null;
     if (
-      (row?.bytes ?? 0) + (published?.bytes ?? 0) + bytes >
+      maxBytes !== null && (row?.bytes ?? 0) + (published?.bytes ?? 0) + bytes >
       Math.min(row?.byteLimit ?? maxBytes, maxBytes)
     )
       return `CONTRIBUTION_${category}_BYTES`;
     if (
-      (row?.processing ?? 0) + processing >
+      maxProcessing !== null && (row?.processing ?? 0) + processing >
       Math.min(row?.processingLimit ?? maxProcessing, maxProcessing)
     )
       return `CONTRIBUTION_${category}_CONCURRENCY`;
   }
   return null;
 }
-export async function batchAllowance(
-  db: DatabaseReader,
-  batchId: Id<"contributionBatches">,
-  actor: Id<"users">,
-) {
-  if (resolveContributionPolicy().version !== "synthetic-v1") return null;
-  const rows = await db
-    .query("contributionCapacityRequests")
-    .withIndex("by_batch_state_expiresAt", (q) =>
-      q.eq("batchId", batchId).eq("state", "approved").gt("expiresAt", Date.now()),
-    )
-    .take(2);
-  if (rows.length > 1) throw new ConvexError({ code: "CAPACITY_ALLOWANCE_CONFLICT" });
-  const row = rows[0];
-  return row?.actorUserId === actor ? row : null;
-}
 export async function assertCapacityNotRevoked(
   db: DatabaseReader,
   actor: Id<"users">,
   admittedAt: number,
 ) {
-  const grant = await db
-    .query("accountFeatureGrants")
-    .withIndex("by_userId_feature_state", (q) =>
-      q
-        .eq("userId", actor)
-        .eq("feature", "trusted_contributor")
-        .eq("state", "revoked"),
-    )
-    .order("desc")
-    .first();
-  if (grant?.revokedAt !== undefined && grant.revokedAt >= admittedAt)
+  const access = await getAccountFeatureAccess(db, actor);
+  if (access.superAdmin || access.canContributeBulk || access.canReviewMedia || access.canPublishMedia) return;
+  const groups = await Promise.all((["trusted_contributor", "media_reviewer", "trusted_publisher", "super_admin"] as const).map(feature =>
+    db.query("accountFeatureGrants").withIndex("by_userId_feature_state", q =>
+      q.eq("userId", actor).eq("feature", feature).eq("state", "revoked")).order("desc").first()));
+  if (groups.some(grant => grant?.revokedAt !== undefined && grant.revokedAt >= admittedAt))
     throw new ConvexError({ code: "CONTRIBUTION_CAPACITY_REVOKED" });
 }
 export async function changeContributionCharge(

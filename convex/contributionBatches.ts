@@ -1,7 +1,6 @@
 import { canReadProfile } from "./_profilePermissions";
 import {
   effectiveContributionPolicy,
-  batchAllowance,
   retainedBatchUsage,
 } from "./_contributionCapacity";
 import {
@@ -135,8 +134,6 @@ async function charge(
   rows: number,
   revisions: number,
   bytes: number,
-  batchId?: Id<"contributionBatches">,
-  batchRowCount?: number,
 ) {
   const old = await ctx.db
     .query("contributionManifestUsage")
@@ -149,19 +146,9 @@ async function charge(
   };
   const limits = (await effectiveContributionPolicy(ctx.db, actorUserId))
     .limits;
-  const allowance = batchId
-    ? await batchAllowance(ctx.db, batchId, actorUserId)
-    : null;
-  if (
-    allowance &&
-    rows > 0 &&
-    (batchRowCount ?? (await ctx.db.get(batchId!))?.rowCount ?? 0) + rows >
-      allowance.rows!
-  )
-    throw new ConvexError({ code: "BATCH_ALLOWANCE_ROWS" });
   if (
     (rows > 0 &&
-      next.activeRows > limits.activeRows + (allowance?.rows ?? 0)) ||
+      next.activeRows > limits.activeRows) ||
     (revisions > 0 && next.retainedRevisions > limits.retainedRevisions) ||
     (bytes > 0 &&
       next.retainedBytes >
@@ -265,7 +252,7 @@ export const append = internalMutation({
         result.push({ itemKey: old.itemKey, revision: old.revision });
         continue;
       }
-      await charge(ctx, args.actorUserId, 1, 1, n.bytes, b._id, b.rowCount);
+      await charge(ctx, args.actorUserId, 1, 1, n.bytes);
       const revisionId = await ctx.db.insert("contributionItemRevisions", {
         actorUserId: args.actorUserId,
         batchId: b._id,

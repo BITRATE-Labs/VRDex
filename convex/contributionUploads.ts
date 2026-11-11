@@ -28,7 +28,6 @@ import {
   reservationBytes,
   effectiveContributionPolicy,
   contributionChargeRefusal,
-  batchAllowance,
   assertCapacityNotRevoked,
   localUploadModes,
 } from "./_contributionCapacity";
@@ -146,11 +145,6 @@ async function reservation(
     throw new ConvexError({ code: "UPLOAD_UNAVAILABLE" });
   await authorize(ctx, args, row.mode);
   await assertCapacityNotRevoked(ctx.db, row.actorUserId, row.createdAt);
-  if (
-    row.allowanceId &&
-    (await ctx.db.get(row.allowanceId))?.state === "revoked"
-  )
-    throw new ConvexError({ code: "CONTRIBUTION_CAPACITY_REVOKED" });
   if (row.capacityRevokedAt !== undefined)
     throw new ConvexError({ code: "CONTRIBUTION_CAPACITY_REVOKED" });
   if (process.env.VRDEX_CONTRIBUTION_INTAKE_PAUSED === "true")
@@ -397,27 +391,20 @@ export const begin = internalMutation({
     const now = Date.now();
     const policy = await effectiveContributionPolicy(ctx.db, actorUserId);
     const charge = reservationBytes(request.byteLength);
-    const allowance = linked
-      ? await batchAllowance(ctx.db, linked.revision.batchId, actorUserId)
-      : null;
-    const extraBytes = allowance?.bytes ?? 0;
-    if (allowance && (allowance.usedBytes ?? 0) + charge > extraBytes)
-      return refuse("CONTRIBUTION_BATCH_BYTES");
     const refusal = await contributionChargeRefusal(
       ctx.db,
       { actorUserId, profileId: profile._id },
       charge,
       1,
-      extraBytes,
     );
     if (refusal) return refuse(refusal);
     if (request.mode === "contributor") {
-      if (
+      if (policy.limits.openActor !== null &&
         (await openSubmissionCountForUser(ctx, actorUserId, now)) >=
         policy.limits.openActor
       )
         return refuse("CONTRIBUTION_ACTOR_OPEN_LIMIT");
-      if (
+      if (policy.limits.openTarget !== null &&
         (await openSubmissionCountForProfile(ctx, profile._id, now)) >=
         policy.limits.openTarget
       )
@@ -435,10 +422,6 @@ export const begin = internalMutation({
       1,
       false,
     );
-    if (allowance)
-      await ctx.db.patch(allowance._id, {
-        usedBytes: (allowance.usedBytes ?? 0) + charge,
-      });
     const subject = {
       issuer: "vrdex:api",
       subject: String(actorUserId),
@@ -499,7 +482,6 @@ export const begin = internalMutation({
     await ctx.db.insert("contributionUploadReservations", {
       intentId: intent.intentId,
       ledgerVersion: 1,
-      allowanceId: allowance?._id,
       actorUserId,
       ...(linked ? { batchRevisionId: linked.revision._id } : {}),
       profileId: profile._id,

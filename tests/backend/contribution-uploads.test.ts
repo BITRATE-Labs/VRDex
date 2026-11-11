@@ -689,3 +689,43 @@ it("keeps private owner identity intake distinct from public-kit visibility", as
   await f.t.run(ctx => ctx.db.patch(f.s.profileId, { publicSurfacingState: "opted_out", fieldVisibility: { mediaKit: "private" } }));
   assert.ok((await f.t.mutation(internal.contributionUploads.begin, { ...f.input, idempotencyKey: "private-owner-upload" })).intentId);
 });
+
+for (const feature of ["trusted_contributor", "media_reviewer", "trusted_publisher", "super_admin"] as const) {
+  it(`${feature} uploads beyond ordinary count and cooldown limits without publishing`, async () => {
+    const f = await fixture();
+    await f.t.run(ctx => ctx.db.insert("accountFeatureGrants", {
+      userId: f.s.contributorUserId, feature, state: "active",
+      grantedBy: { tokenIdentifier: "test:operator", issuer: "test", subject: "operator" },
+      grantedAt: Date.now(), updatedAt: Date.now(),
+    }));
+    await f.t.mutation(internal.contributionUploads.claim, f.claimInput);
+    await f.t.mutation(internal.contributionUploads.complete, f.completeInput);
+    for (let i = 1; i <= 7; i++) {
+      const sha256 = i.toString(16).padStart(64, "0");
+      const begun = await f.t.mutation(internal.contributionUploads.begin, { ...f.input,
+        sha256, idempotencyKey: `standing-${i}` });
+      assert.ok("intentId" in begun);
+      const completion = { ...f.completeInput, intentId: begun.intentId, idempotencyKey: `standing-complete-${i}`,
+        contentSha256: sha256, sourceContentSha256: sha256, downloadContentSha256: sha256 };
+      await f.t.mutation(internal.contributionUploads.claim, { ...f.claimInput, intentId: begun.intentId, idempotencyKey: completion.idempotencyKey });
+      assert.equal((await f.t.mutation(internal.contributionUploads.complete, completion)).operationState, "committed");
+    }
+    assert.equal((await f.t.run(ctx => ctx.db.query("profileMediaSubmissions").collect())).length, 8);
+    assert.equal((await f.t.run(ctx => ctx.db.query("profileAssets").collect())).length, 0);
+  });
+}
+for (const state of ["claimed_verified", "suppressed"] as const) {
+  it(`superadmin upload cannot finish across a ${state} target change`, async () => {
+    const f = await fixture();
+    await f.t.run(ctx => ctx.db.insert("accountFeatureGrants", {
+      userId: f.s.contributorUserId, feature: "super_admin", state: "active",
+      grantedBy: { tokenIdentifier: "test:operator", issuer: "test", subject: "operator" },
+      grantedAt: Date.now(), updatedAt: Date.now(),
+    }));
+    await f.t.mutation(internal.contributionUploads.claim, f.claimInput);
+    await f.t.run(ctx => ctx.db.patch(f.s.profileId, state === "claimed_verified" ?
+      { claimState: state } : { publicSurfacingState: state }));
+    await assert.rejects(f.t.mutation(internal.contributionUploads.complete, f.completeInput));
+    assert.equal((await f.t.run(ctx => ctx.db.query("profileAssets").collect())).length, 0);
+  });
+}

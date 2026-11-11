@@ -91,8 +91,8 @@ async function command(ctx: MutationCtx, input: ContributionCommandBase | Contri
   if (!code && proposal) {
     const now = Date.now();
     const policy = await effectiveContributionPolicy(ctx.db, actor.user._id);
-    if (await openSubmissionCountForUser(ctx, actor.user._id, now) >= policy.limits.openActor ||
-      await openSubmissionCountForProfile(ctx, s.profile._id, now) >= policy.limits.openTarget) code = "proposal_capacity";
+    if ((policy.limits.openActor !== null && await openSubmissionCountForUser(ctx, actor.user._id, now) >= policy.limits.openActor) ||
+      (policy.limits.openTarget !== null && await openSubmissionCountForProfile(ctx, s.profile._id, now) >= policy.limits.openTarget)) code = "proposal_capacity";
     if (!code) {
       try { await assertSubmissionRateLimits(ctx, actor.user._id, s.profile._id, now); }
       catch { code = "proposal_rate_limited"; }

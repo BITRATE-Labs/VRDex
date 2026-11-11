@@ -206,7 +206,7 @@ export async function openSubmissionCountForUser(
         .withIndex("by_submitterUserId_status_expiresAt", (query) =>
           query.eq("submitterUserId", userId).eq("status", status).gt("expiresAt", now),
         )
-        .take(policy.limits.openActor + 1),
+        .take((policy.limits.openActor ?? 1000) + 1),
     ),
   );
   return groups.reduce((count, group) => count + group.length, 0);
@@ -224,7 +224,7 @@ export async function openSubmissionCountForProfile(
         .withIndex("by_profileId_status_expiresAt", (query) =>
           query.eq("profileId", profileId).eq("status", status).gt("expiresAt", now),
         )
-        .take(11),
+        .take(21),
     ),
   );
   return groups.reduce((count, group) => count + group.length, 0);
@@ -237,6 +237,7 @@ async function submissionRateLimit(
   now: number,
 ) {
   const policy = await effectiveContributionPolicy(ctx.db, userId);
+  if (policy.tier === "superadmin") return null;
   const since = now - 24 * 60 * 60 * 1_000;
   const [recentForUser, recentForProfile] = await Promise.all([
     ctx.db
@@ -245,22 +246,22 @@ async function submissionRateLimit(
         query.eq("submitterUserId", userId).gt("createdAt", since),
       )
       .order("desc")
-      .take(policy.limits.dailyActor + 1),
+      .take((policy.limits.dailyActor ?? 0) + 1),
     ctx.db
       .query("profileMediaSubmissions")
       .withIndex("by_profileId_createdAt", (query) =>
         query.eq("profileId", profileId).gt("createdAt", since),
       )
       .order("desc")
-      .take(policy.limits.dailyTarget + 1),
+      .take((policy.limits.dailyTarget ?? 0) + 1),
   ]);
-  if (recentForUser.length >= policy.limits.dailyActor) {
+  if (policy.limits.dailyActor !== null && recentForUser.length >= policy.limits.dailyActor) {
     return "user_daily" as const;
   }
-  if (recentForProfile.length >= policy.limits.dailyTarget) {
+  if (policy.limits.dailyTarget !== null && recentForProfile.length >= policy.limits.dailyTarget) {
     return "profile_daily" as const;
   }
-  if (recentForUser.filter(row => row.createdAt > now - policy.limits.burstWindowMs).length >= policy.limits.burst) {
+  if (policy.limits.burst !== null && recentForUser.filter(row => row.createdAt > now - policy.limits.burstWindowMs).length >= policy.limits.burst) {
     return "cooldown" as const;
   }
   return null;
@@ -438,13 +439,14 @@ export const createUploadIntent = mutation({
     }
     const sourceUrl = normalizeProfileAssetSourceUrl(args.sourceUrl);
     const now = Date.now();
-    if (
-      (await openSubmissionCountForUser(ctx, user._id, now)) >= (await effectiveContributionPolicy(ctx.db, user._id)).limits.openActor) {
-      throw new Error("You already have three media contributions awaiting a decision.");
+    const admissionPolicy = await effectiveContributionPolicy(ctx.db, user._id);
+    if (admissionPolicy.limits.openActor !== null &&
+      (await openSubmissionCountForUser(ctx, user._id, now)) >= admissionPolicy.limits.openActor) {
+      throw new Error("Your pending media contribution limit has been reached.");
     }
-    if (
-      (await openSubmissionCountForProfile(ctx, profile._id, now)) >= (await effectiveContributionPolicy(ctx.db, user._id)).limits.openTarget) {
-      throw new Error("This profile already has two media contributions awaiting a decision.");
+    if (admissionPolicy.limits.openTarget !== null &&
+      (await openSubmissionCountForProfile(ctx, profile._id, now)) >= admissionPolicy.limits.openTarget) {
+      throw new Error("This profile has reached its pending media contribution limit.");
     }
 
     await assertSubmissionRateLimits(ctx, user._id, profile._id, now);
@@ -669,12 +671,13 @@ export const prepareMcpMediaSubmission = internalMutation({
     if (!publicKitAvailable(eligible)) return await refuse("MCP_MEDIA_TARGET_UNAVAILABLE");
 
     const now = Date.now();
-    if (
-      (await openSubmissionCountForUser(ctx, actor._id, now)) >= (await effectiveContributionPolicy(ctx.db, actor._id)).limits.openActor) {
+    const admissionPolicy = await effectiveContributionPolicy(ctx.db, actor._id);
+    if (admissionPolicy.limits.openActor !== null &&
+      (await openSubmissionCountForUser(ctx, actor._id, now)) >= admissionPolicy.limits.openActor) {
       return await refuse("MCP_MEDIA_OPEN_USER_LIMIT");
     }
-    if (
-      (await openSubmissionCountForProfile(ctx, eligible._id, now)) >= (await effectiveContributionPolicy(ctx.db, actor._id)).limits.openTarget) {
+    if (admissionPolicy.limits.openTarget !== null &&
+      (await openSubmissionCountForProfile(ctx, eligible._id, now)) >= admissionPolicy.limits.openTarget) {
       return await refuse("MCP_MEDIA_OPEN_PROFILE_LIMIT");
     }
     const creationLimit = await submissionRateLimit(ctx, actor._id, eligible._id, now);
@@ -1664,7 +1667,7 @@ async function authorizedReviewPage(
         const inherited = inheritedEligible
           ? await ctx.db.query("profileMediaSubmissions")
             .withIndex("by_candidateAssetId_status_expiresAt", q => q.eq("candidateAssetId", candidate._id).eq("status", status).gt("expiresAt", Date.now()))
-            .take(11) : [];
+            .take(21) : [];
         // Open target capacity is ten; refuse unexpected overflow.
         if (inherited.length > 10) throw new Error("Replacement review queue exceeds target capacity.");
         rows = [source, ...inherited].filter(linked).sort((a, b) => a._id.localeCompare(b._id));

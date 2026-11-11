@@ -155,7 +155,6 @@ const mcpWriteToolNames = [
   "vrdex_media_contribution_place",
   "vrdex_media_contribution_propose_placement",
   "vrdex_media_submission_declare",
-  "vrdex_contribution_capacity_request",
   "vrdex_contribution_batch_create",
   "vrdex_contribution_batch_append",
   "vrdex_contribution_batch_archive",
@@ -197,7 +196,6 @@ const mcpWriteToolResourceScopes: Record<(typeof mcpWriteToolNames)[number], Api
   vrdex_media_contribution_place: "assets:publish",
   vrdex_media_contribution_propose_placement: "assets:contribute",
   vrdex_media_submission_declare: "assets:publish",
-  vrdex_contribution_capacity_request: "assets:contribute",
   vrdex_contribution_batch_create: "assets:contribute",
   vrdex_contribution_batch_append: "assets:contribute",
   vrdex_contribution_batch_archive: "assets:contribute",
@@ -217,7 +215,6 @@ const mcpOwnedReadToolNames = [
   "vrdex_event_intake_draft_get",
   "vrdex_event_intake_event_get",
   "vrdex_contribution_capacity",
-  "vrdex_contribution_capacity_requests",
   "vrdex_contribution_status",
   "vrdex_contribution_batch_get",
   "vrdex_contribution_batch_items",
@@ -234,7 +231,6 @@ const mcpOwnedReadToolScopes: Record<(typeof mcpOwnedReadToolNames)[number], Api
   vrdex_event_intake_draft_get: "events:contribute",
   vrdex_event_intake_event_get: "events:contribute",
   vrdex_contribution_capacity: "assets:contribute",
-  vrdex_contribution_capacity_requests: "assets:contribute",
   vrdex_contribution_status: "assets:contribute",
   vrdex_contribution_batch_get: "assets:contribute",
   vrdex_contribution_batch_items: "assets:contribute",
@@ -2018,7 +2014,6 @@ export function buildVrdexMcpServer(options: VrdexMcpServerOptions = {}) {
   ) => {
     const idempotencyKey = isRecord(input)
       ? typeof input.idempotencyKey === "string" ? input.idempotencyKey
-        : toolName === "vrdex_contribution_capacity_request" && typeof input.key === "string" ? input.key
           : undefined
       : undefined;
     const details = {
@@ -2670,8 +2665,6 @@ export function buildVrdexMcpServer(options: VrdexMcpServerOptions = {}) {
 
   const collectionToolNames = {
     capacity: "vrdex_contribution_capacity",
-    request: "vrdex_contribution_capacity_request",
-    requests: "vrdex_contribution_capacity_requests",
     status: "vrdex_contribution_status",
     create: "vrdex_contribution_batch_create",
     append: "vrdex_contribution_batch_append",

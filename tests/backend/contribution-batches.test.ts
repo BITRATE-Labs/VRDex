@@ -80,8 +80,6 @@ it("bounds retained batch envelopes across archive and legacy rows while preserv
     cursor = page.isDone ? null : page.cursor;
   } while (cursor);
   assert.equal(retainedBatches, 1000);
-  process.env.VRDEX_CONTRIBUTION_POLICY = "synthetic-v1";
-  process.env.CONVEX_DEPLOYMENT = "local:contributor-capacity-proof";
   try {
     const grant = await f.t.run(ctx => ctx.db.insert("accountFeatureGrants", {
       userId: f.s.contributorUserId, feature: "trusted_contributor", state: "active",
@@ -94,7 +92,6 @@ it("bounds retained batch envelopes across archive and legacy rows while preserv
       ...f.authority, input: { idempotencyKey: "downgraded", label: "Over" },
     }), /BATCH_ENVELOPE_LIMIT/);
   } finally {
-    delete process.env.VRDEX_CONTRIBUTION_POLICY;
     delete process.env.CONVEX_DEPLOYMENT;
   }
 });
@@ -1271,51 +1268,6 @@ it("uses independently authenticated batch readers and binds their reconciliatio
       }),
       /BATCH_UNAVAILABLE/,
     );
-  }
-});
-
-it("bounds every new row across append pages while replayed rows are free", async () => {
-  const f = await fixture();
-  process.env.VRDEX_CONTRIBUTION_POLICY = "synthetic-v1";
-  process.env.CONVEX_DEPLOYMENT = "local:contributor-capacity-proof";
-  try {
-    await f.t.run((ctx) =>
-      ctx.db.insert("contributionCapacityRequests", {
-        actorUserId: f.s.contributorUserId,
-        key: "allow",
-        kind: "batch_allowance",
-        batchId: f.batch.batchId,
-        evidence: "fixture",
-        reason: "fixture",
-        rows: 3,
-        bytes: 10000,
-        expiresAt: Date.now() + 86400000,
-        state: "approved",
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      }),
-    );
-    const append = (keys: string[]) =>
-      f.t.mutation(internal.contributionBatches.append, {
-        ...f.authority,
-        batchId: f.batch.batchId,
-        items: keys.map((itemKey) => ({ ...f.item, itemKey })),
-      });
-    await append(["a", "b"]);
-    await assert.rejects(append(["a", "c", "d"]), /BATCH_ALLOWANCE_ROWS/);
-    assert.equal(
-      (await f.t.run((ctx) => ctx.db.get(f.batch.batchId)))?.rowCount,
-      2,
-    );
-    await append(["a", "b", "c"]);
-    await append(["a", "b", "c"]);
-    assert.equal(
-      (await f.t.run((ctx) => ctx.db.get(f.batch.batchId)))?.rowCount,
-      3,
-    );
-  } finally {
-    delete process.env.VRDEX_CONTRIBUTION_POLICY;
-    delete process.env.CONVEX_DEPLOYMENT;
   }
 });
 
