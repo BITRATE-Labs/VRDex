@@ -202,8 +202,26 @@ describe("optional browser and visual evidence contract", () => {
     assert.equal(workflow.jobs["deploy-convex-production"].if, "github.event_name == 'push' && github.ref == 'refs/heads/main'");
     assert.deepEqual(workflow.jobs["deploy-convex-production"].needs, ["build-web"]);
     assert.ok(workflow.jobs["playwright-hosted-data-flow"].if.includes("head.repo.fork == false"));
-    const account = workflow.jobs["playwright-hosted-data-flow"].steps.find((step: { name?: string }) => step.name === "Run signed-in account assertions and selected captures");
-    assert.equal(account.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS, "${{ needs.visual-selection.outputs.visuals }}");
+    const candidate = workflow.jobs["playwright-hosted-data-flow"];
+    assert.equal(candidate.uses, "./.github/workflows/vercel-preview-deploy.yml");
+    assert.equal(candidate.with.head_sha, "${{ github.event.pull_request.head.sha }}");
+    assert.equal(candidate.with.browser_acceptance, true);
+    assert.equal(candidate.with.capture_screenshots, "${{ needs.visual-selection.outputs.visuals == 'true' }}");
+    const preview = parseYaml(readFileSync(".github/workflows/vercel-preview-deploy.yml", "utf8"));
+    const browser = preview.jobs["candidate-browser-acceptance"];
+    assert.ok(browser.if.includes("is_fork == 'false'"));
+    assert.equal(browser.env.GITHUB_SHA, undefined, "GitHub reserves its triggering merge SHA");
+    assert.equal(browser.env.CANDIDATE_HEAD_SHA, "${{ needs.deploy-preview.outputs.head_sha }}");
+    assert.equal(browser.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS, "${{ inputs.capture_screenshots }}");
+    assert.equal(browser.env.PLAYWRIGHT_BASE_URL, "${{ needs.deploy-preview.outputs.deployment_url }}");
+    const steps = browser.steps;
+    const preflight = steps.findIndex((step: { run?: string }) => step.run?.includes("candidate-preview-acceptance.mjs preflight"));
+    const mutation = steps.findIndex((step: { run?: string }) => step.run?.includes("profile-submission.flow.spec.ts"));
+    const report = steps.findIndex((step: { run?: string }) => step.run?.includes("candidate-preview-acceptance.mjs report"));
+    assert.ok(preflight >= 0 && mutation > preflight && report > mutation);
+    assert.ok(steps.some((step: { run?: string }) => step.run?.includes("auth-session.flow.spec.ts --project=desktop-chromium --project=mobile-chromium")));
+    assert.ok(steps.some((step: { run?: string }) => step.run === "pnpm test:e2e:hosted:account-visual"));
+    assert.equal(new Set(steps.map((step: { env?: Record<string,string> }) => step.env?.PLAYWRIGHT_JSON_REPORT_FILE).filter(Boolean)).size, 3);
   });
   it("requires real current-branch claim coverage on a local backend without exposing keys to forks", () => {
     assert.equal(workflow.jobs["playwright-data-flow"]["timeout-minutes"], 45, "Budget includes existing flows, composed media coverage, and artifacts");
