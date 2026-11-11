@@ -1,3 +1,4 @@
+import { resolveEventRecapWindow } from "./_eventRecapWindow";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import {
@@ -72,17 +73,13 @@ async function checkTarget(
       event?.scheduleKind === "date_only" ||
       current?._id !== integrationId ||
       event?.communityProfileId !== integration.communityProfileId ||
-      event.startAt !== t.bucketStartAt ||
-      (event.endAt ?? event.startAt + 6 * 3600_000) !== t.bucketEndAt
+      event.startAt !== t.bucketStartAt
     )
       throw new Error("Blocked: event scope changed.");
-    const association = await ctx.db
-      .query("eventInstanceAssociations")
-      .withIndex("by_eventId_state", (q) =>
-        q.eq("eventId", t.eventId!).eq("state", "confirmed"),
-      )
-      .first();
-    if (!association)
+    const window = await resolveEventRecapWindow(ctx.db, event, integration);
+    if (!window?.rangeValid || window.endAt !== t.bucketEndAt)
+      throw new Error("Blocked: event scope changed.");
+    if (!window.sessionIds.length)
       throw new Error("Blocked: event has no confirmed instance.");
   } else if (
     t.eventId ||
@@ -197,21 +194,12 @@ export const inventory = internalQuery({
         .paginate(args.paginationOpts);
       const targets = [];
       for (const e of page.page) {
-        const confirmed = await ctx.db
-          .query("eventInstanceAssociations")
-          .withIndex("by_eventId_state", (q) =>
-            q.eq("eventId", e._id).eq("state", "confirmed"),
-          )
-          .first();
-        if (
-          confirmed &&
-          e.startAt !== undefined &&
-          (e.endAt ?? e.startAt + 6 * 3600_000) <= args.endAt
-        )
+        const window = await resolveEventRecapWindow(ctx.db, e, integration);
+        if (window?.rangeValid && window.sessionIds.length && window.endAt <= args.endAt)
           targets.push({
             grain: "event",
-            bucketStartAt: e.startAt,
-            bucketEndAt: e.endAt ?? e.startAt + 6 * 3600_000,
+            bucketStartAt: window.startAt,
+            bucketEndAt: window.endAt,
             eventId: e._id,
           });
       }
@@ -318,26 +306,11 @@ export const eventPage = internalQuery({
       sessionId: Id<"instanceSessions">;
       breakBefore?: boolean;
     }> = [];
-    const associated = new Map<Id<"instanceSessions">, boolean>();
+    const event = args.eventId ? await ctx.db.get(args.eventId) : null;
+    const window = event ? await resolveEventRecapWindow(ctx.db, event, integration) : null;
+    const associated = new Set(window?.sessionIds ?? []);
     for (const p of page.page) {
-      let valid = associated.get(p.sessionId);
-      if (valid === undefined) {
-        const a = await ctx.db
-          .query("eventInstanceAssociations")
-          .withIndex("by_sessionId_state", (q) =>
-            q.eq("sessionId", p.sessionId).eq("state", "confirmed"),
-          )
-          .first();
-        const session = await ctx.db.get(p.sessionId);
-        valid =
-          a !== null &&
-          a.eventId === args.eventId &&
-          a.communityProfileId === integration.communityProfileId &&
-          session?.integrationId === integration._id &&
-          session.openedAt >= epoch;
-        associated.set(p.sessionId, valid);
-      }
-      if (valid)
+      if (associated.has(p.sessionId))
         rows.push({
           at: p.observedAt,
           value: p.population,
@@ -414,6 +387,7 @@ export const previewEvent = internalAction({
             sessions: new Set<string>(),
             breakBefore: false,
           };
+          if (total.sessions.has(row.sessionId)) continue;
           total.sessions.add(row.sessionId);
           total.breakBefore ||= row.breakBefore === true;
           if (row.coverage === "observed" || row.coverage === "estimated") {

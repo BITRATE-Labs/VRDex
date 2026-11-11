@@ -628,3 +628,55 @@ it("legacy same-window recap jobs restart before adopting a window signature", a
   await t.mutation(internal.communityTelemetry.advanceEventRecapPage, { jobId: job._id });
   assert.equal((await t.run(ctx => ctx.db.query("communityTelemetryRollups").first()))?.peakConcurrency, 101);
 });
+
+
+it("event repair uses observed or canonical windows and canonical alias input", async test => {
+  test.mock.timers.enable({ apis: ["setTimeout"] });
+  const start = Date.UTC(2026, 9, 1);
+  for (const canonical of [false, true]) {
+    const t = convexTest({ schema, modules });
+    const seed = await eventFixture(t, start, 101);
+    const tailAt = start + 3660000;
+    await t.run(async ctx => {
+      const session = (await ctx.db.get(seed.sessionIds[0]!))!;
+      const { _id, _creationTime, ...fields } = session;
+      const aliasId = await ctx.db.insert("instanceSessions", { ...fields, mergedIntoSessionId: _id });
+      const association = (await ctx.db.query("eventInstanceAssociations").withIndex("by_sessionId_state", q => q.eq("sessionId", _id).eq("state", "confirmed")).first())!;
+      await ctx.db.patch(association._id, { sessionId: aliasId });
+      for (const [at, population, key] of [[start + 60000, 99, "duplicate"], [start + 180000, 1, "adjacent"], [tailAt, 500, "tail"]] as const)
+        await ctx.db.insert("instancePopulationObservations", { integrationId: seed.integrationId, sessionId: _id, providerInstanceId: fields.providerInstanceId,
+          vrchatWorldId: fields.vrchatWorldId, idempotencyKey: key, population, observedAt: at, source: "first_party", collectorVersion: "test", coverageState: "observed", fencingToken: 1 });
+      if (canonical) await ctx.db.patch(seed.eventId, { recapEndAt: start + 3600000 });
+    });
+    const raw = await t.run(ctx => ctx.db.query("instancePopulationObservations").collect());
+    const inventory = await t.query(internal.communityTelemetryRepair.inventory, {
+      integrationId: seed.integrationId, grain: "event", startAt: start, endAt: start + 7200000, paginationOpts: { cursor: null, numItems: 10 },
+    });
+    assert.equal(inventory.page.length, 1);
+    const target = inventory.page[0]!;
+    assert.equal(target.bucketEndAt, canonical ? start + 3600000 : tailAt + 1);
+    const preview = await t.action(internal.communityTelemetryRepair.previewEvent, { integrationId: seed.integrationId, ...target });
+    assert.equal(preview.status, "ready");
+    const scope = { integrationId: seed.integrationId, startAt: start, endAt: start + 7200000, inventoryId: `tail-${canonical}`, expectedTargets: 1 };
+    const runId = await t.mutation(internal.communityTelemetryRepair.begin, scope);
+    await t.mutation(internal.communityTelemetryRepair.append, { runId, targets: [target] });
+    await t.mutation(internal.communityTelemetryRepair.seal, { runId });
+    const saved = (await t.run(ctx => ctx.db.query("communityTelemetryRepairTargets").withIndex("by_runId_key", q => q.eq("runId", runId)).first()))!;
+    await t.mutation(internal.communityTelemetryRepair.repairTarget, { targetId: saved._id });
+    for (let page = 0; page < 5; page++) {
+      const job = await t.run(ctx => ctx.db.query("communityTelemetryEventRecapJobs").first());
+      if (!job) break;
+      await t.mutation(internal.communityTelemetry.continueEventRecapJob, { jobId: job._id });
+    }
+    const status = await t.mutation(internal.communityTelemetryRepair.refresh, { runId });
+    assert.equal(status.complete, true);
+    assert.equal(status.corrected, 1);
+    const row = (await t.run(ctx => ctx.db.query("communityTelemetryRollups").first()))!;
+    assert.equal(row.bucketEndAt, target.bucketEndAt);
+    assert.equal(row.peakConcurrency, canonical ? 101 : 500);
+    assert.equal(row.playerMinutes, 102, "preview and repair deduplicate the canonical timestamp across pages");
+    assert.equal(row.playerMinutes, preview.proposed.playerMinutes);
+    assert.deepEqual(await t.run(ctx => ctx.db.query("instancePopulationObservations").collect()), raw);
+    await assert.doesNotReject(t.mutation(internal.communityTelemetryRepair.begin, { ...scope, inventoryId: `next-${canonical}` }));
+  }
+});

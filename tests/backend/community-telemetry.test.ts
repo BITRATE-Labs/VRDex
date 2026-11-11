@@ -2178,7 +2178,7 @@ it("automatic recap tails, canonical overrides and current-session deduplication
   });
   const startAt = Date.now() + 60_000;
   const { eventId, sessionId } = await t.run(async ctx => {
-    const eventId = await ctx.db.insert("events", { title: "Tail", sortTitle: "tail", startAt, endAt: startAt + 60_000,
+    const eventId = await ctx.db.insert("events", { slug: "tail-event", title: "Tail", sortTitle: "tail", startAt, endAt: startAt + 60_000,
       communityProfileId, sourceType: "manual", sourceLabel: "test", eventStatus: "scheduled", publicationState: "published", updatedAt: startAt });
     const sessionId = await ctx.db.insert("instanceSessions", { integrationId, communityProfileId, providerInstanceId: "tail", providerLocation: "wrld_tail:tail", vrchatWorldId: "wrld_tail", source: "first_party", state: "closed", openedAt: startAt, lastObservedAt: startAt + 180_000, closedAt: startAt + 60_000, consecutiveMisses: 0, updatedAt: startAt });
     await ctx.db.insert("eventInstanceAssociations", { eventId, sessionId, communityProfileId, source: "manual", confidence: 1, state: "confirmed", createdAt: startAt, updatedAt: startAt });
@@ -2190,6 +2190,14 @@ it("automatic recap tails, canonical overrides and current-session deduplication
   assert.ok(id);
   assert.equal((await t.run(ctx => ctx.db.get(id)))?.bucketEndAt, startAt + 180_001);
   assert.equal((await t.run(ctx => ctx.db.get(id)))?.peakConcurrency, 20);
+  await t.withIdentity(identity).mutation(api.communityTelemetry.setPublicMetric, { communitySlug: "faceless", metric: "eventRecaps", enabled: true });
+  const publicRecap = await t.query(api.communityTelemetry.getPublicForCommunity, { communitySlug: "faceless", now: startAt + 240000 });
+  assert.equal(publicRecap?.eventRecaps?.[0]?.endAt, startAt + 180001);
+  assert.equal(publicRecap?.eventRecaps?.[0]?.peakConcurrency, 20);
+  assert.equal("instanceHistory" in publicRecap!, false);
+  assert.equal((await t.query(api.events.getPublicBySlug, { slug: "tail-event" }))?.endAt, startAt + 60000);
+  await t.withIdentity(identity).mutation(api.communityTelemetry.setPublicMetric, { communitySlug: "faceless", metric: "eventRecaps", enabled: false });
+  assert.equal((await t.query(api.communityTelemetry.getPublicForCommunity, { communitySlug: "faceless", now: startAt + 240000 }))?.eventRecaps, undefined);
   await assert.rejects(t.mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId, endAt: startAt + 120_000 }), /access|signed/i);
   for (const endAt of [startAt, startAt - 1, startAt + 94 * 86400_000, Infinity])
     await assert.rejects(t.withIdentity(identity).mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId, endAt }), /range|window|finite/i);
@@ -2366,4 +2374,36 @@ it("invalid desired recap windows preserve independent schedule edits and explic
   assert.equal((await read()).page.find(row => row.eventId === ids[0])?.effectiveEndAt, startAt + 180_000);
   await assert.rejects(owner.mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId: ids[0]!, endAt: null }), /supported range/);
   assert.equal((await t.run(ctx => ctx.db.get(ids[0]!)))?.recapEndAt, startAt + 180_000, "failed Automatic restoration preserves the explicit cutoff");
+});
+
+
+it("recap alias overflow preserves raw ingestion and records the skipped refresh", async test => {
+  let now = Date.now();
+  test.mock.method(Date, "now", () => now);
+  test.mock.timers.enable({ apis: ["setTimeout"] });
+  const t = convexTest({ schema, modules });
+  await seedCommunity(t);
+  const collectorAccountId = await registerAccount(t);
+  const integrationId = await t.withIdentity(identity).mutation(api.communityTelemetry.connectGroup, {
+    communitySlug: "faceless", vrchatGroupId: "grp_00000000-0000-4000-8000-000000000001", groupVisibility: "public", joinPolicy: "free",
+  });
+  const claim = (await t.mutation(internal.communityTelemetry.claimDueAssignments, { collectorAccountId, workerId: "alias-overflow", limit: 1, now })).assignments[0]!;
+  const poll = () => ({ integrationId, collectorAccountId, workerId: "alias-overflow", fencingToken: claim.fencingToken, collectorVersion: "test", source: "first_party" as const,
+    groupMemberCount: 50, now, observedAt: now, nextPollAt: now + 60000, pollId: String(now),
+    instances: [{ providerInstanceId: "overflow", providerLocation: "wrld_overflow:overflow", vrchatWorldId: "wrld_overflow", population: 11, userCount: 11, queueSize: 0, platforms: { standalonewindows: 11 } }] });
+  await t.mutation(internal.communityTelemetry.ingestAggregatePoll, poll());
+  const sessionId = await t.run(async ctx => {
+    const session = (await ctx.db.query("instanceSessions").first())!;
+    const { _id, _creationTime, ...fields } = session;
+    for (let index = 0; index < 1001; index++) await ctx.db.insert("instanceSessions", { ...fields, state: "closed", mergedIntoSessionId: _id });
+    return _id;
+  });
+  now += 60000;
+  await assert.doesNotReject(t.mutation(internal.communityTelemetry.ingestAggregatePoll, poll()));
+  const rows = await t.run(ctx => ctx.db.query("instancePopulationObservations").withIndex("by_sessionId_observedAt", q => q.eq("sessionId", sessionId)).collect());
+  assert.equal(rows.length, 2);
+  assert.equal(rows[1]?.userCount, 11);
+  assert.equal(rows[1]?.queueSize, 0);
+  assert.equal((await t.run(ctx => ctx.db.get(integrationId)))?.lastSuccessfulObservationAt, now);
+  assert.ok((await t.run(ctx => ctx.db.query("communityTelemetryAuditEvents").collect())).some(row => row.action === "recap.refresh" && row.result === "alias_limit"));
 });

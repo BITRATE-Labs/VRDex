@@ -1763,7 +1763,11 @@ export const ingestAggregatePoll = internalMutation({
       const events = new Set<Id<"events">>();
       for (const sessionId of observedSessionIds) {
         const aliases = await ctx.db.query("instanceSessions").withIndex("by_mergedIntoSessionId", q => q.eq("mergedIntoSessionId", sessionId)).take(1001);
-        if (aliases.length > 1000) throw new Error("Recap aliases exceed the supported range.");
+        if (aliases.length > 1000) {
+          await audit(ctx, { integrationId: integration._id, communityProfileId: subject.communityProfileId,
+            action: "recap.refresh", result: "alias_limit", now });
+          continue;
+        }
         for (const id of [sessionId, ...aliases.map(alias => alias._id)]) {
           const associations = await ctx.db.query("eventInstanceAssociations")
             .withIndex("by_sessionId_state", q => q.eq("sessionId", id).eq("state", "confirmed")).take(2);
