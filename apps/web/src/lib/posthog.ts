@@ -14,6 +14,10 @@ const URL_PROPERTY_NAMES = new Set([
   // recipients discover the product — that stored value is the live token.
   "$initial_current_url",
   "$initial_pathname",
+  "$prev_pageview_pathname",
+  "$session_entry_url",
+  "$session_entry_pathname",
+  "$session_entry_referrer",
 ]);
 
 export function sanitizeAnalyticsUrl(value: string): string {

@@ -514,6 +514,7 @@ function ProfileLookupPageContent({
   const posthog = usePostHog();
   const privateUiFlag = useFeatureFlagEnabled(PRIVATE_SEED_LOOKUP_UI_FLAG);
   const { mode: analyticsMode } = useAnalyticsPreferences();
+  const privateRolloutEnabled = analyticsRolloutEnabled(analyticsMode, privateUiFlag, Boolean(process.env.NEXT_PUBLIC_POSTHOG_KEY));
   const [displayQuery, setDisplayQuery] = useState(query);
   const [displayResults, setDisplayResults] = useState(results);
   const [displayPrivateResults, setDisplayPrivateResults] = useState(privateResults);
@@ -526,11 +527,11 @@ function ProfileLookupPageContent({
     privateResults.length > 0 ? query : null,
   );
   const bulkLookupLinesRef = useRef<string[]>([]);
-  const bulkPrivateRefreshAttemptedRef = useRef(privateUiFlag === true);
+  const bulkPrivateRefreshAttemptedRef = useRef(privateRolloutEnabled);
   const [isPending, startTransition] = useTransition();
   const isSearching = pendingLabel !== null || isPending;
   const privateUiEnabled = seedViewerAccess.allowed && (seedViewerAccess.source === "super_admin"
-    || analyticsRolloutEnabled(analyticsMode, privateUiFlag, Boolean(process.env.NEXT_PUBLIC_POSTHOG_KEY)));
+    || privateRolloutEnabled);
   const visibleResults = mergeLookupSuggestions(
     displayResults,
     seedViewerAccess.allowed && privateUiEnabled ? displayPrivateResults : [],
@@ -568,7 +569,7 @@ function ProfileLookupPageContent({
     nextLookup: LookupResponse,
     nextQuery: string,
   ) => {
-    const enabled = nextLookup.viewerAccess.source === "super_admin" || privateUiFlag === true;
+    const enabled = nextLookup.viewerAccess.source === "super_admin" || privateRolloutEnabled;
 
     if (!nextLookup.viewerAccess.allowed || !enabled) {
       return [];
@@ -590,11 +591,11 @@ function ProfileLookupPageContent({
       console.error(`Client-side private seed lookup failed: ${message}`);
       return [];
     }
-  }, [privateUiFlag, queryPrivateResults]);
+  }, [privateRolloutEnabled, queryPrivateResults]);
 
   useEffect(() => {
     const currentQuery = displayQuery.trim();
-    const enabled = seedViewerAccess.source === "super_admin" || privateUiFlag === true;
+    const enabled = seedViewerAccess.source === "super_admin" || privateRolloutEnabled;
 
     if (
       bulkEntries.length > 0 ||
@@ -630,7 +631,7 @@ function ProfileLookupPageContent({
     bulkEntries.length,
     displayPrivateResults.length,
     displayQuery,
-    privateUiFlag,
+    privateRolloutEnabled,
     queryPrivateResults,
     seedViewerAccess.allowed,
     seedViewerAccess.source,
@@ -692,7 +693,7 @@ function ProfileLookupPageContent({
   ) => {
     bulkLookupLinesRef.current = lines;
     if (!options.flagRefresh) {
-      bulkPrivateRefreshAttemptedRef.current = privateUiFlag === true;
+      bulkPrivateRefreshAttemptedRef.current = privateRolloutEnabled;
     }
     if (lines.length === 0) {
       requestVersionRef.current += 1;
@@ -725,7 +726,7 @@ function ProfileLookupPageContent({
           const lookup = await fetchLookupResults(line);
           const privateResults = await fetchAllowedPrivateResults(lookup, line);
           const showPrivate = lookup.viewerAccess.allowed && (
-            lookup.viewerAccess.source === "super_admin" || privateUiFlag === true
+            lookup.viewerAccess.source === "super_admin" || privateRolloutEnabled
           );
 
           return {
@@ -778,7 +779,7 @@ function ProfileLookupPageContent({
     fetchAllowedPrivateResults,
     posthog,
     privateUiEnabled,
-    privateUiFlag,
+    privateRolloutEnabled,
     routePath,
     seedViewerAccessAllowed,
     seedViewerAccessSource,
@@ -789,7 +790,7 @@ function ProfileLookupPageContent({
     const lines = bulkLookupLinesRef.current;
     if (!shouldRefreshBulkPrivateLookup({
       bulkEntryCount: bulkEntries.length,
-      flagEnabled: privateUiFlag === true,
+      flagEnabled: privateRolloutEnabled,
       lineCount: lines.length,
       refreshAttempted: bulkPrivateRefreshAttemptedRef.current,
     })) {
@@ -798,12 +799,12 @@ function ProfileLookupPageContent({
 
     bulkPrivateRefreshAttemptedRef.current = true;
     void runBulkLookup(lines, { flagRefresh: true });
-  }, [bulkEntries.length, privateUiFlag, runBulkLookup]);
+  }, [bulkEntries.length, privateRolloutEnabled, runBulkLookup]);
 
   const clearLookup = useCallback(() => {
     requestVersionRef.current += 1;
     bulkLookupLinesRef.current = [];
-    bulkPrivateRefreshAttemptedRef.current = privateUiFlag === true;
+    bulkPrivateRefreshAttemptedRef.current = privateRolloutEnabled;
     startTransition(() => {
       setDisplayQuery("");
       setDisplayResults([]);
@@ -813,7 +814,7 @@ function ProfileLookupPageContent({
       setPendingLabel(null);
       updateLookupUrl("", routePath, view);
     });
-  }, [privateUiFlag, routePath, view]);
+  }, [privateRolloutEnabled, routePath, view]);
 
   const canonicalView = view ?? "dj";
   const switcherQuery = bulkEntries.length > 0 ? undefined : displayQuery;

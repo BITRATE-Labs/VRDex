@@ -7,6 +7,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useAnalyticsPreferences } from "./_components/analytics-preferences";
 import { analyticsRouteClass, filterAnalyticsEvent, parseDeploymentCategory } from "@/lib/analytics-capture";
 import type { AnalyticsMode } from "@/lib/analytics-preference";
+import { guardAnalyticsRequests } from "@/lib/analytics-transport";
 import { captureProductEvent, SESSION_REPLAY_MASKED_SELECTOR } from "@/lib/posthog";
 
 const key = process.env.NEXT_PUBLIC_POSTHOG_KEY?.trim();
@@ -14,8 +15,6 @@ const category = parseDeploymentCategory(process.env.NEXT_PUBLIC_POSTHOG_DEPLOYM
 const limitedEnabled = process.env.NEXT_PUBLIC_POSTHOG_LIMITED_ENABLED === "true";
 let activeMode: AnalyticsMode | undefined;
 let activeClient: PostHog | undefined;
-let fullClient: PostHog | undefined;
-let limitedClient: PostHog | undefined;
 let previousIdentity: string | undefined;
 let previousMode: AnalyticsMode | undefined;
 
@@ -43,11 +42,11 @@ function pauseCapture() {
   client.clear_opt_in_out_capturing();
 }
 
-function initializeClient(token: string, mode: "limited" | "full", analyticsId: string | undefined) {
+function initializeClient(token: string, mode: "limited" | "full", analyticsId: string | undefined, onReady: (client: PostHog) => void) {
   const client = new PostHog();
-  const capture = client.capture.bind(client);
-  // Best-effort beacon capture avoids SDK retries reviving events after withdrawal.
-  client.capture = (event, properties, options) => capture(event, properties, { ...options, transport: "sendBeacon" });
+  if (!guardAnalyticsRequests(client, () => activeClient === client && activeMode === mode)) return undefined;
+  activeClient = client;
+  activeMode = mode;
   client.init(token, {
     api_host: "/ingest", ui_host: "https://us.posthog.com", defaults: "2025-05-24",
     persistence: mode === "full" ? "localStorage" : "memory",
@@ -63,6 +62,9 @@ function initializeClient(token: string, mode: "limited" | "full", analyticsId: 
     mask_all_text: true, mask_all_element_attributes: true,
     disable_surveys: true, disable_product_tours: true, disable_conversations: true,
     disable_web_experiments: true, enable_heatmaps: false,
+    loaded: () => {
+      if (activeClient === client && activeMode === mode) onReady(client);
+    },
     session_recording: {
       blockSelector: SESSION_REPLAY_MASKED_SELECTOR, maskAllInputs: true,
       maskTextSelector: SESSION_REPLAY_MASKED_SELECTOR, captureCanvas: { recordCanvas: false },
@@ -87,10 +89,8 @@ export function PostHogProvider({ children }: { children: ReactNode }) {
       previousMode = mode;
       return;
     }
-    // A Limited instance's disabled flag extensions must never become the Full instance.
-    if (mode === "full") fullClient ??= initializeClient(key, mode, analyticsId);
-    else limitedClient ??= initializeClient(key, mode, undefined);
-    const next = mode === "full" ? fullClient : limitedClient;
+    // A new instance prevents retired queues and recording buffers from joining a later consent session.
+    const next = initializeClient(key, mode, analyticsId, setClient);
     if (!next) return;
     const identityChanged = previousIdentity !== undefined && previousIdentity !== identityKey;
     const modeChanged = previousMode !== undefined && previousMode !== mode;
@@ -105,7 +105,6 @@ export function PostHogProvider({ children }: { children: ReactNode }) {
     next.opt_in_capturing({ captureEventName: false });
     if (mode === "full" && analyticsId) next.identify(analyticsId);
     next.set_config({ autocapture: mode === "full", capture_pageleave: mode === "full", disable_session_recording: mode !== "full" });
-    setClient(next);
     next.capture("$pageview");
     if (mode === "full") {
       const outcome = analyticsId ? "authenticated" : "anonymous";

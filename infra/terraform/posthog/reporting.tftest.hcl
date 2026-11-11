@@ -13,8 +13,8 @@ run "production_full_reports" {
         posthog_insight.auth_restore_by_deployment,
         posthog_insight.auth_restore_by_browser,
         posthog_insight.claim_terminal_outcomes,
-      ] : alltrue([
-        for filter in local.production_full_properties : contains(jsondecode(insight.query_json).source.properties, filter)
+        ] : alltrue([
+          for filter in local.production_full_properties : contains(jsondecode(insight.query_json).source.properties, filter)
       ])
     ])
     error_message = "Every existing trend must exclude nonproduction and non-Full events."

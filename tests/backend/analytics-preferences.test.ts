@@ -95,3 +95,21 @@ it("withdrawal never revives a queued generation after On returns", async () => 
     assert.equal((await ctx.db.query("claimAnalyticsOutbox").collect()).length, 1);
   });
 });
+
+it("a client-supplied journey never borrows another account's consent or identity", async () => {
+  process.env.POSTHOG_DEPLOYMENT_CATEGORY = "staging";
+  const t = convexTest({ schema, modules });
+  await t.run(async (ctx) => {
+    await ctx.db.insert("users", { clerkUserId: "journey-a" });
+    await ctx.db.insert("users", { clerkUserId: "journey-b" });
+  });
+  const a = t.withIdentity({ subject: "journey-a" });
+  const b = t.withIdentity({ subject: "journey-b" });
+  await a.mutation(api.analyticsPreferences.set, { choice: "on", policyVersion: "2026-11-10" });
+  await b.mutation(api.analyticsPreferences.set, { choice: "off", policyVersion: "2026-11-10" });
+  const context = claimAnalyticsContext("abde12ef-abcd-4123-8abc-abcdef123456", "profile", "on");
+  const milestone = { event: "claim_attempt_created", profileType: "person", method: "discord", occurredAt: Date.now() } as const;
+  await a.run(async (ctx) => enqueueClaimAnalyticsEvent(ctx, context, milestone));
+  await b.run(async (ctx) => enqueueClaimAnalyticsEvent(ctx, context, { ...milestone, event: "claim_resolved" }));
+  assert.equal((await t.run(async (ctx) => ctx.db.query("claimAnalyticsOutbox").collect())).length, 1);
+});

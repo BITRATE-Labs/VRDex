@@ -3,7 +3,7 @@ import { currentUserOrNull } from "./_identity";
 import { analyticsDeploymentCategory } from "./_analyticsPreference";
 
 import { internal } from "./_generated/api";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
 export const claimAnalyticsEntrySource = v.union(
@@ -27,6 +27,7 @@ export type ClaimAnalyticsContext = {
   journeyId: string;
   entrySource: ClaimAnalyticsEntrySource;
   browserRestriction?: "off" | "on";
+  ownerUserId?: Id<"users">;
 };
 
 export type ClaimAnalyticsMilestone = {
@@ -103,7 +104,11 @@ export async function enqueueClaimAnalyticsEvent(
 ): Promise<void> {
   const first = await ctx.db.query("claimAnalyticsOutbox")
     .withIndex("by_journeyId", (q) => q.eq("journeyId", analytics.journeyId)).first();
-  const user = first?.ownerUserId ? await ctx.db.get(first.ownerUserId) : await currentUserOrNull(ctx);
+  const caller = await currentUserOrNull(ctx);
+  const ownerUserId = analytics.ownerUserId ?? caller?._id;
+  if (!ownerUserId || (caller && caller._id !== ownerUserId)
+    || (first && first.ownerUserId !== ownerUserId)) return;
+  const user = caller ?? await ctx.db.get(ownerUserId);
   if (!user || user.analyticsPreference?.choice !== "on" || !user.analyticsId) return;
   if (analytics.browserRestriction === "off") return;
   if (first ? first.preferenceRevision !== user.analyticsPreference.revision || first.state === "suppressed"
@@ -152,24 +157,26 @@ export async function enqueueClaimAnalyticsEvent(
 }
 
 export function analyticsContextFromAttempt(
-  attempt: Pick<Doc<"profileVerificationAttempts">, "analyticsJourneyId" | "analyticsEntrySource">,
+  attempt: Pick<Doc<"profileVerificationAttempts">, "analyticsJourneyId" | "analyticsEntrySource" | "userId">,
 ): ClaimAnalyticsContext | null {
   return attempt.analyticsJourneyId === undefined
     ? null
     : {
         journeyId: attempt.analyticsJourneyId,
         entrySource: attempt.analyticsEntrySource ?? "profile",
+        ownerUserId: attempt.userId,
       };
 }
 
 export function analyticsContextFromRequest(
-  request: Pick<Doc<"profileClaimRequests">, "analyticsJourneyId" | "analyticsEntrySource">,
+  request: Pick<Doc<"profileClaimRequests">, "analyticsJourneyId" | "analyticsEntrySource" | "userId">,
 ): ClaimAnalyticsContext | null {
   return request.analyticsJourneyId === undefined
     ? null
     : {
         journeyId: request.analyticsJourneyId,
         entrySource: request.analyticsEntrySource ?? "profile",
+        ownerUserId: request.userId,
       };
 }
 
@@ -177,6 +184,7 @@ export async function enqueueAttemptResolution(
   ctx: MutationCtx,
   attempt: Pick<
     Doc<"profileVerificationAttempts">,
+    | "userId"
     | "analyticsJourneyId"
     | "analyticsEntrySource"
     | "createdAt"
@@ -205,6 +213,7 @@ export async function enqueueRequestResolution(
   ctx: MutationCtx,
   request: Pick<
     Doc<"profileClaimRequests">,
+    | "userId"
     | "analyticsJourneyId"
     | "analyticsEntrySource"
     | "createdAt"

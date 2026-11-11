@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type JSHandle } from "@playwright/test";
+import type { PostHog } from "posthog-js";
 import { gunzipSync } from "node:zlib";
 
 test("first offer is nonblocking; dismiss stays unset and footer reopens the choice", async ({ page }) => {
@@ -93,6 +94,11 @@ test("On enables Full, SPA navigation captures once, and Off stops a late config
   expect(events.some((event) => event.event === "auth_session_restore_completed")).toBe(true);
   await page.evaluate(() => history.pushState({}, "", "/search?query=synthetic-secret"));
   await expect.poll(() => events.filter((event) => event.event === "$pageview" && event.properties.analytics_mode === "full").length).toBe(2);
+  await page.evaluate(() => history.pushState({}, "", "/handoff/synthetic-bearer-token?secret=synthetic-private"));
+  await expect.poll(() => events.filter((event) => event.event === "$pageview" && event.properties.analytics_mode === "full").length).toBe(3);
+  await page.evaluate(() => history.pushState({}, "", "/search"));
+  await expect.poll(() => events.filter((event) => event.event === "$pageview" && event.properties.analytics_mode === "full").length).toBe(4);
+  expect(JSON.stringify(events)).not.toContain("synthetic-bearer-token");
   expect(JSON.stringify(events)).not.toContain("synthetic-secret");
   await page.getByRole("button", { name: "Usage & privacy", exact: true }).click();
   await page.getByRole("button", { name: "Off", exact: true }).click();
@@ -177,4 +183,59 @@ test("Account Privacy can reopen analytics without a profile selection", async (
   await page.getByRole("button", { name: "Usage & privacy", exact: true }).first().click();
   await expect(page.getByRole("region", { name: "Usage & privacy", exact: true })).toBeVisible();
   await page.screenshot({ path: test.info().outputPath("analytics-account.png") });
+});
+
+test("ordinary granted private lookup works in single and bulk mode with analytics Off", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("vrdex-analytics-choice", "off"));
+  await page.route("**/lookup/suggest?**", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    await route.fulfill({ json: { ...body, viewerAccess: { allowed: true, source: "feature_grant" } } });
+  });
+  await page.goto("/search?view=dj");
+  await page.getByLabel("DJ name").fill("nwinn");
+  await page.getByRole("button", { name: "Lookup", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Lookup results" }).getByText("DJ Northstar", { exact: true }).filter({ visible: true })).toBeVisible();
+  await page.goto("/search?view=dj");
+  await page.getByRole("button", { name: "Bulk", exact: true }).click();
+  await page.getByLabel("Lineup text").fill("nwinn\nDJ Aurora");
+  await page.getByRole("button", { name: "Lookup lineup", exact: true }).click();
+  await expect(page.locator(".lookup-bulk-summary").getByText("DJ Northstar", { exact: true })).toBeVisible();
+});
+
+test("snapshot-sized payloads use a size-capable transport", async ({ page }) => {
+  let client: JSHandle<PostHog> | undefined;
+  let snapshotBytes = 0;
+  let transport = "";
+  page.on("console", async (message) => {
+    if (!message.text().includes("Starting in debug mode")) return;
+    const metadata = message.args()[2];
+    if (!metadata) return;
+    const instance = await metadata.getProperty("this");
+    if (await instance.evaluate((value) => value.config.person_profiles) === "identified_only") client = instance;
+  });
+  await page.route("**/ingest/**", async (route) => {
+    const buffer = route.request().postDataBuffer();
+    if (buffer) {
+      try {
+        const body = JSON.parse(buffer[0] === 31 && buffer[1] === 139 ? gunzipSync(buffer).toString() : buffer.toString());
+        if (body.event === "$snapshot") {
+          snapshotBytes = buffer.byteLength;
+          transport = route.request().resourceType();
+        }
+      } catch { /* Ignore non-event requests. */ }
+    }
+    await route.fulfill({ json: { status: 1, featureFlags: {}, sessionRecording: false } });
+  });
+  await page.goto("/search?__posthog_debug=true");
+  await page.getByRole("button", { name: "On", exact: true }).click();
+  await expect.poll(() => Boolean(client)).toBe(true);
+  if (!client) throw new Error("Synthetic SDK instance was not initialized");
+  await client.evaluate((sdk) => {
+    const bytes = [...crypto.getRandomValues(new Uint8Array(60_000)), ...crypto.getRandomValues(new Uint8Array(60_000))];
+    const text = btoa(bytes.map((value) => String.fromCharCode(value)).join(""));
+    sdk.capture("$snapshot", { $snapshot_data: { type: 3, data: { source: 0, text } } }, { _noTruncate: true });
+  });
+  await expect.poll(() => snapshotBytes).toBeGreaterThan(65_536);
+  expect(["fetch", "xhr"]).toContain(transport);
 });

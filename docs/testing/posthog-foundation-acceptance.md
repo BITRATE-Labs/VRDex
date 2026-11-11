@@ -2,6 +2,8 @@
 
 Implementation branch, November 10, 2026. Production activation is not authorized.
 
+The changeset adds the shared Off/On control, opaque account analytics identity, mode-aware browser capture, backend consent enforcement and production-only reporting filters. Limited is internal and its collection remains unenabled pending eligibility. Runtime provider deletion, hosted acceptance and exact public copy remain incomplete activation dependencies.
+
 ## Verified boundaries
 
 Executor's PostHog documentation search confirms `persistence: "memory"`, `set_config`, and the public SDK configuration reference. Memory persistence alone retains identity for a page lifecycle. The proposed Limited boundary therefore strips SDK-generated properties and uses independent event IDs. It disables automatic capture, remote configuration, replay and geo-IP enrichment. Its synthetic payload test must pass before use.
@@ -24,7 +26,11 @@ Executor discovers `persons-bulk-delete`, accepting distinct IDs with `delete_ev
 
 ## Evidence
 
-Synthetic browser acceptance intercepts all PostHog transport with a fake key. Desktop and mobile checks cover independent Limited envelopes, absence of SDK visitor IDs in local/session storage, Off silence, Full navigation, opaque guest continuity across reload, cross-tab withdrawal and a delayed flag/recording configuration response after Off. A 503 regression test verifies old captures do not retry after Off/On. Supported beacon capture is intentionally best effort; server outbox retries are unchanged.
+Synthetic browser acceptance intercepts all PostHog transport with a fake key. Desktop and mobile checks cover independent Limited envelopes, absence of SDK visitor IDs in local/session storage, Off silence, Full navigation, opaque guest continuity across reload, cross-tab withdrawal and a delayed flag/recording configuration response after Off. A 503 regression verifies retired captures do not retry after Off/On. Normal fetch transport handles an actual synthetic snapshot payload larger than 64 KB. Active-session and server outbox retries remain available.
+
+The first beacon-based fix was rejected during whole-branch review because replay buffers can exceed browser beacon quotas. The final guard uses the installed SDK's exported internal `_send_request` method, verified at runtime, and fails closed for unvalidated SDK versions. No SDK dependency upgrade or new transport framework was added. This internal-hook dependency must be revalidated on upgrade.
+
+Whole-branch review also reproduced a cross-account journey reuse and a token leak in SDK-generated previous-page metadata. Regression tests now check caller/authoritative workflow ownership and sanitize previous-page/session-entry URL properties. A real Off-mode ordinary-grant lookup check covers both single and bulk results, including the fetch gates.
 
 The Account Privacy entry is available without a profile selection in the local fixture. This is not proof of hosted account switching, failed authenticated saves or cross-device propagation. Those remain acceptance dependencies.
 
@@ -35,3 +41,20 @@ Terraform validates locally and its mocked-provider test checks production/Full 
 Visual inspection found that the initial translucent panel let footer text show through. The final panel uses the shared opaque surface token and fits desktop/mobile widths. Keyboard Escape returns focus to the explicit opener. Real replay contents and hosted masking/mobile-player performance are unverified.
 
 Existing analytics/sanitizer/route baseline: 28 tests passed. Dependency installation completed using the frozen lockfile; an earlier attempt ran before installation completed and failed to resolve tsx, then passed after installation.
+
+## Final local verification
+
+- Web focused checks: 43 passed. Backend focused checks: 101 passed.
+- Desktop/mobile analytics browser spec: 16 passed. Screenshots received direct visual inspection after the opaque-panel fix.
+- Web broad suite: 1,119 passed with the unchanged `vrdex-mcp.test.ts` synchronous child-probe hang excluded.
+- Backend broad suite: 3,303 passed with six named Windows-sensitive fixture cases excluded: VRCDN hold CBR, renderer transition anchors, two F1 dispatch-failure fixtures, TERM-ignoring descendant cancellation, and the public artwork fixture's unsupported Windows ESM path.
+- Lint, web/backend typechecks and the local Terraform validation/mocked reporting test passed. Documentation build is checked with the final evidence commit.
+
+The unfiltered suites were attempted and are not reported green. The earlier full web run also hit a stdio protocol timeout that passed in isolation. Linux CI remains required; local exclusions do not change committed CI selection or tests.
+
+## Review images
+
+- [Desktop offer](posthog-foundation/offer-desktop.png)
+- [Mobile offer](posthog-foundation/offer-mobile.png)
+
+These show proposed copy in a synthetic local fixture, not approved production copy or hosted authentication/replay acceptance.

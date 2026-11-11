@@ -25,7 +25,7 @@ This is a proposal, not an applied settings diff. Read the effective billing lim
 
 - Review exact public panel/policy copy. The policy draft still needs the concrete event-retention value and broader site-policy review.
 - Establish Limited's actual no-consent eligibility and provider reuse conditions. Synthetic payload stripping alone does not establish legal eligibility.
-- Provision an approved runtime management authorization route and implement/verify the supported withdrawal deletion worker. Current requests are persisted as `blocked_authorization`, without a claim that provider data was deleted. The ingestion key and operator Executor connection do not supply runtime management authorization.
+- Provision an approved runtime management authorization route and implement/verify supported withdrawal deletion for account and guest Full identities. Current account requests are persisted as `blocked_authorization`; the guest withdrawal path and provider worker are incomplete. No provider deletion is claimed. The ingestion key and operator Executor connection do not supply runtime management authorization.
 - Verify account switching, delayed account preferences and failed-save retry against an isolated authenticated backend. Local guest browser checks and Convex unit tests do not prove hosted auth behavior.
 - Use an existing isolated staging target or proven staging-only recording restriction for synthetic public/private/form replay acceptance. Do not enable shared-project recording globally just to test it. Confirm masking, receipt and basic mobile/player responsiveness. This hosted check is pending.
 
