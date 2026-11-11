@@ -19,9 +19,19 @@ The public choice is Off / On. No saved choice derives internal Limited; it is n
 
 Guests keep their browser choice. Signed-in choices use `analyticsPreferences.set`. Browser Off or account Off wins. On waits for successful account persistence, including adoption of a saved guest On choice. Malformed storage notifications cannot clear a known restriction. Local Off applies before the remote save; a failed save does not claim to have stopped disconnected backend work.
 
-Account Full uses a random UUID in the existing user record, never an email or provider/database ID. Repeated On saves preserve that UUID. On after withdrawal rotates it so deleting the old consent period cannot affect the new period. Old UUIDs remain in deletion requests until provider status confirms completion, then expire after 30 days. The worker uses the existing server `POSTHOG_API_KEY`; ingestion keys cannot authorize deletion. Hosted authorization and provider acceptance remain to be verified before activation.
+Full uses a random UUID in the existing user record, never an email or provider/database ID. The account keeps that UUID across Off/On changes so retained analytics remain associated with the same account. Off stops future optional collection and invalidates queued events from the previous preference revision. It does not delete historical events or recordings. Re-enablement is immediate.
 
-Guest Full starts only after the server issues an opaque ID and separate withdrawal receipt and the browser persists that receipt. Only its hash is stored server-side. Web Locks serialize receipt changes across tabs. Off stops capture first and retains a failed withdrawal for retry; a new consent period cannot reuse the withdrawn ID. Full guest events create a PostHog person profile so the supported person deletion operation can cover them. This is not a VRDex account: auth receipts still report anonymous, and guest IDs are not aliased into account IDs. No receipt is sent to PostHog. The guest server endpoint uses the existing admin client and IP rate limiter, not a public arbitrary-ID mutation.
+Locked decision, November 11: analytics Off and data deletion are separate actions. Deletion requires an explicit request through the existing Privacy request form at `/support?topic=owner_opt_out`, followed by operator verification and handling. The form category alone does not authorize analytics deletion; the request must explicitly ask for it. There is no automatic provider-deletion worker or guest withdrawal-receipt service.
+
+### Which action changes analytics data?
+
+```mermaid
+flowchart TD
+  A[Usage & privacy] --> B[Off]
+  B --> C[Stop future optional collection]
+  D[Privacy request form] --> E[Explicit deletion request]
+  E --> F[Operator verifies and handles deletion]
+```
 
 Limited admits a small event/enum allowlist and replaces SDK identity with an independent ID per event. It strips URLs, person buckets, session/device IDs and workflow identifiers, disables replay/autocapture/flags and suppresses geo-IP enrichment. Eligibility without prior consent and provider contractual reuse conditions remain unverified. `NEXT_PUBLIC_POSTHOG_LIMITED_ENABLED` defaults false until those checks pass. The internal state remains Limited while collection is unenabled.
 

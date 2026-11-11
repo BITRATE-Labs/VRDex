@@ -1,54 +1,33 @@
 import { expect, test, type JSHandle } from "@playwright/test";
 import type { PostHog } from "posthog-js";
 import { gunzipSync } from "node:zlib";
-import { randomUUID, randomBytes } from "node:crypto";
 
 test.beforeEach(async ({ context }) => {
-  await context.route("**/api/analytics/guest", (route) => route.fulfill({ json: route.request().postDataJSON().action === "start"
-    ? { analyticsId: randomUUID(), receipt: randomBytes(32).toString("hex") } : { accepted: true } }));
   await context.route("**/ingest/**", (route) => route.fulfill({
     json: { status: 1, featureFlags: {}, sessionRecording: false },
   }));
 });
 
-test("guest Off retains a failed withdrawal for retry and never reuses its consent identity", async ({ page }) => {
-  const ids: string[] = [];
-  await page.route("**/ingest/**", async (route) => {
-    const buffer = route.request().postDataBuffer();
-    if (buffer) {
-      try {
-        const body = JSON.parse(buffer[0] === 31 && buffer[1] === 139 ? gunzipSync(buffer).toString() : buffer.toString());
-        for (const event of Array.isArray(body) ? body : [body]) if (event.event === "$pageview" && event.properties?.analytics_mode === "full") ids.push(event.properties.distinct_id);
-      } catch { /* Configuration requests need no event decoding. */ }
-    }
-    await route.fulfill({ json: { status: 1, featureFlags: {}, sessionRecording: false } });
-  });
-  let fail = true;
-  let withdrawalAttempts = 0;
-  await page.route("**/api/analytics/guest", (route) => {
-    if (route.request().postDataJSON().action === "start") return route.fulfill({ json: { analyticsId: randomUUID(), receipt: randomBytes(32).toString("hex") } });
-    withdrawalAttempts++;
-    return route.fulfill({ status: fail ? 503 : 200, json: fail ? { status: 503 } : { accepted: true } });
+test("guest Off stops collection without a deletion request or re-enablement dependency", async ({ page }) => {
+  let guestServerRequests = 0;
+  await page.route("**/api/analytics/**", (route) => {
+    guestServerRequests++;
+    return route.abort();
   });
   await page.goto("/search");
-  await page.getByRole("button", { name: "On", exact: true }).click();
-  await expect.poll(() => page.evaluate(() => localStorage.getItem("vrdex-analytics-guest"))).not.toBeNull();
-  const first = await page.evaluate(() => JSON.parse(localStorage.getItem("vrdex-analytics-guest")!).analyticsId);
-  await expect.poll(() => ids.at(-1)).toBe(first);
+  const panel = page.getByRole("region", { name: "Usage & privacy", exact: true });
+  await panel.getByRole("button", { name: "On", exact: true }).click();
+  await expect(panel).toHaveCount(0);
   await page.getByRole("button", { name: "Usage & privacy", exact: true }).click();
-  await page.getByRole("button", { name: "Off", exact: true }).click();
-  await expect.poll(() => withdrawalAttempts).toBeGreaterThan(0);
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("vrdex-analytics-guest")!).withdrawn)).toBe(true);
+  await panel.getByRole("button", { name: "Off", exact: true }).click();
+  await expect(panel).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem("vrdex-analytics-choice"))).toBe("off");
-  fail = false;
-  await page.reload();
-  await expect.poll(() => page.evaluate(() => localStorage.getItem("vrdex-analytics-guest"))).toBeNull();
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await page.getByRole("button", { name: "Usage & privacy", exact: true }).click();
-  await page.getByRole("button", { name: "On", exact: true }).click();
-  await expect.poll(() => page.evaluate(() => localStorage.getItem("vrdex-analytics-guest"))).not.toBeNull();
-  const next = await page.evaluate(() => JSON.parse(localStorage.getItem("vrdex-analytics-guest")!).analyticsId);
-  expect(next).not.toBe(first);
-  await expect.poll(() => ids.at(-1)).toBe(next);
+  await panel.getByRole("button", { name: "On", exact: true }).click();
+  await expect(panel).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem("vrdex-analytics-choice"))).toBe("on");
+  expect(guestServerRequests).toBe(0);
 });
 
 test("first offer is nonblocking; dismiss stays unset and footer reopens the choice", async ({ page }) => {
@@ -75,25 +54,6 @@ test("first offer is nonblocking; dismiss stays unset and footer reopens the cho
   await page.reload();
   expect(await page.evaluate(() => localStorage.getItem("vrdex-analytics-choice"))).toBe("off");
   await expect(panel).toHaveCount(0);
-});
-
-test("background guest receipt failure stays quiet and retries on reconnect", async ({ page, context }) => {
-  await context.addInitScript(() => {
-    localStorage.setItem("vrdex-analytics-choice", "on");
-    localStorage.setItem("vrdex-analytics-offered", "1");
-  });
-  let fail = true;
-  await page.route("**/api/analytics/guest", (route) => route.fulfill({ status: fail ? 503 : 200,
-    json: fail ? { status: 503 } : { analyticsId: randomUUID(), receipt: randomBytes(32).toString("hex") } }));
-  const failed = page.waitForResponse((response) => response.url().includes("/api/analytics/guest") && response.status() === 503);
-  await page.goto("/search");
-  await failed;
-  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(null)))));
-  await expect(page.getByRole("region", { name: "Usage & privacy", exact: true })).toHaveCount(0);
-  await expect.poll(() => page.evaluate(() => localStorage.getItem("vrdex-analytics-guest"))).toBeNull();
-  fail = false;
-  await page.evaluate(() => window.dispatchEvent(new Event("online")));
-  await expect.poll(() => page.evaluate(() => localStorage.getItem("vrdex-analytics-guest"))).not.toBeNull();
 });
 
 test("Limited envelopes are independent and Off sends no optional requests", async ({ page }) => {
@@ -240,8 +200,8 @@ test("Full visitor continuity survives reload and another tab receives Off", asy
   await expect.poll(() => identities.length).toBe(3);
   await page.getByRole("button", { name: "Usage & privacy", exact: true }).click();
   await page.getByRole("button", { name: "Off", exact: true }).click();
+  expect(await page.evaluate((id) => JSON.stringify(localStorage).includes(id), first)).toBe(false);
   off = true;
-  await expect.poll(() => page.evaluate((id) => JSON.stringify(localStorage).includes(id), first)).toBe(false);
   await other.getByRole("button", { name: "Usage & privacy", exact: true }).click();
   await expect(other.getByRole("button", { name: "Off", exact: true })).toHaveAttribute("aria-pressed", "true");
   await other.evaluate(() => history.pushState({}, "", "/search?query=other-tab"));
@@ -287,7 +247,7 @@ test("snapshot-sized payloads use a size-capable transport", async ({ page }) =>
     const metadata = message.args()[2];
     if (!metadata) return;
     const instance = await metadata.getProperty("this");
-    if (await instance.evaluate((value) => value.config.person_profiles) === "always") client = instance;
+    if (await instance.evaluate((value) => value.config.person_profiles) === "identified_only") client = instance;
   });
   await page.route("**/ingest/**", async (route) => {
     const buffer = route.request().postDataBuffer();

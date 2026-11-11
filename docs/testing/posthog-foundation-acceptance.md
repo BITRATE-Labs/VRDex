@@ -2,7 +2,7 @@
 
 Implementation branch, November 10, 2026. Production activation is not authorized.
 
-The changeset adds the shared Off/On control, opaque account analytics identity, mode-aware browser capture, backend consent enforcement and production-only reporting filters. Limited is internal and its collection remains unenabled pending eligibility. The withdrawal follow-up adds the worker and guest ownership proof. Hosted provider deletion, authenticated acceptance and exact public copy remain activation dependencies.
+The changeset adds the shared Off/On control, opaque account analytics identity, mode-aware browser capture, backend consent enforcement and production-only reporting filters. Limited is internal and its collection remains unenabled pending eligibility. Hosted acceptance and exact public copy remain incomplete activation dependencies.
 
 ## Verified boundaries
 
@@ -20,54 +20,21 @@ Limited's eligibility without prior consent and provider contractual reuse condi
 - Recent `event_intake_run` and `event_sync_apply` receipts have no emitter in this checkout. Their external owner remains unknown; this changeset does not invent one.
 - No public policy source exists. `/privacy/suppression` is a support redirect. A minimal `/privacy` policy draft is included for owner review.
 
-## Withdrawal
+## Tracking Off and explicit deletion
 
-Executor discovers `persons-bulk-delete`, accepting distinct IDs with `delete_events` and `delete_recordings`. It is irreversible and returns 202 for an asynchronous deletion request. The follow-up worker validates the exact person and returned distinct ID, retains that target before submission, validates both queue acknowledgements and `deletion_errors`, and polls exact person status before marking completion. Missing matches or status are not treated as successful deletion. A lease recovers crashed delivery; unacknowledged submissions retry all steps. Completed analytics mappings expire after 30 days; retired guest receipt hashes remain as acknowledgements without their analytics IDs. Unknown receipts are rejected rather than discarded client-side.
+The November 11 owner correction separates these actions. Off stops future optional collection without deleting retained analytics. Accounts keep their analytics UUID across Off/On changes and can re-enable immediately. Preference revisions still suppress old queued events. Deletion requires an explicit request through the existing Privacy request form and operator verification. The automatic deletion worker, guest receipt service and runtime key provisioning from the earlier follow-up were removed. No provider deletion was executed.
 
-The follow-up reuses the existing repository `POSTHOG_API_KEY` through the backend deployment workflow. No new key is created or read into chat. Runtime management authorization is not established by the ingestion key or operator Executor connection. Hosted provisioning and real-provider synthetic deletion are still pending; no live deletion is claimed.
+Earlier withdrawal-worker acceptance is superseded and does not qualify this corrected behavior. Legacy queue rows are inert and must not be treated as explicit deletion requests. The schema remains compatible with the merged foundation; no stored records are deleted by this correction.
 
-Guest deletion is authorized by a separate 256-bit receipt, stored only as a hash on the server. Its endpoint reuses the internal Convex client and shared IP limiter, rejects cross-origin/oversized requests and cannot accept an arbitrary deletion target. Browser storage and Web Locks preserve receipt ownership across reload and tabs. Failed withdrawal keeps the receipt until server queue acceptance; re-enablement creates a new guest ID. Guest person profiles remain separate from authenticated account identities.
-
-November 11 follow-up evidence: 44 synthetic analytics/playback browser cases pass on desktop and mobile. The new regression verifies the emitted guest ID matches its receipt, survives reload, stops on Off, retries after a failed withdrawal and changes on re-enablement. Focused backend/web checks cover leases, stale workers, provider acknowledgements/status, ownership, failure bounds and completed-only cleanup. Provider traffic is intercepted throughout these tests.
-
-## Candidate browser/backend acceptance
-
-On November 11, the committed follow-up candidate passed desktop Chromium
-acceptance against a real isolated local Convex deployment. Next ran a production
-build with `NODE_ENV=production` and `VRDEX_DEPLOYMENT_ENV=staging`. The browser
-used the actual guest route and backend mutations, rather than mocked receipts.
-
-Both On/Off periods returned successful start/withdrawal responses. Each queued
-backend target matched the distinct ID emitted by the browser. The check also
-covered identity continuity after reload, receipt retention after an injected
-network failure, reconnect retry, a fresh identity on re-enablement, stale-lease
-rejection and the disabled provider worker.
-
-This run found and reproduced a real origin-check failure: Next reconstructed
-the request URL with `localhost` while the browser used `127.0.0.1`. The route
-now checks the browser-facing Host and request protocol. Regression coverage
-still rejects mismatched origins and protocols.
-
-The frontend foundation flag was enabled only for this isolated check. Limited
-collection was disabled. PostHog ingestion used a fake key and intercepted
-transport; all other non-loopback browser traffic was blocked. The server used
-the local Convex admin binding. Clerk and the public Convex binding were unset,
-so authenticated account behavior was not exercised. The local memory rate
-limiter differs from the hosted shared store. Shared staging main was not used
-as evidence for this candidate.
-
-Hosted account consent, actual provider deletion/status, replay and production
-activation remain unverified. These results do not approve public copy or
-establish management-key authorization.
-
-### Candidate evidence reference
-
-- Source: `03f15bea823414f68b2c017eea3f9d8735886184`.
-- Isolated backend: `anonymous-agent`, loopback cloud/site ports 3370/3371.
-- Operator artifacts: `.superpowers/posthog-local-acceptance/result.json`,
-  `request-statuses.json`, `offer.png` and `off-retry.png` in the same directory.
-- Focused follow-up checks: 32 backend, 13 web and 85 API contract cases passed.
-- Source acceptance is separate from selected Linux CI and provider acceptance.
+Correction verification on November 11: 17 backend, 18 web and 44 desktop/mobile
+analytics/playback cases passed, plus two disabled-presentation cases. Web and
+backend types and Markdown checks passed. A fresh isolated Convex deployment
+also accepted Off followed immediately by On, retained the same account UUID,
+created no deletion request and rejected unauthenticated preference changes.
+That API check used a synthetic admin identity override, not Clerk login.
+Provider traffic was absent. Hosted authentication and the manual processing of
+an actual deletion request were not exercised. Desktop/mobile screenshots show
+the existing controls without layout changes.
 
 ## Evidence
 
@@ -79,7 +46,7 @@ Whole-branch review also reproduced a cross-account journey reuse and a token le
 
 The Account Privacy entry is available without a profile selection in the local fixture. This is not proof of hosted account switching, failed authenticated saves or cross-device propagation. Those remain acceptance dependencies.
 
-Focused Convex checks cover preference authorization, stable UUIDs within a consent period, UUID rotation after withdrawal, idempotent blocked deletion requests, legacy-row suppression, On/Off/On queue invalidation and bounded suppressed-row cleanup. Existing proof/claim tests preserve authoritative outcomes while explicitly distinguishing consented and legacy telemetry.
+Focused Convex checks cover preference authorization, stable account UUIDs across Off/On, no deletion requests from Off, immediate re-enablement, legacy-row suppression, On/Off/On queue invalidation and bounded suppressed-row cleanup. Existing proof/claim tests preserve authoritative outcomes while explicitly distinguishing consented and legacy telemetry.
 
 Terraform validates locally and its mocked-provider test checks production/Full filters on every existing trend plus journey-based milestone joins. No provider plan was applied. Executor's current project read confirms recording remains disabled and replay retention remains 30 days. Effective billing limits are not yet verified.
 
@@ -93,9 +60,9 @@ PR review found three additional gaps: proposed copy was not deployment-gated, b
 
 Further review fixes bind adopted guest choices to the first account, clear SDK persistence on withdrawal, pin the SDK exactly and verify the installed version. Granted lookup/temporal access now uses backend authorization consistently across analytics modes; the obsolete flag-refresh helper was removed. Batching remains deliberately disabled, with proxy request volume added to pilot acceptance.
 
-An unresolved or disabled browser mode no longer masquerades as an explicit Off action when continuing a claim. The first authenticated visit consumes a guest marker even when the account already has its own preference. Limited no longer calls the SDK's persistent consent opt-in; its browser regression checks every local/session storage entry and cookie, allowing only the application's offer-dismissal receipt. The existing internal delivery-health query exposes a bounded blocked-deletion count without identifiers. Unfulfilled requests retain each distinct analytics identifier rather than losing deletion targets through owner-level deduplication.
+An unresolved or disabled browser mode no longer masquerades as an explicit Off action when continuing a claim. The first authenticated visit consumes a guest marker even when the account already has its own preference. Limited no longer calls the SDK's persistent consent opt-in; its browser regression checks every local/session storage entry and cookie, allowing only the application's offer-dismissal receipt. The existing internal delivery-health query retains a bounded legacy blocked-deletion count without identifiers. Those legacy rows are inert, not verified deletion requests.
 
-Playback remains outside Convex's provisioning gate so auth reconciliation cannot unmount the persistent owner. A root-boundary regression protects that placement, and the synthetic browser lane includes existing retained-media/layout-transition tests. Analytics output directories are separate children of `test-results`, preserving public-smoke artifacts. The latency insight now excludes receipts without measured latency. Account withdrawal remains immediate; re-enabling within 60 seconds of withdrawal is rejected to bound deletion-request churn. Repeated same-choice saves remain idempotent.
+Playback remains outside Convex's provisioning gate so auth reconciliation cannot unmount the persistent owner. A root-boundary regression protects that placement, and the synthetic browser lane includes existing retained-media/layout-transition tests. Analytics output directories are separate children of `test-results`, preserving public-smoke artifacts. The latency insight now excludes receipts without measured latency. Off and re-enablement are immediate, and repeated same-choice saves remain idempotent.
 
 Follow-up local checks passed 46 backend cases, 12 preference/transport/root-boundary cases, 42 enabled analytics/playback browser cases and two disabled-gate cases. The browser configuration runs synthetic intercepted transport and separately tests disabled presentation/capture on desktop and mobile. Types, lint and Terraform validation/mocked reporting checks passed. Linux CI includes both configurations in the selected public-smoke lane. Original broad local results below precede these follow-ups; current Linux CI verifies the complete branch.
 

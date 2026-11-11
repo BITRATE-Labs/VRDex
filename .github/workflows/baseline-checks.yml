@@ -507,25 +507,6 @@ jobs:
           printf '%s' "$POSTHOG_PROJECT_API_KEY" | pnpm exec convex env set POSTHOG_PROJECT_API_KEY
           pnpm exec convex env set POSTHOG_DEPLOYMENT_CATEGORY production
 
-      - name: Provision existing PostHog server key when configured
-        if: steps.gate.outputs.enabled == 'true'
-        env:
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PROD }}
-          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-          POSTHOG_PROJECT_ID: ${{ vars.POSTHOG_PROJECT_ID || '447783' }}
-        run: |
-          set -euo pipefail
-          if [ -z "$POSTHOG_API_KEY" ]; then
-            echo "::notice::POSTHOG_API_KEY is absent; withdrawal requests remain queued until server authorization is configured."
-            exit 0
-          fi
-          if [[ "$POSTHOG_API_KEY" == phc_* ]]; then
-            echo "::error::POSTHOG_API_KEY must be a server management key, not an ingestion key."
-            exit 1
-          fi
-          printf '%s' "$POSTHOG_API_KEY" | pnpm exec convex env set POSTHOG_API_KEY
-          pnpm exec convex env set POSTHOG_PROJECT_ID "$POSTHOG_PROJECT_ID"
-
       - name: Deploy Convex functions and schema
         if: steps.gate.outputs.enabled == 'true'
         env:

@@ -19,7 +19,7 @@ export default function PrivacyPolicyPage() {
         <p>When enabled, replay records page activity such as navigation, clicks and scrolling. Form inputs are masked, and marked private areas are blocked. Recordings are kept for 30 days. Console content, network request bodies and canvas recording are disabled.</p>
       </section>
       <section className="space-y-3"><h2 className="text-xl font-semibold">Changing your choice</h2>
-        <p>Open Usage &amp; privacy in the footer or Account Privacy to change your choice. A browser Off choice takes precedence over an account On choice. Turning analytics Off stops new optional collection and requests deletion of retained analytics associated with your account identifier.</p>
+        <p>Open Usage &amp; privacy in the footer or Account Privacy to change your choice. A browser Off choice takes precedence over an account On choice. Turning analytics Off stops new optional collection. It does not delete previously collected analytics.</p>
         <p>Usage events remain until deletion or their configured retention period expires. Analytics choices do not remove records needed to operate your account, manage profiles and events, process payments or protect the service.</p>
       </section>
       <section className="space-y-3"><h2 className="text-xl font-semibold">Privacy requests</h2>

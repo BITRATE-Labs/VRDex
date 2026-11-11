@@ -2,10 +2,6 @@
 
 Implementation approval covers code and review. Production recording and provider settings remain unapplied.
 
-Provider withdrawal processing also defaults off through `POSTHOG_WITHDRAWAL_ENABLED`.
-Provisioning the existing management key does not activate deletion. Enable the
-worker only during approved hosted acceptance and production activation.
-
 `NEXT_PUBLIC_POSTHOG_FOUNDATION_ENABLED` defaults false. While disabled, optional browser capture, the proposed panel, footer/account control and draft `/privacy` page are unavailable. Enable it only after the dependencies below are accepted. Existing account preferences alone cannot enable browser collection. Synthetic browser CI explicitly enables it with a fake ingestion key and intercepted transport, then verifies the disabled configuration separately.
 
 ## Current verified settings
@@ -29,20 +25,13 @@ This is a proposal, not an applied settings diff. Read the effective billing lim
 
 ## Dependencies before activation
 
-The follow-up has passed [candidate browser/backend acceptance](../testing/posthog-foundation-acceptance.md#candidate-browserbackend-acceptance)
-using a production web build and isolated local backend. It covers the guest
-path with intercepted provider traffic. Shared staging CI targets main and does
-not qualify the candidate's authenticated flow or live-provider behavior.
-
 - Review exact public panel/policy copy. The policy draft still needs the concrete event-retention value and broader site-policy review.
 - Establish Limited's actual no-consent eligibility and provider reuse conditions. Synthetic payload stripping alone does not establish legal eligibility.
-- Verify the [server management key provisioning and withdrawal worker](convex-environments.md#posthog-withdrawal-authorization) after deployment. The implementation reuses the existing repository `POSTHOG_API_KEY`, handles account and receipt-authorized guest requests, checks provider acknowledgement/status, and retains unresolved targets. Local tests use synthetic transport; no live provider deletion is claimed. The ingestion key and operator Executor connection do not supply runtime management authorization.
+- Verify that the existing Privacy request intake can receive and route an explicit analytics-deletion request for operator verification and handling. Ordinary Off must stop future collection without deleting history. No automatic deletion worker, guest receipt service or additional runtime management key is required for the preference control.
 - Verify account switching, delayed account preferences and failed-save retry against an isolated authenticated backend. Local guest browser checks and Convex unit tests do not prove hosted auth behavior.
 - Use an existing isolated staging target or proven staging-only recording restriction for synthetic public/private/form replay acceptance. Do not enable shared-project recording globally just to test it. Confirm masking, receipt and basic mobile/player responsiveness. This hosted check is pending.
 - Measure proxied ingest requests per Full session during the pilot. Browser event batching is intentionally disabled to keep consent-bound dispatch independent; sampling alone does not bound Vercel transfer cost.
-- Read `claimAnalytics.deliveryOperationalHealth` for bounded blocked, pending, delivering, accepted and failed deletion counts. Completed analytics mappings are pruned after 30 days; unresolved targets remain intact. Retired guest receipt hashes keep no analytics ID and acknowledge old retries. Verify the hosted worker and backlog before activation.
-
-The November 11 Executor billing overview returned no custom dollar limit for product analytics or session replay, and both product usage limits were null. This does not establish a free or capped rollout. Keep existing billing settings unchanged in this code PR; confirm effective limits in the activation diff. Organization feature entitlements do not establish the configured event-retention period.
+- Legacy `analyticsDeletionRequests` rows from the superseded automatic-Off design remain inert. They are not explicit deletion requests and must not be replayed against the provider. Keep them untouched until their operational cleanup is separately scoped.
 
 ## Rollback
 

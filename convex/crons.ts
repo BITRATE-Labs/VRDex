@@ -58,9 +58,6 @@ crons.interval(
   {},
 );
 
-crons.interval("process analytics withdrawals", { minutes: 5 }, internal.analyticsDeletion.deliverPending, {});
-crons.daily("prune completed analytics withdrawals", { hourUTC: 4, minuteUTC: 40 }, internal.analyticsDeletion.sweepCompleted, {});
-
 // Fast retries dead-letter after five attempts so one bad destination cannot
 // monopolize delivery. This bounded hourly sweep makes temporary provider
 // outages recover automatically without turning claim writes into a dependency.

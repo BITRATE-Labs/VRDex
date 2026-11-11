@@ -70,7 +70,7 @@ describe("claim analytics outbox", () => {
       return rows[0];
     });
     const payload = posthogClaimEvent(row!);
-    assert.equal(payload.properties.$process_person_profile, true, "backend-only consented events must have a deletable person profile");
+    assert.equal(payload.properties.$process_person_profile, true, "consented account events use normal person profiles");
 
     assert.deepEqual(
       Object.keys(payload.properties).sort(),
@@ -452,10 +452,6 @@ describe("claim analytics outbox", () => {
       failedCount: 1,
       disabledCount: 0,
       blockedDeletionCount: 0,
-      pendingDeletionCount: 0,
-      deliveringDeletionCount: 0,
-      acceptedDeletionCount: 0,
-      failedDeletionCount: 0,
       oldestPendingAgeMs: null,
       scanLimitReached: false,
     });
