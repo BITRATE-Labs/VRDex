@@ -60,9 +60,7 @@ describe("profile claim lifecycle", () => {
     assert.deepEqual(replay.completedTarget, result.completedTarget);
     assert.equal(context?.lastVerifiedProof?.connectionOnly, true);
     const events = await t.run(ctx => ctx.db.query("claimAnalyticsOutbox").collect());
-    assert.deepEqual(events.filter(event => event.event === "claim_resolved").map(event => ({
-      outcome: event.outcome, connectionOnly: event.connectionOnly,
-    })), [{ outcome: "claimed_unverified", connectionOnly: true }]);
+    assert.deepEqual(events, [], "legacy proof has no original analytics consent context");
     for (const viewer of [t, t.withIdentity(clerkTestIdentity(otherClerkUserId, "other-target@example.test"))]) {
       const other = await viewer.query(api.profileClaims.getClaimJourneyContext, { profileSlug: "completed-target" });
       assert.equal(other?.lastVerifiedProof, null);
@@ -718,12 +716,7 @@ describe("profile claim lifecycle", () => {
     assert.equal(connected.claimState, "claimed_unverified");
     assert.equal(connected.connectionOnly, true);
     const events = await t.run(ctx => ctx.db.query("claimAnalyticsOutbox").collect());
-    assert.deepEqual(events.filter(event => event.event === "claim_resolved").map(event => ({
-      outcome: event.outcome, connectionOnly: event.connectionOnly,
-    })), [
-      { outcome: "claimed_unverified", connectionOnly: false },
-      { outcome: "claimed_unverified", connectionOnly: true },
-    ]);
+    assert.deepEqual(events, [], "unconsented proof workflows preserve claims without optional telemetry");
     const claims = await t.run(ctx => ctx.db.query("profileClaimRequests").collect());
     assert.equal(claims.length, 1);
 

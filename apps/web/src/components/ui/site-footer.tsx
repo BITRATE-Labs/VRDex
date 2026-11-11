@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AnalyticsSettingsButton } from "@/app/_components/analytics-preferences";
 
 /**
  * The only global surface that links anything but the nav's three utilities.
@@ -34,6 +35,7 @@ export function SiteFooter() {
         className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-6 gap-y-3"
       >
         <span className="font-mono text-xs uppercase text-muted">VRDex</span>
+        <AnalyticsSettingsButton />
         {FOOTER_LINKS.map((link) =>
           link.href.startsWith("http") ? (
             <a className={FOOTER_LINK_CLASS} href={link.href} key={link.href} rel="noreferrer" target="_blank">

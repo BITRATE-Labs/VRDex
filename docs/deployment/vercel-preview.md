@@ -149,6 +149,9 @@ Set these in the Vercel project as needed:
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`: required for any deployment that should accept sign-in. Production builds fail without them; a shell-only preview may omit both. `NEXT_PUBLIC_VRDEX_SUBMISSIONS_AUTH_READY` is retired — it gated `/submit` before web auth existed, and `clerkMiddleware` protects that route now.
 - `NEXT_PUBLIC_POSTHOG_KEY`: optional public PostHog project key; BASIC BIT hosted deployments should set this through `infra/terraform/vercel` for PostHog project `447783`.
 - `NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com`: optional PostHog ingestion host; also managed through `infra/terraform/vercel` for hosted deployments.
+- `NEXT_PUBLIC_POSTHOG_DEPLOYMENT_CATEGORY`: required for analytics only. One of `development`, `preview`, `staging` or `production`. Terraform assigns production/default preview/custom staging explicitly. Never infer production from `NODE_ENV`.
+- `NEXT_PUBLIC_POSTHOG_LIMITED_ENABLED`: defaults false. Enable after interim-collection eligibility is established. Synthetic local acceptance uses true with an intercepted fake key. Do not copy that setting into production without acceptance evidence.
+- `NEXT_PUBLIC_POSTHOG_FOUNDATION_ENABLED`: defaults false. Gates the proposed analytics presentation, policy draft and optional browser capture until copy and activation acceptance. BASIC owns activation; recreate the value through checked-in deployment configuration after approval. Local synthetic browser checks explicitly enable it.
 
 Public API, OAuth, and hosted MCP runtime routes also need the server-side
 variables inventoried in `docs/developers/self-hosting-and-iac.md`, including

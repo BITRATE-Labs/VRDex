@@ -61,9 +61,9 @@ export function parseMediaSettings(value) {
     if (audioBitrateKbps !== 160 && audioBitrateKbps !== 320) throw Error('Unsupported audio bitrate');
     return { videoPreset, audioBitrateKbps };
 }
-/** @param {{settings?: unknown, destination: 'vrcdn'|'twitch'}} input */
+/** @param {{settings?: unknown, destination: 'vrcdn'|'twitch'|'custom'}} input */
 export function resolveDestinationProfile({ settings, destination }) {
-    if (destination !== 'vrcdn' && destination !== 'twitch') throw Error('Unsupported destination');
+    if (destination !== 'vrcdn' && destination !== 'twitch' && destination !== 'custom') throw Error('Unsupported destination');
     const parsed = parseMediaSettings(settings);
     return Object.freeze({ videoPreset: parsed.videoPreset, ...VIDEO_PROFILES[parsed.videoPreset], audioBitrateKbps: destination === 'twitch' ? 160 : parsed.audioBitrateKbps, audioChannels: 2, audioSampleRateHz: 48000, keyframeIntervalSeconds: destination === 'twitch' ? 2 : 1 });
 }

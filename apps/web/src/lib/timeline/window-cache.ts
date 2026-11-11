@@ -82,6 +82,24 @@ export function inRange(
     ? s.startAt < range.endAt && s.endAt > range.startAt
     : s.startAt >= range.startAt && s.startAt < range.endAt;
 }
+export function timelineQueryRange(range: TimelineRange, now: number): TimelineRange {
+  return range.startAt <= now && now < range.endAt
+    ? { ...range, startAt: Math.min(range.startAt, now - 24 * HOUR) }
+    : range;
+}
+
+export function recentEventTime(event: TimelineEvent, now: number) {
+  const candidates: Array<{ at: number; label: "Start" | "End" | "Set start" | "Set end" }> = [];
+  if (event.schedule.kind === "date_only") return undefined;
+  candidates.push({ at: event.schedule.startAt, label: "Start" });
+  if (event.schedule.kind === "timed") candidates.push({ at: event.schedule.endAt, label: "End" });
+  for (const slot of event.slots) {
+    candidates.push({ at: slot.schedule.startAt, label: "Set start" });
+    if (slot.schedule.kind === "timed") candidates.push({ at: slot.schedule.endAt, label: "Set end" });
+  }
+  return candidates.filter(({ at }) => at >= now - 24 * HOUR && at <= now).sort((a, b) => b.at - a.at)[0];
+}
+
 const byId = <T extends { id: string }>(items: T[]) => [
   ...new Map(items.map((item) => [item.id, item])).values(),
 ];

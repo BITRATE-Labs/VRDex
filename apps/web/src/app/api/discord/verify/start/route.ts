@@ -1,4 +1,5 @@
 import { convexAuthToken } from "@/lib/server/auth";
+import { parseAnalyticsChoice } from "@/lib/analytics-preference";
 import { fetchAction } from "convex/nextjs";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -14,6 +15,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const returnTo = safeReturnPath(request.nextUrl.searchParams.get("returnTo"));
   const analyticsJourneyId = request.nextUrl.searchParams.get("analyticsJourneyId") ?? undefined;
+  const analyticsBrowserRestriction = parseAnalyticsChoice(request.nextUrl.searchParams.get("analyticsBrowserRestriction"));
   const analyticsEntrySourceValue = request.nextUrl.searchParams.get("analyticsEntrySource");
   const analyticsEntrySource =
     analyticsEntrySourceValue === "account" ||
@@ -37,7 +39,7 @@ export async function GET(request: NextRequest) {
   try {
     const { authorizeUrl } = await fetchAction(
       api.discordVerification.startGuildVerification,
-      { returnTo, analyticsJourneyId, analyticsEntrySource, analyticsProfileType },
+      { returnTo, analyticsJourneyId, analyticsEntrySource, analyticsProfileType, analyticsBrowserRestriction },
       { token },
     );
 

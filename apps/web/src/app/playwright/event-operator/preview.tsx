@@ -1,4 +1,6 @@
 "use client";
+import { ConvexProvider, ConvexReactClient } from "convex/react";
+import { getFunctionName, type FunctionReference } from "convex/server";
 import { useRef, useState } from "react";
 import {
   EventOperatorControls,
@@ -15,11 +17,31 @@ import {
 import {
   parseBroadcastInputUrl,
   broadcastInputPublicUrl,
-} from "../../../../../../convex/_eventBroadcastSources";
+} from "../../../../../../convex/_broadcastInputUrl";
 const initial = operatorFixture();
-export function EventOperatorFixture() {
-  const [status, setStatus] = useState<FixtureStatus>(initial);
+// In-memory query boundary. The rendered picker and Quick switch are production components.
+const fixtureClient = new ConvexReactClient("https://broadcast-fixture.invalid");
+function fixtureQueryResult(ref:FunctionReference<"query">,args:Record<string,unknown>) {
+  const name=getFunctionName(ref);
+  if(name==="profiles:lookupPeople") return [{slug:"aurora",displayName:"Aurora",profilePath:"/aurora",roleTags:["DJ"],tags:[],trustLabel:"Community submitted"}].filter(person=>person.displayName.toLowerCase().includes(String(args.query ?? "").toLowerCase()));
+  if(name==="events:getPersonBroadcastInputChoices") return [{key:"vrcdn:aurora",label:"Aurora",input:{kind:"vrcdn",streamId:"aurora"}}];
+  return null;
+}
+const fixtureResults = new Map<string,ReturnType<typeof fixtureQueryResult>>();
+function fixtureQuery(ref:FunctionReference<"query">,args:Record<string,unknown>) {
+  const key=`${getFunctionName(ref)}:${JSON.stringify(args)}`;
+  if(!fixtureResults.has(key)) fixtureResults.set(key,fixtureQueryResult(ref,args));
+  return fixtureResults.get(key);
+}
+Object.defineProperty(fixtureClient,"query",{value:async(ref:FunctionReference<"query">,args:Record<string,unknown>)=>fixtureQuery(ref,args)});
+Object.defineProperty(fixtureClient,"watchQuery",{value:(ref:FunctionReference<"query">,args:Record<string,unknown>)=>({localQueryResult:()=>fixtureQuery(ref,args),onUpdate:()=>()=>{},journal:()=>undefined})});
+export function EventOperatorFixture({ legacySettings = false }: { legacySettings?: boolean }) {
+  const [status, setStatus] = useState<FixtureStatus>(() => legacySettings ? {
+    ...initial,
+    program: { ...initial.program, mediaSettings: { videoPreset: "480p60", audioBitrateKbps: 160 } },
+  } : initial);
   const [count, setCount] = useState(0);
+  const [preparationKeys, setPreparationKeys] = useState<string[]>([]);
   const [startedOutput, setStartedOutput] = useState("");
   const [holdRequest, setHoldRequest] = useState(false);
   const [fail, setFail] = useState(false);
@@ -110,7 +132,7 @@ export function EventOperatorFixture() {
                       revision: target.revision,
                     },
             broadcastMode:
-              type === "set_automatic_mode"
+              type === "switch_next" ? session.broadcastMode : type === "set_automatic_mode"
                 ? "automatic"
                 : slate
                   ? "hold"
@@ -126,9 +148,18 @@ export function EventOperatorFixture() {
     }, 800);
   }
   return (
-    <>
+    <ConvexProvider client={fixtureClient}>
       <EventOperatorControls
         status={status}
+        nextSource={{sourceId:status.sources[0].sourceId,key:status.sources[0].key,label:status.sources[0].label,revision:status.sources[0].revision}}
+        onPrepare={async(label,url,idempotencyKey)=>{
+          setPreparationKeys(value=>[...value,idempotencyKey]);
+          if(fail) throw Error("fixture failure");
+          const input=parseBroadcastInputUrl(url);
+          const source={...fixtureSource(`quick${status.sources.length}`,label,input.kind === "twitch" ? "twitch" : "vrcdn"),input,publicUrl:broadcastInputPublicUrl(input)};
+          setStatus(value=>({...value,sources:[...value.sources,source]}));
+          return {sourceId:source.sourceId,key:source.key,revision:source.revision,label:source.label,input:source.input,publicUrl:source.publicUrl};
+        }}
         onCancel={async () => {
           sequence.current++;
           setCount((value) => value + 1);
@@ -151,7 +182,7 @@ export function EventOperatorFixture() {
             ...fixtureSource(
               `custom${status.sources.length}`,
               input.label,
-              canonical.kind,
+              canonical.kind === "direct_media" ? "vrcdn" : canonical.kind,
             ),
             input: canonical,
             publicUrl: broadcastInputPublicUrl(canonical),
@@ -167,7 +198,7 @@ export function EventOperatorFixture() {
             ...fixtureSource(
               `replacement${status.sources.length}`,
               input.label,
-              canonical.kind,
+              canonical.kind === "direct_media" ? "vrcdn" : canonical.kind,
             ),
             input: canonical,
             publicUrl: broadcastInputPublicUrl(canonical),
@@ -428,7 +459,9 @@ export function EventOperatorFixture() {
           Confirm task stopped
         </button>
         <output aria-label="Command count">{count}</output>
+        <output aria-label="Preparation request keys">{preparationKeys.join(",")}</output>
         <button onClick={() => setFail(true)}>Fail commands</button>
+        <button onClick={() => setFail(false)}>Allow commands</button>
         <button
           onClick={() =>
             setStatus((value) => ({ ...value, canControl: false }))
@@ -450,6 +483,6 @@ export function EventOperatorFixture() {
           Fail worker
         </button>
       </aside>
-    </>
+    </ConvexProvider>
   );
 }

@@ -2,6 +2,8 @@ import { MARKER_SCHEMA } from './event-source-markers.mjs';
 import { IDENTITY_CODES, validateIdentityEpochs } from './event-marker-record.mjs';
 import { associateContext } from './event-marker-association.mjs';
 import { MARKER_WIRE_SCHEMA, packAudioEpisode, unpackAudioEpisode } from './event-marker-wire.mjs';
+import {transportProjectionFromWire} from './event-marker-transport-wire.mjs';
+import {createTransportComparison} from './event-marker-transport-domain.mjs';
 const CLASS={unknown:0,a:1,b:2,mixed:3};
 const DISPOSITION={paired_full:0,previous_epoch_tail:1,existing_carry_in_fragment:2,existing_steady_edge_fragment:3,recorded_pre_epoch_exclusion:4,failure:5};
 const inverse=o=>Object.fromEntries(Object.entries(o).map(([k,v])=>[v,k]));
@@ -35,7 +37,8 @@ export function assertMarkerEvidenceSize(records) {
     }
   }
   if(references>8192)throw Error('marker_reference_bound');
-  const header={schema:MARKER_SCHEMA,records:records.map(({episodes,visuals,contexts,...header})=>header)};
+  for(const record of records)if(record.transportClock&&bytes(record.transportClock)>65536)throw Error('marker_transport_wire');
+  const header={schema:MARKER_SCHEMA,records:records.map(({episodes,visuals,contexts,transportClock,...header})=>({...header,...(transportClock?{transportClock:{schema:transportClock.schema,bindingSha256:transportClock.bindingSha256}}:{})}))};
   const headersWithReserve=bytes(header)+1024;
   const total=bytes({schema:MARKER_SCHEMA,records})+1024;
   if(headersWithReserve>8192||total>524288)throw Error('marker_evidence_bound');
@@ -69,6 +72,8 @@ export function packMarkerRecord(record) {
     return packAudioEpisode(e);
   });
   const contexts=record.contexts.map(contextTuple);
+  const projection=record.transportClock?transportProjectionFromWire(record.transportClock,record):undefined;
+  if(projection)for(const v of record.visuals)if(projection.videoRows[v.startFrame]?.pts!==v.start||projection.videoRows[v.endFrame]?.pts!==v.end)throw Error('marker_transport_frame');
   const result={schema:MARKER_SCHEMA,episodeEncoding:MARKER_WIRE_SCHEMA,recordingSha256:record.recordingSha256,audioStreamIndex:record.audioStreamIndex,videoStreamIndex:record.videoStreamIndex,
     metadataSamples:record.metadataSamples,decodedBytes:record.decodedBytes,detectorBlockCount:record.detectorBlockCount,
     audioRange:[...record.audioRange],videoRange:[...record.videoRange],videoFrames:record.videoFrames,
@@ -76,7 +81,8 @@ export function packMarkerRecord(record) {
     coefficientAndConditionRanges:summaryRanges(record.episodes),classCounts,contextCounts:[contexts.length,contexts.reduce((n,c)=>n+c[5].length+c[6].length,0)],outsideRequiredContexts:record.episodes.length-used.size,
     episodes,contexts,visuals:record.visuals.map(v=>[v.id,v.start,v.end,IDENTITY_CODES[v.identity],v.watermark]),
     watermarks:record.watermarks.map(w=>[w.selectionTick,w.selectionVideoPts,w.selectionSourcePts,w.firstPulseTick,w.firstPulseSourcePts,w.carryIn,IDENTITY_CODES[w.identity]]),
-    identityEpochs:record.identityEpochs.map(row=>[...row]),visualCount:record.visuals.length,watermarkCount:record.watermarks.length};
+    identityEpochs:record.identityEpochs.map(row=>[...row]),visualCount:record.visuals.length,watermarkCount:record.watermarks.length,
+    ...(projection?{transportClock:structuredClone(record.transportClock)}:{})};
   assertMarkerEvidenceSize([result]);
   // Freeze every newly allocated row. JSON consumers receive their own copy.
   const freeze=x=>{if(x&&typeof x==='object'){Object.values(x).forEach(freeze);Object.freeze(x);}return x;};
@@ -91,14 +97,16 @@ export function validateMarkerRecord(record) {
   if(!/^[a-f0-9]{64}$/.test(record.recordingSha256)||!Number.isSafeInteger(record.audioStreamIndex)||record.audioStreamIndex<0||!Number.isSafeInteger(record.videoStreamIndex)||record.videoStreamIndex<0)throw Error('marker_recording_binding');
   for(const key of ['metadataSamples','decodedBytes','detectorBlockCount','videoFrames','localWindowCount'])if(!Number.isSafeInteger(record[key])||record[key]<0)throw Error('marker_count');
   if(record.metadataSamples<=0||record.videoFrames<2||safe(record.metadataSamples*2)!==record.decodedBytes||record.detectorBlockCount<Math.ceil(record.metadataSamples/480)||record.detectorBlockCount>record.metadataSamples)throw Error('marker_audio_conservation');
-  if(!Array.isArray(record.audioRange)||record.audioRange.length!==2||!record.audioRange.every(Number.isSafeInteger)||record.audioRange[1]-record.audioRange[0]!==record.metadataSamples)throw Error('marker_audio_range');
+  const transport=record.transportClock?transportProjectionFromWire(record.transportClock,record):undefined;
+  if(!Array.isArray(record.audioRange)||record.audioRange.length!==2||!record.audioRange.every(Number.isSafeInteger))throw Error('marker_audio_range');
+  if(transport?record.metadataSamples!==transport.audioRows.length*1024||record.audioRange[0]!==transport.audioRows[0].pts||record.audioRange[1]!==transport.audioRows.at(-1).pts+1024||record.videoFrames!==transport.videoRows.length||record.videoRange[0]!==transport.videoRows[0].pts||record.videoRange[1]!==transport.videoRows.at(-1).pts:record.audioRange[1]-record.audioRange[0]!==record.metadataSamples)throw Error('marker_audio_range');
   const classCounts=[0,0,0,0],residual=[0,0];let localTotal=0,previous;
   const episodes=record.episodes.map((leaf,id)=>{
     let e;try{e=unpackAudioEpisode(leaf);}catch{throw Error('marker_episode_tuple');}
     const {firstLoudLeft:first,lastLoudRight:last,closureRight:end,prelude:p,local,fits}=e;
     const length=safe(end.ordinal-first.ordinal),loud=e.loudEnd,cls=CLASS[e.identity];
     if(length<=0||length>12000||loud<=0||loud>=length||end.ordinal-last.ordinal>480||first.inRow%480||first.row>last.row||last.row>end.row||first.ordinal<0||end.ordinal>record.metadataSamples||previous&&first.ordinal<previous.closureRight.ordinal)throw Error('marker_episode_range');
-    for(const point of [first,last,end])if(point.raw!==safe(record.audioRange[0]+point.ordinal)||point.row>=record.detectorBlockCount||point.inRow>point.ordinal||point.inRow>record.metadataSamples)throw Error('marker_episode_range');
+    for(const point of [first,last,end])if(transport?point.row>=transport.audioRows.length||point.inRow>1024||point.ordinal!==point.row*1024+point.inRow||point.raw!==transport.audioRows[point.row].pts+point.inRow:point.raw!==safe(record.audioRange[0]+point.ordinal)||point.row>=record.detectorBlockCount||point.inRow>point.ordinal||point.inRow>record.metadataSamples)throw Error('marker_episode_range');
     for(const [left,right] of [[first,last],[last,end]])if(left.row===right.row?right.inRow-left.inRow!==right.ordinal-left.ordinal:right.row-left.row>right.ordinal-left.ordinal||right.inRow>right.ordinal-left.ordinal)throw Error('marker_episode_range');
     if(p.kind==='FileOrigin'){
       if(id!==0||first.ordinal!==0||first.row!==0||first.inRow!==0||p.row!==0||p.offset!==0||p.count!==0||p.owner!==-1)throw Error('marker_prelude');
@@ -155,7 +163,10 @@ export function validateMarkerRecord(record) {
   const visuals=record.visuals.map((r,i)=>{
     if(!Array.isArray(r)||r.length!==5)throw Error('marker_visual_reference');r.forEach(safe);
     if(r[0]!==i||!(r[3] in IDENTITY_NAME)||r[2]<=r[1]||(i>0&&r[1]<record.visuals[i-1][2]))throw Error('marker_visual_reference');
-    return {id:r[0],start:r[1],end:r[2],identity:IDENTITY_NAME[r[3]],watermark:r[4]};
+    const frame=pts=>transport.videoRows.findIndex(row=>row.pts===pts);
+    const positions=transport?{startFrame:frame(r[1]),endFrame:frame(r[2])}:{};
+    if(transport&&(positions.startFrame<0||positions.endFrame<0))throw Error('marker_transport_frame');
+    return {id:r[0],start:r[1],end:r[2],identity:IDENTITY_NAME[r[3]],watermark:r[4],...positions};
   });
   const watermarks=record.watermarks.map(r=>{
     if(!Array.isArray(r)||r.length!==7||![1,2].includes(r[6])||typeof r[5]!=='boolean')throw Error('marker_watermark');r.slice(0,5).forEach(safe);
@@ -163,6 +174,7 @@ export function validateMarkerRecord(record) {
   });
   if(visuals.length!==record.visualCount||watermarks.length!==record.watermarkCount)throw Error('marker_visual_conservation');
   const raw={visuals,episodes,watermarks,audioRange:record.audioRange,videoRange:record.videoRange,identityEpochs:record.identityEpochs};validateIdentityEpochs(raw);
+  const q=createTransportComparison(raw,transport);
   const used=new Set();let transitionCount=0,steadyCount=0,references=0;
   const contexts=record.contexts.map(r=>{
     if(!Array.isArray(r)||r.length!==8||![0,1].includes(r[0])||![1,2].includes(r[1]))throw Error('marker_context_tuple');r.slice(0,5).forEach(safe);
@@ -170,9 +182,10 @@ export function validateMarkerRecord(record) {
     if(kind==='transition')transitionCount++;else steadyCount++;
     if(end-start!==(kind==='transition'?360000:540000)||!Array.isArray(r[7])||r[7].length>1)throw Error('marker_context_window');
     const carryVisualId=r[7].length?r[7][0][0]:undefined;
-    const full=visuals.filter(v=>v.identity===identity&&(kind==='transition'?v.start>=start&&v.start<end:v.start>start+18000&&v.start<end-18000)&&v.id!==carryVisualId);
+    const subject={kind,identity,selection:r[2],start,end},lo=q.context(subject,'start'),hi=q.context(subject,'end');
+    const full=visuals.filter(v=>v.identity===identity&&q.test(kind==='transition'?q.all(q.atom(q.video(v,'start'),'>=',lo),q.atom(q.video(v,'start'),'<',hi)):q.all(q.atom(q.video(v,'start'),'>',q.shift(lo,18000)),q.atom(q.video(v,'start'),'<',q.shift(hi,-18000))))&&v.id!==carryVisualId);
     if(full.length<(kind==='transition'?3:Math.floor(6-.4)))throw Error('marker_full_completeness');
-    const actual=associateContext(raw,{kind,identity,selection:r[2],start,end,fullVisualIds:full.map(v=>v.id),carryVisualId});
+    const actual=associateContext(raw,{...subject,fullVisualIds:full.map(v=>v.id),carryVisualId},q);
     if(!actual.valid||!same(contextTuple(actual),r))throw Error('marker_context_partition');
     actual.dispositions.forEach(d=>used.add(d.episodeId));references+=actual.pairs.length+actual.dispositions.length;return actual;
   });

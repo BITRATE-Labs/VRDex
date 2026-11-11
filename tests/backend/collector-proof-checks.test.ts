@@ -209,8 +209,7 @@ describe("collector proof check queue", () => {
         .collect();
       assert.deepEqual(events, []);
       const analytics = await ctx.db.query("claimAnalyticsOutbox").collect();
-      assert.deepEqual(analytics.map((event) => event.event), ["claim_verification_started"]);
-      assert.equal(analytics[0]?.timeToFirstCheckBucket, "under_1m");
+      assert.deepEqual(analytics, [], "a legacy attempt without consent context keeps its authoritative outcome but emits no optional telemetry");
     });
   });
 

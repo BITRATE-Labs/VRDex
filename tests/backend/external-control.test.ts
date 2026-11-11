@@ -1,3 +1,4 @@
+process.env.POSTHOG_DEPLOYMENT_CATEGORY = "staging";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -1010,6 +1011,7 @@ describe("Discord verification state backlog", () => {
           analyticsJourneyId: "4d36e96e-34d9-4f7e-9fe1-72a98aa13077",
           analyticsEntrySource: "profile",
           analyticsProfileType: "community",
+        analyticsBrowserRestriction: "on",
         }),
       );
 
@@ -1033,6 +1035,8 @@ describe("Discord verification state backlog", () => {
     const identity = await t.run(async (ctx) => {
       const userId = await ctx.db.insert("users", {
         clerkUserId: newClerkUserId(),
+        analyticsId: "abde12ef-abcd-4123-8abc-abcdef123456",
+        analyticsPreference: { choice: "on", changedAt: now, policyVersion: "2026-11-10", source: "account", revision: 1 },
         email: "oauth-claim-analytics@example.test",
         emailVerificationTime: now,
       });
@@ -1046,6 +1050,7 @@ describe("Discord verification state backlog", () => {
         analyticsJourneyId: "4d36e96e-34d9-4f7e-9fe1-72a98aa13077",
         analyticsEntrySource: "search",
         analyticsProfileType: "community",
+        analyticsBrowserRestriction: "on",
       },
     );
 
@@ -1091,6 +1096,7 @@ describe("Discord verification state backlog", () => {
         analyticsJourneyId: "4d36e96e-34d9-4f7e-9fe1-72a98aa13077",
         analyticsEntrySource: "search",
         analyticsProfileType: "community",
+        analyticsBrowserRestriction: "on",
       },
     );
     await assert.rejects(
@@ -1115,6 +1121,7 @@ describe("Discord verification state backlog", () => {
         analyticsJourneyId: "profile-basicbit",
         analyticsEntrySource: "search",
         analyticsProfileType: "community",
+        analyticsBrowserRestriction: "on",
       },
     );
     await t.run(async (ctx) => {
@@ -2102,6 +2109,8 @@ describe("claiming a community with a verified guild", () => {
     const seeded = await t.run(async (ctx) => {
       const clerkUserId20 = newClerkUserId();
       const userId = await ctx.db.insert("users", {
+        analyticsId: "abde12ef-abcd-4123-8abc-abcdef123456",
+        analyticsPreference: { choice: "on", changedAt: now, policyVersion: "2026-11-10", source: "account", revision: 1 },
         clerkUserId: clerkUserId20,
         email: "claimer@example.test",
         emailVerificationTime: now,
@@ -2162,6 +2171,7 @@ describe("claiming a community with a verified guild", () => {
       guildId: "777",
       analyticsJourneyId: "1c64ccbd-6240-47ec-8a9a-e6d265f13736",
       analyticsEntrySource: "account",
+      analyticsBrowserRestriction: "on",
     });
 
     // The link this claim wrote is the claimant's own assertion repeated back,

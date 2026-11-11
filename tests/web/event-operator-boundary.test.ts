@@ -16,6 +16,7 @@ function load(relative: string, dependencies: Record<string, unknown>) {
   const exports: Record<string, any> = {};
   vm.runInNewContext(outputText, { exports, require: (name: string) => {
     if (name in dependencies) return dependencies[name];
+    if (name === "./event-broadcast-quick-switch") return {EventBroadcastQuickSwitch:()=>null};
     if (name.startsWith('@/') || name.startsWith('.')) {
       const target = name.startsWith('@/') ? path.resolve('apps/web/src', name.slice(2)) : path.resolve(path.dirname(filename),name);
       for (const extension of ['', '.ts', '.tsx']) { try { readFileSync(target + extension); } catch { continue; }
@@ -27,7 +28,7 @@ function load(relative: string, dependencies: Record<string, unknown>) {
   }, Date, setInterval, clearInterval, performance });
   return exports;
 }
-const api = { eventMediaSources:{create:'create',replace:'replace',remove:'remove'},eventMediaSettings:{configure:'settings'}, events: { getEventMediaControlStatus: 'status', scheduleEventMediaWorker: 'start', queueEventMediaCommand: 'queue', stopEventMediaWorker: 'stop', configureEventBroadcastPolicy: 'policy', configureTwitchOutput: 'twitch', cancelEventMediaOperation:'cancel' } };
+const api = { eventMediaSources:{create:'create',replace:'replace',remove:'remove'},eventMediaSettings:{configure:'settings'}, events: { getEventMediaControlStatus: 'status', getNextEventMediaSource:'next', scheduleEventMediaWorker: 'start', queueEventMediaCommand: 'queue', stopEventMediaWorker: 'stop', configureEventBroadcastPolicy: 'policy', configureTwitchOutput: 'twitch', cancelEventMediaOperation:'cancel' } };
 function routeFixture({ token = 'jwt', authorized = true, eventPath = '/club/events/show', canControl = false } = {}) {
   const calls: string[] = [];
   const status = { eventPath, canControl };
@@ -61,12 +62,13 @@ function operatorFixture({ isAuthenticated = true, isLoading = false } = {}) {
   const React = webRequire('react');
   const status = { eventTitle: 'Show', eventPath: '/club/events/show', canControl: false, outputConfigurationLocked: false, serverNow: Date.now(), program: null, sessions: [], sources: [], outputs: [], commands: [], twitchAccounts: [] };
   const component = load('app/_components/event-operator-view.tsx', {
+    './event-broadcast-quick-switch': {EventBroadcastQuickSwitch:()=>null},
     'next/link': { default: (props: any) => React.createElement('a', props) },
-    'convex/react': { useConvexAuth: () => ({ isAuthenticated, isLoading }), useQuery: (ref: string, args: unknown) => { queries.push({ ref, args: JSON.parse(JSON.stringify(args)) }); if (args !== 'skip' && !isAuthenticated) throw Error('A signed-in user is required.'); return args === 'skip' ? undefined : status; }, useMutation: (ref: string) => async (args: any) => { requests.push({ ref, args }); } },
+    'convex/react': { useConvexAuth: () => ({ isAuthenticated, isLoading }), useQuery: (ref: string, args: unknown) => { queries.push({ ref, args: JSON.parse(JSON.stringify(args)) }); if (args !== 'skip' && !isAuthenticated) throw Error('A signed-in user is required.'); return args === 'skip' ? undefined : ref === 'next' ? null : status; }, useMutation: (ref: string) => async (args: any) => { requests.push({ ref, args }); } },
     '@convex-generated-api': { api },
     '@/lib/event-broadcast-observation': { eventBroadcastObservationFresh: () => false },
     '@/components/ui/button': { Button: ({ variant, size, ...props }: any) => React.createElement('button', props) },
-    '@/components/ui/page-shell': { PageContainer: ({ max, ...props }: any) => React.createElement('div', props), PageShell: (props: any) => React.createElement('div', props) },
+    '@/components/ui/page-shell': { PageNav: (props: any) => React.createElement('nav', props), BrandLink: () => null, PageContainer: ({ max, ...props }: any) => React.createElement('div', props), PageShell: (props: any) => React.createElement('div', props) },
     './viewer-local-event-times': { ViewerLocalEventDateTime: () => null },
     './event-host-view': { EventHostView: () => null },
   });
@@ -83,7 +85,7 @@ it('F3 rendered read-only controls disable every broadcast mutation', () => {
   const f = operatorFixture();
   const { renderToStaticMarkup } = webRequire('react-dom/server');
   const html: string = renderToStaticMarkup(f.React.createElement(f.component.EventOperatorControls, { status: f.status }));
-  for (const label of ['Next', 'Hold current', 'Cut to slate', 'Return to auto', 'Stop', 'Start', 'Save policy']) {
+  for (const label of ['Next', 'Hold current', 'Cut to slate', 'Return to auto', 'Stop', 'Save policy']) {
     assert.match(html, new RegExp(`<button[^>]*disabled=""[^>]*>${label}</button>`));
   }
   assert.match(html, /<fieldset[^>]*disabled=""/);
@@ -95,7 +97,8 @@ it('R2F1 terminal reserved output configuration stays disabled independently of 
   f.status.outputConfigurationLocked = true;
   const { renderToStaticMarkup } = webRequire('react-dom/server');
   const html: string = renderToStaticMarkup(f.React.createElement(f.component.EventOperatorControls, { status: f.status }));
-  assert.match(html, /<fieldset[^>]*disabled=""/);
+  assert.doesNotMatch(html, />Edit connection</);
+  assert.doesNotMatch(html, />Start<\/button>/);
 });
 
 it('an unresolved replacement subscription cannot restore initial permissions or private sources',()=>{
@@ -115,7 +118,7 @@ it('operator skips privileged status reads while Convex establishes or loses aut
     const f = operatorFixture({ isAuthenticated: false, isLoading });
     const tree = f.component.EventOperatorView({ currentSlug: 'show', initialStatus: { ...f.status, canControl: true } });
     assert.equal(tree, null);
-    assert.deepEqual(f.queries, [{ ref: 'status', args: 'skip' }]);
+    assert.deepEqual(f.queries, [{ ref: 'status', args: 'skip' }, {ref:'next',args:'skip'}]);
     assert.deepEqual(f.requests, []);
   }
 });
@@ -124,5 +127,5 @@ it('operator subscribes to the exact event only after Convex confirms authentica
   const f = operatorFixture();
   const tree = f.component.EventOperatorView({ currentSlug: 'show', initialStatus: f.status });
   assert.ok(tree);
-  assert.deepEqual(f.queries, [{ ref: 'status', args: { currentSlug: 'show' } }]);
+  assert.deepEqual(f.queries, [{ ref: 'status', args: { currentSlug: 'show' } }, {ref:'next',args:{currentSlug:'show'}}]);
 });

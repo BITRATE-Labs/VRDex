@@ -34,7 +34,7 @@ locals {
       Effect = "Allow", Action = "sts:AssumeRole", Principal = { Service = "lambda.amazonaws.com" }
     }]
   })
-  bridge_environment = {
+  bridge_environment = merge({
     CONVEX_URL                                = local.bridge.convex_url
     VRDEX_EVENT_MEDIA_ECS_REGION              = var.aws_region
     VRDEX_EVENT_MEDIA_ECS_CLUSTER             = aws_ecs_cluster.worker.arn
@@ -54,7 +54,9 @@ locals {
       VRDEX_RESTREAM_MAX_SESSION_SECONDS       = "43200"
       VRDEX_RESTREAM_MAX_CONCURRENT_WORKERS    = "1"
     })
-  }
+    }, local.managed_output_secret_arn_prefix == null ? {} : {
+    VRDEX_EVENT_OUTPUT_SECRET_ARN_PREFIX = local.managed_output_secret_arn_prefix
+  })
 }
 
 resource "aws_iam_role" "bridge" {

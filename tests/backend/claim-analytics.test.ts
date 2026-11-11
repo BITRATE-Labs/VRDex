@@ -25,6 +25,16 @@ const schema = (
 
 const journeyId = "4d36e96e-34d9-4f7e-9fe1-72a98aa13077";
 
+process.env.POSTHOG_DEPLOYMENT_CATEGORY = "staging";
+async function eligibleOwner(t: ReturnType<typeof convexTest>) {
+  const ownerUserId = await t.run(async (ctx) => ctx.db.insert("users", {
+    clerkUserId: "consenting-analytics-user",
+    analyticsId: "d667e1c5-94c6-48c5-93ea-ecb82e428f6a",
+    analyticsPreference: { choice: "on", changedAt: 1, policyVersion: "2026-11-10", source: "account", revision: 1 },
+  }));
+  return { ownerUserId, preferenceRevision: 1, analyticsId: "d667e1c5-94c6-48c5-93ea-ecb82e428f6a", deploymentCategory: "staging" as const };
+}
+
 describe("claim analytics outbox", () => {
   it("replaces a malformed client journey id instead of blocking the claim", () => {
     const analytics = claimAnalyticsContext("profile-basicbit", "search");
@@ -39,10 +49,11 @@ describe("claim analytics outbox", () => {
 
   it("deduplicates a lifecycle milestone and preserves only sanitized dimensions", async () => {
     const t = convexTest({ schema, modules });
+    const eligibility = await eligibleOwner(t);
     const now = Date.now();
 
-    await t.run(async (ctx) => {
-      const analytics = claimAnalyticsContext(journeyId, "search");
+    await t.withIdentity({ subject: "consenting-analytics-user" }).run(async (ctx) => {
+      const analytics = claimAnalyticsContext(journeyId, "search", "on");
       const milestone = {
         event: "claim_attempt_created" as const,
         profileType: "person" as const,
@@ -65,6 +76,8 @@ describe("claim analytics outbox", () => {
       [
         "$insert_id",
         "$process_person_profile",
+        "analytics_mode",
+        "deployment_category",
         "distinct_id",
         "entry_source",
         "journey_id",
@@ -80,8 +93,10 @@ describe("claim analytics outbox", () => {
 
   it("leases one event, dead-letters at the fast retry cap, and recovers it", async () => {
     const t = convexTest({ schema, modules });
+    const eligibility = await eligibleOwner(t);
     const now = Date.now();
     const outboxId = await t.run(async (ctx) => await ctx.db.insert("claimAnalyticsOutbox", {
+      ...eligibility,
       eventKey: `${journeyId}:claim_resolved`,
       journeyId,
       event: "claim_resolved",
@@ -135,8 +150,10 @@ describe("claim analytics outbox", () => {
 
   it("recovers disabled deliveries only after configuration returns", async () => {
     const t = convexTest({ schema, modules });
+    const eligibility = await eligibleOwner(t);
     const now = Date.now();
     const outboxId = await t.run(async (ctx) => await ctx.db.insert("claimAnalyticsOutbox", {
+      ...eligibility,
       eventKey: `${journeyId}:claim_attempt_created`,
       journeyId,
       event: "claim_attempt_created",
@@ -170,6 +187,7 @@ describe("claim analytics outbox", () => {
 
   it("reclaims an expired delivery lease ahead of a sustained pending backlog", async () => {
     const t = convexTest({ schema, modules });
+    const eligibility = await eligibleOwner(t);
     const now = Date.now();
     const expiredLeaseId = await t.run(async (ctx) => {
       const base = {
@@ -183,12 +201,14 @@ describe("claim analytics outbox", () => {
         nextAttemptAt: now - 60_000,
       };
       const id = await ctx.db.insert("claimAnalyticsOutbox", {
+      ...eligibility,
         ...base,
         eventKey: "expired-lease",
         state: "delivering",
         leaseUntil: now - 1,
       });
       await ctx.db.insert("claimAnalyticsOutbox", {
+      ...eligibility,
         ...base,
         eventKey: "pending-backlog",
         state: "pending",
@@ -203,6 +223,7 @@ describe("claim analytics outbox", () => {
 
   it("deletes terminal analytics rows past the retention window", async () => {
     const t = convexTest({ schema, modules });
+    const eligibility = await eligibleOwner(t);
     const now = Date.now();
     const { oldDeliveredId, oldFailedId } = await t.run(async (ctx) => {
       const base = {
@@ -216,34 +237,40 @@ describe("claim analytics outbox", () => {
         nextAttemptAt: now,
       };
       const oldDeliveredId = await ctx.db.insert("claimAnalyticsOutbox", {
+      ...eligibility,
         ...base,
         eventKey: "old-delivered",
         state: "delivered",
         deliveredAt: now - 31 * 24 * 60 * 60 * 1_000,
       });
       await ctx.db.insert("claimAnalyticsOutbox", {
+      ...eligibility,
         ...base,
         eventKey: "recent-delivered",
         state: "delivered",
         deliveredAt: now - 29 * 24 * 60 * 60 * 1_000,
       });
       const oldFailedId = await ctx.db.insert("claimAnalyticsOutbox", {
+      ...eligibility,
         ...base,
         eventKey: "old-failed",
         state: "failed",
       });
       await ctx.db.insert("claimAnalyticsOutbox", {
+      ...eligibility,
         ...base,
         eventKey: "recent-failed",
         occurredAt: now - 29 * 24 * 60 * 60 * 1_000,
         state: "failed",
       });
       await ctx.db.insert("claimAnalyticsOutbox", {
+      ...eligibility,
         ...base,
         eventKey: "old-disabled",
         state: "disabled",
       });
       await ctx.db.insert("claimAnalyticsOutbox", {
+      ...eligibility,
         ...base,
         eventKey: "old-pending",
         state: "pending",
@@ -265,6 +292,7 @@ describe("claim analytics outbox", () => {
 
   it("deletes detailed lifecycle events after the diagnostic retention window", async () => {
     const t = convexTest({ schema, modules });
+    const eligibility = await eligibleOwner(t);
     const now = Date.now();
     const oldId = await t.run(async (ctx) => {
       const userId = await ctx.db.insert("users", {
@@ -312,11 +340,14 @@ describe("claim analytics outbox", () => {
 
   it("aligns browser correlation with created, first-check, and terminal server milestones", async () => {
     const t = convexTest({ schema, modules });
+    const eligibility = await eligibleOwner(t);
     const now = Date.now();
     const clerkUserId = newClerkUserId();
     await t.run(async (ctx) => {
       await ctx.db.insert("users", {
         clerkUserId,
+        analyticsId: eligibility.analyticsId,
+        analyticsPreference: { choice: "on", changedAt: now, policyVersion: "2026-11-10", source: "account", revision: 1 },
         email: "claim-analytics@example.test",
         emailVerificationTime: now,
       });
@@ -348,6 +379,7 @@ describe("claim analytics outbox", () => {
       targetExternalId: "usr_01234567-89ab-cdef-0123-456789abcdef",
       analyticsJourneyId: journeyId,
       analyticsEntrySource: "search",
+      analyticsBrowserRestriction: "on",
     });
     assert.equal(attempt.analyticsJourneyId, journeyId);
     const duplicateJourneyId = "6d26f0c7-9427-46e0-b47d-a852d9389438";
@@ -394,9 +426,11 @@ describe("claim analytics outbox", () => {
 
   it("reports aggregate delivery failures without journey identifiers", async () => {
     const t = convexTest({ schema, modules });
+    const eligibility = await eligibleOwner(t);
     const now = Date.now();
     await t.run(async (ctx) => {
       await ctx.db.insert("claimAnalyticsOutbox", {
+      ...eligibility,
         eventKey: "opaque-test-key",
         journeyId,
         event: "claim_attempt_created",
@@ -416,6 +450,7 @@ describe("claim analytics outbox", () => {
       deliveringCount: 0,
       failedCount: 1,
       disabledCount: 0,
+      blockedDeletionCount: 0,
       oldestPendingAgeMs: null,
       scanLimitReached: false,
     });

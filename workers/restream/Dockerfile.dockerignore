@@ -1,0 +1,16 @@
+**
+!workers/
+!workers/restream/
+!workers/restream/**
+!scripts/
+!scripts/**
+!tests/
+!tests/backend/
+!tests/backend/*.ts
+!tests/fixtures/
+!tests/fixtures/*.json
+!tests/fixtures/*.mjs
+!tests/native/
+!tests/native/*.mjs
+!tests/scripts/
+!tests/scripts/*.mjs

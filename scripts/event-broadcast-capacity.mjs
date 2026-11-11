@@ -34,6 +34,9 @@ import {
   verifyMedia,
 } from "./event-capacity-media.mjs";
 import { runProofEnvelope } from "./event-proof-envelope.mjs";
+import {startCapturedRtmpReceiver,CAPTURED_TRANSPORT_ARTIFACTS} from './event-captured-transport.mjs';
+import {verifyCapturedMedia} from './event-captured-capacity-media.mjs';
+import {isCapturedTransportApplicable} from './event-captured-transport-artifacts.mjs';
 
 /** Runs only an isolated, synthetic, authenticated-metadata benchmark. The fixture
  * authority and local transport injection are never imported by production.
@@ -48,7 +51,7 @@ export async function runCapacityWorkload(
 ) {
   const directory = request.outputDir;
   const owner = createProcessOwner();
-  let worker, renderer, outputs, watchdog, poll, recording, recordingClosed;
+  let worker, renderer, outputs, watchdog, poll, recording, recordingClosed, transportCapture;
   let phase = "setup",
     readinessLosses = 0,
     maxCompressedBufferBytes = 0,
@@ -173,7 +176,11 @@ export async function runCapacityWorkload(
       })),
     };
     const ports = { vrcdn: 19681, twitch: 19682 };
-    for (const destination of destinations)
+    for (const destination of destinations) {
+      if(destination==='twitch'&&isCapturedTransportApplicable(request)) {
+        transportCapture=await startCapturedRtmpReceiver({directory,receiverPort:ports.twitch,settings:request.settings,durationSeconds:request.durationSeconds});
+        continue;
+      }
       owner.start(
         "ffmpeg",
         [
@@ -193,11 +200,12 @@ export async function runCapacityWorkload(
         ],
         { stdio: "ignore" },
       );
+    }
     outputs = createEventOutputs({
       configuration,
       spawnForDestination: (destination) => (cmd, args, opts) => {
         const local = [...args];
-        local[local.length - 1] = `rtmp://127.0.0.1:${ports[destination]}/live`;
+        local[local.length - 1] = destination==='twitch'&&transportCapture?transportCapture.proxyUrl:`rtmp://127.0.0.1:${ports[destination]}/live`;
         return owner.start(cmd, local, opts);
       },
       resolveCredential: (ref) =>
@@ -490,6 +498,7 @@ export async function runCapacityWorkload(
     clearInterval(watchdog);
     clearInterval(poll);
     await worker.stop();
+    if(transportCapture)receipt.capturedTransport=await transportCapture.drain();
     recording.end();
     await recordingClosed;
     // Receivers need SIGINT/TERM to close their muxes before offline inspection.
@@ -503,7 +512,7 @@ export async function runCapacityWorkload(
       receipt.outputs = [];
       for (const destination of destinations)
         receipt.outputs.push(
-          await verifyMedia(
+          await (destination==='twitch'&&transportCapture?verifyCapturedMedia:verifyMedia)(
             verifier,
             `${directory}/${destination}.ts`,
             request,
@@ -512,6 +521,7 @@ export async function runCapacityWorkload(
             references,
             internalDelayMs,
             selections,
+            destination==='twitch'?transportCapture:undefined,
           ),
         );
     } finally {
@@ -523,8 +533,10 @@ export async function runCapacityWorkload(
     receipt.maxDecoders = maxDecoders;
     receipt.maxAcquisitions = maxAcquisitions;
     receipt.artifacts = [];
-    for (const name of ["program.ts", ...destinations.map((d) => `${d}.ts`)]) {
+    let artifactBytes=0;
+    for (const name of ["program.ts", ...destinations.map((d) => `${d}.ts`),...(transportCapture?CAPTURED_TRANSPORT_ARTIFACTS:[])]) {
       const bytes = await readFile(`${directory}/${name}`);
+      artifactBytes+=bytes.length;if(artifactBytes>byteCap)throw Error('Evidence byte cap exceeded');
       receipt.artifacts.push({
         name,
         bytes: bytes.length,
@@ -587,6 +599,7 @@ export async function runCapacityWorkload(
       await worker?.stop();
       recording?.end();
       if (recordingClosed) await recordingClosed;
+      await transportCapture?.close();
       receipt.cleanup = await owner.close();
     } catch {
       receipt.cleanup = { closed: false };

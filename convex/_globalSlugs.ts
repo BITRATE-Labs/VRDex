@@ -20,6 +20,7 @@ export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
  * configured rewrites, and fails when a new one lands without being added here.
  */
 export const LIVE_ROUTE_SLUGS = [
+  "privacy",
   "account",
   "claim",
   "discover",
@@ -99,7 +100,6 @@ export const HELD_ROUTE_SLUGS = [
   "events",
   "oauth",
   "playwright",
-  "privacy",
   "about",
   "admin",
   "ads",

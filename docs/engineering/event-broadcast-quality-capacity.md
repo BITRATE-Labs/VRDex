@@ -1,9 +1,10 @@
 # Event broadcast quality and capacity
 
-Status: candidate implementation; measured production allocation is unavailable.
-No preset is admitted to a new production session until its checked-in evidence
-covers both audio settings and its frozen destination membership. Local media
-proofs are functional diagnostics, not Fargate capacity evidence.
+Status: 720p30 with 320-kbps audio is qualified at 8 CPU / 16 GiB for primary
+output alone or with optional Twitch simulcast. Other combinations remain
+unadmitted. Each admitted combination requires checked-in evidence for its
+exact image, settings and destination membership. Local media proofs are
+functional diagnostics, not Fargate capacity evidence.
 
 The [retained codec matrix](authority/reviews/codec-diagnostic/matrix/README.md)
 records twelve completed synthetic encodes, the reviewed CodeBuild setup fixes,
@@ -21,6 +22,32 @@ The [source qualification accounting](source-marker-qualification.md) describes
 the exact scope, mandatory amendment original and bounded resolver obligations.
 
 ## Required native CI coverage
+
+Complete-capture fixtures use finite media and an owned half-open relay. Every
+publisher byte reaches the capture unchanged. After the complete `Publish.Start`
+response, the relay owns the receiver's remaining controls. Publisher EOF
+finishes its outgoing stream; the relay consumes controls through receiver EOF.
+Publisher and receiver exits, physical closure, original
+RTMP parsing, decoded populations and lineage checks must all pass.
+
+Production Stop is a separate lifecycle guarantee: it fences input, unsubscribes
+and kills the sender. An arbitrary kill can split an RTMP message even when both
+sockets close cleanly. Stop tests verify that fence and cleanup; they do not
+promise a complete capture or a clock certificate. Truncated originals and
+broken connections must still reject.
+
+Finite capture positives exercise the production codec/mux recipe and strict
+provenance, rather than the sender's queue-to-certificate path. The separate
+native Stop case covers that sender's queue and fence; accepted capacity runs
+provide their own integrated sender, capture and decoder evidence. These scopes
+do not substitute for one another.
+
+Each capacity run must independently satisfy complete-tail acceptance. A prior
+accepted receipt does not guarantee that the next Stop yields a complete capture.
+An incomplete tail fails that run and remains failed. A later run cannot turn
+that receipt into accepted evidence. Guaranteed capture finalization would
+require separate proof lifecycle work without weakening the immediate
+publication fence.
 
 Every **Restream Local Checks** job builds the current production worker image
 and runs the full deterministic transport gate with network isolation. The
@@ -369,7 +396,8 @@ New exact-image transport, functional and capacity proof is still required.
 
 | Output | Audio | Destination | Allocation | Status |
 | --- | --- | --- | --- | --- |
-| 720p30 | 320 kbps | VRCDN only | 8 CPU / 16 GiB | Measured B0 synthetic baseline |
+| 720p30 | 320 kbps | VRCDN only | 8 CPU / 16 GiB | November 10 measured primary |
+| 720p30 | 320 kbps | VRCDN + Twitch | 8 CPU / 16 GiB | November 10 measured simulcast |
 | 720p30 | 160 kbps | VRCDN only | None | Failed marker verification |
 | All other combinations | Either | Either | None | Unproved |
 
@@ -378,15 +406,33 @@ Missing bitrate is invalid; there is no fallback between 160 and 320 kbps.
 The scheduler resolves the immutable session settings, and the ECS bridge checks
 those same settings against the measured allocation before registration.
 
-The [November 8 evidence](./evidence/twitch-operator-task6/bitrate-320-recovery-capacity.json)
-binds the current allocation to source `89e2811e`, immutable image `e51e2ac`,
-run `task6-bitrate-20261108-320-recovery-v4`, and recording hashes. Independent
-registry-layer reads verified all 134 packaged source files and 1,854 installed
-wheel payload files. The 320-kbps run completed 300 seconds of dual decode with
-no readiness loss, 31.22% CPU P95, full recording decode and clean process/cloud
-teardown.
+The [November 10 evidence](./evidence/twitch-operator-task6/broadcast-20261110-capacity.json)
+binds both allocations to source `63c6b361`, immutable image `8ded3a9`, and fresh
+primary and simulcast runs. Independent registry reads verified all 144 packaged
+source files and 1,854 payload files from 20 locked wheels. Primary completed
+300 seconds of dual decode at 30.77% CPU P95; simulcast completed 301 seconds at
+42.86%. Both had zero readiness losses, complete native recording decodes and
+confirmed process, task, network attachment and task-definition cleanup.
 
-A separate test of the same image used real media and local HTTP control. A
+The simulcast proof preserves the raw RTMP capture, encoded payloads, decoded
+audio and video, timestamp metadata and the complete joint-origin domain.
+Independent replay matched all four decoded data channels. The original marker
+limits and native ProgramClock remain unchanged. Its predeclared fixture wait
+only aligns the first resource read with a quiet part of standby B; acceptance
+also requires the actual B take to avoid the pulse and report no carry-in marker.
+The known SPS buffering-period decoder warning is retained. This is measured
+capacity with local receivers, not live Twitch delivery or universal player
+compatibility. See the [captured transport contract](./captured-broadcast-transport.md).
+
+The same image also acquired the public MDN flower MP4 through the real HTTPS
+relay, input manager and renderer. The finite clip reached EOF, both recordings
+passed independent full native decoding, and a selected-source frame was checked.
+This functional check grants no additional capacity profile.
+
+The [November 8 evidence](./evidence/twitch-operator-task6/bitrate-320-recovery-capacity.json)
+remains historical evidence for image `e51e2ac`. It does not qualify the new image.
+
+A separate November 8 test used real media and local HTTP control. A
 3-second request timeout recovered within the unchanged authority window while
 encoded output advanced. Both Stop paths awaited command acknowledgment;
 explicit denial and lease expiry fenced publication. All four recordings passed
@@ -398,7 +444,7 @@ remains historical evidence. Its 160-kbps run failed with `unknown_competitor`,
 despite 32.13% CPU P95 and no readiness loss. It remains rejected, as do all
 earlier failed runs.
 
-The accepted inputs are H264 1080p60 **without B-frames**, continuously encoded
+The measured inputs are H264 1080p60 **without B-frames**, continuously encoded
 AAC, and two synthetic sources. This is not worst-case capacity for arbitrary
 H264 inputs. The actual two-source B2 operational rehearsal remains required
 before live acceptance. Provider delivery and live-user acceptance are separate.
@@ -407,7 +453,16 @@ Release order matters: deploy and verify the matching ECS dispatcher bundle
 before merging this admission change, because merging automatically deploys
 Convex. Keep the measured worker image pinned. These admission files are excluded
 from that image, so this change does not alter its measured runtime bytes.
-No deployment is performed by the source PR.
+Keep dispatch paused through matching dispatcher deployment, backend admission,
+protocol migration and the private connection test. Explicit dispatcher passes
+can service that test while the schedule is paused. Resume scheduled dispatch
+only after the test's provider task cleanup is confirmed.
+
+Stream settings offer only the measured 720p30/320-kbps program profile. Existing
+unsupported saved settings remain visible until the operator selects that
+profile; Save stays disabled until all three fields match. The backend still
+validates allocation independently at Start. Broader encoder and benchmark
+schemas remain available for future qualification.
 
 ## Reproducing the isolated Stop and recovery proof
 
@@ -569,6 +624,11 @@ quality, resource, cleanup and artifact gates still apply. The production
 capacity map remained empty at that checkpoint. See the measured allocation status above for the later scoped result.
 
 ## Source-identified proof candidate
+
+The ordinary Twitch capacity path also requires
+[captured transport clock verification](./captured-broadcast-transport.md) for
+its millisecond FLV timestamps and copied MPEG-TS recording. That evidence has a
+separate scope from the native source-marker qualification below.
 
 The next proof schema uses independent700/1300-Hz source identity, original integer
 PTS, complete interval accounting and strict compact evidence. Its explicit image

@@ -10,6 +10,41 @@ import { newClerkUserId } from "./_clerkTestIdentity";
 
 const schema = (schemaModule as unknown as { default?: typeof schemaModule }).default ?? schemaModule;
 const input = { kind: "twitch", channel: "basic_bit" } as const;
+test("quick-source retries reuse one authorized source and reject changed payloads", async () => {
+  const {t,owner,event} = await fixture();
+  const args = {currentSlug:event.slug,label:"Guest",url:"vrcdn:alpha",idempotencyKey:"11111111-1111-4111-8111-111111111111"};
+  const first = await owner.mutation(sourceMutation("create"),args);
+  const retry = await owner.mutation(sourceMutation("create"),args);
+  assert.deepEqual(retry,first);
+  assert.equal((await t.run(({db})=>db.query("eventMediaSources").collect())).length,1);
+  await assert.rejects(owner.mutation(sourceMutation("create"),{...args,url:"vrcdn:other"}),/idempotency/i);
+});
+test("confirmed source removal rejects a stale revision without disabling the source", async () => {
+  const {t,owner,event} = await fixture();
+  const created = await owner.mutation(sourceMutation("create"),{currentSlug:event.slug,label:"Guest",url:"vrcdn:alpha"});
+  await assert.rejects(owner.mutation(sourceMutation("remove"),{currentSlug:event.slug,sourceId:created.sourceId,expectedSourceRevision:2}),/changed/i);
+  assert.equal((await t.run(({db})=>db.get(created.sourceId)))?.state,"ready");
+});
+test("temporary checks expire while preserving a selected source", async (test) => {
+  test.mock.timers.enable({apis:["setTimeout"]});
+  const {t,owner,event} = await fixture();
+  const created = await owner.mutation(sourceMutation("create"), {currentSlug:event.slug,label:"Guest",url:"vrcdn:alpha",temporary:true});
+  await t.run(async ({db}) => {
+    const source = (await db.get(created.sourceId))!;
+    await db.patch(source._id, {temporaryExpiresAt:Date.now()-1});
+    const sessionId = await db.insert("eventMediaSessions", {programId:source.programId,eventId:source.eventId,status:"live",committedIntent:{kind:"manual",sourceId:source._id,revision:1},createdAt:Date.now(),updatedAt:Date.now()});
+    await db.patch(source.programId,{activeSessionId:sessionId});
+  });
+  await t.mutation(sourceMutation("expireTemporary"), {sourceId:created.sourceId});
+  assert.equal((await t.run(({db})=>db.get(created.sourceId)))?.state,"ready");
+  await t.run(async ({db}) => {
+    const source=(await db.get(created.sourceId))!;
+    const program=(await db.get(source.programId))!;
+    await db.patch(program.activeSessionId!,{status:"ended"});
+  });
+  await t.mutation(sourceMutation("expireTemporary"), {sourceId:created.sourceId});
+  assert.equal((await t.run(({db})=>db.get(created.sourceId)))?.state,"disabled");
+});
 const startAt = Date.UTC(2027, 9, 15, 18);
 const sourceMutation = (name: string) => makeFunctionReference<"mutation">(`eventMediaSources:${name}`);
 async function fixture() {
@@ -38,7 +73,7 @@ test("canonical broadcast inputs normalize provider references and reject fetch 
   assert.equal(broadcastInputKey({ kind: "twitch", channel: "basic_bit" }), "twitch:basic_bit");
   assert.deepEqual(parseBroadcastInputUrl("https://www.twitch.tv/Basic_Bit/"), input);
   assert.deepEqual(parseBroadcastInputUrl("https://panel.vrcdn.live/preview/alpha"), { kind: "vrcdn", streamId: "alpha" });
-  for (const value of ["https://twitch.tv/videos", "https://twitch.tv/directory", "https://twitch.tv/basic_bit?token=secret", "https://user@twitch.tv/basic_bit", "https://twitch.tv:444/basic_bit", "https://twitch.tv/basic_bit/videos", "https://evil.test/live.ts", "https://stream.vrcdn.live/live/alpha.mp4"]) assert.throws(() => parseBroadcastInputUrl(value));
+  for (const value of ["https://twitch.tv/videos", "https://twitch.tv/directory", "https://twitch.tv/basic_bit?token=secret", "https://user@twitch.tv/basic_bit", "https://twitch.tv:444/basic_bit", "https://twitch.tv/basic_bit/videos", "https://evil.test/live.ts"]) assert.throws(() => parseBroadcastInputUrl(value));
 });
 
 test("resolution preserves explicit and legacy choices and never falls through unavailable inputs", async () => {
@@ -257,9 +292,9 @@ test("deployment-owned endpoint descriptors reach the guarded relay without inve
     assert.equal((await fetch(privateDns.resolveSource(source))).status, 502);
     assert.equal(privateRequests, 0);
     assert.throws(() => validateSourceEndpoint("https://127.0.0.1/source.ts", ["https://127.0.0.1/source.ts"]), /not public/);
-    await assert.rejects(owner.mutation(sourceMutation("create"), { currentSlug: event.slug, label: "Not public input", url: source.publicUrl }), /canonical/);
+    await assert.rejects(owner.mutation(sourceMutation("create"), { currentSlug: event.slug, label: "Not public input", url: source.publicUrl }), /public HTTPS video link/);
     const canonical = await owner.mutation(sourceMutation("create"), { currentSlug: event.slug, label: "Canonical", url: "vrcdn:alpha" });
-    await assert.rejects(owner.mutation(sourceMutation("replace"), { currentSlug: event.slug, sourceId: canonical.sourceId, label: "Not public input", url: source.publicUrl }), /canonical/);
+    await assert.rejects(owner.mutation(sourceMutation("replace"), { currentSlug: event.slug, sourceId: canonical.sourceId, label: "Not public input", url: source.publicUrl }), /public HTTPS video link/);
   } finally { relay.stop(); unauthorized.stop(); privateDns.stop(); }
 });
 
@@ -383,4 +418,18 @@ for (const unavailable of ["flagged", "detached", "private profile", "removed in
   });
   const status = await owner.query(api.events.getEventMediaControlStatus, { currentSlug: event.slug });
   assert.deepEqual(status.sources.map(row => row.sourceId), [current.sourceId]);
+});
+test("direct-media sources persist canonical input and reach the worker descriptor", async () => {
+  const { eventMediaSourceWorkerDescriptor } = await import("../../convex/_eventBroadcastSources");
+  const { t, owner, event } = await fixture();
+  for (const extension of ["mp4", "webm", "ts", "m3u8"]) {
+    const url = `https://media.example.org/clip.${extension}`;
+    const result = await owner.mutation(sourceMutation("create"), { currentSlug: event.slug, label: "Video", url });
+    const row = (await t.run(ctx => ctx.db.get(result.sourceId)))!;
+    assert.deepEqual(row.input, { kind: "direct_media", url });
+    assert.equal(row.publicUrl, url);
+    const descriptor = eventMediaSourceWorkerDescriptor(row);
+    assert.deepEqual(descriptor?.input, { kind: "direct_media", url });
+    assert.equal(descriptor?.publicUrl, url);
+  }
 });

@@ -52,12 +52,12 @@ for (const p of Object.keys(VIDEO_PROFILES))
 for (const videoPreset of Object.keys(VIDEO_PROFILES))
   for (const audioBitrateKbps of [160, 320])
     for (const simulcastEnabled of [false, true])
-      test(`production ${videoPreset}/${audioBitrateKbps}/${simulcastEnabled} admits only the measured profile`, () => {
+      test(`production ${videoPreset}/${audioBitrateKbps}/${simulcastEnabled} admits only measured profiles`, () => {
         const input = { videoPreset, audioBitrateKbps, simulcastEnabled };
-        if (videoPreset === "720p30" && audioBitrateKbps === 320 && !simulcastEnabled) {
+        if (videoPreset === "720p30" && audioBitrateKbps === 320) {
           assert.deepEqual(resolveWorkerAllocation(input), {
             cpuUnits: 8192, memoryMiB: 16384,
-            evidenceId: "task6-bitrate-20261108-320-recovery-v4",
+            evidenceId: simulcastEnabled ? "task6-br447-twitch-20261110h" : "task6-br447-primary-20261110g",
           });
         } else assert.throws(() => resolveWorkerAllocation(input), /unproved/i);
       });

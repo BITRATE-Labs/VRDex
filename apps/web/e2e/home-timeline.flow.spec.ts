@@ -3,6 +3,7 @@ import {
   test,
   TIMELINE_NOW,
   changeTimelineFixture,
+  loadCompleteSchedule,
 } from "./home-timeline-fixture";
 import { waitForPublicSearchHydration } from "./public-search-fixture";
 async function saveInInspector(page: Page, title: string, performer?: string) {
@@ -26,11 +27,7 @@ test.describe("continuous schedule @flow @fixture", () => {
     await expect(
       page.getByRole("heading", { name: "Schedule", exact: true }),
     ).toBeVisible();
-    await expect(page.getByLabel("Schedule data state")).toHaveAttribute(
-      "data-state",
-      "ready",
-      { timeout: 20000 },
-    );
+    await loadCompleteSchedule(page);
   });
   test("dateOnlyRecordsRemainDiscoverableWithoutAgenda", async ({ page, timelineFixture }) => {
     await page.goto(`/?at=${TIMELINE_NOW - 3600000}&tz=America%2FNew_York&scheduleView=agenda&tag=a&tag=b`);
@@ -1071,10 +1068,7 @@ test.describe("continuous schedule @flow @fixture", () => {
         });
       });
       await page.reload();
-      await expect(page.getByLabel("Schedule data state")).toHaveAttribute(
-        "data-state",
-        "ready",
-      );
+      await loadCompleteSchedule(page);
 
       await page
         .getByRole("button", {

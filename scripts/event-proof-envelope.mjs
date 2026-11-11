@@ -3,6 +3,7 @@ import { createReadStream, createWriteStream } from "node:fs";
 import { readFile, writeFile, stat, readdir, mkdir } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import { createProcessOwner, processTable } from "./event-proof-processes.mjs";
+import {CAPTURED_TRANSPORT_ARTIFACTS,CAPTURED_TRANSPORT_ARTIFACT_LIMITS} from './event-captured-transport-artifacts.mjs';
 export const PRIVATE_PROOF_ROOT =
   "s3://vrdex-restream-worker-079358094174-artifacts/synthetic-benchmarks";
 /** No raw logs or recursive directory uploads. Recordings are split, hashed and
@@ -119,7 +120,7 @@ export async function runProofEnvelope({
       exitCode = 1;
     let total = 0;
     const names = (await readdir(directory)).filter((name) =>
-      /^(program|vrcdn|twitch)\.ts$|^(receipt\.json|samples\.ndjson|transport-receipt\.json)$/.test(
+      CAPTURED_TRANSPORT_ARTIFACTS.includes(name)||/^(program|vrcdn|twitch)\.ts$|^(receipt\.json|samples\.ndjson|transport-receipt\.json)$/.test(
         name,
       ),
     );
@@ -132,7 +133,7 @@ export async function runProofEnvelope({
       if (
         total > byteCap ||
         !info.isFile() ||
-        (!name.endsWith(".ts") && info.size > 8 * 1048576)
+        (!name.endsWith(".ts") && info.size > (CAPTURED_TRANSPORT_ARTIFACT_LIMITS[name]??8*1048576))
       )
         throw Error("Evidence byte cap exceeded");
       if (name.endsWith(".ts") && info.size === 0)
