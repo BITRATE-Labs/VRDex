@@ -169,6 +169,8 @@ import type * as _worldPublic from "../_worldPublic.js";
 import type * as _worldSlugs from "../_worldSlugs.js";
 import type * as accountFeatureGrants from "../accountFeatureGrants.js";
 import type * as accounts from "../accounts.js";
+import type * as analyticsDeletion from "../analyticsDeletion.js";
+import type * as analyticsGuest from "../analyticsGuest.js";
 import type * as analyticsPreferences from "../analyticsPreferences.js";
 import type * as apiPlatformObservability from "../apiPlatformObservability.js";
 import type * as apiRateLimitEvents from "../apiRateLimitEvents.js";
@@ -441,6 +443,8 @@ declare const fullApi: ApiFromModules<{
   _worldSlugs: typeof _worldSlugs;
   accountFeatureGrants: typeof accountFeatureGrants;
   accounts: typeof accounts;
+  analyticsDeletion: typeof analyticsDeletion;
+  analyticsGuest: typeof analyticsGuest;
   analyticsPreferences: typeof analyticsPreferences;
   apiPlatformObservability: typeof apiPlatformObservability;
   apiRateLimitEvents: typeof apiRateLimitEvents;

@@ -47,6 +47,48 @@ Each extraction run that reaches the model (extraction enabled and
 through `productAnalyticsOutbox` with the existing `POSTHOG_PROJECT_API_KEY`;
 no new PostHog variable is needed.
 
+## PostHog withdrawal authorization
+
+`POSTHOG_API_KEY` is the existing server management key, also used by the PostHog
+Terraform workflow. The production backend deployment copies the repository
+secret of that name into Convex through standard input. It never enters a web
+bundle. The ingestion key remains separate and cannot authorize deletion.
+
+`POSTHOG_PROJECT_ID` identifies the target project. Production uses repository
+variable `POSTHOG_PROJECT_ID`, defaulting to the existing VRDex project 447783.
+`POSTHOG_MANAGEMENT_HOST` defaults to `https://us.posthog.com`; other regions or
+self-hosted installations must set their own HTTPS API origin. Requests refuse
+redirects. Self-hosters supply their own key and project, never BASIC's values.
+
+Owner: BASIC. The management key needs access to that project and person write
+permission, which includes the reads used to verify deletion status. Reuse one
+normal server key rather than creating a credential for each operation. Rotation:
+replace `POSTHOG_API_KEY` in the repository secret store, run the backend deploy,
+verify requests leave `blocked_authorization`, then revoke the old key. Existing
+manual Convex installations can replace the corresponding server secret directly.
+
+The worker processes one saved withdrawal per action and schedules the next due
+request. A five-minute sweep recovers interrupted delivery. It polls accepted
+requests hourly. Five transient failures leave a retained `failed` request for
+operator attention. After fixing the cause, use internal
+`analyticsDeletion.retryFailed` with the exact request ID. Authorization failures
+remain blocked and retry hourly. Aggregate counts are exposed by
+`claimAnalytics.deliveryOperationalHealth`; they contain no visitor identifiers.
+Completed mappings and associated withdrawn guest receipts expire after 30 days.
+Pending, accepted, blocked and failed targets are never swept.
+
+Guest On uses the existing web-to-Convex admin path and shared `public_write` IP
+rate limit to issue a random ID and withdrawal receipt. Convex retains only the
+receipt hash. Guest Off stops capture immediately, queues deletion with that
+receipt, and retains it in browser storage until the queue accepts it. A failed
+request retries on the next visit, reconnect, or explicit save. Re-enablement
+waits for that acceptance before creating another guest identity. No additional
+signing secret or public arbitrary-ID deletion endpoint is introduced.
+
+This configuration prepares withdrawal handling. It does not enable browser
+collection or project recording. See [activation](posthog-foundation-activation.md)
+for the remaining hosted evidence and policy acceptance.
+
 No hosted write, deployment, migration, model call, or production storage test
 is implied by the local adapter tests.
 

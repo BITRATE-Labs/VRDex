@@ -2,7 +2,7 @@
 
 Implementation branch, November 10, 2026. Production activation is not authorized.
 
-The changeset adds the shared Off/On control, opaque account analytics identity, mode-aware browser capture, backend consent enforcement and production-only reporting filters. Limited is internal and its collection remains unenabled pending eligibility. Runtime provider deletion, hosted acceptance and exact public copy remain incomplete activation dependencies.
+The changeset adds the shared Off/On control, opaque account analytics identity, mode-aware browser capture, backend consent enforcement and production-only reporting filters. Limited is internal and its collection remains unenabled pending eligibility. The withdrawal follow-up adds the worker and guest ownership proof. Hosted provider deletion, authenticated acceptance and exact public copy remain activation dependencies.
 
 ## Verified boundaries
 
@@ -22,7 +22,13 @@ Limited's eligibility without prior consent and provider contractual reuse condi
 
 ## Withdrawal
 
-Executor discovers `persons-bulk-delete`, accepting distinct IDs with `delete_events` and `delete_recordings`. It is irreversible and returns 202 for an asynchronous deletion request. No deletion was executed. Runtime backend management authorization is not established by the ingestion key or the operator's Executor connection. Activation requires a working supported backend authorization route and acknowledgement/retry evidence. No new credential is created by this changeset.
+Executor discovers `persons-bulk-delete`, accepting distinct IDs with `delete_events` and `delete_recordings`. It is irreversible and returns 202 for an asynchronous deletion request. The follow-up worker resolves the exact person, retains that target before submission, validates both queue acknowledgements and `deletion_errors`, and polls exact person status before marking completion. Missing matches or status are not treated as successful deletion. A lease recovers crashed delivery; failures retain the target and expose aggregate operational counts. Completed mappings and withdrawn guest receipts expire after 30 days.
+
+The follow-up reuses the existing repository `POSTHOG_API_KEY` through the backend deployment workflow. No new key is created or read into chat. Runtime management authorization is not established by the ingestion key or operator Executor connection. Hosted provisioning and real-provider synthetic deletion are still pending; no live deletion is claimed.
+
+Guest deletion is authorized by a separate 256-bit receipt, stored only as a hash on the server. Its endpoint reuses the internal Convex client and shared IP limiter, rejects cross-origin/oversized requests and cannot accept an arbitrary deletion target. Browser storage and Web Locks preserve receipt ownership across reload and tabs. Failed withdrawal keeps the receipt until server queue acceptance; re-enablement creates a new guest ID. Guest person profiles remain separate from authenticated account identities.
+
+November 11 follow-up evidence: 44 synthetic analytics/playback browser cases pass on desktop and mobile. The new regression verifies the emitted guest ID matches its receipt, survives reload, stops on Off, retries after a failed withdrawal and changes on re-enablement. Focused backend/web checks cover leases, stale workers, provider acknowledgements/status, ownership, failure bounds and completed-only cleanup. Provider traffic is intercepted throughout these tests.
 
 ## Evidence
 

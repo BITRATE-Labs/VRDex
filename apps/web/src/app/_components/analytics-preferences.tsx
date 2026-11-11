@@ -9,11 +9,13 @@ import { Button } from "@/components/ui/button";
 import { ANALYTICS_CHOICE_KEY, ANALYTICS_OFFER_KEY, ANALYTICS_POLICY_VERSION, analyticsAccountMatches, parseAnalyticsChoice, resolveAnalyticsMode, type AnalyticsChoice, type AnalyticsMode } from "@/lib/analytics-preference";
 import { parseDeploymentCategory } from "@/lib/analytics-capture";
 import { ANALYTICS_FOUNDATION_ENABLED, ANALYTICS_CHOICE_OWNER_KEY, analyticsChoiceOwnerMatches } from "@/lib/analytics-preference";
+import { ensureGuestReceipt, withdrawGuestReceipt, type GuestReceipt } from "@/lib/analytics-guest";
 
 type AccountState = { resolved: boolean; choice?: AnalyticsChoice; analyticsId?: string; revision?: number; userId?: string };
 type Preferences = {
   mode: AnalyticsMode | undefined;
   analyticsId?: string;
+  guestAnalyticsId?: string;
   identityKey?: string;
   open: () => void;
   pauseRef: { current: (withdraw?: boolean) => void };
@@ -89,6 +91,8 @@ function EnabledAnalyticsPreferencesProvider({ children }: { children: ReactNode
   const [visible, setVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
+  const [guest, setGuest] = useState<GuestReceipt>();
+  const browserRevision = useRef(0);
   const pauseRef = useRef<(withdraw?: boolean) => void>(() => {});
   const saveRef = useRef<((choice: AnalyticsChoice) => Promise<void>) | undefined>(undefined);
   const mounted = useRef(true);
@@ -115,6 +119,7 @@ function EnabledAnalyticsPreferencesProvider({ children }: { children: ReactNode
       if (event.key !== ANALYTICS_CHOICE_KEY) return;
       const next = parseAnalyticsChoice(event.newValue);
       if (next === undefined) return;
+      browserRevision.current++;
       setChoice((current) => {
         if (current !== next) pauseRef.current(next === "off");
         return next;
@@ -123,6 +128,20 @@ function EnabledAnalyticsPreferencesProvider({ children }: { children: ReactNode
     window.addEventListener("storage", sync);
     return () => { mounted.current = false; window.removeEventListener("storage", sync); };
   }, []);
+  useEffect(() => {
+    if (mode === "off") {
+      setGuest(undefined);
+      const retry = () => { void withdrawGuestReceipt().catch(() => {}); };
+      retry();
+      window.addEventListener("online", retry);
+      return () => window.removeEventListener("online", retry);
+    }
+    if (mode !== "full" || account.userId) return;
+    let cancelled = false;
+    void ensureGuestReceipt().then((receipt) => { if (!cancelled) setGuest(receipt); })
+      .catch(() => { if (!cancelled) { setError(true); setVisible(true); } });
+    return () => { cancelled = true; };
+  }, [mode, account.userId]);
   const updateAccount = useCallback((state: AccountState) => {
     accountIdentityRef.current = state.userId;
     setAccount((current) => {
@@ -147,9 +166,11 @@ function EnabledAnalyticsPreferencesProvider({ children }: { children: ReactNode
   const save = async (next: AnalyticsChoice) => {
     if (saving || (!account.resolved && next === "on")) return;
     const savingFor = account.userId;
+    const savingRevision = browserRevision.current;
     setSaving(true);
     setError(false);
     if (next === "off") {
+      browserRevision.current++;
       pauseRef.current(true);
       setChoice("off");
       try { localStorage.setItem(ANALYTICS_CHOICE_KEY, "off"); } catch { /* Retain in-memory restriction. */ }
@@ -157,6 +178,12 @@ function EnabledAnalyticsPreferencesProvider({ children }: { children: ReactNode
     if (!account.resolved) { setError(true); setSaving(false); return; }
     try {
       await saveRef.current?.(next);
+      if (next === "off") await withdrawGuestReceipt();
+      else if (!savingFor) {
+        const receipt = await ensureGuestReceipt();
+        if (browserRevision.current !== savingRevision) return;
+        setGuest(receipt);
+      }
       if (!mounted.current || accountIdentityRef.current !== savingFor) return;
       localStorage.setItem(ANALYTICS_CHOICE_OWNER_KEY, savingFor ?? "guest");
       localStorage.setItem(ANALYTICS_CHOICE_KEY, next);
@@ -174,7 +201,9 @@ function EnabledAnalyticsPreferencesProvider({ children }: { children: ReactNode
       focusOnOpenRef.current = false;
     }
   }, [visible]);
-  return <Context.Provider value={{ mode, analyticsId: account.analyticsId, identityKey: `${account.userId ?? "guest"}:${account.revision ?? 0}`, open: () => {
+  return <Context.Provider value={{ mode: mode === "full" && !(account.userId ? account.analyticsId : guest?.analyticsId) ? undefined : mode,
+    analyticsId: account.analyticsId, guestAnalyticsId: account.userId ? undefined : guest?.analyticsId,
+    identityKey: `${account.userId ?? guest?.analyticsId ?? "guest"}:${account.revision ?? 0}`, open: () => {
     returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     focusOnOpenRef.current = true;
     setVisible(true);

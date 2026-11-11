@@ -48,7 +48,7 @@ function pauseCapture(withdraw = false) {
   client.clear_opt_in_out_capturing();
 }
 
-function initializeClient(token: string, mode: "limited" | "full", analyticsId: string | undefined, onReady: (client: PostHog) => void) {
+function initializeClient(token: string, mode: "limited" | "full", analyticsId: string | undefined, guestAnalyticsId: string | undefined, onReady: (client: PostHog) => void) {
   const client = new PostHog();
   if (!guardAnalyticsRequests(client, () => activeClient === client && activeMode === mode)) return undefined;
   activeClient = client;
@@ -56,8 +56,8 @@ function initializeClient(token: string, mode: "limited" | "full", analyticsId: 
   client.init(token, {
     api_host: "/ingest", ui_host: "https://us.posthog.com", defaults: "2025-05-24",
     persistence: mode === "full" ? "localStorage" : "memory",
-    person_profiles: mode === "full" ? "identified_only" : "never",
-    bootstrap: mode === "full" && analyticsId ? { distinctID: analyticsId, isIdentifiedID: true } : undefined,
+    person_profiles: mode === "full" ? "always" : "never",
+    bootstrap: mode === "full" && (analyticsId || guestAnalyticsId) ? { distinctID: analyticsId ?? guestAnalyticsId, isIdentifiedID: true } : undefined,
     capture_pageview: false, capture_pageleave: false, autocapture: false,
     disable_session_recording: true, advanced_disable_flags: mode !== "full",
     opt_out_capturing_by_default: mode === "full",
@@ -85,7 +85,7 @@ function initializeClient(token: string, mode: "limited" | "full", analyticsId: 
 }
 
 export function PostHogProvider({ children }: { children: ReactNode }) {
-  const { mode, analyticsId, identityKey, pauseRef } = useAnalyticsPreferences();
+  const { mode, analyticsId, guestAnalyticsId, identityKey, pauseRef } = useAnalyticsPreferences();
   const [client, setClient] = useState<PostHog>(posthog);
   useLayoutEffect(() => {
     pauseRef.current = pauseCapture;
@@ -96,20 +96,21 @@ export function PostHogProvider({ children }: { children: ReactNode }) {
       return;
     }
     // A new instance prevents retired queues and recording buffers from joining a later consent session.
-    const next = initializeClient(key, mode, analyticsId, setClient);
+    const next = initializeClient(key, mode, analyticsId, guestAnalyticsId, setClient);
     if (!next) return;
     const identityChanged = previousIdentity !== undefined && previousIdentity !== identityKey;
     const modeChanged = previousMode !== undefined && previousMode !== mode;
+    const captureId = analyticsId ?? guestAnalyticsId;
     next.set_config({ advanced_disable_flags: mode !== "full" });
-    if (identityChanged || modeChanged || (analyticsId && next.get_distinct_id() !== analyticsId)
-      || (!analyticsId && next.get_property("$user_id"))) next.reset(true);
+    if (identityChanged || modeChanged || (captureId && next.get_distinct_id() !== captureId)
+      || (!captureId && next.get_property("$user_id"))) next.reset(true);
     previousIdentity = identityKey;
     previousMode = mode;
     activeMode = mode;
     activeClient = next;
     next.register({ deployment_category: category, analytics_mode: mode });
     if (mode === "full") next.opt_in_capturing({ captureEventName: false });
-    if (mode === "full" && analyticsId) next.identify(analyticsId);
+    if (mode === "full" && captureId) next.identify(captureId);
     next.set_config({ autocapture: mode === "full", capture_pageleave: mode === "full", disable_session_recording: mode !== "full" });
     next.capture("$pageview");
     if (mode === "full") {
@@ -124,6 +125,6 @@ export function PostHogProvider({ children }: { children: ReactNode }) {
       next.reloadFeatureFlags();
     }
     return pauseCapture;
-  }, [mode, analyticsId, identityKey, pauseRef]);
+  }, [mode, analyticsId, guestAnalyticsId, identityKey, pauseRef]);
   return <Provider client={client}><Suspense><NavigationCapture /></Suspense>{children}</Provider>;
 }

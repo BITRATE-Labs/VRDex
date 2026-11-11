@@ -39,7 +39,7 @@ export const set = mutation({
         .withIndex("by_analyticsId", (q) => q.eq("analyticsId", analyticsId)).unique();
       if (!existing) await ctx.db.insert("analyticsDeletionRequests", {
         ownerUserId: user._id, analyticsId, requestedAt: Date.now(),
-        // shortcut: activation requires runtime management authorization and a supported deletion worker.
+        // The worker admits requests only when server management authorization is configured.
         state: "blocked_authorization",
       });
     }

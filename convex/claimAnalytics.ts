@@ -222,9 +222,11 @@ export const deliveryOperationalHealth = internalQuery({
       ),
     );
     const [pending, delivering, failed, disabled] = rowsByState;
-    const blockedDeletions = await ctx.db.query("analyticsDeletionRequests")
-      .withIndex("by_state", (q) => q.eq("state", "blocked_authorization"))
-      .take(HEALTH_SCAN_LIMIT + 1);
+    const deletionsByState = await Promise.all(
+      (["blocked_authorization", "pending", "delivering", "accepted", "failed"] as const).map((state) =>
+        ctx.db.query("analyticsDeletionRequests").withIndex("by_state", (q) => q.eq("state", state)).take(HEALTH_SCAN_LIMIT + 1)),
+    );
+    const [blockedDeletions, pendingDeletions, deliveringDeletions, acceptedDeletions, failedDeletions] = deletionsByState;
     const oldestOutstanding = [...pending, ...delivering]
       .sort((left, right) => left.occurredAt - right.occurredAt)[0];
 
@@ -234,11 +236,15 @@ export const deliveryOperationalHealth = internalQuery({
       failedCount: Math.min(failed.length, HEALTH_SCAN_LIMIT),
       disabledCount: Math.min(disabled.length, HEALTH_SCAN_LIMIT),
       blockedDeletionCount: Math.min(blockedDeletions.length, HEALTH_SCAN_LIMIT),
+      pendingDeletionCount: Math.min(pendingDeletions.length, HEALTH_SCAN_LIMIT),
+      deliveringDeletionCount: Math.min(deliveringDeletions.length, HEALTH_SCAN_LIMIT),
+      acceptedDeletionCount: Math.min(acceptedDeletions.length, HEALTH_SCAN_LIMIT),
+      failedDeletionCount: Math.min(failedDeletions.length, HEALTH_SCAN_LIMIT),
       oldestPendingAgeMs:
         oldestOutstanding === undefined
           ? null
           : Math.max(0, args.now - oldestOutstanding.occurredAt),
-      scanLimitReached: blockedDeletions.length > HEALTH_SCAN_LIMIT || rowsByState.some((rows) => rows.length > HEALTH_SCAN_LIMIT),
+      scanLimitReached: [...deletionsByState, ...rowsByState].some((rows) => rows.length > HEALTH_SCAN_LIMIT),
     };
   },
 });

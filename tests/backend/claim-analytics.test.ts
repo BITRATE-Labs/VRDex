@@ -451,6 +451,10 @@ describe("claim analytics outbox", () => {
       failedCount: 1,
       disabledCount: 0,
       blockedDeletionCount: 0,
+      pendingDeletionCount: 0,
+      deliveringDeletionCount: 0,
+      acceptedDeletionCount: 0,
+      failedDeletionCount: 0,
       oldestPendingAgeMs: null,
       scanLimitReached: false,
     });

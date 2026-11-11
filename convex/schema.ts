@@ -792,12 +792,27 @@ export default defineSchema({
     .index("email", ["email"])
     .index("phone", ["phone"]),
   analyticsDeletionRequests: defineTable({
-    ownerUserId: v.id("users"),
+    ownerUserId: v.optional(v.id("users")),
     analyticsId: v.string(),
     requestedAt: v.number(),
-    state: v.literal("blocked_authorization"),
+    state: v.union(v.literal("blocked_authorization"), v.literal("pending"), v.literal("delivering"), v.literal("accepted"), v.literal("completed"), v.literal("failed")),
+    nextAttemptAt: v.optional(v.number()),
+    failureCount: v.optional(v.number()),
+    lease: v.optional(v.string()),
+    personId: v.optional(v.string()),
+    acceptedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
   }).index("by_analyticsId", ["analyticsId"])
-    .index("by_state", ["state"]),
+    .index("by_state", ["state"])
+    .index("by_state_nextAttemptAt", ["state", "nextAttemptAt"])
+    .index("by_state_completedAt", ["state", "completedAt"]),
+  analyticsGuestReceipts: defineTable({
+    analyticsId: v.string(),
+    receiptHash: v.string(),
+    createdAt: v.number(),
+    withdrawnAt: v.optional(v.number()),
+  }).index("by_receiptHash", ["receiptHash"])
+    .index("by_analyticsId", ["analyticsId"]),
   profiles: defineTable(
     v.union(
       v.object({

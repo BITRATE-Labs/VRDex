@@ -1,11 +1,54 @@
 import { expect, test, type JSHandle } from "@playwright/test";
 import type { PostHog } from "posthog-js";
 import { gunzipSync } from "node:zlib";
+import { randomUUID, randomBytes } from "node:crypto";
 
 test.beforeEach(async ({ context }) => {
+  await context.route("**/api/analytics/guest", (route) => route.fulfill({ json: route.request().postDataJSON().action === "start"
+    ? { analyticsId: randomUUID(), receipt: randomBytes(32).toString("hex") } : { accepted: true } }));
   await context.route("**/ingest/**", (route) => route.fulfill({
     json: { status: 1, featureFlags: {}, sessionRecording: false },
   }));
+});
+
+test("guest Off retains a failed withdrawal for retry and never reuses its consent identity", async ({ page }) => {
+  const ids: string[] = [];
+  await page.route("**/ingest/**", async (route) => {
+    const buffer = route.request().postDataBuffer();
+    if (buffer) {
+      try {
+        const body = JSON.parse(buffer[0] === 31 && buffer[1] === 139 ? gunzipSync(buffer).toString() : buffer.toString());
+        for (const event of Array.isArray(body) ? body : [body]) if (event.event === "$pageview" && event.properties?.analytics_mode === "full") ids.push(event.properties.distinct_id);
+      } catch { /* Configuration requests need no event decoding. */ }
+    }
+    await route.fulfill({ json: { status: 1, featureFlags: {}, sessionRecording: false } });
+  });
+  let fail = true;
+  let withdrawalAttempts = 0;
+  await page.route("**/api/analytics/guest", (route) => {
+    if (route.request().postDataJSON().action === "start") return route.fulfill({ json: { analyticsId: randomUUID(), receipt: randomBytes(32).toString("hex") } });
+    withdrawalAttempts++;
+    return route.fulfill({ status: fail ? 503 : 200, json: fail ? { status: 503 } : { accepted: true } });
+  });
+  await page.goto("/search");
+  await page.getByRole("button", { name: "On", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("vrdex-analytics-guest"))).not.toBeNull();
+  const first = await page.evaluate(() => JSON.parse(localStorage.getItem("vrdex-analytics-guest")!).analyticsId);
+  await expect.poll(() => ids.at(-1)).toBe(first);
+  await page.getByRole("button", { name: "Usage & privacy", exact: true }).click();
+  await page.getByRole("button", { name: "Off", exact: true }).click();
+  await expect.poll(() => withdrawalAttempts).toBeGreaterThan(0);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("vrdex-analytics-guest")!).withdrawn)).toBe(true);
+  expect(await page.evaluate(() => localStorage.getItem("vrdex-analytics-choice"))).toBe("off");
+  fail = false;
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("vrdex-analytics-guest"))).toBeNull();
+  await page.getByRole("button", { name: "Usage & privacy", exact: true }).click();
+  await page.getByRole("button", { name: "On", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("vrdex-analytics-guest"))).not.toBeNull();
+  const next = await page.evaluate(() => JSON.parse(localStorage.getItem("vrdex-analytics-guest")!).analyticsId);
+  expect(next).not.toBe(first);
+  await expect.poll(() => ids.at(-1)).toBe(next);
 });
 
 test("first offer is nonblocking; dismiss stays unset and footer reopens the choice", async ({ page }) => {
@@ -225,7 +268,7 @@ test("snapshot-sized payloads use a size-capable transport", async ({ page }) =>
     const metadata = message.args()[2];
     if (!metadata) return;
     const instance = await metadata.getProperty("this");
-    if (await instance.evaluate((value) => value.config.person_profiles) === "identified_only") client = instance;
+    if (await instance.evaluate((value) => value.config.person_profiles) === "always") client = instance;
   });
   await page.route("**/ingest/**", async (route) => {
     const buffer = route.request().postDataBuffer();
