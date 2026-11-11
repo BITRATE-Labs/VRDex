@@ -23,6 +23,13 @@ it("guest consent route rejects cross-origin and oversized requests, bounds atte
     assert.equal((await POST(request({ action: "start", extra: "x".repeat(5000) }))).status, 413);
     assert.equal((await POST(request({ action: "withdraw", receipt: "known-analytics-id" }))).status, 400);
     assert.equal(calls, 0);
+    // Next may reconstruct its internal URL with localhost instead of the browser-facing host.
+    const proxied = (origin) => new Request("http://localhost:3033/api/analytics/guest", {
+      method: "POST", headers: { host: "127.0.0.1:3033", origin, "content-type": "application/json" }, body: JSON.stringify({ action: "probe" }),
+    });
+    assert.equal((await POST(proxied("http://127.0.0.1:3033"))).status, 400);
+    assert.equal((await POST(proxied("http://localhost:3033"))).status, 403);
+    assert.equal((await POST(proxied("https://127.0.0.1:3033"))).status, 403);
     const started = await POST(request({ action: "start" }));
     assert.equal(started.status, 200);
     assert.match(started.headers.get("cache-control"), /no-store/);
@@ -41,6 +48,6 @@ it("guest consent route rejects cross-origin and oversized requests, bounds atte
     const limited = await POST(request({ action: "start" }));
     assert.equal(limited.status, 429);
     assert.equal(calls, before);
-    assert.ok(calls <= 5, "guest identity minting uses a tighter existing IP limit");
+    assert.ok(calls <= 30, "guest consent uses the existing public write limit");
   `], { cwd: process.cwd(), env: { ...process.env, TSX_TSCONFIG_PATH: "apps/web/tsconfig.json", CONVEX_URL: "http://127.0.0.1:3230", CONVEX_ADMIN_TOKEN: "synthetic-admin-test", VRDEX_RATE_LIMIT_STORE: "memory", NEXT_PUBLIC_POSTHOG_FOUNDATION_ENABLED: "true", NODE_ENV: "test" }, stdio: "pipe" });
 });

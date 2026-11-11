@@ -37,7 +37,6 @@ export const apiRouteClasses = [
   "oauth_dynamic_client_registration",
   "asset_upload_intent",
   "public_write",
-  "analytics_guest_start",
   "anonymous_mcp_public_read",
   "authenticated_mcp",
   "authenticated_mcp_write",

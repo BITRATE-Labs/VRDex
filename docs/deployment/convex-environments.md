@@ -91,8 +91,10 @@ so withdrawal covers accounts whose browser ingestion was blocked. Operational
 extraction telemetry remains separate from account analytics.
 
 Guest On uses the existing web-to-Convex admin path and IP limiter to issue a
-random ID and withdrawal receipt. The `analytics_guest_start` policy allows three
-starts per IP per minute; withdrawal retains the `public_write` policy. Convex retains only the
+random ID and withdrawal receipt. Both commands reuse `public_write` at 30
+requests per IP per minute. Self-hosters must configure the existing
+`VRDEX_TRUSTED_PROXY_CLIENT_IP_HEADER` for their trusted proxy; otherwise visitors
+share the fallback IP bucket. Convex retains only the
 receipt hash. Guest Off stops capture immediately, queues deletion with that
 receipt, and retains it in browser storage until the queue accepts it. A failed
 request retries on the next visit, reconnect, or explicit save. Re-enablement

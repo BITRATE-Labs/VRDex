@@ -12,7 +12,10 @@ const problem = (status: number) => Response.json({ status }, { status, headers 
 
 export async function POST(request: Request) {
   if (process.env.NEXT_PUBLIC_POSTHOG_FOUNDATION_ENABLED !== "true") return problem(404);
-  if (request.headers.get("origin") !== new URL(request.url).origin) return problem(403);
+  const url = new URL(request.url);
+  // Next can use an internal hostname in request.url; Host identifies the browser-facing destination.
+  const origin = `${url.protocol}//${request.headers.get("host") ?? url.host}`;
+  if (request.headers.get("origin") !== origin) return problem(403);
   if (request.headers.get("content-type")?.split(";")[0].trim() !== "application/json") return problem(415);
   try {
     const reader = request.body?.getReader();
@@ -29,7 +32,7 @@ export async function POST(request: Request) {
     let input: z.infer<typeof command>;
     try { input = command.parse(JSON.parse(Buffer.concat(chunks).toString("utf8"))); }
     catch { return problem(400); }
-    const limit = await checkApiRateLimit({ routeClass: input.action === "start" ? "analytics_guest_start" : "public_write", identity: { kind: "ip", value: clientIpForRequest(request) } });
+    const limit = await checkApiRateLimit({ routeClass: "public_write", identity: { kind: "ip", value: clientIpForRequest(request) } });
     if (!limit.allowed) return Response.json({ status: 429 }, { status: 429, headers: { ...headers, ...apiRateLimitResponseHeaders(limit) } });
     const client = optionalConvexAdminHttpClient();
     if (!client) return problem(503);
