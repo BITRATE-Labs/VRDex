@@ -180,7 +180,7 @@ test('finite test relay preserves bytes through setup and consumes post-publish 
 });
 
 for(const closeMode of ['exit','destroy'])test('post-publish controls are consumed while a full-closed publisher EOF is paused: '+closeMode,{timeout:7000},async t=>{
- const initialReply=publishStartReply(),control=Buffer.from('control during paused publisher EOF'),received=[],errors=[];
+ const initialReply=publishStartReply(),control=Buffer.from('control during paused publisher EOF'),bytes=Buffer.alloc(16*1024,73),received=[],errors=[];
  let target,relay,child,childClosed,phase='setup';const phases=[];
  const receiver=createServer({allowHalfOpen:true},socket=>{
   target=socket;receiver.close();socket.on('error',error=>errors.push(error.code));socket.pause();socket.write(initialReply);
@@ -192,12 +192,12 @@ for(const closeMode of ['exit','destroy'])test('post-publish controls are consum
  async function guard(promise,name){phase=name;phases.push({phase:name,state:'waiting'});const value=await Promise.race([promise,deadline]);phases.push({phase:name,state:'completed'});return value;}
  try{
   relay=await guard(startFinitePublisherRelay(receiver.address().port,1,{holdPublisherReads:true}),'relay setup');
-  const code="const net=require('node:net');let n=0,started=false;const s=net.connect({host:'127.0.0.1',port:Number(process.argv[1]),allowHalfOpen:true});s.on('error',()=>process.exit(2));s.on('data',b=>{n+=b.length;if(!started&&n>=Number(process.argv[2])){started=true;s.end(Buffer.alloc(1048576,73),()=>{if(process.argv[3]==='exit')process.exit(0);else s.destroySoon();});}});s.on('close',()=>process.exit(0));";
-  child=spawnSocketPublisher(process.execPath,['-e',code,String(new URL(relay.proxyUrl).port),String(initialReply.length),closeMode],{stdio:['ignore','ignore','ignore']});
+  const code="const net=require('node:net');let n=0,started=false;const s=net.connect({host:'127.0.0.1',port:Number(process.argv[1]),allowHalfOpen:true});s.on('error',()=>process.exit(2));s.on('data',b=>{n+=b.length;if(!started&&n>=Number(process.argv[2])){started=true;s.end(Buffer.alloc(Number(process.argv[4]),73),()=>{if(process.argv[3]==='exit')process.exit(0);else s.destroySoon();});}});s.on('close',()=>process.exit(0));";
+  child=spawnSocketPublisher(process.execPath,['-e',code,String(new URL(relay.proxyUrl).port),String(initialReply.length),closeMode,String(bytes.length)],{stdio:['ignore','ignore','ignore']});
   childClosed=new Promise(resolve=>child.once('close',(code,signal)=>resolve({code,signal})));
   await guard(relay.paused,'explicit publisher pause barrier');const exit=await guard(childClosed,'publisher native close');assert.deepEqual(exit,{code:0,signal:null});assert.equal(relay.publisherPaused(),true,'The full-close regression must hold EOF behind an explicit read barrier');
   target.write(control);const consumed=await guard(relay.controlConsumed,'positive post-publish control consumption');assert.deepEqual(consumed,{bytes:control.length,publisherPaused:true,publisherEof:false,published:true});assert.equal(relay.publisherPaused(),true);relay.releasePublisherReads();target.resume();
-  const receipt=await guard(relay.finish(),'full byte/hash and EOF join');assert.equal(receipt.published,true);assert.equal(receipt.setupBoundary,initialReply.length);assert.equal(receipt.consumedAfterPublish,control.length);assert.equal(receipt.publisherBytes,1048576);assert.equal(receipt.forwardedBytes,1048576);assert.equal(receipt.publisherSha256,createHash('sha256').update(Buffer.alloc(1048576,73)).digest('hex'));assert.deepEqual(Buffer.concat(received),Buffer.alloc(1048576,73));assert.deepEqual(errors,[]);t.diagnostic(JSON.stringify({closeMode,phases,publisherExit:exit,consumed,receipt}));
+  const receipt=await guard(relay.finish(),'full byte/hash and EOF join');assert.equal(receipt.published,true);assert.equal(receipt.setupBoundary,initialReply.length);assert.equal(receipt.consumedAfterPublish,control.length);assert.equal(receipt.publisherBytes,bytes.length);assert.equal(receipt.forwardedBytes,bytes.length);assert.equal(receipt.publisherSha256,createHash('sha256').update(bytes).digest('hex'));assert.deepEqual(Buffer.concat(received),bytes);assert.deepEqual(errors,[]);t.diagnostic(JSON.stringify({closeMode,phases,publisherExit:exit,consumed,receipt}));
  }catch(error){t.diagnostic(JSON.stringify({closeMode,phases,awaiting:phase,error:error.message}));throw error;}finally{clearTimeout(timer);if(child?.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');await childClosed;await relay?.close();target?.destroy();if(receiver.listening)receiver.close();await receiverClosed;}
 });
 

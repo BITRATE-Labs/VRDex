@@ -235,6 +235,20 @@ test('API and MCP verification installs FFmpeg before full script coverage', asy
  assert.match(steps[install].run, /ffmpeg -version/);
  assert.equal(steps[verify].run, 'pnpm verify:vrdex-mcp');
 });
+test('media CI prefers independent HTTPS mirrors without weakening package verification', async () => {
+ const { parse } = await import('yaml');
+ const workflow = parse(await readFile('.github/workflows/baseline-checks.yml', 'utf8'));
+ workflow.jobs.reusableProbe = { uses: './.github/workflows/reusable.yml' };
+ const installs = Object.values(workflow.jobs).flatMap(job => job.steps ?? []).filter(step => ['Install script media test prerequisites', 'Install backend media test prerequisites', 'Install FFmpeg'].includes(step.name));
+ assert.equal(installs.length, 3);
+ for (const step of installs) {
+  assert.equal(step['timeout-minutes'], 5);
+  const mirror = step.run.indexOf("sudo sed -i '1ihttps://mirrors.edge.kernel.org/ubuntu/\\tpriority:1' /etc/apt/apt-mirrors.txt");
+  assert.ok(mirror >= 0 && mirror < step.run.indexOf('sudo apt-get update'));
+  assert.doesNotMatch(step.run, /allow-unauthenticated|AllowInsecureRepositories|Check-Valid-Until=false|trusted=yes/);
+ }
+});
+
 test('rehearsal IAM resources are opt-in, standalone, exact and additive', async () => {
  const worker = await readFile('infra/terraform/restream-worker/rehearsal.tf', 'utf8');
  const image = await readFile('infra/terraform/state-mgmt/restream-proof.tf', 'utf8');
