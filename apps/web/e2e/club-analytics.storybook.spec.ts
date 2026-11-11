@@ -170,7 +170,7 @@ test("instance list emphasizes population and opens detail @storybook-visual", a
     page.getByText("Data completeness", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("group", { name: "People", exact: true }),
+    page.getByRole("group", { name: "Instance population chart", exact: true }),
   ).toBeVisible();
   await page.getByLabel("Event", { exact: true }).selectOption("fixture-event");
   await page
@@ -291,5 +291,38 @@ for (const reactive of [false, true]) {
     await expect(chart).toBeVisible();
     await expect.poll(connections).toBe(0);
     await expect(chart.locator('circle[r="3"]')).toHaveCount(2);
+  });
+}
+
+for (const scenario of ["paired", "paged", "legacy", "no-queue", "partial", "multi-day"]) {
+  test(`real instance detail chart ${scenario} @storybook-visual`, async ({ page, isMobile }) => {
+    await page.goto(`/iframe.html?id=clubs-analytics--instance-chart-${scenario}&viewMode=story`);
+    await expect(page.getByText("Data completeness", { exact: true })).toBeVisible();
+    const chart = page.getByRole("group", { name: "Instance population chart", exact: true });
+    await expect(chart).toBeVisible();
+    await expect(page.getByRole("checkbox")).toHaveCount(0);
+    await expect(chart.locator('.recharts-line-curve[name="Queue"]')).toHaveCount(["legacy", "no-queue"].includes(scenario) ? 0 : 1);
+    await expect(chart.locator('.recharts-line-curve[name="Windows"]')).toHaveCount(["legacy", "partial"].includes(scenario) ? 0 : 1);
+    await expect(chart.locator('.recharts-line-curve[name="Android"]')).toHaveCount(scenario === "legacy" ? 0 : 1);
+    await expect(chart.locator('.recharts-reference-line')).toHaveCount(1);
+    if (scenario === "multi-day") {
+      const path = await chart.locator('.recharts-line-curve[name="Population"]').getAttribute("d");
+      const xs = Array.from((path ?? "").matchAll(/[ML]([\d.]+),/g), match => Number(match[1]));
+      expect(xs[5]! - xs[4]!).toBeGreaterThan(100 * (xs[1]! - xs[0]!));
+      const marker = Number(await chart.locator('.recharts-reference-line-line').getAttribute("x1"));
+      expect(marker).toBeGreaterThan(xs[5]!);
+      expect(marker).toBeLessThan(xs[6]!);
+    }
+    if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") await page.screenshot({path:`../../.cache/artifacts/instance-detail-compact-${scenario}-${isMobile ? "mobile" : "desktop"}.png`,fullPage:true});
+    await page.getByRole("button", { name: "Show data table", exact: true }).click();
+    const table = page.getByRole("table", { name: "Instance population values", exact: true });
+    await expect(table).toBeVisible();
+    if (scenario === "paired") await expect(table.getByRole("row").filter({ hasText: "110" })).toContainText("135");
+    if (scenario === "paged") await expect(table.getByRole("row").last()).toContainText("28");
+    if (scenario === "legacy") await expect(table.getByRole("row").nth(1)).toContainText("Unknown");
+    await page.getByText("Diagnostics", { exact: true }).click();
+    await expect(page.getByRole("table", { name: "Instance diagnostic counts", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") await page.screenshot({path:`../../.cache/artifacts/instance-detail-${scenario}-${isMobile ? "mobile" : "desktop"}.png`,fullPage:true});
   });
 }
