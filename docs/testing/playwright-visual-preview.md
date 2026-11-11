@@ -349,6 +349,11 @@ Each data-flow run uses a unique `VRDEX_E2E_RUN_ID` prefix and creates only `e2e
 
 ## CI behavior
 
+Host media prerequisites give the [Linux Kernel Archives Ubuntu mirror](https://mirrors.kernel.org/)
+explicit APT priority over the runner's Canonical mirrors to reduce reliance on Canonical DNS.
+The runner's HTTPS fallbacks and Ubuntu package-signature verification remain in place.
+Installation keeps its five-minute bound. The native transport gate still uses its packaged runtime.
+
 Default PR CI runs lint, types, unit tests, docs, API/MCP checks, the existing backend/restream checks, and the web build. Browser suites and the Storybook build are opt-in.
 
 | Labels when a normal PR run starts | Browser assertions and Storybook build | Review screenshots and both image comparisons |

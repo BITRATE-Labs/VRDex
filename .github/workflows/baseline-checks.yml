@@ -110,9 +110,10 @@ jobs:
       - name: Install script media test prerequisites
         timeout-minutes: 5
         run: |
-          # Keep the runner's official HTTPS fallbacks; Azure HTTP downloads can crawl.
+          # Avoid a shared Canonical DNS dependency while retaining Ubuntu signature checks.
           if [[ -f /etc/apt/apt-mirrors.txt ]]; then
             sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+            sudo sed -i '1ihttps://mirrors.edge.kernel.org/ubuntu/\tpriority:1' /etc/apt/apt-mirrors.txt
           fi
           sudo apt-get update
           sudo apt-get install --no-install-recommends --yes ffmpeg
@@ -198,9 +199,10 @@ jobs:
       - name: Install backend media test prerequisites
         timeout-minutes: 5
         run: |
-          # Keep the runner's official HTTPS fallbacks; Azure HTTP downloads can crawl.
+          # Avoid a shared Canonical DNS dependency while retaining Ubuntu signature checks.
           if [[ -f /etc/apt/apt-mirrors.txt ]]; then
             sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+            sudo sed -i '1ihttps://mirrors.edge.kernel.org/ubuntu/\tpriority:1' /etc/apt/apt-mirrors.txt
           fi
           sudo apt-get update
           sudo apt-get install --no-install-recommends --yes ffmpeg
@@ -353,9 +355,10 @@ jobs:
         if: steps.changes.outputs.enabled == 'true'
         timeout-minutes: 5
         run: |
-          # Keep the runner's official HTTPS fallbacks; Azure HTTP downloads can crawl.
+          # Avoid a shared Canonical DNS dependency while retaining Ubuntu signature checks.
           if [[ -f /etc/apt/apt-mirrors.txt ]]; then
             sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+            sudo sed -i '1ihttps://mirrors.edge.kernel.org/ubuntu/\tpriority:1' /etc/apt/apt-mirrors.txt
           fi
           sudo apt-get update
           sudo apt-get install -y ffmpeg
