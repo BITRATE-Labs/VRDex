@@ -29,3 +29,7 @@ Desktop/mobile screenshots received VLM review: readable role context, visible k
 Actual authenticated sign-in return, live VRChat role payloads and provider navigation were not exercised. Field semantics come from the pinned community specification cited by the worker and deployment guide. Storybook data is synthetic.
 
 No historical replay, general resolver, migration, production write, merge or deployment was performed. Comparable workspace screens remain follow-up work. Remote publication was rejected by automatic approval review because explicit authorization for that external publication was not established. The reviewed branch remains local pending that approval.
+
+## Broader suite limits
+
+The full backend and web unit suites were also attempted. They reported failures in the unmodified VRCDN CBR-envelope, renderer transition-anchor and profile-statistics protocol tests, then did not terminate promptly. Those broad runs were interrupted; no full-suite green result is claimed. The 67 focused backend tests and six membership browser checks were rerun successfully using the isolated locked dependencies afterward. These unrelated failures need their owning workstreams' diagnosis before any whole-repository readiness claim.
