@@ -540,3 +540,24 @@ it("requires fresh trusted email verification for all MCP review surfaces and re
     /verified email/i,
   );
 });
+
+it("superadmin routine approval cannot enrich a profile claimed after upload", async () => {
+  const t = convexTest({ schema, modules });
+  const s = await seed(t);
+  const { intent } = await createAndUpload(t, s);
+  await t.run(ctx => ctx.db.patch(s.profileId, { claimState: "claimed_verified" }));
+  await assert.rejects(t.withIdentity(s.moderatorIdentity).mutation(api.profileMediaSubmissions.decide, {
+    submissionId: intent.submissionId, decision: "approve", expectedProfileUpdatedAt: NOW,
+    privateReason: "Routine enrichment must stop after claim",
+  }));
+  const reviewer = t.withIdentity(s.moderatorIdentity);
+  const detail = await reviewer.query(api.profileMediaSubmissions.reviewDetail, { submissionId: intent.submissionId });
+  assert.ok(detail);
+  const receipt = await reviewer.mutation(api.profileMediaSubmissions.decideWithReceipt, {
+    submissionId: intent.submissionId, decision: "approve", expectedReviewVersion: detail.reviewVersion,
+    privateReason: "Routine enrichment must stop after claim", idempotencyKey: "claimed-admin",
+  });
+  assert.equal(receipt.operationState, "refused");
+  assert.equal(receipt.code, "target_claimed");
+  assert.equal((await t.run(ctx => ctx.db.query("profileAssets").collect())).length, 0);
+});

@@ -162,8 +162,28 @@ calling the internal function. Existing contribution scopes gain no review
 power. Own withdrawal is an internal actor command with a submitter ownership
 check and does not require review authority.
 
-This source change neither changes intake limits nor grants accounts new
-features. The separate contribution and media-kit switches still apply.
+Editing authority, publication authority, and capacity are separate. The standing
+`roles-v1` policy gives trusted contributors, media reviewers, and trusted
+publishers the same higher capacity. Capacity alone never grants review or
+publication authority. Superadmins can explicitly publish their own validated
+media on public unclaimed profiles. Independent review still refuses self-review.
+Routine enrichment, including admin approval, stops after a profile is claimed;
+its owner keeps the existing editing/review path. A future claimed-profile admin
+override requires a separate approval step and is not implemented here.
+
+Trusted limits are 1,000 contributions per rolling day, 1,000 open proposals,
+12 admissions per minute, 20 GiB reserved bytes, and four concurrent processing
+operations. Trusted target limits are 100 contributions per rolling day and
+20 open proposals. Ordinary limits remain unchanged. Superadmin contributor
+quotas are inapplicable, but shared deployment budgets, target processing/byte
+checks, validation, cleanup readiness, and intake pause remain enforced.
+
+Capacity responses represent inapplicable limits and remaining counts as `null`.
+Superadmin rolling/open usage counts are also `null`, avoiding an unbounded
+history scan. Byte and processing usage remain recorded. Temporary capacity
+request tools and batch allowance enforcement have been removed. Historical
+request rows remain inert audit data. The contribution and media-kit switches
+still apply. Optional collection organization is independent of routine uploads.
 MCP tools and the browser use these shared commands. Deployments, account grants,
 and publication operations remain separate.
 

@@ -725,8 +725,8 @@ async function contributionAttestation(f: Awaited<ReturnType<typeof fixture>>) {
     resource: "https://example.test/mcp", scopes: ["mcp:read", "mcp:write", "assets:contribute"], status: "active", issuedAt: Date.now(), expiresAt: Date.now() + 60_000 }));
   return { actorUserId: f.s.contributorUserId, oauthTokenId: "replacement-token", oauthClientId: "client", emailVerified: true, emailVerificationAttestedAt: Date.now() };
 }
-it("actual MCP proposal boundary reports upload cooldown and admits a fresh key after the unchanged window", async () => {
-  const f = await fixture(); await occupyFallback(f); const attestation = await contributionAttestation(f);
+it("ordinary MCP proposal boundary retains its upload cooldown and admits a fresh key after the unchanged window", async () => {
+  const f = await fixture("person", true); await occupyFallback(f); const attestation = await contributionAttestation(f);
   await f.t.run(ctx => ctx.db.patch(f.intent.submissionId, { createdAt: Date.now() }));
   const d = await f.detail(); const args = { submissionId: f.intent.submissionId, expectedContributionVersion: d.contributionVersion, idempotencyKey: "cooldown", ...attestation };
   const refused = await f.t.mutation(internal.profileMediaSubmissions.proposePlacementForMcpActor, args);

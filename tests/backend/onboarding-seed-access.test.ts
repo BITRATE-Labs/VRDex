@@ -69,7 +69,7 @@ describe("account feature access", () => {
         [{ feature: "super_admin", state: "active", expiresAt: 101 }],
         100,
       ),
-      { superAdmin: true, canReviewMedia:false, canPublishMedia:false, canContributeBulk:false, canViewPrivateSeedLookup: true, canUseTemporalParsing: true },
+      { superAdmin: true, canReviewMedia:false, canPublishMedia:true, canContributeBulk:false, canViewPrivateSeedLookup: true, canUseTemporalParsing: true },
     );
     assert.deepEqual(
       accountFeatureAccessFromGrants(

@@ -2,18 +2,16 @@
 
 ## Local evidence, 2026-09-14
 
-The synthetic policy is a sizing proposal, not an enabled hosted policy. The
-default remains `baseline-v1`: three open proposals per actor, two per target,
-six creations per actor per rolling day, twenty per target, and one admission
-per thirty seconds. Local bridge bytes remain 144 MiB per actor and 96 MiB per
-target. Current normal intake does not acquire trusted limits merely from a grant.
+Current policy: [simple contribution permissions](../superpowers/specs/2026-11-11-simple-contribution-policy-design.md).
+The `roles-v1` ordinary/trusted/superadmin limits apply in every environment.
+Temporary allowance and capacity-request workflows are removed. Tests use the
+same policy with role fixtures and controlled time, without a synthetic identity
+allowlist. Ordinary contributors retain six creations per rolling day and three
+open proposals; trusted roles receive 1,000 of each. Superadmins retain shared
+operational safeguards while contributor quotas are inapplicable.
 
-`convex/_contributionPolicy.ts` contains the single proposed ordinary/trusted
-table and a checked-in dedicated identity allowlist. Only
-`local:contributor-capacity-proof` can select `synthetic-v1`. Unknown policies,
-production identities, ordinary dev identities and malformed bounds fail closed.
-Adding a real dedicated staging identity requires an owner-reviewed code change.
-No env variable can add an identity to the allowlist.
+The measurements below are historical local evidence from September 14, 2026,
+not hosted throughput guarantees. The reproduction script now uses standing roles.
 
 Run the local workflow with PowerShell:
 
@@ -48,14 +46,12 @@ feature availability, limits, usage, remaining capacity and rolling retry time.
 It explicitly reports `reservation: false`. Backlog/byte saturation has no invented
 retry time. `vrdex_contribution_status` supports cursor, state, batch and exact
 operation receipt lookup. A filtered page can be empty with more pages available.
-`vrdex_contribution_capacity_request` accepts private evidence and a restricted
-reason (`collection`, `reconsideration`, `temporary_batch`); own request status is
-available through `vrdex_contribution_capacity_requests`. These are ordinary MCP
-operations, not admin-only scripts. They remain available during intake pause.
+Temporary capacity requests and per-batch allowance decisions are no longer
+part of the workflow. Existing history is retained without granting capacity.
 
 Retained batch envelopes have a separate quota, including empty, archived and
-legacy batches. The bound is 1,000 for baseline/ordinary actors and 10,000 for
-synthetic trusted actors, matching the active-row policy scale. Current trust
+legacy batches. The bound is 1,000 for ordinary actors and 10,000 for
+trusted and superadmin actors, matching the active-row policy scale. Current trust
 determines admission. Archiving does not release this quota, and an existing
 caller key still replays at or above the bound. `BATCH_ENVELOPE_LIMIT` refuses
 new keys without deleting audit or receipt rows. No counter backfill is needed.
@@ -71,14 +67,12 @@ reconciliation alone does not override admission or delete retained records.
 Batch reconciliation counts active rows only in non-archived batches. Revision
 reconciliation excludes rows whose private payload has expired.
 
-The separately granted `trusted_contributor` feature conveys capacity only.
-`accountFeatureGrants.grant` can link a request ID; revoke and expiry use the
-existing internal grant operations. No migration creates grants. Temporary batch
-allowances require internal super-admin review, bind the actor, batch, maximum
-rows, cumulative reserved bytes and expiry, and apply only under `synthetic-v1`.
-They do not change target limits, reviewer/publisher authority or source policy.
-Expiry/downgrade permits an admitted unexpired reservation to finish; revocation
-and intake pause block completion. Read/status/review/withdrawal remain available.
+The active trusted-contributor, media-reviewer, and trusted-publisher roles select
+the same contribution capacity. Editing and publication checks remain separate.
+Superadmins may explicitly publish validated media on public unclaimed targets.
+Admission follows current roles; expiry permits admitted work to finish, while
+revocation without another qualifying role blocks finalization. Intake pause,
+source policy, target processing, and deployment budgets remain enforced.
 
 New local and legacy URL intake share creation limits and the reservation ledger.
 Admission quota refusals are terminal receipts; an in-progress attempt remains
@@ -94,9 +88,8 @@ available at the limit. A further fresh refusal returns
 not a status-queryable command outcome. The indexed count reads at most 256
 rows and 8 MiB; an incomplete read fails closed. Historical receipts remain
 retained. Expired source-host minute counters are removed in bounded scheduled
-pages, with continuation for a full page. Pending-request limits count only
-unexpired batch allowances, and approval permits one active allowance per
-batch. Expired historical approvals remain available for audit.
+pages, with continuation for a full page. Historical requests remain available as inert audit records; they no longer
+change admission or capacity.
 
 `contributionOperations.inventory` is an internal super-admin paginated query
 (at most 40 reservations) returning object-key inventory, page totals, pending
@@ -115,14 +108,13 @@ table and `convex/_contributionPolicy.ts`; never put secret values in git.
 
 | Name | Default | Meaning |
 | --- | --- | --- |
-| `VRDEX_CONTRIBUTION_POLICY` | `baseline-v1` | Explicit policy selection; synthetic identity guard applies |
 | `VRDEX_CONTRIBUTION_BATCHES_ENABLED` | false | Bulk collection intake switch |
 | `VRDEX_CONTRIBUTION_INTAKE_PAUSED` | false | Stops new intake and finalization, preserves reads and decisions |
 | `VRDEX_CONTRIBUTION_DEPLOYMENT_BYTES` | 100 GiB | Proposed unmeasured deployment storage bound |
 | `VRDEX_CONTRIBUTION_DEPLOYMENT_CONCURRENCY` | 16 | Proposed unmeasured import bound |
 | `VRDEX_CONTRIBUTION_HOST_FETCHES_PER_MINUTE` | 30 | Proposed unmeasured initial source-host fetch bound |
 
-These global bounds apply to both baseline and synthetic policies. Global values
+These shared bounds apply in every environment and to every role. Global values
 are conservative operator choices requiring measurement, not
 universal safe production values. Existing upload, cleanup-readiness, storage,
 OAuth and publication switches remain required. Source-host admission counts
