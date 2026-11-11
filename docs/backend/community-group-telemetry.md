@@ -76,7 +76,17 @@ Member metadata remains available without an aggregate slot under the shared pub
 
 ## Observation model
 
-The collector reads `GET /users/{collectorUserId}/instances/groups/{groupId}` after checking the group's membership. This returns full instance records in one request. Population uses each instance's `n_users`, not the group-list `memberCount`. Only normalized counts, locators, and closure timestamps leave the adapter; rosters are discarded. The collector identity comes from its verified service-account session.
+The collector reads `GET /users/{collectorUserId}/instances/groups/{groupId}` after checking the group's membership. This returns full instance records in one request. Population uses each instance's `n_users`, not the group-list `memberCount`. Only normalized counts, platform breakdowns, locators, and closure timestamps leave the adapter; rosters are discarded. The collector identity comes from its verified service-account session.
+
+Each instance observation may also retain the same response's `userCount`, `queueSize`, and `platforms`. These are independent diagnostics: `population` remains the exact `n_users` value. No equality, world-capacity ceiling, queue-to-population relationship or platform-sum relationship is assumed. Missing or null diagnostics are omitted; measured zero and an empty platform map are retained. Historical observations and older collectors remain valid without these fields. The platform sum is calculated by a reader when needed and is not stored.
+
+The adapter and backend ingestion independently reject supplied malformed diagnostics. Optional counts and every platform value must be nonnegative safe integers. A platform map has at most 16 entries, with keys of 1 to 64 ASCII letters, digits, underscores or hyphens, beginning with a letter. Keys beginning `usr_` are rejected to prevent identity-shaped breakdowns. There is no platform-name allowlist, so future names within those bounds remain usable. A malformed supplied diagnostic rejects the entire snapshot; a missing field does not. Provider shape drift may therefore interrupt collection until reviewed, while an omitted field remains unknown.
+
+Only the existing authorized private `clubAnalytics.getInstanceSeries` query returns these optional fields, including its before/after boundary points. Instance summaries, population arithmetic, public projections and request budgets remain unchanged. No additional provider reads, player lists or raw payload capture are added.
+
+### Paired-count rollout
+
+Deploy the additive backend schema, ingestion validators and private series return validators first. Verify backend compatibility with old collectors before releasing a new collector. Old backends reject the new fields, so do not run this collector against an older backend. Build and deploy the collector through the existing versioned release process with a new `VRDEX_GROUP_TELEMETRY_RELEASE_VERSION` and its exact release SHA. Keep the protocol version unchanged because the additive backend still accepts older workers. Source changes alone do not update a running collector. Verify future paired observations through an authorized private series read before claiming runtime capture; local fixtures and compile checks do not prove provider field availability. Rolling the collector back leaves already retained diagnostics intact. Do not remove additive backend support while a new collector can still send these fields.
 
 The response's `fetchedAt` is the observation time. Repeated cached responses therefore cannot renew liveness or count as new disappearance confirmations. Poll scheduling still uses the current request time, including on duplicates. Snapshots older than the connection epoch or the latest accepted observation do not change history. A response older than six minutes fails as unknown coverage instead of becoming a new observation.
 
@@ -172,3 +182,11 @@ The heartbeat adds bounded phase counts, external-wait count, processing-backlog
 ## Reviewed session consolidation
 
 Historical session repairs use internal `instanceSessionRepair` preview/apply/rollback functions. The exact seven-session request is deployment- and epoch-bound, fingerprinted, and resource-bounded. Apply atomically reparents measured observations, retains six alias rows and stores a rollback receipt. It never edits measured populations or community totals. Lists and ingestion use canonical-only indexes; authorized old detail links resolve one same-scope alias hop. A later provider-confirmed close followed by active reuse still creates a new session. No repair runs automatically on deployment. See the [repair review and operator boundary](../planning/2026-11-09-instance-session-continuity-repair.md#operator-preview-and-execution-boundary).
+
+## Private instance chart
+
+Authorized instance detail uses the complete paginated retained history for Population, Windows, Android and Queue. Population and its summary cards continue to use n_users. Windows and Android use their provider platform keys independently; other retained platforms remain available in Diagnostics. A platform line appears only with known values. Queue appears automatically only if any sample is positive. There are no queue or closure visibility toggles.
+
+Unknown fields and collection gaps break lines; measured zero remains zero in the exact-value table. The count axis is unstacked and timestamps use proportional elapsed spacing, with date context for multi-day histories. A stored closedAt marks closure to new joins, not lobby emptiness; later observations remain visible. Data tables and private diagnostics retain full local timestamps and mount their rows only when opened. Chart dots identify isolated observations rather than every sample. Old records show unknown diagnostics without a backfill. Existing instance-history permission checks and repaired-link resolution remain in force.
+
+See the [instance chart release checklist](../deployment/instance-count-chart-release.md) for backend-first rollout and runtime acceptance.

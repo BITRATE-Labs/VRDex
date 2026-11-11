@@ -356,7 +356,7 @@ The runner's HTTPS fallbacks and Ubuntu package-signature verification remain in
 Installation keeps its five-minute bound. The native transport gate still uses its packaged runtime.
 Playwright browser installs in baseline, deployed-health, and staging workflows, plus
 synthetic-media installation, prepare the same independent mirror through
-`.github/scripts/prepare-browser-apt.sh` before installing dependencies. These install
+`.github/scripts/configure-ubuntu-mirror.mjs` before installing dependencies. These install
 steps have a ten-minute timeout for system dependencies and browser downloads. The helper logs the effective mirror list and
 retains Ubuntu package signature verification and the existing HTTPS fallbacks.
 Runners without a mirror-list file explicitly report that their configured sources
@@ -711,3 +711,7 @@ Full command outputs, raw observations, coverage composition, VLM notes and
 recovery proofs are retained at
 `/workspace/previews/vrdex-home-polish/task-7` in the execution workspace.
 The controller owns whole-branch review and selected browser/visual CI.
+
+### Ubuntu package prerequisites
+
+Baseline browser and media jobs use `.github/scripts/configure-ubuntu-mirror.mjs` before APT dependency installation. It applies the same reachable Ubuntu mirror to direct source files and mirror lists, retaining distribution suites, components and signing configuration. This avoids Canonical/Azure DNS failures without dropping browser fonts, FFmpeg or any test lane. `tests/scripts/ubuntu-mirror.test.mjs` covers both source formats and idempotence.

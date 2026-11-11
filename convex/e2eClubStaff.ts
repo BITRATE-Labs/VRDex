@@ -160,20 +160,22 @@ export const seedAnalytics = internalMutation({
       createdAt: startAt,
       updatedAt: startAt,
     });
-    const sessionId = await ctx.db.insert("instanceSessions", {
+    const sessionData = {
       integrationId,
       communityProfileId: args.profileId,
       providerInstanceId: marker,
       providerLocation: marker,
       vrchatWorldId: marker,
-      source: "first_party",
-      state: "closed",
+      source: "first_party" as const,
+      state: "closed" as const,
       openedAt: startAt,
       lastObservedAt: startAt + 300000,
-      closedAt: startAt + 300000,
+      closedAt: startAt + 180000,
       consecutiveMisses: 0,
       updatedAt: startAt + 300000,
-    });
+    };
+    const sessionId = await ctx.db.insert("instanceSessions", sessionData);
+    const aliasId = await ctx.db.insert("instanceSessions", { ...sessionData, mergedIntoSessionId: sessionId });
     for (let i = 0; i < 6; i++) {
       const common = {
         integrationId,
@@ -196,6 +198,8 @@ export const seedAnalytics = internalMutation({
         providerInstanceId: marker,
         vrchatWorldId: marker,
         population: 10 + i * 3,
+        ...(i > 0 ? { userCount: 9 + i * 3, queueSize: i === 5 ? 7 : 0,
+          platforms: { standalonewindows: 5 + i * 3, android: 4 } } : {}),
       });
       await ctx.db.insert("communityMemberCountObservations", {
         ...common,
@@ -204,7 +208,7 @@ export const seedAnalytics = internalMutation({
         memberCount: 1000 + i,
       });
     }
-    return { integrationId, sessionId, startAt, endAt: startAt + 300000 };
+    return { integrationId, sessionId, aliasId, startAt, endAt: startAt + 300001 };
   },
 });
 
@@ -224,18 +228,12 @@ export const cleanupAnalytics = internalMutation({
       integration.leaseGeneration !== 0
     )
       throw new Error("Exact inactive synthetic integration required.");
-    const sessions = await ctx.db
-      .query("instanceSessions")
-      .withIndex("by_integrationId_state", (q) =>
-        q.eq("integrationId", integration._id),
-      )
-      .take(2);
-    if (
-      sessions.length !== 1 ||
-      sessions[0]!.providerLocation !== marker ||
-      sessions[0]!.providerInstanceId !== marker ||
-      sessions[0]!.state !== "closed"
-    )
+    const sessions = await ctx.db.query("instanceSessions")
+      .withIndex("by_integrationId_state", q => q.eq("integrationId", integration._id)).take(3);
+    const canonical = sessions.find(session => session.mergedIntoSessionId === undefined);
+    if (sessions.length !== 2 || !canonical || sessions.some(session =>
+      session.providerLocation !== marker || session.providerInstanceId !== marker || session.state !== "closed" ||
+      (session._id !== canonical._id && session.mergedIntoSessionId !== canonical._id)))
       throw new Error("Unexpected fixture sessions.");
     const rows = await Promise.all([
       ctx.db
@@ -289,7 +287,7 @@ export const cleanupAnalytics = internalMutation({
     for (const list of rows)
       for (const row of list) await ctx.db.delete(row._id);
     for (const row of preferences) await ctx.db.delete(row._id);
-    await ctx.db.delete(sessions[0]!._id);
+    for (const session of sessions) await ctx.db.delete(session._id);
     await ctx.db.delete(integration._id);
     return null;
   },

@@ -365,7 +365,7 @@ jobs:
         working-directory: apps/web
         timeout-minutes: 10
         run: |
-          bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
+          sudo "$(command -v node)" "${{ github.workspace }}/.github/scripts/configure-ubuntu-mirror.mjs"
           pnpm exec playwright install --with-deps chromium
 
       - name: Run hosted staging data-flow health

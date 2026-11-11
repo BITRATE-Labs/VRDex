@@ -112,7 +112,7 @@ jobs:
         working-directory: apps/web
         timeout-minutes: 10
         run: |
-          bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
+          sudo "$(command -v node)" "${{ github.workspace }}/.github/scripts/configure-ubuntu-mirror.mjs"
           pnpm exec playwright install --with-deps chromium
 
       - name: Run hosted mutation-backed profile submission flow
@@ -308,7 +308,7 @@ jobs:
         working-directory: apps/web
         timeout-minutes: 10
         run: |
-          bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
+          sudo "$(command -v node)" "${{ github.workspace }}/.github/scripts/configure-ubuntu-mirror.mjs"
           pnpm exec playwright install --with-deps chromium
 
       - name: Run production read-only route smoke
@@ -515,7 +515,7 @@ jobs:
         working-directory: apps/web
         timeout-minutes: 10
         run: |
-          bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
+          sudo "$(command -v node)" "${{ github.workspace }}/.github/scripts/configure-ubuntu-mirror.mjs"
           pnpm exec playwright install --with-deps chromium
 
       - name: Prepare hosted MCP OAuth smoke credentials

@@ -12,15 +12,13 @@ test('every browser dependency install prepares mirrors within a bounded step', 
         if (!step.run?.includes('playwright install --with-deps')) continue;
         installs++;
         assert.equal(step['timeout-minutes'], 10, `${file}: ${step.name}`);
-        assert.ok(step.run.indexOf('prepare-browser-apt.sh') >= 0);
-        assert.ok(step.run.indexOf('prepare-browser-apt.sh') < step.run.indexOf('playwright install'));
+        assert.ok(step.run.indexOf('configure-ubuntu-mirror.mjs') >= 0);
+        assert.ok(step.run.indexOf('configure-ubuntu-mirror.mjs') < step.run.indexOf('playwright install'));
       }
     }
   }
   assert.equal(installs, 13);
-  const helper = await readFile('.github/scripts/prepare-browser-apt.sh', 'utf8');
+  const helper = await readFile('.github/scripts/configure-ubuntu-mirror.mjs', 'utf8');
   assert.match(helper, /priority:1/);
-  assert.match(helper, /grep -Fxq/);
-  assert.match(helper, /cat "\$mirrors"/);
   assert.doesNotMatch(helper, /allow-unauthenticated|AllowInsecureRepositories|Check-Valid-Until=false|trusted=yes/);
 });
