@@ -2,6 +2,12 @@ import { expect, test, type JSHandle } from "@playwright/test";
 import type { PostHog } from "posthog-js";
 import { gunzipSync } from "node:zlib";
 
+test.beforeEach(async ({ context }) => {
+  await context.route("**/ingest/**", (route) => route.fulfill({
+    json: { status: 1, featureFlags: {}, sessionRecording: false },
+  }));
+});
+
 test("first offer is nonblocking; dismiss stays unset and footer reopens the choice", async ({ page }) => {
   await page.goto("/search");
   const panel = page.getByRole("region", { name: "Usage & privacy", exact: true });
@@ -168,6 +174,7 @@ test("Full visitor continuity survives reload and another tab receives Off", asy
   await expect.poll(() => identities.length).toBe(3);
   await page.getByRole("button", { name: "Usage & privacy", exact: true }).click();
   await page.getByRole("button", { name: "Off", exact: true }).click();
+  expect(await page.evaluate((id) => JSON.stringify(localStorage).includes(id), first)).toBe(false);
   off = true;
   await other.getByRole("button", { name: "Usage & privacy", exact: true }).click();
   await expect(other.getByRole("button", { name: "Off", exact: true })).toHaveAttribute("aria-pressed", "true");
@@ -185,8 +192,9 @@ test("Account Privacy can reopen analytics without a profile selection", async (
   await page.screenshot({ path: test.info().outputPath("analytics-account.png") });
 });
 
-test("ordinary granted private lookup works in single and bulk mode with analytics Off", async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("vrdex-analytics-choice", "off"));
+for (const choice of ["off", "on"] as const) {
+test(`ordinary granted private lookup works in single and bulk mode with analytics ${choice}`, async ({ page }) => {
+  await page.addInitScript((value) => localStorage.setItem("vrdex-analytics-choice", value), choice);
   await page.route("**/lookup/suggest?**", async (route) => {
     const response = await route.fetch();
     const body = await response.json();
@@ -202,6 +210,7 @@ test("ordinary granted private lookup works in single and bulk mode with analyti
   await page.getByRole("button", { name: "Lookup lineup", exact: true }).click();
   await expect(page.locator(".lookup-bulk-summary").getByText("DJ Northstar", { exact: true })).toBeVisible();
 });
+}
 
 test("snapshot-sized payloads use a size-capable transport", async ({ page }) => {
   let client: JSHandle<PostHog> | undefined;

@@ -564,6 +564,11 @@ jobs:
           VRDEX_E2E_CONVEX_SECRET: local-convex-e2e-secret
         run: pnpm --filter web exec playwright test public-routes.smoke.spec.ts --project=desktop-chromium --project=mobile-chromium --workers=1
 
+      - name: Verify synthetic analytics and disabled presentation
+        run: |
+          pnpm --filter web exec playwright test --config playwright.analytics.config.mjs --workers=1
+          NEXT_PUBLIC_POSTHOG_FOUNDATION_ENABLED=false pnpm --filter web exec playwright test --config playwright.analytics.config.mjs --workers=1
+
       - name: Upload public smoke artifacts
         id: upload
         if: always()

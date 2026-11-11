@@ -113,3 +113,23 @@ it("a client-supplied journey never borrows another account's consent or identit
   await b.run(async (ctx) => enqueueClaimAnalyticsEvent(ctx, context, { ...milestone, event: "claim_resolved" }));
   assert.equal((await t.run(async (ctx) => ctx.db.query("claimAnalyticsOutbox").collect())).length, 1);
 });
+
+it("continuing in a restricted browser terminally suppresses an existing journey", async () => {
+  process.env.POSTHOG_DEPLOYMENT_CATEGORY = "staging";
+  const t = convexTest({ schema, modules });
+  await t.run(async (ctx) => {
+    await ctx.db.insert("users", { clerkUserId: "continuing-user" });
+    await ctx.db.insert("users", { clerkUserId: "other-user" });
+  });
+  const user = t.withIdentity({ subject: "continuing-user" });
+  await user.mutation(api.analyticsPreferences.set, { choice: "on", policyVersion: "2026-11-10" });
+  const context = claimAnalyticsContext("abde12ef-abcd-4123-8abc-abcdef123457", "profile", "on");
+  const milestone = { event: "claim_attempt_created", profileType: "person", method: "discord", occurredAt: Date.now() } as const;
+  await user.run(async (ctx) => enqueueClaimAnalyticsEvent(ctx, context, milestone));
+  await t.withIdentity({ subject: "other-user" }).mutation(internal.claimAnalytics.restrictBrowserJourney, { journeyId: context.journeyId });
+  assert.equal((await t.run(async (ctx) => ctx.db.query("claimAnalyticsOutbox").first()))?.state, "pending");
+  await user.mutation(internal.claimAnalytics.restrictBrowserJourney, { journeyId: context.journeyId, browserRestriction: "off" });
+  await user.run(async (ctx) => enqueueClaimAnalyticsEvent(ctx, context, { ...milestone, event: "claim_resolved" }));
+  assert.equal((await t.run(async (ctx) => ctx.db.query("claimAnalyticsOutbox").collect())).length, 1);
+  assert.equal((await t.mutation(internal.claimAnalytics.claimNextForDelivery, {})).row, null);
+});

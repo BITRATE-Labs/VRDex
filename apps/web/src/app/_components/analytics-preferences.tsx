@@ -8,6 +8,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { Button } from "@/components/ui/button";
 import { ANALYTICS_CHOICE_KEY, ANALYTICS_OFFER_KEY, ANALYTICS_POLICY_VERSION, analyticsAccountMatches, parseAnalyticsChoice, resolveAnalyticsMode, type AnalyticsChoice, type AnalyticsMode } from "@/lib/analytics-preference";
 import { parseDeploymentCategory } from "@/lib/analytics-capture";
+import { ANALYTICS_FOUNDATION_ENABLED, ANALYTICS_CHOICE_OWNER_KEY, analyticsChoiceOwnerMatches } from "@/lib/analytics-preference";
 
 type AccountState = { resolved: boolean; choice?: AnalyticsChoice; analyticsId?: string; revision?: number; userId?: string };
 type Preferences = {
@@ -15,9 +16,9 @@ type Preferences = {
   analyticsId?: string;
   identityKey?: string;
   open: () => void;
-  pauseRef: { current: () => void };
+  pauseRef: { current: (withdraw?: boolean) => void };
 };
-const Context = createContext<Preferences>({ mode: undefined, open: () => {}, pauseRef: { current: () => {} } });
+const Context = createContext<Preferences>({ mode: "off", open: () => {}, pauseRef: { current: () => {} } });
 export const useAnalyticsPreferences = () => useContext(Context);
 
 type AccountBridgeProps = {
@@ -25,6 +26,7 @@ type AccountBridgeProps = {
   saveRef: { current: ((choice: AnalyticsChoice) => Promise<void>) | undefined };
   browserChoice: AnalyticsChoice | undefined;
   failed: () => void;
+  inherited: () => void;
 };
 
 function ClerkAccount(props: AccountBridgeProps) {
@@ -32,7 +34,7 @@ function ClerkAccount(props: AccountBridgeProps) {
   return <ConnectedAccount {...props} authLoaded={isLoaded} expectedSubject={userId ?? null} />;
 }
 
-function ConnectedAccount({ update, saveRef, browserChoice, failed, authLoaded = true, expectedSubject }: AccountBridgeProps & {
+function ConnectedAccount({ update, saveRef, browserChoice, failed, inherited, authLoaded = true, expectedSubject }: AccountBridgeProps & {
   authLoaded?: boolean;
   expectedSubject?: string | null;
 }) {
@@ -57,14 +59,25 @@ function ConnectedAccount({ update, saveRef, browserChoice, failed, authLoaded =
   useEffect(() => {
     if (browserChoice !== "on" || !user || user.analyticsPreference) return;
     let cancelled = false;
+    let owner: string | null = null;
+    try { owner = localStorage.getItem(ANALYTICS_CHOICE_OWNER_KEY); } catch { /* An unproven browser choice cannot grant account consent. */ }
+    if (!analyticsChoiceOwnerMatches(owner, user.id)) {
+      inherited();
+      return;
+    }
+    try { localStorage.setItem(ANALYTICS_CHOICE_OWNER_KEY, user.id); } catch { inherited(); return; }
     void setPreference({ choice: "on", policyVersion: ANALYTICS_POLICY_VERSION, browserRestriction: "on" })
       .catch(() => { if (!cancelled) failed(); });
     return () => { cancelled = true; };
-  }, [browserChoice, user, setPreference, failed]);
+  }, [browserChoice, user, setPreference, failed, inherited]);
   return null;
 }
 
 export function AnalyticsPreferencesProvider({ children }: { children: ReactNode }) {
+  return ANALYTICS_FOUNDATION_ENABLED ? <EnabledAnalyticsPreferencesProvider>{children}</EnabledAnalyticsPreferencesProvider> : children;
+}
+
+function EnabledAnalyticsPreferencesProvider({ children }: { children: ReactNode }) {
   const connected = Boolean(process.env.NEXT_PUBLIC_CONVEX_URL);
   const [account, setAccount] = useState<AccountState>({ resolved: !connected });
   const [ready, setReady] = useState(false);
@@ -72,7 +85,7 @@ export function AnalyticsPreferencesProvider({ children }: { children: ReactNode
   const [visible, setVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
-  const pauseRef = useRef(() => {});
+  const pauseRef = useRef<(withdraw?: boolean) => void>(() => {});
   const saveRef = useRef<((choice: AnalyticsChoice) => Promise<void>) | undefined>(undefined);
   const mounted = useRef(true);
   const accountIdentityRef = useRef<string | undefined>(undefined);
@@ -99,7 +112,7 @@ export function AnalyticsPreferencesProvider({ children }: { children: ReactNode
       const next = parseAnalyticsChoice(event.newValue);
       if (next === undefined) return;
       setChoice((current) => {
-        if (current !== next) pauseRef.current();
+        if (current !== next) pauseRef.current(next === "off");
         return next;
       });
     };
@@ -112,11 +125,16 @@ export function AnalyticsPreferencesProvider({ children }: { children: ReactNode
       if (current.resolved === state.resolved && current.choice === state.choice
         && current.analyticsId === state.analyticsId && current.userId === state.userId
         && current.revision === state.revision) return current;
-      pauseRef.current();
+      pauseRef.current(state.choice === "off");
       return state;
     });
   }, []);
   const failedAccountSave = useCallback(() => { setError(true); setVisible(true); }, []);
+  const inheritedChoice = useCallback(() => {
+    setChoice(undefined);
+    setVisible(true);
+    try { localStorage.removeItem(ANALYTICS_CHOICE_KEY); } catch { /* Keep capture unconsented in memory. */ }
+  }, []);
   const dismiss = () => {
     setVisible(false);
     returnFocusRef.current?.focus();
@@ -128,7 +146,7 @@ export function AnalyticsPreferencesProvider({ children }: { children: ReactNode
     setSaving(true);
     setError(false);
     if (next === "off") {
-      pauseRef.current();
+      pauseRef.current(true);
       setChoice("off");
       try { localStorage.setItem(ANALYTICS_CHOICE_KEY, "off"); } catch { /* Retain in-memory restriction. */ }
     }
@@ -136,6 +154,7 @@ export function AnalyticsPreferencesProvider({ children }: { children: ReactNode
     try {
       await saveRef.current?.(next);
       if (!mounted.current || accountIdentityRef.current !== savingFor) return;
+      localStorage.setItem(ANALYTICS_CHOICE_OWNER_KEY, savingFor ?? "guest");
       localStorage.setItem(ANALYTICS_CHOICE_KEY, next);
       setChoice(next);
       dismiss();
@@ -157,8 +176,8 @@ export function AnalyticsPreferencesProvider({ children }: { children: ReactNode
     setVisible(true);
   }, pauseRef }}>
     {connected && (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-      ? <ClerkAccount update={updateAccount} saveRef={saveRef} browserChoice={choice} failed={failedAccountSave} />
-      : <ConnectedAccount update={updateAccount} saveRef={saveRef} browserChoice={choice} failed={failedAccountSave} />)}
+      ? <ClerkAccount update={updateAccount} saveRef={saveRef} browserChoice={choice} failed={failedAccountSave} inherited={inheritedChoice} />
+      : <ConnectedAccount update={updateAccount} saveRef={saveRef} browserChoice={choice} failed={failedAccountSave} inherited={inheritedChoice} />)}
     {children}
     {visible && ready && <section ref={panelRef} tabIndex={-1} onKeyDown={(event) => { if (event.key === "Escape") dismiss(); }} aria-label="Usage & privacy" data-ph-no-capture className="fixed inset-x-4 bottom-4 z-50 mx-auto max-h-[calc(100dvh-2rem)] max-w-md overflow-y-auto rounded-panel border border-border-strong bg-surface-strong p-5 text-foreground shadow-hero sm:left-auto sm:right-6 sm:mx-0">
       <div className="flex items-center justify-between gap-4">
@@ -178,5 +197,6 @@ export function AnalyticsPreferencesProvider({ children }: { children: ReactNode
 
 export function AnalyticsSettingsButton() {
   const { open } = useAnalyticsPreferences();
+  if (!ANALYTICS_FOUNDATION_ENABLED) return null;
   return <button type="button" onClick={open} className="cursor-pointer text-muted underline-offset-4 hover:text-foreground hover:underline">Usage & privacy</button>;
 }

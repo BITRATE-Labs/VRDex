@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
+import { createRequire } from "node:module";
 import type { PostHog } from "posthog-js";
 import { guardAnalyticsRequests } from "../../apps/web/src/lib/analytics-transport";
+
+it("validates the installed SDK against the request guard", () => {
+  const { PostHog: InstalledPostHog } = createRequire(new URL("../../apps/web/package.json", import.meta.url))("posthog-js");
+  assert.equal(guardAnalyticsRequests(new InstalledPostHog(), () => true), true);
+});
 
 it("preserves large fetch payloads and suppresses retired session requests", () => {
   type Request = Parameters<PostHog["_send_request"]>[0];

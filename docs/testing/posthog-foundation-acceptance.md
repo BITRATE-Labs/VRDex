@@ -42,7 +42,15 @@ Visual inspection found that the initial translucent panel let footer text show 
 
 Existing analytics/sanitizer/route baseline: 28 tests passed. Dependency installation completed using the frozen lockfile; an earlier attempt ran before installation completed and failed to resolve tsx, then passed after installation.
 
-## Final local verification
+## PR follow-up verification
+
+PR review found three additional gaps: proposed copy was not deployment-gated, browser Off was not forwarded when continuing a claim, and unresolved auth cleared the prior outcome. The default-false foundation gate now hides the draft policy and controls and prevents optional browser collection. Claim continuation forwards the current restriction and terminally suppresses the owned journey before adapter work; cancellation also forwards the restriction. Auth history survives an unresolved interval and still resets on withdrawal.
+
+Further review fixes bind adopted guest choices to the first account, clear SDK persistence on withdrawal, pin the SDK exactly and verify the installed version. Granted lookup/temporal access now uses backend authorization consistently across analytics modes; the obsolete flag-refresh helper was removed. Batching remains deliberately disabled, with proxy request volume added to pilot acceptance.
+
+Follow-up local checks passed 46 backend cases and ten preference/transport cases. The browser configuration runs the enabled matrix with synthetic intercepted transport and separately tests disabled presentation/capture on desktop and mobile. Linux CI includes both configurations in the selected public-smoke lane. Original broad local results below precede these follow-ups; current Linux CI verifies the complete branch.
+
+## Original implementation verification
 
 - Web focused checks: 43 passed. Backend focused checks: 101 passed.
 - Desktop/mobile analytics browser spec: 16 passed. Screenshots received direct visual inspection after the opaque-panel fix.

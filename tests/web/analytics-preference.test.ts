@@ -1,7 +1,25 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
-import { analyticsAccountMatches, analyticsRolloutEnabled, parseAnalyticsChoice, resolveAnalyticsMode } from "../../apps/web/src/lib/analytics-preference";
+import { analyticsAccountMatches, parseAnalyticsChoice, resolveAnalyticsMode } from "../../apps/web/src/lib/analytics-preference";
 import { filterAnalyticsEvent } from "../../apps/web/src/lib/analytics-capture";
+import { retainAnalyticsAuthOutcome } from "../../apps/web/src/lib/analytics-preference";
+import { analyticsChoiceOwnerMatches } from "../../apps/web/src/lib/analytics-preference";
+
+it("adopts guest consent once but never inherits another account's choice", () => {
+  assert.equal(analyticsChoiceOwnerMatches("guest", "account-a"), true);
+  assert.equal(analyticsChoiceOwnerMatches("account-a", "account-a"), true);
+  assert.equal(analyticsChoiceOwnerMatches("account-a", "account-b"), false);
+  assert.equal(analyticsChoiceOwnerMatches(null, "account-b"), false);
+});
+
+it("retains the last auth outcome across unresolved identity but clears it after withdrawal", () => {
+  let previous: "authenticated" | "anonymous" | undefined = "authenticated";
+  previous = retainAnalyticsAuthOutcome(previous, undefined);
+  assert.equal(previous, "authenticated");
+  assert.equal(retainAnalyticsAuthOutcome(previous, "full"), "authenticated");
+  assert.equal(retainAnalyticsAuthOutcome(previous, "off"), undefined);
+  assert.equal(retainAnalyticsAuthOutcome(previous, "limited"), undefined);
+});
 
 it("uses Limited only after preferences resolve, with either Off restriction winning", () => {
   assert.equal(resolveAnalyticsMode(undefined, undefined, true), "limited");
@@ -43,15 +61,6 @@ it("accepts only explicit binary stored choices", () => {
   }
   assert.equal(parseAnalyticsChoice("off"), "off");
   assert.equal(parseAnalyticsChoice("on"), "on");
-});
-
-it("keeps authorized features usable without analytics and honors Full rollout flags", () => {
-  assert.equal(analyticsRolloutEnabled("off", false, true), true);
-  assert.equal(analyticsRolloutEnabled("limited", undefined, true), true);
-  assert.equal(analyticsRolloutEnabled(undefined, false, true), true);
-  assert.equal(analyticsRolloutEnabled("full", undefined, true), false);
-  assert.equal(analyticsRolloutEnabled("full", false, true), false);
-  assert.equal(analyticsRolloutEnabled("full", true, true), true);
 });
 
 it("rejects a stale backend identity during account switching and sign-out", () => {

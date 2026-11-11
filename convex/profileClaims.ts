@@ -530,6 +530,7 @@ export const cancelClaimJourneyPending = mutation({
   args: {
     profileSlug: v.string(),
     pendingType: v.union(v.literal("claim_request"), v.literal("proof")),
+    analyticsBrowserRestriction: v.optional(analyticsChoice),
   },
   handler: async (ctx, args) => {
     const { user } = await requireClaimSession(ctx);
@@ -570,6 +571,7 @@ export const cancelClaimJourneyPending = mutation({
       });
       const analytics = analyticsContextFromRequest(request);
       if (analytics !== null) {
+        analytics.browserRestriction = args.analyticsBrowserRestriction === "on" ? "on" : "off";
         await enqueueClaimAnalyticsEvent(ctx, analytics, {
           event: "claim_resolved",
           profileType: request.profileType,
@@ -607,6 +609,7 @@ export const cancelClaimJourneyPending = mutation({
     });
     const analytics = analyticsContextFromAttempt(proof);
     if (analytics !== null) {
+      analytics.browserRestriction = args.analyticsBrowserRestriction === "on" ? "on" : "off";
       await enqueueClaimAnalyticsEvent(ctx, analytics, {
         event: "claim_resolved",
         profileType: profile.profileType,
@@ -1228,12 +1231,18 @@ export const recordDiscordCommunityVerificationStarted = internalMutation({
 export const verifyDiscordCommunityAdminClaim = action({
   args: {
     claimRequestId: v.id("profileClaimRequests"),
+    analyticsBrowserRestriction: v.optional(analyticsChoice),
   },
   handler: async (ctx, args): Promise<DiscordAdminAdapterResult> => {
     const claimContext = (await ctx.runQuery(internal.profileClaims.getDiscordCommunityClaimForAdapter, {
       claimRequestId: args.claimRequestId,
     })) as DiscordCommunityClaimAdapterContext;
     const guildId = claimContext.claimRequest.discordGuildId;
+
+    if (claimContext.claimRequest.analyticsJourneyId) await ctx.runMutation(internal.claimAnalytics.restrictBrowserJourney, {
+      journeyId: claimContext.claimRequest.analyticsJourneyId,
+      browserRestriction: args.analyticsBrowserRestriction,
+    });
 
     if (guildId === undefined) {
       throw claimError("INVALID_DISCORD_GUILD_ID");
@@ -1854,6 +1863,7 @@ export const recordAdapterProofCheckOutcome = internalMutation({
 export const verifyVrchatProofViaAdapter = action({
   args: {
     attemptId: v.id("profileVerificationAttempts"),
+    analyticsBrowserRestriction: v.optional(analyticsChoice),
   },
   handler: async (ctx, args): Promise<VerifyAdapterResult> => {
     const attemptContext = (await ctx.runQuery(internal.profileClaims.getVerificationAttemptForAdapter, {
@@ -1863,6 +1873,11 @@ export const verifyVrchatProofViaAdapter = action({
     if (attemptContext === null) {
       throw claimError("PROOF_NOT_FOUND");
     }
+
+    if (attemptContext.attempt.analyticsJourneyId) await ctx.runMutation(internal.claimAnalytics.restrictBrowserJourney, {
+      journeyId: attemptContext.attempt.analyticsJourneyId,
+      browserRestriction: args.analyticsBrowserRestriction,
+    });
 
     /**
      * The attempt's current state when the collector settled it mid-call,

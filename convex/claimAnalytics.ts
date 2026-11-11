@@ -1,4 +1,6 @@
 import { v } from "convex/values";
+import { currentUserOrNull } from "./_identity";
+import { analyticsChoice } from "./_analyticsPreference";
 
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
@@ -15,6 +17,21 @@ const LIFECYCLE_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
 const LIFECYCLE_CLEANUP_BATCH = 200;
 
 type DeliveryClaim = { row: Doc<"claimAnalyticsOutbox"> | null };
+
+export const restrictBrowserJourney = internalMutation({
+  args: { journeyId: v.string(), browserRestriction: v.optional(analyticsChoice) },
+  handler: async (ctx, args) => {
+    if (args.browserRestriction === "on") return;
+    const caller = await currentUserOrNull(ctx);
+    if (!caller) return;
+    const rows = await ctx.db.query("claimAnalyticsOutbox")
+      .withIndex("by_journeyId", (q) => q.eq("journeyId", args.journeyId)).collect();
+    // Keep the original receipt suppressed so later asynchronous milestones cannot revive this journey.
+    for (const row of rows) if (row.ownerUserId === caller._id) {
+      await ctx.db.patch(row._id, { state: "suppressed", leaseUntil: undefined });
+    }
+  },
+});
 
 export const claimNextForDelivery = internalMutation({
   args: {},

@@ -29,7 +29,7 @@ Each consent/account transition has a separate SDK lifetime. A small request gua
 
 The first eligible outbox row records original owner, preference revision, UUID and deployment category for its journey. Later milestones inherit that context only when the authenticated caller or authoritative attempt/request owner matches. A journey UUID is never authorization to select another account's identity or consent. Enqueue and delivery require account On and the original revision. Initial browser restriction must explicitly permit On. Legacy rows and revoked generations become terminally suppressed and cannot return after a later On. Authoritative claim/proof records remain unchanged. Suppressed rows use the existing 30-day cleanup.
 
-Granted lookup/temporal features remain usable in Off/Limited through backend authorization and checked-in defaults. Full honors resolved rollout flags. Featured remains disabled. Surveys, experiments, heatmaps, new error tracking and performance metrics are not enabled.
+Granted lookup/temporal features use backend authorization in every analytics mode. Optional PostHog rollout flags cannot remove granted access when someone opts in. Featured remains disabled. Surveys, experiments, heatmaps, new error tracking and performance metrics are not enabled.
 
 See the [acceptance record](../testing/posthog-foundation-acceptance.md). This implementation does not activate production recording, apply provider changes, create credentials or access real session content.
 

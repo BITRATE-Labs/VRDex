@@ -1,7 +1,10 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import { ANALYTICS_FOUNDATION_ENABLED } from "@/lib/analytics-preference";
 import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
 
 export default function PrivacyPolicyPage() {
+  if (!ANALYTICS_FOUNDATION_ENABLED) notFound();
   return <PageShell className="py-10"><PageContainer max="4xl">
     <PageNav><BrandLink /></PageNav>
     <article className="max-w-2xl space-y-6 text-sm leading-relaxed" data-ph-no-capture>

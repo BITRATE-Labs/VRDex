@@ -1,15 +1,13 @@
 "use client";
 
 import { api } from "@convex-generated-api";
-import { useAnalyticsPreferences } from "../_components/analytics-preferences";
-import { analyticsRolloutEnabled } from "@/lib/analytics-preference";
 import type {
   TemporalParseCompletedResponse,
   TemporalParsePendingResponse,
 } from "@vrdex/api-contracts";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import Link from "next/link";
-import { useFeatureFlagEnabled, usePostHog } from "posthog-js/react";
+import { usePostHog } from "posthog-js/react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -19,14 +17,12 @@ import { Notice } from "@/components/ui/notice";
 import {
   captureProductEvent,
   mirrorTemporalParsingAccess,
-  TEMPORAL_PARSING_UI_FLAG,
 } from "@/lib/posthog";
 import { defaultCountryForLocale } from "@/lib/temporal-locale";
 
 type Result = TemporalParseCompletedResponse | TemporalParsePendingResponse;
 
 const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
-const posthogConfigured = Boolean(process.env.NEXT_PUBLIC_POSTHOG_KEY?.trim());
 
 function latencyBucket(milliseconds: number) {
   if (milliseconds < 2_000) return "under_2s" as const;
@@ -123,8 +119,6 @@ function ConnectedTemporalParser() {
   const access = useQuery(api.temporalParsing.getAccess, isAuthenticated ? {} : "skip");
   const setRetention = useMutation(api.temporalParsing.setRetentionPreference);
   const posthog = usePostHog();
-  const uiFlag = useFeatureFlagEnabled(TEMPORAL_PARSING_UI_FLAG);
-  const { mode: analyticsMode } = useAnalyticsPreferences();
   const [text, setText] = useState("");
   const [timeZone, setTimeZone] = useState("America/New_York");
   const [locale, setLocale] = useState("en-US");
@@ -136,8 +130,7 @@ function ConnectedTemporalParser() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const pageOpened = useRef(false);
-  const enabled = access?.allowed === true && access.emailVerified
-    && analyticsRolloutEnabled(analyticsMode, uiFlag, posthogConfigured);
+  const enabled = access?.allowed === true && access.emailVerified;
 
   useEffect(() => {
     setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York");

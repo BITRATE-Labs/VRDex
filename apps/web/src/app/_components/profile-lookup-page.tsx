@@ -1,16 +1,13 @@
 "use client";
 
 import { useConvex } from "convex/react";
-import { useAnalyticsPreferences } from "./analytics-preferences";
-import { analyticsRolloutEnabled } from "@/lib/analytics-preference";
 import type { FunctionReference } from "convex/server";
 import Link from "next/link";
-import { useFeatureFlagEnabled, usePostHog } from "posthog-js/react";
+import { usePostHog } from "posthog-js/react";
 import { type CSSProperties, useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { api } from "@convex-generated-api";
 import { PublicProfileLinks } from "./public-profile-links";
-import { shouldRefreshBulkPrivateLookup } from "./lookup-private-refresh";
 import { LookupSearchBox } from "./lookup-search-box";
 import { mergeLookupSuggestions } from "./lookup-suggestion-merge";
 import { SearchViewShell } from "./search-view-shell";
@@ -25,7 +22,6 @@ import type { AvatarAppearance } from "@/lib/avatar-appearance";
 import {
   captureProductEvent,
   mirrorPrivateSeedLookupAccess,
-  PRIVATE_SEED_LOOKUP_UI_FLAG,
 } from "@/lib/posthog";
 
 type ProfileTrustLabel = "community_submitted" | "unclaimed" | "claimed_unverified" | "claimed_verified";
@@ -512,9 +508,6 @@ function ProfileLookupPageContent({
   viewerAccess,
 }: ProfileLookupPageProps & { queryPrivateResults: QueryPrivateResults | null }) {
   const posthog = usePostHog();
-  const privateUiFlag = useFeatureFlagEnabled(PRIVATE_SEED_LOOKUP_UI_FLAG);
-  const { mode: analyticsMode } = useAnalyticsPreferences();
-  const privateRolloutEnabled = analyticsRolloutEnabled(analyticsMode, privateUiFlag, Boolean(process.env.NEXT_PUBLIC_POSTHOG_KEY));
   const [displayQuery, setDisplayQuery] = useState(query);
   const [displayResults, setDisplayResults] = useState(results);
   const [displayPrivateResults, setDisplayPrivateResults] = useState(privateResults);
@@ -526,12 +519,9 @@ function ProfileLookupPageContent({
   const privateLookupQueryRef = useRef<string | null>(
     privateResults.length > 0 ? query : null,
   );
-  const bulkLookupLinesRef = useRef<string[]>([]);
-  const bulkPrivateRefreshAttemptedRef = useRef(privateRolloutEnabled);
   const [isPending, startTransition] = useTransition();
   const isSearching = pendingLabel !== null || isPending;
-  const privateUiEnabled = seedViewerAccess.allowed && (seedViewerAccess.source === "super_admin"
-    || privateRolloutEnabled);
+  const privateUiEnabled = seedViewerAccess.allowed;
   const visibleResults = mergeLookupSuggestions(
     displayResults,
     seedViewerAccess.allowed && privateUiEnabled ? displayPrivateResults : [],
@@ -569,9 +559,7 @@ function ProfileLookupPageContent({
     nextLookup: LookupResponse,
     nextQuery: string,
   ) => {
-    const enabled = nextLookup.viewerAccess.source === "super_admin" || privateRolloutEnabled;
-
-    if (!nextLookup.viewerAccess.allowed || !enabled) {
+    if (!nextLookup.viewerAccess.allowed) {
       return [];
     }
 
@@ -591,18 +579,16 @@ function ProfileLookupPageContent({
       console.error(`Client-side private seed lookup failed: ${message}`);
       return [];
     }
-  }, [privateRolloutEnabled, queryPrivateResults]);
+  }, [queryPrivateResults]);
 
   useEffect(() => {
     const currentQuery = displayQuery.trim();
-    const enabled = seedViewerAccess.source === "super_admin" || privateRolloutEnabled;
 
     if (
       bulkEntries.length > 0 ||
       currentQuery.length < 1 ||
       displayPrivateResults.length > 0 ||
       !seedViewerAccess.allowed ||
-      !enabled ||
       !queryPrivateResults ||
       privateLookupQueryRef.current === currentQuery
     ) {
@@ -631,7 +617,6 @@ function ProfileLookupPageContent({
     bulkEntries.length,
     displayPrivateResults.length,
     displayQuery,
-    privateRolloutEnabled,
     queryPrivateResults,
     seedViewerAccess.allowed,
     seedViewerAccess.source,
@@ -689,12 +674,7 @@ function ProfileLookupPageContent({
 
   const runBulkLookup = useCallback(async (
     lines: string[],
-    options: { flagRefresh?: boolean } = {},
   ) => {
-    bulkLookupLinesRef.current = lines;
-    if (!options.flagRefresh) {
-      bulkPrivateRefreshAttemptedRef.current = privateRolloutEnabled;
-    }
     if (lines.length === 0) {
       requestVersionRef.current += 1;
       startTransition(() => {
@@ -725,9 +705,7 @@ function ProfileLookupPageContent({
         lines.map(async (line) => {
           const lookup = await fetchLookupResults(line);
           const privateResults = await fetchAllowedPrivateResults(lookup, line);
-          const showPrivate = lookup.viewerAccess.allowed && (
-            lookup.viewerAccess.source === "super_admin" || privateRolloutEnabled
-          );
+          const showPrivate = lookup.viewerAccess.allowed;
 
           return {
             lookup: { ...lookup, privateResults },
@@ -779,32 +757,14 @@ function ProfileLookupPageContent({
     fetchAllowedPrivateResults,
     posthog,
     privateUiEnabled,
-    privateRolloutEnabled,
     routePath,
     seedViewerAccessAllowed,
     seedViewerAccessSource,
     view,
   ]);
 
-  useEffect(() => {
-    const lines = bulkLookupLinesRef.current;
-    if (!shouldRefreshBulkPrivateLookup({
-      bulkEntryCount: bulkEntries.length,
-      flagEnabled: privateRolloutEnabled,
-      lineCount: lines.length,
-      refreshAttempted: bulkPrivateRefreshAttemptedRef.current,
-    })) {
-      return;
-    }
-
-    bulkPrivateRefreshAttemptedRef.current = true;
-    void runBulkLookup(lines, { flagRefresh: true });
-  }, [bulkEntries.length, privateRolloutEnabled, runBulkLookup]);
-
   const clearLookup = useCallback(() => {
     requestVersionRef.current += 1;
-    bulkLookupLinesRef.current = [];
-    bulkPrivateRefreshAttemptedRef.current = privateRolloutEnabled;
     startTransition(() => {
       setDisplayQuery("");
       setDisplayResults([]);
@@ -814,7 +774,7 @@ function ProfileLookupPageContent({
       setPendingLabel(null);
       updateLookupUrl("", routePath, view);
     });
-  }, [privateRolloutEnabled, routePath, view]);
+  }, [routePath, view]);
 
   const canonicalView = view ?? "dj";
   const switcherQuery = bulkEntries.length > 0 ? undefined : displayQuery;

@@ -6,7 +6,7 @@ import { Suspense, type ReactNode, useEffect, useLayoutEffect, useRef, useState 
 import { usePathname, useSearchParams } from "next/navigation";
 import { useAnalyticsPreferences } from "./_components/analytics-preferences";
 import { analyticsRouteClass, filterAnalyticsEvent, parseDeploymentCategory } from "@/lib/analytics-capture";
-import type { AnalyticsMode } from "@/lib/analytics-preference";
+import { retainAnalyticsAuthOutcome, type AnalyticsMode } from "@/lib/analytics-preference";
 import { guardAnalyticsRequests } from "@/lib/analytics-transport";
 import { captureProductEvent, SESSION_REPLAY_MASKED_SELECTOR } from "@/lib/posthog";
 
@@ -31,11 +31,15 @@ function NavigationCapture() {
   return null;
 }
 
-function pauseCapture() {
+function pauseCapture(withdraw = false) {
   activeMode = undefined;
   const client = activeClient;
   activeClient = undefined;
   if (!client) return;
+  if (withdraw) {
+    client.reset(true);
+    client.set_config({ disable_persistence: true });
+  }
   client.set_config({ disable_session_recording: true, autocapture: false, capture_pageleave: false, advanced_disable_flags: true });
   client.stopSessionRecording();
   client.opt_out_capturing();
@@ -56,6 +60,7 @@ function initializeClient(token: string, mode: "limited" | "full", analyticsId: 
     disable_session_recording: true, advanced_disable_flags: mode !== "full",
     opt_out_capturing_by_default: true,
     consent_persistence_name: `vrdex-analytics-${mode}`,
+    // Keep each consent-bound event independently dispatchable; measure proxy request volume during the pilot.
     request_batching: false, ip: false, capture_performance: false, enable_recording_console_log: false,
     // Nonproduction must admit synthetic browser acceptance traffic.
     opt_out_useragent_filter: category !== "production",
@@ -83,7 +88,7 @@ export function PostHogProvider({ children }: { children: ReactNode }) {
   const authSessionRef = useRef<"anonymous" | "authenticated" | undefined>(undefined);
   useLayoutEffect(() => {
     pauseRef.current = pauseCapture;
-    if (mode !== "full") authSessionRef.current = undefined;
+    authSessionRef.current = retainAnalyticsAuthOutcome(authSessionRef.current, mode);
     pauseCapture();
     if (!key || !category || !mode || mode === "off" || (mode === "limited" && !limitedEnabled)) {
       previousMode = mode;

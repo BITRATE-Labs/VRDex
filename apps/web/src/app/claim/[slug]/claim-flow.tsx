@@ -666,7 +666,7 @@ export function ClaimFlowContent({
     try {
       captureJourneyView(journeyId);
       captureMethodSelection(journeyId, proofMethod);
-      const result = await verifyVrchat({ attemptId });
+      const result = await verifyVrchat({ attemptId, analyticsBrowserRestriction: analyticsMode === "full" ? "on" : "off" });
       if ("claimState" in result) {
         const verified = result.claimState === "claimed_verified";
         setStatus({
@@ -777,7 +777,7 @@ export function ClaimFlowContent({
     try {
       captureJourneyView(journeyId);
       captureMethodSelection(journeyId, "discord");
-      const result = await verifyDiscord({ claimRequestId: requestId });
+      const result = await verifyDiscord({ claimRequestId: requestId, analyticsBrowserRestriction: analyticsMode === "full" ? "on" : "off" });
       if ("claimState" in result) {
         const verified = result.claimState === "claimed_verified";
         setStatus({
@@ -829,7 +829,7 @@ export function ClaimFlowContent({
     setCollectorCompletion(null);
     setStatus({ kind: "working", message: "Canceling…" });
     try {
-      const result = await cancelPending({ profileSlug: profile.slug, pendingType });
+      const result = await cancelPending({ profileSlug: profile.slug, pendingType, analyticsBrowserRestriction: analyticsMode === "full" ? "on" : "off" });
 
       // Nothing was cancelled, so the collector resolved the proof between the
       // click and this mutation. Say nothing and let the completion observer

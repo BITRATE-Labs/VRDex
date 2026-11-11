@@ -143,6 +143,6 @@ describe("API platform review boundaries", () => {
     const temporalPage = source("apps/web/src/app/time/temporal-parser.tsx");
 
     assert.match(temporalPage, /access\?\.allowed === true && access.emailVerified/);
-    assert.match(temporalPage, /analyticsRolloutEnabled\(analyticsMode, uiFlag, posthogConfigured\)/);
+    assert.doesNotMatch(temporalPage, /useFeatureFlagEnabled|analyticsRolloutEnabled/);
   });
 });
