@@ -64,6 +64,9 @@ const aggregateInstanceValidator = v.object({
   providerLocation: v.string(),
   vrchatWorldId: v.string(),
   population: v.number(),
+  userCount: v.optional(v.union(v.number(), v.null())),
+  queueSize: v.optional(v.union(v.number(), v.null())),
+  platforms: v.optional(v.union(v.record(v.string(), v.number()), v.null())),
   closedAt: v.optional(v.number()),
 });
 
@@ -1599,6 +1602,9 @@ export const ingestAggregatePoll = internalMutation({
     for (const item of args.instances) {
       if (
         !Number.isSafeInteger(item.population) || item.population < 0 ||
+        [item.userCount, item.queueSize].some(value => value != null && (!Number.isSafeInteger(value) || value < 0)) ||
+        (item.platforms != null && (Object.keys(item.platforms).length > 16 || Object.entries(item.platforms).some(([key, value]) =>
+          !/^(?!usr_)[A-Za-z][A-Za-z0-9_-]{0,63}$/i.test(key) || !Number.isSafeInteger(value) || value < 0))) ||
         (item.closedAt !== undefined && (!Number.isSafeInteger(item.closedAt) || item.closedAt < 0 || item.closedAt > args.observedAt)) ||
         item.providerInstanceId.length < 1 || item.providerInstanceId.length > 500 || /[\u0000-\u001f\u007f]/.test(item.providerInstanceId) ||
         item.providerLocation.length < 1 || item.providerLocation.length > 500 ||
@@ -1738,6 +1744,9 @@ export const ingestAggregatePoll = internalMutation({
         providerInstanceId: item.providerInstanceId,
         vrchatWorldId: item.vrchatWorldId,
         population: item.population,
+        ...(item.userCount != null ? { userCount: item.userCount } : {}),
+        ...(item.queueSize != null ? { queueSize: item.queueSize } : {}),
+        ...(item.platforms != null ? { platforms: item.platforms } : {}),
         observedAt: args.observedAt,
         source: args.source,
         collectorVersion: args.collectorVersion,
@@ -1908,7 +1917,7 @@ async function telemetryDashboardData(ctx: QueryCtx, profile: Doc<"profiles">, n
     },
     sessions: ownedSessions,
     population: population.reverse(),
-    instancePopulation: instancePopulation.reverse(),
+    instancePopulation: instancePopulation.reverse().map(({ userCount, queueSize, platforms, ...observation }) => observation),
     memberCounts: memberCounts.reverse(),
     coverage: coverage.reverse(),
     rollups,

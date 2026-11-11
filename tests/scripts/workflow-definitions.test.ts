@@ -225,6 +225,9 @@ describe("optional browser and visual evidence contract", () => {
     const steps = browser.steps;
     const evidenceUpload = steps.find((step: { name?: string }) => step.name === "Upload candidate evidence");
     assert.equal(evidenceUpload.with["retention-days"], 7);
+    const mirror = steps.findIndex((step: { run?: string }) => step.run?.includes("configure-ubuntu-mirror.mjs"));
+    const chromium = steps.findIndex((step: { name?: string }) => step.name === "Install Chromium");
+    assert.ok(mirror >= 0 && chromium > mirror, "Preserve main's signed-mirror prerequisite in the reused browser job");
     const preflight = steps.findIndex((step: { run?: string }) => step.run?.includes("candidate-preview-acceptance.mjs preflight"));
     const mutation = steps.findIndex((step: { run?: string }) => step.run?.includes("profile-submission.flow.spec.ts"));
     const report = steps.findIndex((step: { run?: string }) => step.run?.includes("candidate-preview-acceptance.mjs report"));

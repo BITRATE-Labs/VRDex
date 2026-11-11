@@ -110,11 +110,7 @@ jobs:
       - name: Install script media test prerequisites
         timeout-minutes: 5
         run: |
-          # Avoid a shared Canonical DNS dependency while retaining Ubuntu signature checks.
-          if [[ -f /etc/apt/apt-mirrors.txt ]]; then
-            sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
-            sudo sed -i '1ihttps://mirrors.edge.kernel.org/ubuntu/\tpriority:1' /etc/apt/apt-mirrors.txt
-          fi
+          sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
           sudo apt-get update
           sudo apt-get install --no-install-recommends --yes ffmpeg
           ffmpeg -version
@@ -199,11 +195,7 @@ jobs:
       - name: Install backend media test prerequisites
         timeout-minutes: 5
         run: |
-          # Avoid a shared Canonical DNS dependency while retaining Ubuntu signature checks.
-          if [[ -f /etc/apt/apt-mirrors.txt ]]; then
-            sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
-            sudo sed -i '1ihttps://mirrors.edge.kernel.org/ubuntu/\tpriority:1' /etc/apt/apt-mirrors.txt
-          fi
+          sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
           sudo apt-get update
           sudo apt-get install --no-install-recommends --yes ffmpeg
           ffmpeg -version
@@ -355,11 +347,7 @@ jobs:
         if: steps.changes.outputs.enabled == 'true'
         timeout-minutes: 5
         run: |
-          # Avoid a shared Canonical DNS dependency while retaining Ubuntu signature checks.
-          if [[ -f /etc/apt/apt-mirrors.txt ]]; then
-            sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
-            sudo sed -i '1ihttps://mirrors.edge.kernel.org/ubuntu/\tpriority:1' /etc/apt/apt-mirrors.txt
-          fi
+          sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
@@ -549,6 +537,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Configure Ubuntu package mirror
+        run: sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
+
       - name: Install Playwright Chromium
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
@@ -613,6 +604,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Configure Ubuntu package mirror
+        run: sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
+
       - name: Install Playwright Chromium
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
@@ -664,6 +658,7 @@ jobs:
 
       - name: Install synthetic media tools
         run: |
+          sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
           sudo apt-get update && sudo apt-get install -y ffmpeg pulseaudio pulseaudio-utils
           pnpm --filter web exec playwright install --with-deps firefox
 
@@ -781,6 +776,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Configure Ubuntu package mirror
+        run: sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
 
       - name: Install Playwright Chromium
         working-directory: apps/web
@@ -904,6 +902,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Configure Ubuntu package mirror
+        run: sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
+
       - name: Install Playwright Chromium
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
@@ -985,6 +986,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Configure Ubuntu package mirror
+        run: sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
+
       - name: Install Playwright Chromium
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
@@ -1053,6 +1057,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Configure Ubuntu package mirror
+        run: sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
 
       - name: Install Playwright Chromium
         working-directory: apps/web

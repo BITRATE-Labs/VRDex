@@ -92,7 +92,7 @@ for (const mode of ["owner", "staff"]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `../../.cache/artifacts/task9-history-expired-${mode}-${test.info().project.name}.png`, fullPage: true });
     await history(page).getByRole("button", { name: "The Observatory" }).click();
-    await expect(page.getByText("Unknown", { exact: true })).toBeVisible();
+    await expect(page.getByRole("paragraph").filter({ hasText: /^Unknown$/ })).toBeVisible();
     await expect(page.getByRole("button", { name: "Close instance", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Back to instances" })).toBeVisible();
   });
@@ -105,7 +105,7 @@ for (const mode of ["owner", "staff"]) {
     await expect(page.getByRole("button", { name: "Confirm closure" })).toBeVisible();
     await page.clock.runFor(1);
     await expect(page.getByRole("button", { name: "Confirm closure" })).toHaveCount(0);
-    await expect(page.getByText("Unknown", { exact: true })).toBeVisible();
+    await expect(page.getByRole("paragraph").filter({ hasText: /^Unknown$/ })).toBeVisible();
     await expect(page.getByTestId("session-submissions")).toHaveText("[]");
     await expect(page.getByText("100", { exact: true }).first()).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -132,7 +132,7 @@ for (const skew of [-86_400_000, 86_400_000]) {
     await expect(page.getByText("Still open", { exact: true })).toHaveCount(0);
     await click(page, "Hold evaluations");
     await click(page, "Remount owner");
-    await expect(page.getByText("Unknown", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("paragraph").filter({ hasText: /^Unknown$/ })).toHaveCount(0);
     await expect(page.getByRole("status").filter({ hasText: "Loading instance" })).toBeVisible();
     await click(page, "Replace observation");
     await page.clock.runFor(5000);
@@ -148,7 +148,7 @@ test("disconnect and management revocation remove open confirmations while histo
   await click(page, "Close instance");
   await click(page, "Disconnect");
   await expect(page.getByRole("button", { name: "Confirm closure" })).toHaveCount(0);
-  await expect(page.getByText("Unknown", { exact: true })).toBeVisible();
+  await expect(page.getByRole("paragraph").filter({ hasText: /^Unknown$/ })).toBeVisible();
   await click(page, "Replace observation");
   await click(page, "Close instance");
   await click(page, "Revoke management");
