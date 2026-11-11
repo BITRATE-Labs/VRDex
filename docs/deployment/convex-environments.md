@@ -77,6 +77,10 @@ remain blocked and retry hourly. Aggregate counts are exposed by
 Completed mappings and associated withdrawn guest receipts expire after 30 days.
 Pending, accepted, blocked and failed targets are never swept.
 
+Consented backend claim events also create the opaque account person profile,
+so withdrawal covers accounts whose browser ingestion was blocked. Operational
+extraction telemetry remains separate from account analytics.
+
 Guest On uses the existing web-to-Convex admin path and IP limiter to issue a
 random ID and withdrawal receipt. The `analytics_guest_start` policy allows three
 starts per IP per minute; withdrawal retains the `public_write` policy. Convex retains only the
