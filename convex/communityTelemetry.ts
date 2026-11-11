@@ -1604,7 +1604,7 @@ export const ingestAggregatePoll = internalMutation({
         !Number.isSafeInteger(item.population) || item.population < 0 ||
         [item.userCount, item.queueSize].some(value => value != null && (!Number.isSafeInteger(value) || value < 0)) ||
         (item.platforms != null && (Object.keys(item.platforms).length > 16 || Object.entries(item.platforms).some(([key, value]) =>
-          !/^(?!usr_)[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(key) || !Number.isSafeInteger(value) || value < 0))) ||
+          !/^(?!usr_)[A-Za-z][A-Za-z0-9_-]{0,63}$/i.test(key) || !Number.isSafeInteger(value) || value < 0))) ||
         (item.closedAt !== undefined && (!Number.isSafeInteger(item.closedAt) || item.closedAt < 0 || item.closedAt > args.observedAt)) ||
         item.providerInstanceId.length < 1 || item.providerInstanceId.length > 500 || /[\u0000-\u001f\u007f]/.test(item.providerInstanceId) ||
         item.providerLocation.length < 1 || item.providerLocation.length > 500 ||

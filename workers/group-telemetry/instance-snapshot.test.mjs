@@ -73,7 +73,7 @@ test("malformed optional diagnostics reject the snapshot", async () => {
   for (const value of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1, "3", false, {}, []]) {
     for (const key of ["userCount", "queueSize"]) await assert.rejects(setup([{ ...instance, [key]: value }]).provider.readAggregateSnapshot(groupId));
   }
-  for (const platforms of [[], 4, "windows", { windows: -1 }, { windows: 1.5 }, { windows: "2" }, { windows: Number.MAX_SAFE_INTEGER + 1 }, { "": 0 }, { ["a".repeat(65)]: 0 }, { "usr_private": 1 }, { "bad key": 1 }, Object.fromEntries(Array.from({ length: 17 }, (_, i) => [`platform${i}`, 0]))]) {
+  for (const platforms of [[], 4, "windows", { windows: -1 }, { windows: 1.5 }, { windows: "2" }, { windows: Number.MAX_SAFE_INTEGER + 1 }, { "": 0 }, { ["a".repeat(65)]: 0 }, { "usr_private": 1 }, { "USR_private": 1 }, { "bad key": 1 }, Object.fromEntries(Array.from({ length: 17 }, (_, i) => [`platform${i}`, 0]))]) {
     await assert.rejects(setup([{ ...instance, platforms }]).provider.readAggregateSnapshot(groupId));
   }
 });

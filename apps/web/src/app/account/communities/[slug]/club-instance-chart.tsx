@@ -10,14 +10,21 @@ const exactTime = new Intl.DateTimeFormat(undefined, { year: "numeric", month: "
 export function ClubInstanceChart({ points, closedAt }: { points: InstanceChartPoint[]; closedAt: number | null }) {
   const [showTable, setShowTable] = useState(false);
   const tableId = useId();
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
   const hasQueue = points.some((point) => (point.queueSize ?? 0) > 0);
   const hasWindows = points.some((point) => point.windows !== null);
   const hasAndroid = points.some((point) => point.android !== null);
   const first = points[0]?.at, last = points.at(-1)?.at;
-  if (first === undefined || last === undefined) return <Notice variant="dashed">No observations in this range.</Notice>;
+  if (first === undefined || last === undefined || !points.some((point) => point.population !== null)) return <Notice variant="dashed">No observations in this range.</Notice>;
   const domain = [Math.min(first, closedAt ?? first), Math.max(last, closedAt ?? last, first + 1)];
   const multiDay = new Date(first).toDateString() !== new Date(domain[1]!).toDateString();
   const axisTime = new Intl.DateTimeFormat(undefined, { ...(multiDay ? { month: "short", day: "numeric" } : {}), hour: "2-digit", minute: "2-digit" });
+  const isolatedDot = (key: "population" | "windows" | "android" | "queueSize", color: string) =>
+    function IsolatedDot({ cx, cy, index }: { cx?: number; cy?: number; index?: number }) {
+      const position = index ?? -1;
+      return points[position]?.[key] != null && points[position - 1]?.[key] == null && points[position + 1]?.[key] == null
+        ? <circle cx={cx} cy={cy} r={3} fill={color} /> : <></>;
+    };
   return <div className="min-w-0">
       <div className="min-w-0">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -47,10 +54,10 @@ export function ClubInstanceChart({ points, closedAt }: { points: InstanceChartP
                 </div> : null;
               }} />
               {closedAt !== null ? <ReferenceLine x={closedAt} stroke="var(--muted)" strokeDasharray="2 4" ifOverflow="extendDomain" label={{ value: "Closed to new joins", position: closedAt > domain[0]! + (domain[1]! - domain[0]!) * 0.7 ? "insideTopRight" : "top", fill: "var(--muted)", fontSize: 10 }} /> : null}
-              <Line name="Population" dataKey="population" type="linear" stroke="var(--accent)" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} isAnimationActive={false} />
-              {hasWindows ? <Line name="Windows" dataKey="windows" type="linear" stroke="var(--success)" strokeWidth={2} dot={{ r: 2 }} connectNulls={false} isAnimationActive={false} /> : null}
-              {hasAndroid ? <Line name="Android" dataKey="android" type="linear" stroke="var(--warning)" strokeWidth={2} dot={{ r: 2 }} connectNulls={false} isAnimationActive={false} /> : null}
-              {hasQueue ? <Line name="Queue" dataKey="queueSize" type="linear" stroke="var(--muted)" strokeWidth={2} strokeDasharray="5 4" dot={{ r: 3 }} connectNulls={false} isAnimationActive={false} /> : null}
+              <Line name="Population" dataKey="population" type="linear" stroke="var(--accent)" strokeWidth={2} dot={isolatedDot("population", "var(--accent)")} activeDot={{ r: 4 }} connectNulls={false} isAnimationActive={false} />
+              {hasWindows ? <Line name="Windows" dataKey="windows" type="linear" stroke="var(--success)" strokeWidth={2} dot={isolatedDot("windows", "var(--success)")} activeDot={{ r: 4 }} connectNulls={false} isAnimationActive={false} /> : null}
+              {hasAndroid ? <Line name="Android" dataKey="android" type="linear" stroke="var(--warning)" strokeWidth={2} dot={isolatedDot("android", "var(--warning)")} activeDot={{ r: 4 }} connectNulls={false} isAnimationActive={false} /> : null}
+              {hasQueue ? <Line name="Queue" dataKey="queueSize" type="linear" stroke="var(--muted)" strokeWidth={2} strokeDasharray="5 4" dot={isolatedDot("queueSize", "var(--muted)")} activeDot={{ r: 4 }} connectNulls={false} isAnimationActive={false} /> : null}
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -60,7 +67,7 @@ export function ClubInstanceChart({ points, closedAt }: { points: InstanceChartP
         </div>
         {closedAt !== null ? <div className="mt-4 flex flex-wrap items-center gap-3">
           <span className="text-xs text-muted">{exactTime.format(closedAt)} · Closed to new joins</span>
-        </div> : <p className="mt-3 text-xs text-muted">Closure time: Unknown</p>}
+        </div> : null}
         {showTable ? <div id={tableId} className="mt-5 max-h-80 overflow-auto">
           <table className="w-full text-left text-sm tabular-nums">
             <caption className="sr-only">Instance population values</caption>
@@ -70,15 +77,15 @@ export function ClubInstanceChart({ points, closedAt }: { points: InstanceChartP
         </div> : null}
       </div>
       <div className="mt-5 min-w-0 border-t border-border pt-4">
-        <details>
+        <details onToggle={(event) => setShowDiagnostics(event.currentTarget.open)}>
           <summary className="cursor-pointer text-sm font-medium">Diagnostics</summary>
-          <div className="mt-4 max-h-80 overflow-auto">
+          {showDiagnostics ? <div className="mt-4 max-h-80 overflow-auto">
             <table className="w-full text-left text-sm tabular-nums">
               <caption className="sr-only">Instance diagnostic counts</caption>
               <thead className="border-b border-border text-muted"><tr><th className="py-3 pr-4 font-normal">Time</th><th className="px-2 py-3 font-normal">userCount</th><th className="px-2 py-3 font-normal">Platform sum</th><th className="px-2 py-3 font-normal">Reported platforms</th></tr></thead>
               <tbody>{points.map((point) => <tr key={point.at} className="border-b border-border"><th scope="row" className="py-3 pr-4 font-normal">{exactTime.format(point.at)}</th><td className="px-2 py-3">{count(point.userCount)}</td><td className="px-2 py-3">{point.platforms ? count(Object.values(point.platforms).reduce((sum, value) => sum + value, 0)) : "Unknown"}</td><td className="px-2 py-3 text-xs text-muted">{point.platforms ? Object.entries(point.platforms).map(([platform, value]) => <div key={platform}>{platform}: {count(value)}</div>) : "Unknown"}</td></tr>)}</tbody>
             </table>
-          </div>
+          </div> : null}
         </details>
       </div>
   </div>;

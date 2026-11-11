@@ -158,7 +158,7 @@ describe("community telemetry control plane", () => {
     const publicView = await t.query(api.communityTelemetry.getPublicForCommunity, { communitySlug: "faceless", now: now + 3 });
     assert.equal(publicView?.currentPopulation?.value, 4);
     assert.equal(/userCount|queueSize|platforms/.test(JSON.stringify(publicView)), false);
-    for (const diagnostics of [{ userCount: -1 }, { queueSize: 1.5 }, { userCount: Number.MAX_SAFE_INTEGER + 1 }, { platforms: { windows: -1 } }, { platforms: { windows: Number.MAX_SAFE_INTEGER + 1 } }, { platforms: { "bad key": 1 } }, { platforms: { usr_private: 1 } }, { platforms: { ["a".repeat(65)]: 1 } }, { platforms: Object.fromEntries(Array.from({ length: 17 }, (_, i) => [`platform${i}`, 0])) }]) {
+    for (const diagnostics of [{ userCount: -1 }, { queueSize: 1.5 }, { userCount: Number.MAX_SAFE_INTEGER + 1 }, { platforms: { windows: -1 } }, { platforms: { windows: Number.MAX_SAFE_INTEGER + 1 } }, { platforms: { "bad key": 1 } }, { platforms: { usr_private: 1 } }, { platforms: { USR_private: 1 } }, { platforms: { ["a".repeat(65)]: 1 } }, { platforms: Object.fromEntries(Array.from({ length: 17 }, (_, i) => [`platform${i}`, 0])) }]) {
       await assert.rejects(t.mutation(internal.communityTelemetry.ingestAggregatePoll, { ...poll, pollId: "invalid", observedAt: now + 5, instances: [{ ...instance, ...diagnostics }] }));
     }
     assert.equal((await t.run(ctx => ctx.db.query("instancePopulationObservations").collect())).length, 4);

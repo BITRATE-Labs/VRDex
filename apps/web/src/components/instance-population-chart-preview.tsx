@@ -19,6 +19,7 @@ const scenarios = {
   noQueue: "No queue",
   conflicting: "Conflicting counts",
   closure: "Confirmed closure",
+  unknown: "Unknown coverage",
 };
 export type PopulationPreviewScenario = keyof typeof scenarios;
 
@@ -41,6 +42,7 @@ const samples: Record<PopulationPreviewScenario, Sample[]> = {
     ? { ...sample, population: 110, queueSize: 135, userCount: 78, platforms: { standalonewindows: 58, android: 18 } }
     : sample),
   closure: pairedSamples,
+  unknown: [{ minute: 0, population: null }],
 };
 export function InstancePopulationChartPreview({ initialScenario = "paired" }: { initialScenario?: PopulationPreviewScenario }) {
   const [scenario, setScenario] = useState(initialScenario);
@@ -50,7 +52,7 @@ export function InstancePopulationChartPreview({ initialScenario = "paired" }: {
     queueSize: point.queueSize ?? null, userCount: point.userCount ?? null, platforms: point.platforms ?? null }));
   return <main className="mx-auto grid w-full max-w-5xl gap-6 px-4 py-8 sm:px-8 sm:py-12">
     <header className="flex flex-wrap items-end justify-between gap-5"><div><h1 className="text-2xl font-semibold tracking-tight">Instance population</h1><p className="mt-2 text-sm text-muted">Synthetic sample data</p></div>
-    <Field>Sample case<Select value={scenario} onChange={(event) => { const next = event.target.value; if (next === "paired" || next === "historical" || next === "noQueue" || next === "conflicting" || next === "closure") setScenario(next); }}>{Object.entries(scenarios).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</Select></Field></header>
+    <Field>Sample case<Select value={scenario} onChange={(event) => { const next = event.target.value; if (next === "paired" || next === "historical" || next === "noQueue" || next === "conflicting" || next === "closure" || next === "unknown") setScenario(next); }}>{Object.entries(scenarios).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</Select></Field></header>
     <Card><ClubInstanceChart points={points} closedAt={scenario === "closure" ? start + 18 * 60000 : null} /></Card>
   </main>;
 }

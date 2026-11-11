@@ -55,7 +55,7 @@ function instanceDiagnostics(item) {
   }
   if (item.platforms != null) {
     if (typeof item.platforms !== "object" || Array.isArray(item.platforms) || Object.keys(item.platforms).length > 16 ||
-        Object.entries(item.platforms).some(([key, value]) => !/^(?!usr_)[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(key) || !Number.isSafeInteger(value) || value < 0))
+        Object.entries(item.platforms).some(([key, value]) => !/^(?!usr_)[A-Za-z][A-Za-z0-9_-]{0,63}$/i.test(key) || !Number.isSafeInteger(value) || value < 0))
       throw new VrchatProviderError("Instance platforms are malformed.", { category: "schema_drift" });
     diagnostics.platforms = item.platforms;
   }
