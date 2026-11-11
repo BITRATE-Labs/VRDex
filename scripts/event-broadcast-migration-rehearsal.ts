@@ -734,8 +734,7 @@ async function runProtocolScenarios({
     );
     assert.deepEqual(await ack(f, op), { kind: "fenced", reason: "stopped" });
     assert.deepEqual(await observe(f, op), {
-      kind: "fenced",
-      reason: "stopped",
+      kind: "superseded",
     });
     const claims = await call(() =>
       admin.mutation(api.eventMediaWorker.claimCommands, f.args),
