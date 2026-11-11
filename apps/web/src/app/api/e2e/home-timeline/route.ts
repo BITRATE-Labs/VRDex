@@ -78,6 +78,7 @@ async function handle(
     body.scenario !== "discovery-clubs" &&
     body.scenario !== "discovery-roster" &&
     body.scenario !== "short-sets" &&
+    body.scenario !== "recent-timestamps" &&
     body.scenario !== "timeline-visual"
   )
     return NextResponse.json(
@@ -99,7 +100,8 @@ async function handle(
         body.scenario === "discovery-clubs" ||
         body.scenario === "discovery-roster" ||
         body.scenario === "timeline-visual" ||
-        body.scenario === "short-sets")
+        body.scenario === "short-sets" ||
+        body.scenario === "recent-timestamps")
         ? { scenario: body.scenario }
         : {}),
     }),

@@ -17,11 +17,12 @@ import {
 } from "@/lib/timeline/navigation";
 import { localDayBands } from "@/lib/timeline/geometry";
 import { togglePlanAction } from "@/lib/timeline/plan-actions";
-import { HOUR, inRange } from "@/lib/timeline/window-cache";
+import { HOUR, inRange, recentEventTime, timelineQueryRange } from "@/lib/timeline/window-cache";
 import { useTimelinePreferences } from "./use-timeline-preferences";
 import { useTimelineData } from "./use-timeline-data";
 import { TimelineToolbar } from "./timeline-toolbar";
 import { TimelineChart } from "./timeline-chart";
+import { TimelineRecent } from "./timeline-recent";
 import { TimelineNight } from "./timeline-night";
 import { type TimelineActions } from "./timeline-event-bar";
 import styles from "./timeline.module.css";
@@ -125,7 +126,7 @@ function ScheduleContent({
     timeZone,
   };
   const data = useTimelineData({
-    range,
+    range: timelineQueryRange(range, now),
     favoritesOnly: navigation.favoritesOnly,
     favoriteProfileIds: preference.preferences.favoriteProfileIds,
     plan: preference.preferences.plan,
@@ -243,7 +244,11 @@ function ScheduleContent({
     if (next !== undefined) navigate({ anchor: next });
   };
   const visible = data.records.filter((event) => inRange(event, range));
-  const nextEvent = visible.length === 0 ? data.records.flatMap((event) => {
+  const recent = range.startAt <= now && now < range.endAt
+    ? data.records.filter((event) => !inRange(event, range) && recentEventTime(event, now) !== undefined)
+    : [];
+  const empty = visible.length === 0 && recent.length === 0;
+  const nextEvent = empty ? data.records.flatMap((event) => {
     const schedule = event.schedule;
     if (schedule.kind === "date_only") {
       const nominal = Date.parse(schedule.eventDate);
@@ -305,7 +310,7 @@ function ScheduleContent({
             </>
           )}
           {data.kind === "ready" &&
-            visible.length === 0 &&
+            empty &&
             (navigation.favoritesOnly
               ? "No favorites in this range"
               : "No events in this range")}
@@ -346,6 +351,7 @@ function ScheduleContent({
         onNext={nextSaved}
         {...actions}
       />
+      <TimelineRecent records={recent} now={now} timeZone={timeZone} hour12={runtime.hour12} {...actions} />
     </section>
   );
 }

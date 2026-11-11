@@ -6,6 +6,13 @@
   width: 100%;
   color: var(--foreground);
 }
+.recent { margin-top: 1rem; }
+.recent h3 { font-size: 0.9rem; font-weight: 600; }
+.recent ul { list-style: none; margin: 0; padding: 0; }
+.recent li { display: flex; align-items: center; gap: 0.75rem; border-bottom: 1px solid var(--border); }
+.recent li > button:first-child { display: grid; gap: 0.2rem; min-width: 0; flex: 1; padding: 0.65rem 0; text-align: left; }
+.recent strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.8rem; }
+.recent span { color: var(--muted); font-size: 0.75rem; }
 .toolbar {
   display: flex;
   flex-wrap: wrap;
