@@ -2,9 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { searchHref, type SearchViewKey } from "./search-view-state";
-import { buttonVariants } from "@/components/ui/button";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
-import { cn } from "@/lib/cn";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 
 const SEARCH_CONTEXT = "Search across public people, communities, worlds, and events.";
 
@@ -24,12 +22,6 @@ export function SearchViewShell({
   return (
     <PageShell className={className}>
       <PageContainer className="gap-5" max="7xl">
-        <PageNav>
-          <BrandLink variant="wordmark" />
-          <Link className={cn(buttonVariants({ variant: "secondary" }), "ml-auto")} href="/submit">
-            Add profile
-          </Link>
-        </PageNav>
 
         <header className="grid gap-4 pt-2">
           <div className="grid gap-2">

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CopyValueRow } from "@/components/ui/copy-value-row";
 import { Field, FieldText, Input } from "@/components/ui/field";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageActions, PageShell } from "@/components/ui/page-shell";
 import { checkIngestUrl, setupPlaybackLinks, serverPresets, type BroadcastConnection } from "./destination-setup";
 import styles from "./preview.module.css";
 
@@ -67,7 +67,7 @@ export function BroadcastSetup({ connection, onCancel, onComplete, showTools = f
     onComplete({ label:provider === "Twitch" ? "Twitch" : "World stream", provider, serverUrl, tested, playback:setupPlaybackLinks(playbackUrl) });
   }
   return <PageShell className={styles.shell}><PageContainer max="3xl">
-    <PageNav showMyEvents={false}><BrandLink />{test !== "passed" && <Button variant="secondary" onClick={leave}>Back to broadcast</Button>}</PageNav>
+    <PageActions>{test !== "passed" && <Button variant="secondary" onClick={leave}>Back to broadcast</Button>}</PageActions>
     <header className={styles.setupHeader}><p className={styles.context}>Afterglow Harbor Sessions</p><h1 ref={title} tabIndex={-1}>{test === "passed" ? "Connection test passed" : step === 1 ? "Connect your stream" : step === 2 ? "Add the playback link" : "Test your connection"}</h1></header>
     <ol className={styles.steps} aria-label="Setup progress">{["Connection", "Playback", "Test"].map((label, index) => <li key={label} aria-current={step === index + 1 ? "step" : undefined}><span>{index + 1}</span>{label}</li>)}</ol>
     <section className={styles.setupCard}>

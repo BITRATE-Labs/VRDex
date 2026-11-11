@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getOpenApiDocument } from "@vrdex/api-contracts";
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageActions, PageShell } from "@/components/ui/page-shell";
 import { cn } from "@/lib/cn";
 
 export const dynamic = "force-static";
@@ -78,8 +78,8 @@ export default function ApiReferencePage() {
   return (
     <PageShell className="py-8 sm:py-10">
       <PageContainer max="7xl">
-        <PageNav>
-          <BrandLink />
+        <PageActions>
+
           <div className="flex flex-wrap items-center gap-2">
             <a className={buttonVariants({ variant: "secondary" })} href="/api/v0/openapi.json">
               OpenAPI JSON
@@ -97,7 +97,7 @@ export default function ApiReferencePage() {
               Home
             </Link>
           </div>
-        </PageNav>
+        </PageActions>
 
         <section className="grid gap-5 lg:grid-cols-[0.82fr_1.18fr]">
           <div className="space-y-5">

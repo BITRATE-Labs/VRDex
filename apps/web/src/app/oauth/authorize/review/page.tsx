@@ -7,18 +7,12 @@ import { redirect } from "next/navigation";
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageActions, PageShell } from "@/components/ui/page-shell";
 import { oauthConsentSummary, oauthScopeLabel } from "@/lib/oauth-consent-copy";
 import { convexAdminHttpClient, convexHttpClient } from "@/lib/server/convex-http";
-import {
-  signInPath,
-  isUnauthenticatedError,
-} from "@/lib/server/auth";
+import { signInPath, isUnauthenticatedError } from "@/lib/server/auth";
 import { oauthAuthorizeProblemDetail } from "@/lib/server/oauth-authorize-problem";
-import {
-  hashOAuthConsentTransactionValue,
-  normalizeOAuthConsentTransactionValue,
-} from "@/lib/server/oauth-consent-transaction";
+import { hashOAuthConsentTransactionValue, normalizeOAuthConsentTransactionValue } from "@/lib/server/oauth-consent-transaction";
 
 type AuthorizeReviewPageProps = {
   searchParams: Promise<{ problem?: string | string[]; transaction?: string | string[] }>;
@@ -32,12 +26,12 @@ function AuthorizationProblem({ detail }: { detail: string }) {
   return (
     <PageShell className="py-10">
       <PageContainer max="4xl">
-        <PageNav>
-          <BrandLink />
+        <PageActions>
+
           <Link className={buttonVariants({ variant: "secondary" })} href="/developers/api">
             API docs
           </Link>
-        </PageNav>
+        </PageActions>
 
         <Card className="grid gap-4" padding="lg" surface="white">
           <h1 className="text-3xl font-semibold">Authorization request failed</h1>
@@ -113,12 +107,12 @@ export default async function AuthorizeReviewPage({ searchParams }: AuthorizeRev
   return (
     <PageShell className="py-10">
       <PageContainer max="4xl">
-        <PageNav>
-          <BrandLink />
+        <PageActions>
+
           <Link className={buttonVariants({ variant: "secondary" })} href="/account">
             Account
           </Link>
-        </PageNav>
+        </PageActions>
 
         <section className="grid gap-6">
           <div>

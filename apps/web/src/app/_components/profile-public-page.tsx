@@ -18,7 +18,7 @@ import type { PopulationSeries } from "@/lib/public-group-statistics";
 import { ViewerLocalEventDateTime } from "./viewer-local-event-times";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, Eyebrow, SectionHeading } from "@/components/ui/card";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { VerifiedTrustMark } from "@/components/ui/verified-trust-mark";
 import { avatarFrameStyle, defaultAvatarAppearance, type AvatarAppearance } from "@/lib/avatar-appearance";
 import { cn } from "@/lib/cn";
@@ -522,9 +522,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
   return (
     <Shell>
       <PageContainer>
-        {!embedded ? <PageNav>
-          <BrandLink />
-        </PageNav> : null}
+
 
         <section
           aria-labelledby={`profile-title-${profile.slug}`}

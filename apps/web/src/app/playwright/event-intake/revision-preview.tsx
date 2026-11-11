@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { ConvexProviderWithAuth, type ConvexReactClient } from "convex/react";
 import { getFunctionName, type FunctionReference } from "convex/server";
 import { ConvexError } from "convex/values";
-import { BrandLink, PageNav } from "@/components/ui/page-shell";
 import { EventIntakeForm } from "../../events/event-intake-form";
 import { EventContributionControls } from "../../events/event-contribution-controls";
 import type { EventIntakePatch } from "../../../../../../packages/api-contracts/src/event-intake";
@@ -204,7 +203,7 @@ export function EventIntakeRevisionPreview({ correction, sourceMode, staff = fal
   const [refreshed, setRefreshed] = useState(false);
   return <ConvexProviderWithAuth client={fixture.client} useAuth={useFixtureAuth}>
     <main className="mx-auto w-full max-w-6xl p-5">
-      {sourceMode ? <PageNav><BrandLink /></PageNav> : null}
+
       {!sourceMode ? <button onClick={() => { fixture.refresh({ venueLabel: "New venue" }); setRefreshed(true); }}>Update elsewhere</button> : null}
       {refreshed ? <output>Query refreshed</output> : null}
       {correction ? <EventContributionControls eventId="fixture-event" /> : <EventIntakeForm heading={sourceMode ? <h1 className="text-3xl font-semibold">Add event</h1> : undefined} draftId={initialCommunitySlug ? undefined : "fixture-draft"} initialCommunitySlug={initialCommunitySlug} />}

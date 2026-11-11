@@ -1,11 +1,8 @@
-import type { Meta, StoryObj } from "@storybook/nextjs-vite";
+import type { Meta,StoryObj } from "@storybook/nextjs-vite";
 import type { TemporalParseCompletedResponse } from "@vrdex/api-contracts";
 
-import {
-  TemporalParserSurface,
-  TemporalRetentionUnavailableSurface,
-} from "@/app/time/temporal-parser";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { TemporalParserSurface, TemporalRetentionUnavailableSurface } from "@/app/time/temporal-parser";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 
 const resolvedResult = {
   requestId: "preview",
@@ -53,9 +50,7 @@ export const Resolved: Story = {
   render: () => (
     <PageShell tone="public">
       <PageContainer max="4xl">
-        <PageNav accountMode="signed-out">
-          <BrandLink />
-        </PageNav>
+
         <header className="py-5 sm:py-8">
           <h1 className="text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">VRDex Time</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
@@ -93,9 +88,7 @@ export const RetentionUnavailable: Story = {
   render: () => (
     <PageShell tone="public">
       <PageContainer max="4xl">
-        <PageNav accountMode="signed-out">
-          <BrandLink />
-        </PageNav>
+
         <header className="py-5 sm:py-8">
           <h1 className="text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">VRDex Time</h1>
         </header>

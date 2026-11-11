@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Notice } from "@/components/ui/notice";
-import { BrandLink, PageContainer, PageShell } from "@/components/ui/page-shell";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { AUTH_UNAVAILABLE_COPY } from "@/lib/auth-copy";
 
 /**
@@ -24,11 +23,7 @@ export function AuthPageShell({
 }) {
   return (
     <PageShell className="flex py-6 sm:py-8">
-      <PageContainer className="min-h-[calc(100vh-3rem)] gap-0 sm:min-h-[calc(100vh-4rem)]" max="4xl">
-        <nav className="flex items-center justify-between border-b border-border pb-4" aria-label="Primary navigation">
-          <BrandLink />
-          <ThemeToggle className="size-10 p-0" />
-        </nav>
+      <PageContainer className="gap-0" max="4xl">
 
         <div className="flex flex-1 items-center justify-center py-10 sm:py-14">
           <section aria-labelledby={headingId} className="w-full max-w-md">

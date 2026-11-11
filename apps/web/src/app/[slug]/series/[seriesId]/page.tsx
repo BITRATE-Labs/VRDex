@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { EventBackendNotice, EventPreviewCard } from "../../../_components/event-public-page";
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { fetchPublicEventSeries } from "@/convex/server";
 
 export const dynamic = "force-dynamic";
@@ -29,9 +29,6 @@ export default async function EventSeriesPage({ params }: EventSeriesPageProps) 
   return (
     <PageShell className="py-5 sm:py-6 lg:py-7" tone="event">
       <PageContainer className="gap-5">
-        <PageNav>
-          <BrandLink />
-        </PageNav>
 
         <header>
           <h1 className="text-5xl leading-none font-semibold tracking-[-0.05em] sm:text-7xl">{series.title}</h1>

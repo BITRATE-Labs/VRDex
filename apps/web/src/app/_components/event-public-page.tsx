@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/action-card";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, Eyebrow } from "@/components/ui/card";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { cn } from "@/lib/cn";
 import { safeImageBackground } from "@/lib/safe-image";
 import { publicEventPath } from "@/lib/event-path";
@@ -347,9 +347,7 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
   return (
     <PageShell className="py-5 sm:py-6 lg:py-7" tone="event">
       <PageContainer className="gap-5">
-        <PageNav>
-          <BrandLink />
-        </PageNav>
+
 
         <section className="overflow-hidden rounded-hero border border-border bg-media shadow-hero">
           <div

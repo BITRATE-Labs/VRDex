@@ -7,7 +7,7 @@ import { api } from "@convex-generated-api";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import { CopyValueRow } from "@/components/ui/copy-value-row";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageActions, PageShell } from "@/components/ui/page-shell";
 import { broadcastPlaybackLinks, broadcastServers, checkBroadcastServer, type BroadcastProvider } from "@/lib/broadcast-connection";
 export type BroadcastSetupState = FunctionReturnType<typeof api.eventBroadcastConnections.getSetup>;
 type TestId = NonNullable<BroadcastSetupState["activeTest"]>["jobId"];
@@ -63,7 +63,7 @@ export function EventBroadcastSetupForm({currentSlug,eventPath,eventTitle,state,
   }
   function advance() {try {checkBroadcastServer(server);if (!key.trim() && !canReuse) throw Error("Enter your stream key.");setError("");setStep(2);}catch(failure){setError(failure instanceof Error ? failure.message : "Check the connection details.");}}
   return <PageShell className="py-5"><PageContainer max="3xl"><div className="ph-no-capture space-y-8" data-ph-no-capture>
-    <PageNav showMyEvents={false}><BrandLink/>{!running && !passed && <Link href={returnPath} onClick={event=>{if(dirty){event.preventDefault();leaveDialog.current?.showModal();}}}>Back to broadcast</Link>}</PageNav>
+    <PageActions>{!running && !passed && <Link href={returnPath} onClick={event=>{if(dirty){event.preventDefault();leaveDialog.current?.showModal();}}}>Back to broadcast</Link>}</PageActions>
     <dialog ref={leaveDialog} className="m-auto max-w-md rounded-control border border-border bg-surface p-6 text-foreground backdrop:bg-black/60"><h2 className="text-xl font-semibold">Discard connection changes?</h2><div className="mt-5 flex gap-3"><Button onClick={()=>leaveDialog.current?.close()}>Keep editing</Button><Link className={buttonVariants({variant:"secondary"})} href={returnPath}>Discard changes</Link></div></dialog>
     <header><p className="mb-2 text-sm text-muted">{eventTitle}</p><h1 ref={title} tabIndex={-1} className="text-3xl font-semibold tracking-tight">{passed ? "Connection test passed" : step === 1 ? "Connect your stream" : step === 2 ? "Add the playback link" : "Test your connection"}</h1></header>
     <ol className="flex gap-6 border-b border-border pb-4 text-sm" aria-label="Setup progress">{["Connection","Playback","Test"].map((label,index)=><li key={label} aria-current={step===index+1 ? "step" : undefined} className={step===index+1 ? "font-medium text-foreground" : "text-muted"}>{index+1}. {label}</li>)}</ol>

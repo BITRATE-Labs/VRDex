@@ -4,7 +4,7 @@ import { isVrclinkingSecretStoreConfigured } from "@/lib/server/vrclinking-secre
 import { Card } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
 import { parseDiscordVerifyStatus } from "@/lib/profile-claim";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 
 export default async function ConnectionsPage({
   searchParams,
@@ -29,9 +29,6 @@ export default async function ConnectionsPage({
   return (
     <PageShell className="py-10">
       <PageContainer max="6xl">
-        <PageNav>
-          <BrandLink />
-        </PageNav>
 
         <ProfileWorkspace
           activeSlug={initialProfileSlug}

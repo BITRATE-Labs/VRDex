@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { DeveloperTokensPanel } from "./developer-tokens-panel";
 import { buttonVariants } from "@/components/ui/button";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageActions, PageShell } from "@/components/ui/page-shell";
 
 export const metadata = {
   title: "Developer Tokens | VRDex",
@@ -12,8 +12,8 @@ export default function DeveloperTokensPage() {
   return (
     <PageShell className="py-10">
       <PageContainer max="6xl">
-        <PageNav>
-          <BrandLink />
+        <PageActions>
+
           <div className="flex flex-wrap gap-3">
             <Link className={buttonVariants({ variant: "secondary" })} href="/developers/api">
               API reference
@@ -25,7 +25,7 @@ export default function DeveloperTokensPage() {
               OAuth apps
             </Link>
           </div>
-        </PageNav>
+        </PageActions>
 
         <section className="grid gap-8">
           <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">

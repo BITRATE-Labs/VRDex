@@ -32,7 +32,7 @@ export function SiteFooter() {
     <footer className="mt-auto border-t border-border px-4 py-8 text-sm sm:px-10 lg:px-16">
       <nav
         aria-label="Site"
-        className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-6 gap-y-3"
+        className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-x-6 gap-y-3"
       >
         <span className="font-mono text-xs uppercase text-muted">VRDex</span>
         <AnalyticsSettingsButton />

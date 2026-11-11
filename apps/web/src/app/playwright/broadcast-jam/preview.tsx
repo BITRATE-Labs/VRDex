@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ArrowUpRight, Radio } from "lucide-react";
 import { CopyValueRow } from "@/components/ui/copy-value-row";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageActions, PageShell } from "@/components/ui/page-shell";
 import { previewVideoLink } from "./video-link";
 import { PersonLookup } from "./person-lookup";
 import { BroadcastSetup } from "./setup-wizard";
@@ -184,7 +184,7 @@ export function BroadcastJam({ showTools = false }: { showTools?: boolean }) {
   }
   if (setupOpen) return <BroadcastSetup showTools={showTools} connection={connection} onCancel={() => setSetupOpen(false)} onComplete={value => {setConnection(value); setPhase("ready"); setSetupOpen(false);}} />;
   return <PageShell className={styles.shell}><PageContainer max="5xl">
-    <PageNav showMyEvents={false}><BrandLink /><Link className={buttonVariants({variant:"secondary"})} href="/account/events">My events</Link></PageNav>
+    <PageActions><Link className={buttonVariants({variant:"secondary"})} href="/account/events">My events</Link></PageActions>
     <header className={styles.header}><div><p className={styles.context}>Afterglow Harbor Sessions</p><h1>Broadcast</h1></div><div className={styles.headerActions}><span className={styles.state} data-active={active}>{phase === "live" ? "● Live" : phase === "reconnecting" ? "◌ Reconnecting" : phase === "starting" ? "◌ Starting" : "○ Offline"}</span>{active && <Button variant="secondary" onClick={() => requestChange({title:"Stop this broadcast?", message:`The output to ${destination} will stop.`, label:"Stop broadcast", destructive:true, apply:stop})}>Stop broadcast</Button>}</div></header>
     {phase === "reconnecting" && <div className={styles.warning} role="status"><div><strong>Output connection lost</strong><p>Reconnecting. What viewers can see is unknown.</p></div>{showTools && <Button variant="secondary" onClick={() => requestChange({title:"Simulate recovery?", message:"The preview will return to its live state.", label:"Simulate recovery", apply:() => setPhase("live")})}>Simulate recovery</Button>}</div>}
     <div className={styles.workspace}>

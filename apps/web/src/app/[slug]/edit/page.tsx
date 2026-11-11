@@ -1,6 +1,6 @@
 import { ProfileEditForm } from "../../_components/profile-edit-form";
 import { ProfilePrivateRecord } from "../../_components/profile-private-record";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 
 export const dynamic = "force-dynamic";
 
@@ -31,9 +31,6 @@ export default async function ProfileEditPage({ params, searchParams }: ProfileE
   return (
     <PageShell>
       <PageContainer max="3xl">
-        <PageNav>
-          <BrandLink />
-        </PageNav>
 
         <section className="border-t border-border pt-8 sm:pt-10">
           <h1 className="text-3xl leading-tight font-semibold sm:text-4xl">Edit profile</h1>

@@ -10,7 +10,7 @@ import { ManagedEventsPanel } from "@/app/account/events/managed-events-panel";
 import { EventEditorPage } from "@/app/events/event-editor-page";
 import { EventIntakeForm } from "@/app/events/event-intake-form";
 import { EventPublicPage } from "@/app/_components/event-public-page";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageActions, PageShell } from "@/components/ui/page-shell";
 import { buttonVariants } from "@/components/ui/button";
 
 type Snapshot = {
@@ -82,7 +82,7 @@ export function EventWorkspaceCheckpoint({ view }: { view: string }) {
   return <ConvexProviderWithAuth client={fixture.client} useAuth={useFixtureAuth}>
     {view === "staff" ? <EventEditorPage communityName="Checkpoint Club" communitySlug="checkpoint-club" event={snapshot.editable} discordPostText={snapshot.discord} />
       : view.endsWith("-public") ? publicEvent ? <EventPublicPage event={publicEvent} /> : null
-        : <PageShell className="py-10"><PageContainer max={view === "inventory" ? "5xl" : "6xl"}><PageNav showMyEvents={view !== "intake"}><BrandLink />{view === "intake" ? <Link className={buttonVariants({ variant: "secondary" })} href="/account/events">My events</Link> : null}</PageNav>
+        : <PageShell className="py-10"><PageContainer max={view === "inventory" ? "5xl" : "6xl"}><PageActions>{view === "intake" ? <Link className={buttonVariants({ variant: "secondary" })} href="/account/events">My events</Link> : null}</PageActions>
           {view === "intake" ? <EventIntakeForm heading={<h1 className="text-3xl font-semibold">Add event</h1>} draftId={snapshot.draftId} /> : <ManagedEventsPanel />}
         </PageContainer></PageShell>}
   </ConvexProviderWithAuth>;

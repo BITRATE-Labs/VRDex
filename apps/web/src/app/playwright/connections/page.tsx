@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 
 import { ConnectionsPanelPreview } from "./preview";
 import { Card } from "@/components/ui/card";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 
 export default async function PlaywrightConnectionsPage({
   searchParams,
@@ -22,9 +22,6 @@ export default async function PlaywrightConnectionsPage({
   return (
     <PageShell className="py-10">
       <PageContainer max="6xl">
-        <PageNav accountMode="signed-out">
-          <BrandLink />
-        </PageNav>
 
         <Card className="shadow-hero" padding="lg">
           <h1 className="text-3xl leading-none font-semibold sm:text-4xl">Connections</h1>

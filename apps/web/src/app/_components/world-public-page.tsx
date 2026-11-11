@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, Eyebrow, SectionHeading, SectionTitle } from "@/components/ui/card";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageActions, PageShell } from "@/components/ui/page-shell";
 import { cn } from "@/lib/cn";
 import { publicEventPath } from "@/lib/event-path";
 import { safeImageBackground } from "@/lib/safe-image";
@@ -304,12 +304,12 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
   return (
     <PageShell tone="world">
       <PageContainer>
-        <PageNav>
-          <BrandLink />
+        <PageActions>
+
           <Link className={buttonVariants({ variant: "surface" })} href="/submit">
             Add a missing profile
           </Link>
-        </PageNav>
+        </PageActions>
 
         <section className="overflow-hidden rounded-hero border border-border bg-media shadow-hero">
           <div

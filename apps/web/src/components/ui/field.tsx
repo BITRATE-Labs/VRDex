@@ -35,12 +35,17 @@ export function Input({ className, ...props }: ComponentPropsWithoutRef<"input">
 // one so focus can be moved to it when the profile it names disappears.
 export function Select({
   className,
+  style,
   ...props
 }: ComponentPropsWithoutRef<"select"> & { ref?: Ref<HTMLSelectElement> }) {
-  // Chrome insets its own dropdown arrow by `padding-right`, so the extra 4px is
-  // what moves the pip off the border — the select's text still ends where an
-  // input's would, since the arrow occupies that space anyway.
-  return <select className={cn(fieldControlClassName, "pr-5", className)} {...props} />;
+  return <select className={cn(fieldControlClassName, "pr-10", className)} style={{
+    appearance: "none",
+    backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%238795a5' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
+    backgroundPosition: "right 12px center",
+    backgroundSize: "16px 16px",
+    backgroundRepeat: "no-repeat",
+    ...style,
+  }} {...props} />;
 }
 
 export function Textarea({ className, ...props }: ComponentPropsWithoutRef<"textarea">) {
