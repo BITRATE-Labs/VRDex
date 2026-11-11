@@ -4,7 +4,7 @@ PR [#445](https://github.com/BITRATE-Labs/VRDex/pull/445) includes paired count 
 
 ## Before merge
 
-- [ ] Record the final PR head and refresh checks and feedback after the required 30-minute window. Each new commit resets that window.
+- [ ] Record the final pushed PR head, wait for its checks to finish, then refresh all feedback and readiness surfaces for that exact head.
 - [ ] Pass backend, worker, web and docs checks plus ci:browsers and ci:visuals. Earlier Windows-only full-suite failures are not a substitute for current CI evidence.
 - [ ] Review actual instance-page desktop/mobile evidence, a late positive queue after page 1, unknown/zero/partial platform data, multi-day time spacing and a closure between samples with later population.
 - [ ] Confirm authenticated local-route and restricted-reader tests pass without skips, and the exact synthetic fixture/users clean up.
