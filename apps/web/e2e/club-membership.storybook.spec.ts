@@ -54,8 +54,10 @@ test("role activity separates people, roles and audit evidence @storybook-visual
   const mira = page.getByRole("link", { name: "Mira", exact: true });
   await expect(mira).toHaveAttribute("href", "https://vrchat.com/home/user/usr_00000000-0000-4000-8000-000000000001");
   await expect(mira).toHaveAttribute("target", "_blank");
-  await expect(page.getByRole("link", { name: "VRDex", exact: true })).toHaveCount(1);
-  await expect(page.getByRole("link", { name: "VRDex", exact: true })).toHaveAttribute("href", "/mira");
+  await expect(page.getByRole("link", { name: "VRDex", exact: true })).toHaveCount(2);
+  await expect(page.getByRole("link", { name: "VRDex", exact: true }).first()).toHaveAttribute("href", "/mira");
+  await expect(page.getByRole("link", { name: "VRDex", exact: true }).nth(1)).toHaveAttribute("href", "/sol");
+  await expect(page.locator("body")).not.toContainText("\uFFFD");
   await expect(page.getByRole("link", { name: "Sol", exact: true })).toBeVisible();
   await expect(page.getByText("group.member.role.assign", { exact: true }).first()).not.toBeVisible();
   await page.getByText("Details", { exact: true }).first().focus();

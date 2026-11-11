@@ -70,9 +70,10 @@ export const Unknown: Story = {
 
 export const RoleActivity: Story = {
   render: () => <div className="mx-auto max-w-5xl p-5"><MembershipActivityView events={[
-    { auditId: "role-assign", eventType: "group.member.role.assign", occurredAt: start, targetUserId: "usr_00000000-0000-4000-8000-000000000001", targetDisplayName: "Mira Moon", targetIdentity: { displayName: "Mira", observedAt: start + 1000, vrchatUrl: "https://vrchat.com/home/user/usr_00000000-0000-4000-8000-000000000001", vrdexUrl: "/mira" }, actorUserId: "usr_00000000-0000-4000-8000-000000000002", actorDisplayName: "Old Sol", actorIdentity: { displayName: "Sol", observedAt: start + 1000, vrchatUrl: "https://vrchat.com/home/user/usr_00000000-0000-4000-8000-000000000002" }, roleId: "grol_00000000-0000-4000-8000-000000000003", roleName: "DJ" },
+    { auditId: "role-assign", eventType: "group.member.role.assign", occurredAt: start, targetUserId: "usr_00000000-0000-4000-8000-000000000001", targetDisplayName: "Mira Moon", targetIdentity: { displayName: "Mira", observedAt: start + 1000, vrchatUrl: "https://vrchat.com/home/user/usr_00000000-0000-4000-8000-000000000001", vrdexUrl: "/mira" }, actorUserId: "usr_00000000-0000-4000-8000-000000000002", actorDisplayName: "Old Sol", actorIdentity: { displayName: "Sol", vrdexUrl: "/sol", observedAt: start + 1000, vrchatUrl: "https://vrchat.com/home/user/usr_00000000-0000-4000-8000-000000000002" }, roleId: "grol_00000000-0000-4000-8000-000000000003", roleName: "DJ" },
     { auditId: "role-remove", eventType: "group.member.role.unassign", occurredAt: start - 1000, targetDisplayName: "Nightbird", roleName: "Deputy", roleId: "grol_00000000-0000-4000-8000-000000000004" },
     { auditId: "role-missing", eventType: "group.member.role.assign", occurredAt: start - 2000, targetDisplayName: "Echo" },
+    { auditId: "long-name", eventType: "group.member.role.unassign", occurredAt: start - 2500, targetDisplayName: "A very long display name ".repeat(7), roleName: "A very long role name ".repeat(7) },
     { auditId: "unknown", eventType: "future.event", occurredAt: start - 3000 },
   ]} /></div>,
 };

@@ -1,6 +1,6 @@
 # Membership activity identities implementation plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Display recognizable people, readable membership actions and actual role context without guessing missing history.
 
@@ -40,7 +40,7 @@ The comparable-screen inventory remains ordered follow-up work. Do not turn this
 ## File reach
 
 | Files | Responsibility |
-|---|---|
+| --- | --- |
 | `workers/group-telemetry/membership-audit.mjs`, its test | Validate and project event-specific target, actor and role evidence. |
 | `convex/schema.ts`, `convex/clubMembership.ts` | Optional stored evidence, duplicate handling, authorized paginated output. |
 | `convex/http.ts:298` | Existing `membership_scan_page` dispatch; verify the extended payload still reaches the validator. |
@@ -59,27 +59,31 @@ Produces optional validated actor ID/name and role ID/name evidence on events. P
 
 The new local helper takes `(ctx: QueryCtx, ids: readonly string[])`, deduplicates normalized IDs and returns a map of those identity projections. It performs no writes or provider calls. Use existing connection-verification and visibility rules. Cap profile candidates at 20 plus one overflow sentinel per identity; any overflow returns no VRDex match.
 
-- [ ] Establish assignment/unassignment role-field semantics against pinned community schema or separately authorized sanitized fixtures. Record the exact source. Do not invent provider keys. If role names are not supplied, retain the validated role ID and show the approved unavailable fallback unless an authorized existing role observation can name it.
-- [ ] Extend worker fixture tests first. Assert that actor-only name evidence never becomes target-name evidence; assignment/unassignment produce the correct role fields; malformed optional metadata and future events preserve valid core audit evidence. Keep foreign-group and half-open-window checks.
-- [ ] Run `node --test workers/group-telemetry/membership-audit.test.mjs` and confirm the new assertions fail before the change, then pass after the minimal projection change.
-- [ ] Add optional schema/validator fields and preserve existing immutable conflicts. Duplicate audit IDs must not replace recorded evidence with current names. Old-format payloads still ingest. Add backend fixtures for duplicate events with absent versus conflicting optional evidence and explicitly choose preserve-first behavior, with no automatic enrichment on replay.
-- [ ] Add local identity projection tests for repeated IDs, exact cache-key hits, absent/stale cache entries, actor/target separation, unique verified visible matches and ambiguous/overflow/hidden/suppressed/directory-only/revoked matches. Use existing historical display-proof semantics; do not turn stale display proof into action authority.
-- [ ] Add the projection after existing `listActivity` authorization and pagination. Query only authorized local data. Do not reuse other subjects' temporary member/role read results. Verify existing public movement reads cannot return named details and that denied individual-history and wrong-epoch fixtures remain denied or absent.
-- [ ] Run `node --conditions=import --import tsx --test tests/backend/club-membership.test.ts tests/backend/profile-connection-verification.test.ts tests/backend/automatic-group-statistics.test.ts`. Expected: all applicable assertions pass.
-- [ ] Update affected collector/analytics documentation with the exact retained fields and historical limits, then checkpoint the evidence/query change.
+- [x] Establish assignment/unassignment role-field semantics against pinned community schema or separately authorized sanitized fixtures. Record the exact source. Do not invent provider keys. If role names are not supplied, retain the validated role ID and show the approved unavailable fallback unless an authorized existing role observation can name it.
+- [x] Extend worker fixture tests first. Assert that actor-only name evidence never becomes target-name evidence; assignment/unassignment produce the correct role fields; malformed optional metadata and future events preserve valid core audit evidence. Keep foreign-group and half-open-window checks.
+- [x] Run `node --test workers/group-telemetry/membership-audit.test.mjs` and confirm the new assertions fail before the change, then pass after the minimal projection change.
+- [x] Add optional schema/validator fields and preserve existing immutable conflicts. Duplicate audit IDs must not replace recorded evidence with current names. Old-format payloads still ingest. Add backend fixtures for duplicate events with absent versus conflicting optional evidence and explicitly choose preserve-first behavior, with no automatic enrichment on replay.
+- [x] Add local identity projection tests for repeated IDs, exact cache-key hits, absent/stale cache entries, actor/target separation, unique verified visible matches and ambiguous/overflow/hidden/suppressed/directory-only/revoked matches. Use existing historical display-proof semantics; do not turn stale display proof into action authority.
+- [x] Add the projection after existing `listActivity` authorization and pagination. Query only authorized local data. Do not reuse other subjects' temporary member/role read results. Verify existing public movement reads cannot return named details and that denied individual-history and wrong-epoch fixtures remain denied or absent.
+- [x] Run `node --conditions=import --import tsx --test tests/backend/club-membership.test.ts tests/backend/profile-connection-verification.test.ts tests/backend/automatic-group-statistics.test.ts`. Expected: all applicable assertions pass.
+- [x] Update affected collector/analytics documentation with the exact retained fields and historical limits, then checkpoint the evidence/query change.
 
 ## Task 2: Render the approved activity design
 
 Consumes the enriched return type of `api.clubMembership.listActivity`. Produces the existing `MembershipActivityView` and `ClubMembershipActivity` interfaces updated for that return shape. Reuse Card, Notice, Button and local timestamps. If another consumer is later added, extract a small person-link renderer then; do not build a general identity component system now.
 
-- [ ] Extend the existing Storybook fixtures with named role assignment/removal, missing actor, absent role metadata, unknown user, no/multiple VRDex matches, renamed roles, future event types and long names. Replace disabled mock links with tested fixture destinations in the real-component story. Keep the separate design mock clearly labeled or remove it once the real story replaces it.
-- [ ] Add focused UI assertions: readable role labels rather than raw event types, target and actor remain distinct, missing metadata uses approved fallback, only eligible VRDex links render, and original IDs/types stay in details.
-- [ ] Implement links, inline details and row layout matching the approved preview. VRChat uses validated IDs and opens externally; VRDex uses the canonical eligible profile slug. Add keyboard-visible focus and descriptive external-link names. No nested clickable rows.
-- [ ] Preserve loaded rows during pagination or recoverable errors, add the approved Retry behavior, and verify permission loss clears both rows and open details. Use the existing workspace access/error conventions instead of inventing a separate authentication flow.
+- [x] Extend the existing Storybook fixtures with named role assignment/removal, missing actor, absent role metadata, unknown user, no/multiple VRDex matches, renamed roles, future event types and long names. Replace disabled mock links with tested fixture destinations in the real-component story. Keep the separate design mock clearly labeled or remove it once the real story replaces it.
+- [x] Add focused UI assertions: readable role labels rather than raw event types, target and actor remain distinct, missing metadata uses approved fallback, only eligible VRDex links render, and original IDs/types stay in details.
+- [x] Implement links, inline details and row layout matching the approved preview. VRChat uses validated IDs and opens externally; VRDex uses the canonical eligible profile slug. Add keyboard-visible focus and descriptive external-link names. No nested clickable rows.
+- [x] Preserve loaded rows during pagination or recoverable errors, add the approved Retry behavior, and verify permission loss clears both rows and open details. Use the existing workspace access/error conventions instead of inventing a separate authentication flow.
 - [ ] Exercise direct analytics entry, existing sign-in return, range/day selection, pagination, VRDex navigation/back and VRChat new-tab return. Preserve range and loaded pages; add only the minimum existing route/state mechanism needed if current restoration fails.
-- [ ] Run the focused membership Storybook visual test with `pnpm --filter web exec playwright test --config playwright.storybook.config.mjs club-membership.storybook.spec.ts`. Inspect desktop/mobile screenshots with VLM review and test keyboard details expansion. Expected: no clipping, readable names/roles and working intended interactions.
+- [x] Run the focused membership Storybook visual test with `pnpm --filter web exec playwright test --config playwright.storybook.config.mjs club-membership.storybook.spec.ts`. Inspect desktop/mobile screenshots with VLM review and test keyboard details expansion. Expected: no clipping, readable names/roles and working intended interactions.
 - [ ] Run relevant web/backend lint and type checks using repository scripts. Apply `ci:browsers` and `ci:visuals` before the PR run. Check docs drift, review the full branch, and follow exact-current-head feedback/check requirements before declaring readiness.
 
 ## Completion and rollout
 
 Implementation completion means the approved component is backed by tested projections, with terminal acceptable PR checks and handled feedback at the pushed head. It does not mean deployed or live accepted. Collector release/deployment approval remains separate, especially where merge may trigger an automatic release. Report historical coverage honestly and keep general resolution/replay deferred.
+
+## Execution result
+
+Implemented with independent whole-change review. See [verification and release limits](../../testing/membership-activity-identities.md). Remaining checkboxes include live authenticated navigation and remote exact-head checks; local type/lint and synthetic pagination/access checks passed. Publication is awaiting approval.

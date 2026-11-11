@@ -21,7 +21,7 @@ Defer a new service that resolves every historical member. The existing destinat
 The supplied screenshot was inspected locally. It shows full `usr_` values as the primary text, raw role assignment/unassignment event strings, and timestamps. No identities from it were looked up.
 
 | Stage | Retained or available | Missing or discarded |
-|---|---|---|
+| --- | --- | --- |
 | Provider audit page | The adapter passes audit results to normalization. The referenced community specification describes actor ID/name, target ID, event type, description and event-dependent data. | The actual live shape of assignment/unassignment data was not checked. Do not assume every event has a role name or target user. |
 | Collector normalization | Audit ID, event type, timestamp, and a user-shaped target ID. All in-window event types pass through, including future or non-membership types. | Actor fields, generic target IDs, description, and all event data are dropped. It never populates `targetDisplayName`. A test explicitly prevents using the actor's name as the target's name. |
 | Convex membership events | Optional target name is allowed, along with target ID and immutable audit fields. Events are scoped by integration and epoch, then verified through scan passes. | No actor or role fields exist in this projection. Optional target-name support does not establish populated data. Duplicate events are skipped after checking immutable type, timestamp and target. |
@@ -32,7 +32,7 @@ An old event can gain a latest known target name through an exact-ID cache hit. 
 ## Existing identity and role sources
 
 | Source | Reuse | Boundary |
-|---|---|---|
+| --- | --- | --- |
 | `profileLinkDestinations` | Indexed by a normalized key such as `vrchat_user:usr_...`; has resolved entity ID, name, status and observation time. Reuse exact-ID normalization and read cached names in the authorized activity projection. | It is a current-observation cache, not historical evidence or verified VRDex identity. Its queue only refreshes visible outbound profile links. No activity row should create a fake profile reference to obtain a refresh. |
 | `profileExternalLinks` and connection verification | Reverse lookup by asset type, exact external ID and active state. Apply existing owner/proof verification and profile/field visibility rules, then deduplicate eligible profiles. | A directory reference or matching display name is insufficient. Associations are many-to-many. Zero or multiple eligible profiles mean no automatic VRDex link. Proof history used for display must not grant permission to act. |
 | `clubProviderReadRequests` | Member pages retain projected user display names and role IDs; roles retain names and IDs. Reuse authorized results already available to a screen. | Subject-scoped temporary reads, with 60-second freshness and 15-minute retention. They are not a general durable identity cache. Do not read another staff member's cached page or grant `view_members`/role-assignment rights merely to label history. |
@@ -44,7 +44,7 @@ Use the existing Card, Button, Notice and local-time formatting patterns. There 
 ## Approaches
 
 | Approach | Benefit | Limit | Status |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Display-only labels, cache names and links | Smallest UI/backend change; helps existing rows immediately. | Future role names and staff attribution continue to be lost. | Insufficient alone. |
 | Cache-backed rows plus a small future audit projection | Addresses the screenshot and prevents further loss of useful actor/role evidence. Existing rows degrade honestly. | Requires collector, validator and query changes. Many names may still be unresolved. | Approved by BASIC on November 11, 2026. |
 | General resolver and historical replay | Could improve coverage across many screens. | New collection scope, scheduling and recovery cost; provider retention and payload coverage unknown. It still cannot guarantee old names. | Deferred. |
@@ -56,7 +56,7 @@ Keep the current activity list and day/range navigation. Each desktop row has a 
 Synthetic examples only. Names and roles below do not identify anyone in the screenshot.
 
 | Before | Proposed main row |
-|---|---|
+| --- | --- |
 | `usr_<A>` / `Joined` / time | `Lumen` with `VRChat` and eligible `VRDex` links / `Joined` / time |
 | `usr_<B>` / `group.member.role.assign` / time | `Mira` with profile links / `Assigned role: DJ`, secondary `By Sol` when proven / time |
 | `usr_<B>` / `group.member.role.unassign` / time | `Mira` with profile links / `Removed role: DJ` / time |
@@ -77,7 +77,7 @@ Recommended link behavior:
 The full design approval covers the strings in this section and the row examples. They are short factual labels under the VR Johnny lens, without promotional or technical explanations.
 
 | State | Proposed display and behavior |
-|---|---|
+| --- | --- |
 | First page loading | Preserve existing `Loading membership activity…`. |
 | Loading another page | Preserve loaded rows and `Load more activity`; indicate pending work without blanking the list. |
 | Name not resolved or lookup unavailable | `Unknown member`; valid VRChat link remains. Details expose the ID. No per-row spinner when no refresh was requested. |
@@ -136,7 +136,7 @@ Mobbin flow research was considered through the installed `mobbin-flow-research`
 This is a source-backed inventory of comparable screens, not proof of every deployed UI or every identifier in the repository. Priorities describe sequencing within this improvement, not incident severity.
 
 | Priority | Screen and source evidence | Recommendation |
-|---|---|---|
+| --- | --- | --- |
 | 1 | Membership activity, `club-membership.tsx:33,224` and `clubMembership.ts:502`. Raw target fallback and raw unmapped event types. | Deliver the proposed rows, links, details and future metadata preservation first. |
 | 2 | Member workspace recent actions, `club-members.tsx:670`. Shows action label and raw `payload.targetUserId`; role context is not shown there. | Reuse person rendering and add known role context. Preserve submission outcome separately from provider audit facts. |
 | 2 | Scheduled list/cancel confirmation, `club-scheduled.tsx:631,678`. Raw target and world IDs; staff name already available. | Names and appropriate links in the list; preserve exact target ID in confirmation. Resolve world names through existing world records, never from user-ID helpers. |

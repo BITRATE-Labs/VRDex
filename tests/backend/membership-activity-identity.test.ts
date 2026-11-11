@@ -65,3 +65,53 @@ it("omits ambiguous and overflowed profile matches without hiding the VRChat lin
     assert.ok(result?.vrchatUrl);
   }
 });
+
+it("never selects a second profile when another eligible profile has unresolved proof overflow", async () => {
+  const f = await fixture();
+  await f.t.run(async ctx => {
+    const proof = await ctx.db.get(f.proofId); assert.ok(proof);
+    const { _id: proofId, _creationTime: proofCreation, ...proofData } = proof;
+    for (let n = 0; n < 20; n++) await ctx.db.insert("externalControlProofs", proofData);
+    const otherUserId = await ctx.db.insert("users", { clerkUserId: newClerkUserId() });
+    const profile = await ctx.db.get(f.profileId); assert.ok(profile);
+    const { _id, _creationTime, ...profileData } = profile;
+    const profileId = await ctx.db.insert("profiles", { ...profileData, slug: "second-mira" });
+    await ctx.db.insert("profileOwners", { profileId, userId: otherUserId, roleKey: "owner", state: "active", grantedAt: now, updatedAt: now });
+    const otherProofId = await ctx.db.insert("externalControlProofs", { ...proofData, userId: otherUserId });
+    await ctx.db.insert("profileExternalLinks", { profileId, assetType: "vrchat_user", assetExternalId: id, linkRole: "primary", state: "active", verifiedByProofId: otherProofId, createdAt: now, updatedAt: now });
+  });
+  assert.equal((await f.read()).get(id)?.vrdexUrl, undefined);
+});
+
+it("deduplicates local lookups and stops optional profile work at the page budget", async () => {
+  const f = await fixture();
+  await f.t.run(ctx => ctx.db.delete(f.linkId));
+  const queryCount = await f.t.run(async ctx => {
+    let count = 0;
+    const db = new Proxy(ctx.db, { get(target, key) {
+      if (key === "query") return (table: Parameters<typeof target.query>[0]) => { count++; return target.query(table); };
+      return Reflect.get(target, key);
+    } });
+    await membershipActivityIdentities({ ...ctx, db }, Array(200).fill(id));
+    return count;
+  });
+  assert.equal(queryCount, 2);
+  const ids = await f.t.run(async ctx => {
+    const source = await ctx.db.get(f.profileId); assert.ok(source);
+    const { _id, _creationTime, ...data } = source;
+    const ids: string[] = [];
+    for (let n = 1; n <= 6; n++) {
+      const userId = `usr_00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+      ids.push(userId);
+      const profileId = await ctx.db.insert("profiles", { ...data, slug: `budget-${n}` });
+      await ctx.db.insert("profileOwners", { profileId, userId: f.userId, roleKey: "owner", state: "active", grantedAt: now, updatedAt: now });
+      const proofId = await ctx.db.insert("externalControlProofs", { userId: f.userId, assetType: "vrchat_user", assetExternalId: userId, controlLevel: "self", state: "active", evidenceSource: "vrchat_api", verifiedAt: now, revalidateAfter: now, createdAt: now, updatedAt: now });
+      for (let link = 0; link < 20; link++) await ctx.db.insert("profileExternalLinks", { profileId, assetType: "vrchat_user", assetExternalId: userId, linkRole: "primary", state: "active", verifiedByProofId: proofId, createdAt: now, updatedAt: now });
+    }
+    return ids;
+  });
+  const entries = await f.t.run(async ctx => [...await membershipActivityIdentities(ctx, ids)]);
+  assert.equal(entries.filter(([, identity]) => identity.vrdexUrl).length, 5);
+  assert.equal(entries[5][1].vrdexUrl, undefined);
+  assert.ok(entries[5][1].vrchatUrl);
+});
