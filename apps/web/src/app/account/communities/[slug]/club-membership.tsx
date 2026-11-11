@@ -1,6 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import type { FunctionReturnType } from "convex/server";
+import { ClubErrorBoundary } from "./club-workspace";
 import { useQueries, usePaginatedQuery } from "convex/react";
 import { api } from "@convex-generated-api";
 import {
@@ -23,23 +26,15 @@ export type MovementPoint = {
   joins: number | null;
   departures: number | null;
 };
-export type MembershipEvent = {
-  auditId: string;
-  eventType: string;
-  occurredAt: number;
-  targetUserId?: string;
-  targetDisplayName?: string;
-};
-export function membershipEventLabel(type: string) {
-  return (
-    (
-      {
-        "group.member.join": "Joined",
-        "group.member.leave": "Left",
-        "group.member.remove": "Removed",
-      } as Record<string, string>
-    )[type] ?? type
-  );
+export type MembershipEvent = FunctionReturnType<typeof api.clubMembership.listActivity>["page"][number];
+export function membershipEventLabel(type: string, roleName?: string) {
+  if (type === "group.member.role.assign") return roleName ? `Assigned role: ${roleName}` : "Role assigned";
+  if (type === "group.member.role.unassign") return roleName ? `Removed role: ${roleName}` : "Role removed";
+  return ({ "group.member.join": "Joined", "group.member.leave": "Left", "group.member.remove": "Removed" } as Record<string, string>)[type] ?? "Other activity";
+}
+function PersonName({ identity, recordedName }: { identity?: MembershipEvent["targetIdentity"]; recordedName?: string }) {
+  const name = identity?.displayName ?? recordedName ?? "Unknown member";
+  return identity ? <a href={identity.vrchatUrl} target="_blank" rel="noreferrer" title="VRChat profile, opens in a new tab" className="underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2">{name}</a> : <>{name}</>;
 }
 export function MembershipMovementView({
   points,
@@ -237,31 +232,35 @@ export function MembershipActivityView({
       <SectionTitle>Membership activity</SectionTitle>
       <div className="mt-4 divide-y divide-border">
         {events.map((event) => (
-          <div
-            key={event.auditId}
-            className="grid gap-2 py-4 sm:grid-cols-[minmax(0,1fr)_8rem_12rem]"
-          >
-            <div className="min-w-0">
-              <p className="truncate font-medium">
-                {event.targetDisplayName ??
-                  event.targetUserId ??
-                  "Unknown member"}
-              </p>
-              {event.targetDisplayName && event.targetUserId ? (
-                <p className="mt-1 break-all text-xs text-muted">
-                  {event.targetUserId}
-                </p>
-              ) : null}
+          <div key={event.auditId} className="py-4">
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_12rem]">
+              <div className="min-w-0">
+                <p className="break-words font-medium"><PersonName identity={event.targetIdentity} recordedName={event.targetDisplayName} /></p>
+                {event.targetIdentity ? <div className="mt-1 flex gap-4 text-xs text-muted">
+                  <a href={event.targetIdentity.vrchatUrl} target="_blank" rel="noreferrer" title="Opens in a new tab" className="underline underline-offset-4">VRChat</a>
+                  {event.targetIdentity.vrdexUrl ? <Link href={event.targetIdentity.vrdexUrl} className="underline underline-offset-4">VRDex</Link> : null}
+                </div> : null}
+              </div>
+              <div>
+                <p className="break-words text-sm">{membershipEventLabel(event.eventType, event.roleName)}</p>
+                {event.actorUserId || event.actorDisplayName ? <p className="mt-1 text-xs text-muted">By <PersonName identity={event.actorIdentity} recordedName={event.actorDisplayName} />{event.actorIdentity?.vrdexUrl ? <> · <Link href={event.actorIdentity.vrdexUrl} className="underline">VRDex</Link></> : null}</p> : null}
+                {event.eventType.startsWith("group.member.role.") && !event.roleName ? <p className="mt-1 text-xs text-muted">Role unavailable</p> : null}
+              </div>
+              <time dateTime={new Date(event.occurredAt).toISOString()} className="text-xs text-muted sm:text-right">{metricTime(event.occurredAt)}</time>
             </div>
-            <p className="break-words text-sm">
-              {membershipEventLabel(event.eventType)}
-            </p>
-            <time
-              dateTime={new Date(event.occurredAt).toISOString()}
-              className="text-xs text-muted sm:text-right"
-            >
-              {metricTime(event.occurredAt)}
-            </time>
+            <details className="mt-3 text-xs text-muted">
+              <summary className="w-fit cursor-pointer rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">Details</summary>
+              <dl className="mt-3 grid gap-2 border-l border-border pl-3">
+                {[
+                  ["Event type", event.eventType], ["Audit ID", event.auditId], ["Target ID", event.targetUserId],
+                  ["Name recorded with event", event.targetDisplayName],
+                  ["Name last checked", event.targetIdentity?.observedAt === undefined ? undefined : metricTime(event.targetIdentity.observedAt)],
+                  ["Actor ID", event.actorUserId], ["Actor name recorded with event", event.actorDisplayName],
+                  ["Actor name last checked", event.actorIdentity?.observedAt === undefined ? undefined : metricTime(event.actorIdentity.observedAt)],
+                  ["Role ID", event.roleId], ["Role recorded with event", event.roleName],
+                ].map(([label, value]) => value ? <div key={label}><dt>{label}</dt><dd className="break-all text-foreground">{value}</dd></div> : null)}
+              </dl>
+            </details>
           </div>
         ))}
       </div>
@@ -278,7 +277,7 @@ export function MembershipActivityView({
     </Card>
   );
 }
-export function ClubMembershipActivity({
+function MembershipActivityQuery({
   communitySlug,
   startAt,
   endAt,
@@ -287,11 +286,29 @@ export function ClubMembershipActivity({
   startAt: number;
   endAt: number;
 }) {
+  const storageKey = `membership-pages:${communitySlug}:${startAt}:${endAt}`;
+  const [restoreCount] = useState(() => {
+    try {
+      const count = Number(sessionStorage.getItem(storageKey));
+      return Number.isSafeInteger(count) && count > 25 ? count : 25;
+    } catch { return 25; }
+  });
   const query = usePaginatedQuery(
     api.clubMembership.listActivity,
     { communitySlug, startAt, endAt },
     { initialNumItems: 25 },
   );
+  const { status, results, loadMore } = query;
+  useEffect(() => {
+    if (status === "CanLoadMore" && results.length < restoreCount) {
+      loadMore(Math.min(100, restoreCount - results.length));
+    }
+  }, [status, results.length, loadMore, restoreCount]);
+  useEffect(() => {
+    if (query.results.length > 0) {
+      try { sessionStorage.setItem(storageKey, String(query.results.length)); } catch { /* Storage is optional. */ }
+    }
+  }, [storageKey, query.results.length]);
   return (
     <MembershipActivityView
       events={query.results}
@@ -302,4 +319,8 @@ export function ClubMembershipActivity({
       onLoadMore={() => query.loadMore(25)}
     />
   );
+}
+
+export function ClubMembershipActivity(props: { communitySlug: string; startAt: number; endAt: number }) {
+  return <ClubErrorBoundary key={`${props.communitySlug}:${props.startAt}:${props.endAt}`} errorMessage="Unable to load activity."><MembershipActivityQuery {...props} /></ClubErrorBoundary>;
 }

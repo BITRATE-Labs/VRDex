@@ -35,7 +35,7 @@ export function ClubAccessNotice() {
 }
 
 export class ClubErrorBoundary extends Component<
-  { children: ReactNode },
+  { children: ReactNode; errorMessage?: string },
   { failed: boolean }
 > {
   state = { failed: false };
@@ -45,7 +45,7 @@ export class ClubErrorBoundary extends Component<
   render() {
     return this.state.failed ? (
       <Notice variant="error" role="alert">
-        Unable to load this page.
+        {this.props.errorMessage ?? "Unable to load this page."}
         <Button
           className="ml-3"
           size="sm"
