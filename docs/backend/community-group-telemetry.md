@@ -182,3 +182,11 @@ The heartbeat adds bounded phase counts, external-wait count, processing-backlog
 ## Reviewed session consolidation
 
 Historical session repairs use internal `instanceSessionRepair` preview/apply/rollback functions. The exact seven-session request is deployment- and epoch-bound, fingerprinted, and resource-bounded. Apply atomically reparents measured observations, retains six alias rows and stores a rollback receipt. It never edits measured populations or community totals. Lists and ingestion use canonical-only indexes; authorized old detail links resolve one same-scope alias hop. A later provider-confirmed close followed by active reuse still creates a new session. No repair runs automatically on deployment. See the [repair review and operator boundary](../planning/2026-11-09-instance-session-continuity-repair.md#operator-preview-and-execution-boundary).
+
+## Private instance chart
+
+Authorized instance detail uses the complete paginated retained history for Population, Windows, Android and Queue. Population and its summary cards continue to use n_users. Windows and Android use their provider platform keys independently; other retained platforms remain available in Diagnostics. A platform line appears only with known values. Queue appears automatically only if any sample is positive. There are no queue or closure visibility toggles.
+
+Unknown fields and collection gaps break lines; measured zero remains zero in the exact-value table. The count axis is unstacked and timestamps use proportional elapsed spacing, with date context for multi-day histories. A stored closedAt marks closure to new joins, not lobby emptiness; later observations remain visible. Data tables and private diagnostics retain full local timestamps. Old records show unknown diagnostics without a backfill. Existing instance-history permission checks and repaired-link resolution remain in force.
+
+See the [instance chart release checklist](../deployment/instance-count-chart-release.md) for backend-first rollout and runtime acceptance.

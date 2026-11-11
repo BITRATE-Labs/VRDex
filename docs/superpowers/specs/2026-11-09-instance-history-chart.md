@@ -6,7 +6,7 @@ Replace the single population graph in the existing private instance detail page
 
 **Current recommendation:** finish this integration in PR #445 before merging it. Its additive capture work is already implemented, but its chart currently renders synthetic data only. Keep recap PR #444 independent. The tradeoff is a slightly larger #445 in exchange for reviewing capture and its actual consumer together.
 
-BASIC's visual revisions are locked below. The remaining review decision is whether this production scope and release sequence are the right next slice. No new navigation, public analytics, historical backfill or metric correction is proposed.
+Locked decision: BASIC approved implementing this scope in #445 on November 11. The visual revisions below remain the production contract. Merge and production release remain separate decisions. No new navigation, public analytics, historical backfill or metric correction is proposed.
 
 ## Experience
 

@@ -33,23 +33,23 @@
 
 **Interfaces:** Export InstanceObservation as SeriesPoint plus optional userCount, queueSize and platforms. Export InstanceChartPoint with at, label, population, windows, android, queueSize, userCount and platforms; missing numeric values are null. Export instanceChartPoints(observations: InstanceObservation[]): InstanceChartPoint[].
 
-- [ ] Write failing model tests using observed points at t, t+3 minutes and t+12 minutes. Assert one shared gap, independently retained diagnostics, zero versus null and no fabricated fields on that gap. Add breakBefore, singleton, platform-only missing, empty map, contradictory counts and counts above 80 cases.
-- [ ] Run `node --import tsx --test tests/web/club-instance-chart-model.test.ts` and verify the intended failure.
-- [ ] Implement the adapter using observedChartPoints as the existing population/gap authority and a timestamp lookup for source diagnostics. Respect coverage; do not interpolate counters or infer missing platforms.
-- [ ] Run the new model test and `node --import tsx --test tests/web/club-analytics-model.test.ts`. Both must pass; commit only this tested task.
+- [x] Write failing model tests using observed points at t, t+3 minutes and t+12 minutes. Assert one shared gap, independently retained diagnostics, zero versus null and no fabricated fields on that gap. Add breakBefore, singleton, platform-only missing, empty map, contradictory counts and counts above 80 cases.
+- [x] Run `node --import tsx --test tests/web/club-instance-chart-model.test.ts` and verify the intended failure.
+- [x] Implement the adapter using observedChartPoints as the existing population/gap authority and a timestamp lookup for source diagnostics. Respect coverage; do not interpolate counters or infer missing platforms.
+- [x] Run the new model test and `node --import tsx --test tests/web/club-analytics-model.test.ts`. Both must pass; commit only this tested task.
 
 ## Task 2: Integrate the production chart and retire parallel prototype rendering
 
 **Files:** Create apps/web/src/app/account/communities/[slug]/club-instance-chart.tsx. Modify club-instances.tsx, apps/web/src/components/instance-population-chart-preview.tsx, its stories and apps/web/e2e/instance-population-chart-preview.storybook.spec.ts. Add real-page scenarios to apps/web/src/components/club-analytics.stories.tsx and browser coverage to apps/web/e2e/club-analytics.storybook.spec.ts.
 
-**Interfaces:** ClubInstanceChart({ points, closedAt }: { points: InstanceChartPoint[]; closedAt: number | null }). InstanceDetailContent passes instanceChartPoints(metrics.results) only when metrics.complete, and session.closedAt. Summary metrics continue to consume the unchanged query results.
+**Interfaces:** `ClubInstanceChart({ points, closedAt }: { points: InstanceChartPoint[]; closedAt: number | null })`. InstanceDetailContent passes instanceChartPoints(metrics.results) only when metrics.complete, and session.closedAt. Summary metrics continue to consume the unchanged query results.
 
-- [ ] Write failing browser checks on the actual instance-detail fixture for the locked labels, platform paths, automatic queue presence/absence, exact table, diagnostics, closure marker without a toggle and population after closure. Include an 110/135 disagreement and missing individual platform samples.
-- [ ] Add a paginated fixture with more than 500 observations and its only positive queue on a later page. Assert the complete chart includes it. Add a multi-day fixture with irregular spacing and a closure between sample timestamps.
-- [ ] Implement ClubInstanceChart with the existing chart primitives and preview styling. Use numeric timestamp XAxis, zero-based shared YAxis, unstacked lines, connectNulls=false, isolated dots and full local timestamps. Include per-platform lines only when known; include Queue only when positive somewhere. Its exact table always preserves known zero versus Unknown.
-- [ ] Replace only the ClubChart call in InstanceDetailContent. Retain event association/actions, loading/error states, complete pagination, summary cards, Data completeness and Back behavior. Do not change the shared ClubChart.
-- [ ] Reduce the prototype to a fixture wrapper around ClubInstanceChart. Keep sample generation and Sample case controls outside the production module. Add NoQueue, Legacy, PartialPlatforms, ClosedTail and MultiDay fixtures without real identities.
-- [ ] Run web typecheck, targeted ESLint, the model tests and targeted instance-detail/preview Playwright checks for desktop and mobile. Include existing club-instance-freshness and instance-session-repair coverage. Use ci:browsers and ci:visuals on the PR.
+- [x] Write failing browser checks on the actual instance-detail fixture for the locked labels, platform paths, automatic queue presence/absence, exact table, diagnostics, closure marker without a toggle and population after closure. Include an 110/135 disagreement and missing individual platform samples.
+- [x] Add a paginated fixture with more than 500 observations and its only positive queue on a later page. Assert the complete chart includes it. Add a multi-day fixture with irregular spacing and a closure between sample timestamps.
+- [x] Implement ClubInstanceChart with the existing chart primitives and preview styling. Use numeric timestamp XAxis, zero-based shared YAxis, unstacked lines, connectNulls=false, isolated dots and full local timestamps. Include per-platform lines only when known; include Queue only when positive somewhere. Its exact table always preserves known zero versus Unknown.
+- [x] Replace only the ClubChart call in InstanceDetailContent. Retain event association/actions, loading/error states, complete pagination, summary cards, Data completeness and Back behavior. Do not change the shared ClubChart.
+- [x] Reduce the prototype to a fixture wrapper around ClubInstanceChart. Keep sample generation and Sample case controls outside the production module. Add NoQueue, Legacy, PartialPlatforms, ClosedTail and MultiDay fixtures without real identities.
+- [x] Run web typecheck, targeted ESLint, the model tests and targeted instance-detail/preview Playwright checks for desktop and mobile. Include existing club-instance-freshness and instance-session-repair coverage. Use ci:browsers and ci:visuals on the PR.
 
 Verification commands for Task 2, using the task's existing Storybook port:
 
@@ -60,7 +60,7 @@ $env:PLAYWRIGHT_REUSE_STORYBOOK = "true"
 pnpm --filter web exec playwright test --config playwright.storybook.config.mjs instance-population-chart-preview.storybook.spec.ts club-analytics.storybook.spec.ts club-instance-freshness.storybook.spec.ts instance-session-repair.storybook.spec.ts
 ```
 
-- [ ] Capture and inspect desktop/mobile screenshots of the real instance detail, table, diagnostic section, multi-day chart and closure tail. Confirm no document overflow or clipped annotations; verify numeric spacing rather than evenly spaced samples. Update backend/operator docs for the real chart behavior and commit the integration.
+- [x] Capture and inspect desktop/mobile screenshots of the real instance detail, table, diagnostic section, multi-day chart and closure tail. Confirm no document overflow or clipped annotations; verify numeric spacing rather than evenly spaced samples. Update backend/operator docs for the real chart behavior and commit the integration.
 
 ## Task 3: Prove the account route and prepare release
 
