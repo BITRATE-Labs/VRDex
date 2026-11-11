@@ -29,6 +29,11 @@ This is a proposal, not an applied settings diff. Read the effective billing lim
 
 ## Dependencies before activation
 
+The follow-up has passed [candidate browser/backend acceptance](../testing/posthog-foundation-acceptance.md#candidate-browserbackend-acceptance)
+using a production web build and isolated local backend. It covers the guest
+path with intercepted provider traffic. Shared staging CI targets main and does
+not qualify the candidate's authenticated flow or live-provider behavior.
+
 - Review exact public panel/policy copy. The policy draft still needs the concrete event-retention value and broader site-policy review.
 - Establish Limited's actual no-consent eligibility and provider reuse conditions. Synthetic payload stripping alone does not establish legal eligibility.
 - Verify the [server management key provisioning and withdrawal worker](convex-environments.md#posthog-withdrawal-authorization) after deployment. The implementation reuses the existing repository `POSTHOG_API_KEY`, handles account and receipt-authorized guest requests, checks provider acknowledgement/status, and retains unresolved targets. Local tests use synthetic transport; no live provider deletion is claimed. The ingestion key and operator Executor connection do not supply runtime management authorization.

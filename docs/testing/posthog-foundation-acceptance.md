@@ -30,6 +30,45 @@ Guest deletion is authorized by a separate 256-bit receipt, stored only as a has
 
 November 11 follow-up evidence: 44 synthetic analytics/playback browser cases pass on desktop and mobile. The new regression verifies the emitted guest ID matches its receipt, survives reload, stops on Off, retries after a failed withdrawal and changes on re-enablement. Focused backend/web checks cover leases, stale workers, provider acknowledgements/status, ownership, failure bounds and completed-only cleanup. Provider traffic is intercepted throughout these tests.
 
+## Candidate browser/backend acceptance
+
+On November 11, the committed follow-up candidate passed desktop Chromium
+acceptance against a real isolated local Convex deployment. Next ran a production
+build with `NODE_ENV=production` and `VRDEX_DEPLOYMENT_ENV=staging`. The browser
+used the actual guest route and backend mutations, rather than mocked receipts.
+
+Both On/Off periods returned successful start/withdrawal responses. Each queued
+backend target matched the distinct ID emitted by the browser. The check also
+covered identity continuity after reload, receipt retention after an injected
+network failure, reconnect retry, a fresh identity on re-enablement, stale-lease
+rejection and the disabled provider worker.
+
+This run found and reproduced a real origin-check failure: Next reconstructed
+the request URL with `localhost` while the browser used `127.0.0.1`. The route
+now checks the browser-facing Host and request protocol. Regression coverage
+still rejects mismatched origins and protocols.
+
+The frontend foundation flag was enabled only for this isolated check. Limited
+collection was disabled. PostHog ingestion used a fake key and intercepted
+transport; all other non-loopback browser traffic was blocked. The server used
+the local Convex admin binding. Clerk and the public Convex binding were unset,
+so authenticated account behavior was not exercised. The local memory rate
+limiter differs from the hosted shared store. Shared staging main was not used
+as evidence for this candidate.
+
+Hosted account consent, actual provider deletion/status, replay and production
+activation remain unverified. These results do not approve public copy or
+establish management-key authorization.
+
+### Candidate evidence reference
+
+- Source: `03f15bea823414f68b2c017eea3f9d8735886184`.
+- Isolated backend: `anonymous-agent`, loopback cloud/site ports 3370/3371.
+- Operator artifacts: `.superpowers/posthog-local-acceptance/result.json`,
+  `request-statuses.json`, `offer.png` and `off-retry.png` in the same directory.
+- Focused follow-up checks: 32 backend, 13 web and 85 API contract cases passed.
+- Source acceptance is separate from selected Linux CI and provider acceptance.
+
 ## Evidence
 
 Synthetic browser acceptance intercepts all PostHog transport with a fake key. Desktop and mobile checks cover independent Limited envelopes, absence of SDK visitor IDs in local/session storage, Off silence, Full navigation, opaque guest continuity across reload, cross-tab withdrawal and a delayed flag/recording configuration response after Off. A 503 regression verifies retired captures do not retry after Off/On. Normal fetch transport handles an actual synthetic snapshot payload larger than 64 KB. Active-session and server outbox retries remain available.
