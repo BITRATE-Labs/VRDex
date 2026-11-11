@@ -21,7 +21,7 @@ type DeliveryClaim = { row: Doc<"claimAnalyticsOutbox"> | null };
 export const restrictBrowserJourney = internalMutation({
   args: { journeyId: v.string(), browserRestriction: v.optional(analyticsChoice) },
   handler: async (ctx, args) => {
-    if (args.browserRestriction === "on") return;
+    if (args.browserRestriction !== "off") return;
     const caller = await currentUserOrNull(ctx);
     if (!caller) return;
     const rows = await ctx.db.query("claimAnalyticsOutbox")
@@ -222,6 +222,9 @@ export const deliveryOperationalHealth = internalQuery({
       ),
     );
     const [pending, delivering, failed, disabled] = rowsByState;
+    const blockedDeletions = await ctx.db.query("analyticsDeletionRequests")
+      .withIndex("by_state", (q) => q.eq("state", "blocked_authorization"))
+      .take(HEALTH_SCAN_LIMIT + 1);
     const oldestOutstanding = [...pending, ...delivering]
       .sort((left, right) => left.occurredAt - right.occurredAt)[0];
 
@@ -230,11 +233,12 @@ export const deliveryOperationalHealth = internalQuery({
       deliveringCount: Math.min(delivering.length, HEALTH_SCAN_LIMIT),
       failedCount: Math.min(failed.length, HEALTH_SCAN_LIMIT),
       disabledCount: Math.min(disabled.length, HEALTH_SCAN_LIMIT),
+      blockedDeletionCount: Math.min(blockedDeletions.length, HEALTH_SCAN_LIMIT),
       oldestPendingAgeMs:
         oldestOutstanding === undefined
           ? null
           : Math.max(0, args.now - oldestOutstanding.occurredAt),
-      scanLimitReached: rowsByState.some((rows) => rows.length > HEALTH_SCAN_LIMIT),
+      scanLimitReached: blockedDeletions.length > HEALTH_SCAN_LIMIT || rowsByState.some((rows) => rows.length > HEALTH_SCAN_LIMIT),
     };
   },
 });

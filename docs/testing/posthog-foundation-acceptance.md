@@ -48,6 +48,8 @@ PR review found three additional gaps: proposed copy was not deployment-gated, b
 
 Further review fixes bind adopted guest choices to the first account, clear SDK persistence on withdrawal, pin the SDK exactly and verify the installed version. Granted lookup/temporal access now uses backend authorization consistently across analytics modes; the obsolete flag-refresh helper was removed. Batching remains deliberately disabled, with proxy request volume added to pilot acceptance.
 
+An unresolved or disabled browser mode no longer masquerades as an explicit Off action when continuing a claim. The first authenticated visit consumes a guest marker even when the account already has its own preference. Limited no longer calls the SDK's persistent consent opt-in; its browser regression checks every local/session storage entry and cookie, allowing only the application's offer-dismissal receipt. The existing internal delivery-health query exposes a bounded blocked-deletion count without identifiers. Unfulfilled requests retain each distinct analytics identifier rather than losing deletion targets through owner-level deduplication.
+
 Follow-up local checks passed 46 backend cases and ten preference/transport cases. The browser configuration runs the enabled matrix with synthetic intercepted transport and separately tests disabled presentation/capture on desktop and mobile. Linux CI includes both configurations in the selected public-smoke lane. Original broad local results below precede these follow-ups; current Linux CI verifies the complete branch.
 
 ## Original implementation verification

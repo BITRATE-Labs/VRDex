@@ -571,7 +571,7 @@ export const cancelClaimJourneyPending = mutation({
       });
       const analytics = analyticsContextFromRequest(request);
       if (analytics !== null) {
-        analytics.browserRestriction = args.analyticsBrowserRestriction === "on" ? "on" : "off";
+        analytics.browserRestriction = args.analyticsBrowserRestriction;
         await enqueueClaimAnalyticsEvent(ctx, analytics, {
           event: "claim_resolved",
           profileType: request.profileType,
@@ -609,7 +609,7 @@ export const cancelClaimJourneyPending = mutation({
     });
     const analytics = analyticsContextFromAttempt(proof);
     if (analytics !== null) {
-      analytics.browserRestriction = args.analyticsBrowserRestriction === "on" ? "on" : "off";
+      analytics.browserRestriction = args.analyticsBrowserRestriction;
       await enqueueClaimAnalyticsEvent(ctx, analytics, {
         event: "claim_resolved",
         profileType: profile.profileType,

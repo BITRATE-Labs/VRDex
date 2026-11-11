@@ -381,7 +381,7 @@ export function ClaimFlowContent({
     const destination = new URL(discordVerifyHref, "https://vrdex.invalid");
     destination.searchParams.set("analyticsJourneyId", journeyId);
     destination.searchParams.set("analyticsEntrySource", source);
-    destination.searchParams.set("analyticsBrowserRestriction", analyticsMode === "full" ? "on" : "off");
+    if (analyticsMode === "full" || analyticsMode === "off") destination.searchParams.set("analyticsBrowserRestriction", analyticsMode === "full" ? "on" : "off");
     destination.searchParams.set("analyticsProfileType", profile.profileType);
     return `${destination.pathname}${destination.search}`;
   }
@@ -538,7 +538,7 @@ export function ClaimFlowContent({
           targetExternalId: String(form.get("targetExternalId") ?? ""),
           analyticsJourneyId: journeyId,
           analyticsEntrySource: source,
-          analyticsBrowserRestriction: analyticsMode === "full" ? "on" : "off",
+          analyticsBrowserRestriction: analyticsMode === "full" ? "on" : analyticsMode === "off" ? "off" : undefined,
         });
 
         journeyId = started.analyticsJourneyId;
@@ -557,7 +557,7 @@ export function ClaimFlowContent({
           targetExternalId: String(form.get("targetExternalId") ?? ""),
           analyticsJourneyId: journeyId,
           analyticsEntrySource: source,
-          analyticsBrowserRestriction: analyticsMode === "full" ? "on" : "off",
+          analyticsBrowserRestriction: analyticsMode === "full" ? "on" : analyticsMode === "off" ? "off" : undefined,
         });
         journeyId = started.analyticsJourneyId;
         setAnalyticsJourneyId(journeyId);
@@ -574,7 +574,7 @@ export function ClaimFlowContent({
           profileSlug: profile.slug,
           analyticsJourneyId: journeyId,
           analyticsEntrySource: source,
-          analyticsBrowserRestriction: analyticsMode === "full" ? "on" : "off",
+          analyticsBrowserRestriction: analyticsMode === "full" ? "on" : analyticsMode === "off" ? "off" : undefined,
         });
         const alreadyOwned = "state" in result && result.state === "already_owned";
         setStatus({
@@ -600,7 +600,7 @@ export function ClaimFlowContent({
         guildId: String(form.get("discordGuildId") ?? ""),
         analyticsJourneyId: journeyId,
         analyticsEntrySource: source,
-          analyticsBrowserRestriction: analyticsMode === "full" ? "on" : "off",
+          analyticsBrowserRestriction: analyticsMode === "full" ? "on" : analyticsMode === "off" ? "off" : undefined,
       });
       // Server control is proved either way. Whether it verifies *this listing*
       // depends on the server already being on record for it, so report what the
@@ -666,7 +666,7 @@ export function ClaimFlowContent({
     try {
       captureJourneyView(journeyId);
       captureMethodSelection(journeyId, proofMethod);
-      const result = await verifyVrchat({ attemptId, analyticsBrowserRestriction: analyticsMode === "full" ? "on" : "off" });
+      const result = await verifyVrchat({ attemptId, analyticsBrowserRestriction: analyticsMode === "full" ? "on" : analyticsMode === "off" ? "off" : undefined });
       if ("claimState" in result) {
         const verified = result.claimState === "claimed_verified";
         setStatus({
@@ -777,7 +777,7 @@ export function ClaimFlowContent({
     try {
       captureJourneyView(journeyId);
       captureMethodSelection(journeyId, "discord");
-      const result = await verifyDiscord({ claimRequestId: requestId, analyticsBrowserRestriction: analyticsMode === "full" ? "on" : "off" });
+      const result = await verifyDiscord({ claimRequestId: requestId, analyticsBrowserRestriction: analyticsMode === "full" ? "on" : analyticsMode === "off" ? "off" : undefined });
       if ("claimState" in result) {
         const verified = result.claimState === "claimed_verified";
         setStatus({
@@ -829,7 +829,7 @@ export function ClaimFlowContent({
     setCollectorCompletion(null);
     setStatus({ kind: "working", message: "Canceling…" });
     try {
-      const result = await cancelPending({ profileSlug: profile.slug, pendingType, analyticsBrowserRestriction: analyticsMode === "full" ? "on" : "off" });
+      const result = await cancelPending({ profileSlug: profile.slug, pendingType, analyticsBrowserRestriction: analyticsMode === "full" ? "on" : analyticsMode === "off" ? "off" : undefined });
 
       // Nothing was cancelled, so the collector resolved the proof between the
       // click and this mutation. Say nothing and let the completion observer

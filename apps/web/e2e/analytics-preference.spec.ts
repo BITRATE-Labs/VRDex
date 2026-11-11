@@ -61,6 +61,9 @@ test("Limited envelopes are independent and Off sends no optional requests", asy
   expect(first.properties.$geoip_disable).toBe(true);
   expect(await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith("ph_")))).toEqual([]);
   expect(await page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith("ph_")))).toEqual([]);
+  expect(await page.evaluate(() => Object.entries(localStorage))).toEqual([["vrdex-analytics-offered", "1"]]);
+  expect(await page.evaluate(() => Object.entries(sessionStorage))).toEqual([]);
+  expect(await page.context().cookies()).toEqual([]);
   await page.getByRole("region", { name: "Usage & privacy", exact: true }).getByRole("button", { name: "Off", exact: true }).click();
   off = true;
   await page.reload();

@@ -796,7 +796,8 @@ export default defineSchema({
     analyticsId: v.string(),
     requestedAt: v.number(),
     state: v.literal("blocked_authorization"),
-  }).index("by_analyticsId", ["analyticsId"]),
+  }).index("by_analyticsId", ["analyticsId"])
+    .index("by_state", ["state"]),
   profiles: defineTable(
     v.union(
       v.object({

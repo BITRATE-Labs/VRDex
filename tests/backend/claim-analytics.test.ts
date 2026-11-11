@@ -450,6 +450,7 @@ describe("claim analytics outbox", () => {
       deliveringCount: 0,
       failedCount: 1,
       disabledCount: 0,
+      blockedDeletionCount: 0,
       oldestPendingAgeMs: null,
       scanLimitReached: false,
     });

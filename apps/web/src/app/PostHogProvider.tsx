@@ -58,7 +58,7 @@ function initializeClient(token: string, mode: "limited" | "full", analyticsId: 
     bootstrap: mode === "full" && analyticsId ? { distinctID: analyticsId, isIdentifiedID: true } : undefined,
     capture_pageview: false, capture_pageleave: false, autocapture: false,
     disable_session_recording: true, advanced_disable_flags: mode !== "full",
-    opt_out_capturing_by_default: true,
+    opt_out_capturing_by_default: mode === "full",
     consent_persistence_name: `vrdex-analytics-${mode}`,
     // Keep each consent-bound event independently dispatchable; measure proxy request volume during the pilot.
     request_batching: false, ip: false, capture_performance: false, enable_recording_console_log: false,
@@ -107,7 +107,7 @@ export function PostHogProvider({ children }: { children: ReactNode }) {
     activeMode = mode;
     activeClient = next;
     next.register({ deployment_category: category, analytics_mode: mode });
-    next.opt_in_capturing({ captureEventName: false });
+    if (mode === "full") next.opt_in_capturing({ captureEventName: false });
     if (mode === "full" && analyticsId) next.identify(analyticsId);
     next.set_config({ autocapture: mode === "full", capture_pageleave: mode === "full", disable_session_recording: mode !== "full" });
     next.capture("$pageview");

@@ -18,7 +18,7 @@ type Preferences = {
   open: () => void;
   pauseRef: { current: (withdraw?: boolean) => void };
 };
-const Context = createContext<Preferences>({ mode: "off", open: () => {}, pauseRef: { current: () => {} } });
+const Context = createContext<Preferences>({ mode: undefined, open: () => {}, pauseRef: { current: () => {} } });
 export const useAnalyticsPreferences = () => useContext(Context);
 
 type AccountBridgeProps = {
@@ -57,10 +57,14 @@ function ConnectedAccount({ update, saveRef, browserChoice, failed, inherited, a
     return () => { saveRef.current = undefined; };
   }, [isAuthenticated, isLoading, user, matches, setPreference, update, saveRef]);
   useEffect(() => {
-    if (browserChoice !== "on" || !user || user.analyticsPreference) return;
+    if (browserChoice !== "on" || !user) return;
     let cancelled = false;
     let owner: string | null = null;
     try { owner = localStorage.getItem(ANALYTICS_CHOICE_OWNER_KEY); } catch { /* An unproven browser choice cannot grant account consent. */ }
+    if (user.analyticsPreference) {
+      try { localStorage.setItem(ANALYTICS_CHOICE_OWNER_KEY, user.id); } catch { /* The account preference remains authoritative. */ }
+      return;
+    }
     if (!analyticsChoiceOwnerMatches(owner, user.id)) {
       inherited();
       return;

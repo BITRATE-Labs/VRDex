@@ -86,6 +86,9 @@ it("withdrawal never revives a queued generation after On returns", async () => 
   const pending = await t.run(async (ctx) => ctx.db.query("analyticsDeletionRequests").collect());
   assert.equal(pending.length, 1);
   assert.equal(pending[0].state, "blocked_authorization");
+  const health = await t.query(internal.claimAnalytics.deliveryOperationalHealth, { now: Date.now() });
+  assert.equal(health.blockedDeletionCount, 1);
+  assert.equal(JSON.stringify(health).includes(pending[0].analyticsId), false);
   await user.mutation(api.analyticsPreferences.set, { choice: "off", policyVersion: "2026-11-10" });
   assert.equal((await t.run(async (ctx) => ctx.db.query("analyticsDeletionRequests").collect())).length, 1);
   await user.mutation(api.analyticsPreferences.set, { choice: "on", policyVersion: "2026-11-10" });
@@ -127,6 +130,7 @@ it("continuing in a restricted browser terminally suppresses an existing journey
   const milestone = { event: "claim_attempt_created", profileType: "person", method: "discord", occurredAt: Date.now() } as const;
   await user.run(async (ctx) => enqueueClaimAnalyticsEvent(ctx, context, milestone));
   await t.withIdentity({ subject: "other-user" }).mutation(internal.claimAnalytics.restrictBrowserJourney, { journeyId: context.journeyId });
+  await user.mutation(internal.claimAnalytics.restrictBrowserJourney, { journeyId: context.journeyId });
   assert.equal((await t.run(async (ctx) => ctx.db.query("claimAnalyticsOutbox").first()))?.state, "pending");
   await user.mutation(internal.claimAnalytics.restrictBrowserJourney, { journeyId: context.journeyId, browserRestriction: "off" });
   await user.run(async (ctx) => enqueueClaimAnalyticsEvent(ctx, context, { ...milestone, event: "claim_resolved" }));

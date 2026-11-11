@@ -31,6 +31,7 @@ This is a proposal, not an applied settings diff. Read the effective billing lim
 - Verify account switching, delayed account preferences and failed-save retry against an isolated authenticated backend. Local guest browser checks and Convex unit tests do not prove hosted auth behavior.
 - Use an existing isolated staging target or proven staging-only recording restriction for synthetic public/private/form replay acceptance. Do not enable shared-project recording globally just to test it. Confirm masking, receipt and basic mobile/player responsiveness. This hosted check is pending.
 - Measure proxied ingest requests per Full session during the pilot. Browser event batching is intentionally disabled to keep consent-bound dispatch independent; sampling alone does not bound Vercel transfer cost.
+- Read `claimAnalytics.deliveryOperationalHealth.blockedDeletionCount` for a bounded aggregate of unfulfilled deletion requests. Do not sweep or deduplicate distinct consent-period identifiers before supported deletion has completed. A supported worker, backlog handling and completed-request retention are still activation dependencies.
 
 ## Rollback
 
