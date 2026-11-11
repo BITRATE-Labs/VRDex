@@ -501,8 +501,8 @@ export async function expectVerifiedPersonProfilePage(page: Page) {
   await expect(page.getByText(/Public lookup seed for validating operator workflows/i)).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Copy Discord" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Watch", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Watch on Twitch" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open preview" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Twitch basic_bit", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open preview" })).toHaveCount(0);
   await expectProfilePlaybackLinks(page, 1);
   await expect(page.getByRole("link", { exact: true, name: "VRCDN stream" })).toHaveCount(0);
   // Twitch and the permanent VRCDN controls keep the Watch surface present.

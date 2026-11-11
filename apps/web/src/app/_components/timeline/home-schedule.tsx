@@ -311,9 +311,7 @@ function ScheduleContent({
           )}
           {data.kind === "ready" &&
             empty &&
-            (navigation.favoritesOnly
-              ? "No favorites in this range"
-              : "No events in this range")}
+            navigation.favoritesOnly && "No favorites in this range"}
           {nextEvent !== undefined && (
             <Button size="sm" onClick={() => navigate({ anchor: nextEvent })}>Next event</Button>
           )}

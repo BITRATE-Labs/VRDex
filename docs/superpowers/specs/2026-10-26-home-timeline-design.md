@@ -293,9 +293,11 @@ Favorite, Unfavorite, Open event, Close, Expand, Collapse, Retry, More,
 Time TBA, Unavailable, Cancelled, Overlap, Next saved, Not saved.
 Limit reached is the proposed storage-cap label.
 
-Additional state wording for exact-copy review: "No events in this range",
+Additional state wording for exact-copy review:
 "No favorites in this range", "Events unavailable", "Loading events",
 "More events available", "Saved in this browser".
+
+November 6 update: BASIC requested removing "No events in this range". A settled empty schedule remains visible without that text.
 
 Use these only when their state applies. No tagline, sample banner, tutorial
 paragraph, browser-storage essay or decorative filler. Accessibility names can

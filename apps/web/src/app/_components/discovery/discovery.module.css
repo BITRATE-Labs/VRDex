@@ -342,3 +342,7 @@
     animation: none;
   }
 }
+
+.clubArtwork { aspect-ratio: 4 / 3; background: var(--surface); }
+.clubArtwork::after { display: none; }
+.clubLogo:has(img) { width: 76%; height: 68%; }

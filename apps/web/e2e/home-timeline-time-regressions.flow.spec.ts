@@ -149,9 +149,9 @@ test.describe("timeline time regressions @flow @fixture", () => {
             return rect.width > 0 && rect.right > bounds.left + 1 && rect.left < bounds.right - 1 && rect.bottom > bounds.top && rect.top < bounds.bottom;
           });
           const text = status.textContent ?? "";
-          const empty = /No (events|favorites) in this range/.test(text);
+          const empty = /No favorites in this range/.test(text);
           audit.sawVisibleContent ||= Boolean(visible);
-          audit.sawEmpty ||= empty;
+          audit.sawEmpty ||= status.getAttribute("data-state") === "ready" && !visible;
           if (empty && visible && audit.contradictions.length < 40) audit.contradictions.push({ text, date: document.querySelector<HTMLInputElement>('[aria-label="Schedule date"]')?.value ?? null, anchor: new URL(location.href).searchParams.get("at"), content: visible.getAttribute("data-testid") });
         };
         new MutationObserver(sample).observe(document, { subtree: true, childList: true, characterData: true, attributes: true });
@@ -168,11 +168,13 @@ test.describe("timeline time regressions @flow @fixture", () => {
       await chart.press("ArrowRight");
       await page.getByRole("button", { name: "Later", exact: true }).click();
       await page.getByRole("button", { name: "Later", exact: true }).click();
-      await expect(page.getByText("No events in this range", { exact: true })).toBeVisible();
+      await expect(page.getByLabel("Schedule data state", { exact: true }),
+      ).toHaveAttribute("data-state", "ready");
       await page.getByRole("button", { name: "Now", exact: true }).click();
       await expect(bar).toBeInViewport();
       await page.getByLabel("Schedule date", { exact: true }).fill("2026-10-27");
-      await expect(page.getByText("No events in this range", { exact: true })).toBeVisible();
+      await expect(page.getByLabel("Schedule data state", { exact: true }),
+      ).toHaveAttribute("data-state", "ready");
       await page.getByRole("button", { name: "Now", exact: true }).click();
       await expect(bar).toBeInViewport();
       const audit: { samples: number; sawVisibleContent: boolean; sawEmpty: boolean; contradictions: unknown[] } = await page.evaluate(() => Reflect.get(window, "timelineStatusAudit"));

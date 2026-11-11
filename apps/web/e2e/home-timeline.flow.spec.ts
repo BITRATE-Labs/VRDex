@@ -577,9 +577,7 @@ test.describe("continuous schedule @flow @fixture", () => {
         panel.getByText(/ (12|24)h$/, { exact: true }),
     ).toHaveText("UTC · 12h");
     if (isMobile) {
-      expect((await panel.boundingBox())?.height).toBeLessThanOrEqual(
-        (page.viewportSize()?.height ?? 0) / 2 + 1,
-      );
+      expect((await panel.boundingBox())?.height).toBeCloseTo(page.viewportSize()?.height ?? 0, 0);
     }
     await panel
       .getByRole("button", {
@@ -835,8 +833,9 @@ test.describe("continuous schedule @flow @fixture", () => {
     ).toBeVisible();
     await expect(page.getByTestId("night-lanes")).toHaveCount(0);
     await expect(
-      page.getByText("No events in this range", { exact: true }),
-    ).toBeVisible();
+      page.getByLabel("Schedule data state", { exact: true }),
+      ).toHaveAttribute("data-state", "ready");
+    await expect(page.getByText("No events in this range", { exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Next saved", exact: true }).click();
     await expect(page.getByLabel("Schedule date", { exact: true })).toHaveValue(
       "2026-10-26",
@@ -1216,8 +1215,8 @@ test.describe("continuous schedule @flow @fixture", () => {
         .getByLabel("Schedule date", { exact: true })
         .fill("2036-11-04");
       await expect(
-        page.getByText("No events in this range", { exact: true }),
-      ).toBeVisible();
+        page.getByLabel("Schedule data state", { exact: true }),
+      ).toHaveAttribute("data-state", "ready");
       const saved = page
         .getByRole("region", { name: "My night", exact: true })
         .getByRole("button", { name: /^Later-page guest/ });

@@ -170,7 +170,7 @@ test.describe("Home schedule images @visual @snapshot @fixture", () => {
     await page.goto(`/?at=${Date.UTC(2036, 10, 5, 12)}`);
     await expect(
       page.getByLabel("Schedule data state", { exact: true }),
-    ).toContainText("No events in this range");
+    ).toHaveAttribute("data-state", "ready");
     await expect(page.getByRole("button", { name: "Next event", exact: true })).toHaveCount(0);
     await capture(page, "empty");
   });

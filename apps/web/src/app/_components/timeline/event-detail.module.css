@@ -39,6 +39,7 @@
   background: var(--canvas-muted);
 }
 .poster img {
+  aspect-ratio: 4 / 5;
   display: block;
   width: 100%;
   height: auto;
