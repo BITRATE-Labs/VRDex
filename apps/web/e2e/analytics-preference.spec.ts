@@ -77,6 +77,25 @@ test("first offer is nonblocking; dismiss stays unset and footer reopens the cho
   await expect(panel).toHaveCount(0);
 });
 
+test("background guest receipt failure stays quiet and retries on reconnect", async ({ page, context }) => {
+  await context.addInitScript(() => {
+    localStorage.setItem("vrdex-analytics-choice", "on");
+    localStorage.setItem("vrdex-analytics-offered", "1");
+  });
+  let fail = true;
+  await page.route("**/api/analytics/guest", (route) => route.fulfill({ status: fail ? 503 : 200,
+    json: fail ? { status: 503 } : { analyticsId: randomUUID(), receipt: randomBytes(32).toString("hex") } }));
+  const failed = page.waitForResponse((response) => response.url().includes("/api/analytics/guest") && response.status() === 503);
+  await page.goto("/search");
+  await failed;
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(null)))));
+  await expect(page.getByRole("region", { name: "Usage & privacy", exact: true })).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("vrdex-analytics-guest"))).toBeNull();
+  fail = false;
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("vrdex-analytics-guest"))).not.toBeNull();
+});
+
 test("Limited envelopes are independent and Off sends no optional requests", async ({ page }) => {
   const events: Array<{ event: string; properties: Record<string, unknown> }> = [];
   let off = false;
@@ -221,8 +240,8 @@ test("Full visitor continuity survives reload and another tab receives Off", asy
   await expect.poll(() => identities.length).toBe(3);
   await page.getByRole("button", { name: "Usage & privacy", exact: true }).click();
   await page.getByRole("button", { name: "Off", exact: true }).click();
-  expect(await page.evaluate((id) => JSON.stringify(localStorage).includes(id), first)).toBe(false);
   off = true;
+  await expect.poll(() => page.evaluate((id) => JSON.stringify(localStorage).includes(id), first)).toBe(false);
   await other.getByRole("button", { name: "Usage & privacy", exact: true }).click();
   await expect(other.getByRole("button", { name: "Off", exact: true })).toHaveAttribute("aria-pressed", "true");
   await other.evaluate(() => history.pushState({}, "", "/search?query=other-tab"));

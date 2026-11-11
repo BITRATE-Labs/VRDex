@@ -77,13 +77,17 @@ remain blocked and retry hourly. Aggregate counts are exposed by
 Completed mappings and associated withdrawn guest receipts expire after 30 days.
 Pending, accepted, blocked and failed targets are never swept.
 
-Guest On uses the existing web-to-Convex admin path and shared `public_write` IP
-rate limit to issue a random ID and withdrawal receipt. Convex retains only the
+Guest On uses the existing web-to-Convex admin path and IP limiter to issue a
+random ID and withdrawal receipt. The `analytics_guest_start` policy allows three
+starts per IP per minute; withdrawal retains the `public_write` policy. Convex retains only the
 receipt hash. Guest Off stops capture immediately, queues deletion with that
 receipt, and retains it in browser storage until the queue accepts it. A failed
 request retries on the next visit, reconnect, or explicit save. Re-enablement
 waits for that acceptance before creating another guest identity. No additional
-signing secret or public arbitrary-ID deletion endpoint is introduced.
+signing secret or public arbitrary-ID deletion endpoint is introduced. Guest Full
+requires Web Locks; unsupported browsers keep optional capture disabled. Background
+receipt failures stay quiet and retry on reconnect or an explicit save. New
+withdrawals start pending; blocked means a provider authorization failure.
 
 This configuration prepares withdrawal handling. It does not enable browser
 collection or project recording. See [activation](posthog-foundation-activation.md)

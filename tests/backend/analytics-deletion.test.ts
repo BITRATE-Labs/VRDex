@@ -44,7 +44,7 @@ it("requires a server management key and exact project, refusing ingestion keys 
 });
 
 it("requests event and recording deletion for the exact stored identity, recording acceptance rather than completion", async () => {
-  const requests = responses([{ body: { results: [{ id: "person-uuid" }] } }, { status: 202, body: acknowledged }]);
+  const requests = responses([{ body: { results: [{ id: 123, uuid: "person-uuid" }] } }, { status: 202, body: acknowledged }]);
   assert.deepEqual(await deletePosthogIdentity(config, { analyticsId: "opaque-consent-id" }), { kind: "accepted", personId: "person-uuid" });
   assert.match(requests[0].url, /distinct_id=opaque-consent-id/);
   assert.deepEqual(JSON.parse(String(requests[1].init?.body)), { ids: ["person-uuid"], delete_events: true, delete_recordings: true });
@@ -172,4 +172,14 @@ it("does not starve an older submission behind accepted requests waiting for pro
     await ctx.db.insert("analyticsDeletionRequests", { analyticsId: "submit", requestedAt: 0, state: "pending", nextAttemptAt: 1 });
   });
   assert.equal((await t.mutation(claim, { now: 11 }))?.analyticsId, "submit");
+});
+
+it("continues completed cleanup beyond a full batch", async () => {
+  const t = convexTest({ schema, modules });
+  await t.run(async (ctx) => {
+    for (let i = 0; i < 101; i++) await ctx.db.insert("analyticsDeletionRequests", { analyticsId: `completed-${i}`, requestedAt: 0, state: "completed", completedAt: 1 });
+  });
+  await t.mutation(sweep, { now: 31 * 86_400_000 });
+  const scheduled = await t.run(async (ctx) => ctx.db.system.query("_scheduled_functions").collect());
+  assert.equal(scheduled.length, 1);
 });

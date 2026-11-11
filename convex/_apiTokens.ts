@@ -37,6 +37,7 @@ export const apiRouteClassValidator = v.union(
   v.literal("oauth_dynamic_client_registration"),
   v.literal("asset_upload_intent"),
   v.literal("public_write"),
+  v.literal("analytics_guest_start"),
   v.literal("anonymous_mcp_public_read"),
   v.literal("authenticated_mcp"),
   v.literal("authenticated_mcp_write"),
@@ -98,6 +99,7 @@ export type ApiRouteClass =
   | "oauth_dynamic_client_registration"
   | "asset_upload_intent"
   | "public_write"
+  | "analytics_guest_start"
   | "anonymous_mcp_public_read"
   | "authenticated_mcp"
   | "authenticated_mcp_write"
@@ -113,6 +115,7 @@ export const apiRouteClassValues: ApiRouteClass[] = [
   "oauth_dynamic_client_registration",
   "asset_upload_intent",
   "public_write",
+  "analytics_guest_start",
   "anonymous_mcp_public_read",
   "authenticated_mcp",
   "authenticated_mcp_write",

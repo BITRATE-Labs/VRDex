@@ -37,5 +37,6 @@ it("guest consent route rejects cross-origin and oversized requests, bounds atte
     const limited = await POST(request({ action: "start" }));
     assert.equal(limited.status, 429);
     assert.equal(calls, before);
+    assert.ok(calls <= 4, "guest identity minting uses a tighter existing IP limit");
   `], { cwd: process.cwd(), env: { ...process.env, TSX_TSCONFIG_PATH: "apps/web/tsconfig.json", CONVEX_URL: "http://127.0.0.1:3230", CONVEX_ADMIN_TOKEN: "synthetic-admin-test", VRDEX_RATE_LIMIT_STORE: "memory", NEXT_PUBLIC_POSTHOG_FOUNDATION_ENABLED: "true", NODE_ENV: "test" }, stdio: "pipe" });
 });

@@ -40,7 +40,7 @@ export const set = mutation({
       if (!existing) await ctx.db.insert("analyticsDeletionRequests", {
         ownerUserId: user._id, analyticsId, requestedAt: Date.now(),
         // The worker admits requests only when server management authorization is configured.
-        state: "blocked_authorization",
+        state: "pending",
       });
     }
     return {

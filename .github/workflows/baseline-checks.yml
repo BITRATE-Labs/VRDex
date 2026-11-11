@@ -516,7 +516,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$POSTHOG_API_KEY" ]; then
-            echo "::notice::POSTHOG_API_KEY is absent; withdrawal requests remain blocked until server authorization is configured."
+            echo "::notice::POSTHOG_API_KEY is absent; withdrawal requests remain queued until server authorization is configured."
             exit 0
           fi
           if [[ "$POSTHOG_API_KEY" == phc_* ]]; then

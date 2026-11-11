@@ -32,6 +32,7 @@ async function withdrawStored() {
 }
 
 export async function ensureGuestReceipt(): Promise<GuestReceipt> {
+  // shortcut: guest Full requires Web Locks, revisit when supporting browsers without them.
   if (!navigator.locks) throw new Error("Guest analytics storage unavailable");
   return navigator.locks.request(ANALYTICS_GUEST_KEY, async () => {
     const current = read();

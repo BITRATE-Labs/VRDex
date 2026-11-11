@@ -138,9 +138,12 @@ function EnabledAnalyticsPreferencesProvider({ children }: { children: ReactNode
     }
     if (mode !== "full" || account.userId) return;
     let cancelled = false;
-    void ensureGuestReceipt().then((receipt) => { if (!cancelled) setGuest(receipt); })
-      .catch(() => { if (!cancelled) { setError(true); setVisible(true); } });
-    return () => { cancelled = true; };
+    const retry = () => {
+      void ensureGuestReceipt().then((receipt) => { if (!cancelled) setGuest(receipt); }).catch(() => {});
+    };
+    retry();
+    window.addEventListener("online", retry);
+    return () => { cancelled = true; window.removeEventListener("online", retry); };
   }, [mode, account.userId]);
   const updateAccount = useCallback((state: AccountState) => {
     accountIdentityRef.current = state.userId;

@@ -23,7 +23,7 @@ export const withdraw = internalMutation({
     const guest = await ctx.db.query("analyticsGuestReceipts").withIndex("by_receiptHash", (q) => q.eq("receiptHash", receiptHash)).unique();
     if (!guest) return false;
     if (guest.withdrawnAt !== undefined) return true;
-    await ctx.db.insert("analyticsDeletionRequests", { analyticsId: guest.analyticsId, requestedAt: Date.now(), state: "blocked_authorization" });
+    await ctx.db.insert("analyticsDeletionRequests", { analyticsId: guest.analyticsId, requestedAt: Date.now(), state: "pending" });
     await ctx.db.patch(guest._id, { withdrawnAt: Date.now() });
     return true;
   },

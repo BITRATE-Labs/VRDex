@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     let input: z.infer<typeof command>;
     try { input = command.parse(JSON.parse(Buffer.concat(chunks).toString("utf8"))); }
     catch { return problem(400); }
-    const limit = await checkApiRateLimit({ routeClass: "public_write", identity: { kind: "ip", value: clientIpForRequest(request) } });
+    const limit = await checkApiRateLimit({ routeClass: input.action === "start" ? "analytics_guest_start" : "public_write", identity: { kind: "ip", value: clientIpForRequest(request) } });
     if (!limit.allowed) return Response.json({ status: 429 }, { status: 429, headers: { ...headers, ...apiRateLimitResponseHeaders(limit) } });
     const client = optionalConvexAdminHttpClient();
     if (!client) return problem(503);

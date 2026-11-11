@@ -45,16 +45,17 @@ export async function deletePosthogIdentity(config: ManagementConfig, target: De
     if (lookup.status === 401 || lookup.status === 403) return { kind: "authorization" };
     if (!record(lookup.data) || !Array.isArray(lookup.data.results) || lookup.data.results.length !== 1) return { kind: "retry" };
     const person: unknown = lookup.data.results[0];
-    if (!record(person) || typeof person.id !== "string" || !person.id) return { kind: "retry" };
-    if (target.personId && target.personId !== person.id) return { kind: "retry" };
-    await rememberPerson?.(person.id);
-    const deletion = await request(`${base}bulk_delete/`, { ids: [person.id], delete_events: true, delete_recordings: true });
+    if (!record(person)) return { kind: "retry" };
+    const personId = typeof person.uuid === "string" ? person.uuid : person.id;
+    if (typeof personId !== "string" || !personId || (target.personId && target.personId !== personId)) return { kind: "retry" };
+    await rememberPerson?.(personId);
+    const deletion = await request(`${base}bulk_delete/`, { ids: [personId], delete_events: true, delete_recordings: true });
     if (deletion.status === 401 || deletion.status === 403) return { kind: "authorization" };
     const data = deletion.data;
     if (deletion.status !== 202 || !record(data) || data.persons_found !== 1 || data.persons_queued_for_deletion !== 1
       || data.events_queued_for_deletion !== true || data.recordings_queued_for_deletion !== true
       || !Array.isArray(data.deletion_errors) || data.deletion_errors.length !== 0) return { kind: "retry" };
-    return { kind: "accepted", personId: person.id };
+    return { kind: "accepted", personId };
   } catch { return { kind: "retry" }; }
 }
 import { v } from "convex/values";
@@ -134,6 +135,7 @@ export const sweepCompleted = internalMutation({
       if (guest?.withdrawnAt !== undefined) await ctx.db.delete(guest._id);
       await ctx.db.delete(row._id);
     }
+    if (rows.length === 100) await ctx.scheduler.runAfter(0, internal.analyticsDeletion.sweepCompleted, {});
     return { deletedCount: rows.length };
   },
 });

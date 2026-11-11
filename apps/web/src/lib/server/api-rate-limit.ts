@@ -46,6 +46,7 @@ export const defaultApiRateLimitPolicies: Record<ApiRouteClass, ApiRateLimitPoli
   oauth_dynamic_client_registration: { limit: 10, windowMs: 60_000 },
   asset_upload_intent: { limit: 30, windowMs: 60_000 },
   public_write: { limit: 30, windowMs: 60_000 },
+  analytics_guest_start: { limit: 3, windowMs: 60_000 },
   anonymous_mcp_public_read: { limit: 60, windowMs: 60_000 },
   authenticated_mcp: { limit: 300, windowMs: 60_000 },
   authenticated_mcp_write: { limit: 30, windowMs: 60_000 },

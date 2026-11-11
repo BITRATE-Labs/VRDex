@@ -90,9 +90,10 @@ it("withdrawal never revives a queued generation after On returns", async () => 
   await user.mutation(api.analyticsPreferences.set, { choice: "off", policyVersion: "2026-11-10" });
   const pending = await t.run(async (ctx) => ctx.db.query("analyticsDeletionRequests").collect());
   assert.equal(pending.length, 1);
-  assert.equal(pending[0].state, "blocked_authorization");
+  assert.equal(pending[0].state, "pending");
   const health = await t.query(internal.claimAnalytics.deliveryOperationalHealth, { now: Date.now() });
-  assert.equal(health.blockedDeletionCount, 1);
+  assert.equal(health.blockedDeletionCount, 0);
+  assert.equal(health.pendingDeletionCount, 1);
   assert.equal(JSON.stringify(health).includes(pending[0].analyticsId), false);
   await user.mutation(api.analyticsPreferences.set, { choice: "off", policyVersion: "2026-11-10" });
   assert.equal((await t.run(async (ctx) => ctx.db.query("analyticsDeletionRequests").collect())).length, 1);
