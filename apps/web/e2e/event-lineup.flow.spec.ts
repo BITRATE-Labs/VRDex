@@ -1,6 +1,31 @@
 import { linkedPerformer } from "./event-performer-helpers";
 import { expect, test } from "@playwright/test";
 
+for (const timeZone of ["UTC", "America/Los_Angeles"]) test.describe(`standalone event timing in ${timeZone}`, () => {
+  test.use({ timezoneId: timeZone });
+  test("retains doors and end without a poster or lineup @flow @fixture", async ({ page }, info) => {
+    const doors = Date.UTC(2027, 9, 15, 22), start = Date.UTC(2027, 9, 15, 23), end = Date.UTC(2027, 9, 16, 3);
+    await page.addInitScript(event => localStorage.setItem("event-lineup-fixture-public", JSON.stringify(event)), {
+      id: "timing-only", slug: "timing-only", title: "Timing only", startAt: start, doorsOpenAt: doors, endAt: end,
+      status: "scheduled", source: { sourceType: "community", label: "Fixture" },
+      slots: [], lineup: [], participants: [], worlds: [], mediaLinks: [], authoredMediaLinks: [],
+    });
+    await page.goto("/playwright/event-lineup");
+    const main = page.getByRole("main");
+    await expect(main.getByRole("heading", { name: "Timing only", exact: true })).toBeVisible();
+    for (const [label, timestamp] of [["Doors open", doors], ["End", end]] as const) {
+      const row = main.getByText(label, { exact: true }).locator("..");
+      await expect(row.locator("time")).toHaveAttribute("datetime", new Date(timestamp).toISOString());
+      await expect(row.locator("time")).toHaveText(new Intl.DateTimeFormat("en", {
+        timeZone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short",
+      }).format(timestamp));
+    }
+    await expect(main.getByRole("heading", { name: "Lineup", exact: true })).toHaveCount(0);
+    await expect(main.locator("img")).toHaveCount(0);
+    await page.screenshot({ path: info.outputPath("standalone-timing.png"), fullPage: true });
+  });
+});
+
 for (const mode of ["create", "edit"]) test(`staff ${mode} keeps mounted values through steps and saves a draft`, async ({ page }, testInfo) => {
   await page.goto(`/playwright/event-lineup?editor&mode=${mode}`);
   const navigation = page.getByRole("navigation", { name: "Event editor" });

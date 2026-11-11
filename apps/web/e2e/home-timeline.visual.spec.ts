@@ -133,7 +133,7 @@ test.describe("Home schedule images @visual @snapshot @fixture", () => {
       .click();
     await expect(
       page
-        .getByRole("region", { name: "Event details", exact: true })
+        .getByLabel("Event details", { exact: true })
         .getByRole("listitem"),
     ).toHaveCount(2);
     await capture(page, "details");
@@ -246,10 +246,7 @@ test.describe("Home schedule images @visual @snapshot @fixture", () => {
           exact: true,
         })
         .click();
-      const panel = page.getByRole("region", {
-        name: "Event details",
-        exact: true,
-      });
+      const panel = page.getByLabel("Event details", { exact: true });
       await expect(panel.getByRole("listitem")).toHaveCount(83);
       await expect(panel.locator('[data-selected="true"]')).toBeInViewport();
       await capture(page, "dense");

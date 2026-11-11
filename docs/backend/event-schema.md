@@ -228,6 +228,10 @@ flowchart LR
   Review -->|Save draft| Draft
 ```
 
+The event banner retains the start date/time and compact authored Doors open
+and End values in the viewer's local timezone, including events without a poster
+or lineup. It does not repeat a separate When card.
+
 The public page shows one Lineup with optional local set times and portraits or
 initials. Performer names lead to their profiles. A Host view icon in the event banner opens the separate lineup and stream-link rundown.
 The Host view action appears only for authorized hosts. Direct host and status routes enforce the same access, including for published events. The grant uses the existing community staff-role editor.

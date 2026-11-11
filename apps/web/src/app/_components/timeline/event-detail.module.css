@@ -1,4 +1,7 @@
 .panel {
+  margin: 0;
+  padding: 0;
+  max-width: none;
   position: fixed;
   z-index: 40;
   top: 1rem;
@@ -13,6 +16,9 @@
   color: var(--foreground);
   overflow: hidden;
   box-shadow: var(--shadow-panel);
+}
+dialog.panel:not([open]) {
+  display: none;
 }
 .header {
   display: flex;

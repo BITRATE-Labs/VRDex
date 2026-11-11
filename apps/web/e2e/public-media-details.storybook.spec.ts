@@ -7,11 +7,13 @@ for (const state of ["collapsed", "expanded"]) {
   test(`public media card ${state} @storybook-visual`, async ({ page }, testInfo) => {
     await page.goto(`/iframe.html?id=public-media-asset-card--${state}&viewMode=story`);
     const card = page.locator("article");
-    await expect(card.getByRole("link", { name: "View source" })).toBeVisible();
+    const source = card.locator("details").getByRole("link", { name: "View source", includeHidden: true });
     if (state === "expanded") {
+      await expect(source).toBeVisible();
       await expect(card.getByText("Uploaded by", { exact: true })).toBeVisible();
       await expect(card.getByText("Shared by Karly", { exact: true })).toBeVisible();
     } else {
+      await expect(source).toBeHidden();
       await expect(card.getByText("Shared by Karly", { exact: true })).toHaveCount(0);
     }
     await waitForVisualReady(page);
@@ -20,6 +22,7 @@ for (const state of ["collapsed", "expanded"]) {
     await expect(card.getByRole("status", { name: "Loading image" })).toHaveCount(0);
     expect(await card.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
     if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") await card.screenshot({ path: path.resolve(process.cwd(), "../../.cache/artifacts", `public-media-story-${testInfo.project.name}-${state}.png`) });
+    await expect(card.locator("summary")).toHaveText("Details & history");
   });
 }
 
@@ -32,12 +35,15 @@ for (const story of ["no-destination", "invalid-destination"]) {
     const card = page.locator("article#media-synthetic-portrait");
     await expect(card.getByRole("heading", { name: "Aurora press portrait" })).toBeVisible();
     await expect(card.locator("img")).toHaveClass(/opacity-100/);
-    await expect(card.getByRole("link", { name: "View source" })).toBeVisible();
+    await expect(card.locator("details")).not.toHaveAttribute("open");
+    await card.locator("summary").click();
+    await expect(card.locator("details").getByRole("link", { name: "View source" })).toBeVisible();
     await expect(card.getByRole("link", { name: "Download Aurora press portrait" })).toBeVisible();
     await expect(card.locator("details")).toHaveAttribute("open", "");
     await page.evaluate(() => { window.location.hash = "other"; window.location.hash = "media-synthetic-portrait"; });
     await expect(card.getByRole("status")).toHaveCount(0);
-    await expect(card.locator("details, summary")).toHaveCount(0);
+    await expect(card.locator("details")).toHaveAttribute("open", "");
+    await expect(card.locator("summary")).toHaveText("Details & history");
     expect(reads).toBe(0);
     expect(await card.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
     if (story === "no-destination") {

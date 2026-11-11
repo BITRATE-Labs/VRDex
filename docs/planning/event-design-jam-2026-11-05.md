@@ -4,7 +4,7 @@
 
 The accepted UI is integrated on `codex/public-ui-integration` in a native managed worktree. The original jam branch remains the immutable visual reference. Current-main analytics consent, broadcast behavior and past-24-hour timeline retention are preserved. Real provider image retrieval remains deferred.
 
-Local verification and PR evidence are recorded in the final appendix. Real Clerk signed-in host grant/revocation proof is still unavailable, so the PR must remain draft.
+Draft [PR #457](https://github.com/BITRATE-Labs/VRDex/pull/457) carries the integration with `ci:browsers` and `ci:visuals` selected. Local verification and PR evidence are recorded in the final appendix. Real Clerk signed-in host grant/revocation proof is still unavailable, so the PR must remain draft.
 
 ## Accepted checkpoint, November 11
 
@@ -222,6 +222,37 @@ Final checkpoint checks, November 11: web TypeScript and 20 focused host/profile
 Integration base: `440f37c80aecb3d2b867592ef0470b3f7200df90`. Accepted checkpoint: `7bdee240d533b4d4736a24cdc6a5e5d785cb1c6e`.
 
 All 110 accepted paths are accounted for below. Additional integration tests cover authorization, support payload routing, media fixture exclusion and the shared shell. Generated Convex line-ending noise and local caches are excluded.
+
+### Initial integrated local verification
+
+| Check | Observed result |
+| --- | --- |
+| Web tests | 1186 passed, zero skipped |
+| Event, host, report, lineup and operator browser matrix | 128 passed |
+| Timeline and inactive analytics browser matrix | 70 passed |
+| Public Linux Chromium image comparisons | 92 passed; 12 intentional local auth-unavailable pixel skips |
+| Storybook Linux Chromium image comparisons | 56 passed |
+| Changed baseline review | All 187 images reviewed in labeled sheets, plus full-size critical profile, world and timeline images |
+| Backend integrated profile, media, staff, resource and worker checks | 245 passed after the hidden-preview metadata assertion repair |
+| Web lint, web/backend typechecks, docs build, web production build | Passed |
+
+The full backend diagnostic returned 3309 passes and five failures before the hidden-preview assertion repair. That repair then passed its focused two tests and the integrated 245-test run. The other four failures reproduce in unchanged main code on Windows: encoder pipe closure, renderer anchor count, process cancellation through `/proc`, and a Windows absolute ESM import. The full backend suite has not been declared passing. Linux CI must cover those paths.
+
+The real Clerk signed-in host grant/revocation check remains unavailable. Local fixtures and backend permission tests do not prove it. Keep the PR draft until that evidence is supplied. The initial cold mobile editor capture had incomplete renders; an isolated interaction run completed, five isolated image updates passed, and the full comparison then passed without update mode. No assertions or tolerances were relaxed.
+
+### Final review and authentication handoff
+
+The fresh whole-branch review identified two Important regressions: lost authored doors/end timing and keyboard focus behind full-screen phone details. Compact viewer-local timing and a native phone dialog address them. New regression checks reproduced both failures, then passed all six desktop/phone cases. The web suite passed again with 1186 tests after the repairs.
+
+The broader browser run found club placeholders retaining the old portrait ratio and a phone status row shrinking from a 40px More control to a 24px loading message. Matching club frames and reserving the status control height preserve loading geometry and reading position. Phone tests now close the modal before interacting with covered controls. Saved-item removal still checks exact scroll preservation, clamped only when deletion makes the old position unreachable.
+
+CI exposed stale source-link and logo assertions. The media checks now expand Details & history, retain source URL/format assertions and verify collapsed metadata stays hidden. Storybook media checks pass 10/10; public gallery checks pass 2/2. Six changed event-image comparisons pass after visual review, and four loading/error Storybook comparisons pass. The unchanged badge references were restored from main after CI actual PNGs matched them byte-for-byte.
+
+BASIC asked about Executor-to-Clerk and requested EA coordination. EA and VRDex lead identified the existing candidate-browser path in [PR #456](https://github.com/BITRATE-Labs/VRDex/pull/456), using repository-held development Clerk bindings and the ordinary browser helper. Executor's catalog has a Clerk Backend API app, but none was installed or connected for this task. Provider administration is separate from browser authentication. The reported candidate setup still needs the specific host grant/revocation cases against this integration, with a matching backend and normal role controls. No guards were weakened and no credentials were exported.
+
+Final local repair verification: 18/18 browser regressions passed with files stable. Phone image updates and subsequent no-update comparison each returned 29 passes and six existing auth-unavailable pixel skips. All 16 follow-up PNG changes were visually reviewed. Web tests passed 1186/1186 after the source repairs, and web lint passed. Current-head CI remains the release evidence to refresh on the PR.
+
+Candidate setup reference supplied by the lead: `80c45af03f2acf680d80cbd3c037001a10c74899`, especially `apps/web/e2e/clerk-auth.ts`, `docs/deployment/vercel-preview.md` and `docs/testing/playwright-visual-preview.md`. It is a dependency/handoff, not proof that PR #457's signed-in host check ran.
 
 <details>
 <summary>Checkpoint path reconciliation</summary>

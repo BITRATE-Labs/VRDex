@@ -527,7 +527,7 @@
   .status {
     order: 4;
     width: 100%;
-    min-height: 24px;
+    min-height: 40px;
   }
   .metadata {
     order: 5;

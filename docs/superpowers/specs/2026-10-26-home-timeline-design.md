@@ -139,16 +139,18 @@ timing validation rather than independently guessing durations.
 
 ## Browsing and event details
 
-Click an event to select it and open a nonmodal floating panel at the lower
-right on desktop, similar to the accepted study. Keep the timeline's width
+Locked decision, revised by BASIC in the November 11 public UI checkpoint:
+click an event to select it and open a nonmodal 520px floating panel on the
+right on desktop. Keep the timeline's width
 and scroll position. Scrolling and selecting another event remain available.
 The panel scrolls internally and has a visible Close action. Escape closes
 it, returning focus to the invoking control when still present.
 
-On mobile use a bottom panel bounded to roughly half the viewport, with an
-expand action for longer details. Do not dim or block the remaining timeline.
-Use nonmodal semantics and a named region, not a modal focus trap. A fully
-expanded detail view may cover the chart; collapsing restores browsing.
+On mobile, details occupy the full viewport. Use a native modal dialog so
+focus moves to Close and covered page controls are inert. Tab and Shift+Tab
+stay within the dialog or browser controls. Escape or Close returns to the
+invoking control and preserves browsing position. The desktop inspector
+remains a named nonmodal region, with the timeline available beside it.
 
 Show the intact poster, title, community, viewer-local schedule, venue,
 organizer description and lineup. Reuse eligible canonical links and existing
@@ -319,7 +321,6 @@ for end-to-end coverage and direct desktop/mobile screenshot review. Dense,
 empty, failed, long-name, missing-logo and unavailable-saved-item states need
 coverage. Keep existing Home/search and legacy lookup checks passing.
 
-Builder choices include component boundaries, suitable shared nonmodal panel
-primitives, exact responsive dimensions, measured scan budgets and cache
-invalidation mechanics. These may not change the public visibility guarantees,
+Builder choices include component boundaries, measured scan budgets and
+cache invalidation mechanics. Preserve the accepted responsive panel layout. These may not change the public visibility guarantees,
 invent timing or silently weaken completeness.

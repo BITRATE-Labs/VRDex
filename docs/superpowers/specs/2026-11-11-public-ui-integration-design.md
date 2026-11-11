@@ -4,7 +4,7 @@
 
 Bring the accepted UI jam onto current main as one integration branch and one PR. Preserve the pages BASIC reviewed while reconciling newer broadcast, timeline and analytics work. The result should feel consistent across discovery, profiles, worlds, events and support, with authorization and regression evidence for normal release review.
 
-The visual direction and one-PR approach are approved. This document proposes the production integration contract. BASIC is asked to approve that contract before the implementation plan is written. Merge and deployment remain separate decisions.
+BASIC approved the visual direction, one-PR approach, integration contract, implementation plan and native execution on November 11. Merge and deployment remain separate decisions.
 
 ## Decisions and approaches
 

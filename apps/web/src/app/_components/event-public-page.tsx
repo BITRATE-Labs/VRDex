@@ -361,6 +361,10 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
                   <p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-white">Cancelled</p>
                 ) : null}
                 <ViewerLocalEventDateTime className={cn("block text-sm uppercase tracking-[0.24em] text-white/70", canHost ? "pr-36" : "pr-24")} timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />
+                {event.scheduleKind !== "date_only" && (event.doorsOpenAt !== undefined || event.endAt !== undefined) ? <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-white/80">
+                  {event.doorsOpenAt !== undefined ? <span><span>Doors open</span>{" "}<ViewerLocalEventDateTime timestamp={event.doorsOpenAt} /></span> : null}
+                  {event.endAt !== undefined ? <span><span>End</span>{" "}<ViewerLocalEventDateTime timestamp={event.endAt} /></span> : null}
+                </div> : null}
                 <h1 className="mt-4 text-5xl leading-none font-semibold tracking-[-0.05em] sm:text-7xl">
                   {event.title}
                 </h1>

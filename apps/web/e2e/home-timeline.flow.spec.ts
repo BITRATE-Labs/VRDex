@@ -8,13 +8,13 @@ import {
 import { waitForPublicSearchHydration } from "./public-search-fixture";
 async function saveInInspector(page: Page, title: string, performer?: string) {
   await page.locator("[data-home-schedule]").getByRole("button", { name: `Open ${title}`, exact: true }).first().click();
-  const panel = page.getByRole("region", { name: "Event details", exact: true });
+  const panel = page.getByLabel("Event details", { exact: true });
   await panel.getByRole("button", { name: `Interested: ${performer ?? title}`, exact: true }).click();
   await panel.getByRole("button", { name: "Close", exact: true }).click();
 }
 async function toggleAuroraFavorite(page: Page, selected: boolean) {
   await page.locator("[data-home-schedule]").getByRole("button", { name: "Open ORBIT: Interstellar Bassline Orchestra", exact: true }).first().click();
-  const panel = page.getByRole("region", { name: "Event details", exact: true });
+  const panel = page.getByLabel("Event details", { exact: true });
   await panel.getByRole("button", { name: `${selected ? "Remove favorite" : "Favorite"}: Aurora`, exact: true }).first().click();
   await panel.getByRole("button", { name: "Close", exact: true }).click();
 }
@@ -39,7 +39,7 @@ test.describe("continuous schedule @flow @fixture", () => {
     await expect(marker).toHaveAttribute("data-calendar-date", "2026-10-26");
     await expect(marker).toContainText("Time TBA");
     await marker.getByRole("button", { name: "Open Day Gathering, Time TBA", exact: true }).click();
-    const panel = page.getByRole("region", { name: "Event details", exact: true });
+    const panel = page.getByLabel("Event details", { exact: true });
     await expect(panel.getByRole("heading", { name: "Day Gathering", exact: true })).toBeVisible();
     await panel.getByRole("button", { name: "Close", exact: true }).click();
     await page.getByRole("button", { name: "Later", exact: true }).click();
@@ -54,7 +54,7 @@ test.describe("continuous schedule @flow @fixture", () => {
     await expect(marker).toHaveAttribute("data-start-at", String(TIMELINE_NOW + 1800000));
     await expect(page.getByTestId(`event-${timelineFixture.eventIds[6]}`)).toHaveCount(0);
     await marker.getByRole("button", { name: /Open Night Without End/ }).click();
-    await expect(page.getByRole("region", { name: "Event details", exact: true })).toBeVisible();
+    await expect(page.getByLabel("Event details", { exact: true })).toBeVisible();
   });
   test("savedUntimedReferencesRemainRemovable", async ({ page, timelineFixture }) => {
     for (const index of [6, 7]) {
@@ -88,7 +88,7 @@ test.describe("continuous schedule @flow @fixture", () => {
   });
   test("quietRangePreservesFavoritesWhenNavigatingKnownStart", async ({ page }) => {
     await page.locator("[data-home-schedule]").getByRole("button", { name: "Open ORBIT: Interstellar Bassline Orchestra", exact: true }).click();
-    const panel = page.getByRole("region", { name: "Event details", exact: true });
+    const panel = page.getByLabel("Event details", { exact: true });
     await panel.getByRole("button", { name: "Favorite: Aurora", exact: true }).first().click();
     await panel.getByRole("button", { name: "Close", exact: true }).click();
     const width = await page.getByRole("region", { name: "Timeline chart", exact: true }).evaluate((el) => el.clientWidth);
@@ -428,10 +428,7 @@ test.describe("continuous schedule @flow @fixture", () => {
         exact: true,
       });
     await trigger.click();
-    const panel = page.getByRole("region", {
-      name: "Event details",
-      exact: true,
-    });
+    const panel = page.getByLabel("Event details", { exact: true });
     await expect(
       panel.getByText("Loading events", { exact: true }),
     ).toBeVisible();
@@ -466,10 +463,7 @@ test.describe("continuous schedule @flow @fixture", () => {
         exact: true,
       })
       .click();
-    const panel = page.getByRole("region", {
-      name: "Event details",
-      exact: true,
-    });
+    const panel = page.getByLabel("Event details", { exact: true });
     const href = `/${timelineFixture.runId}-community/events/${timelineFixture.runId}-3`;
     const links = [
       panel.getByRole("link", {
@@ -490,6 +484,32 @@ test.describe("continuous schedule @flow @fixture", () => {
     await expect(
       panel.getByRole("link", { name: "Open event", exact: true }),
     ).toHaveCount(0);
+  });
+  test("phone details contain keyboard focus and close restores the invoker", async ({ page, timelineFixture, isMobile }) => {
+    const invoker = page.getByTestId(`event-${timelineFixture.eventIds[3]}`).getByRole("button", {
+      name: "Open ORBIT: Interstellar Bassline Orchestra", exact: true,
+    });
+    await invoker.focus();
+    await invoker.press("Enter");
+    const panel = page.getByLabel("Event details", { exact: true });
+    await expect(panel).toBeVisible();
+    if (isMobile) {
+      await expect(page.getByRole("dialog", { name: "Event details", exact: true })).toBeVisible();
+      await expect(panel.getByRole("button", { name: "Close", exact: true })).toBeFocused();
+      expect(await panel.evaluate(node => node.matches(":modal"))).toBe(true);
+      for (const key of ["Shift+Tab", ...Array<string>(12).fill("Tab")]) {
+        await page.keyboard.press(key);
+        // Native dialog navigation may visit browser chrome before reentering the document.
+        if (await page.evaluate(() => document.activeElement === document.body)) await page.keyboard.press(key);
+        expect(await panel.evaluate(node => node.contains(document.activeElement))).toBe(true);
+      }
+    } else {
+      await expect(page.getByRole("region", { name: "Event details", exact: true })).toBeVisible();
+      await expect(invoker).toBeFocused();
+    }
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+    await expect(invoker).toBeFocused();
   });
   test("panelUsesCompactPerformerControls", async ({
     page,
@@ -521,10 +541,7 @@ test.describe("continuous schedule @flow @fixture", () => {
       x: document.querySelector('[aria-label="Timeline chart"]')?.scrollLeft,
     }));
     await open.press("Enter");
-    const panel = page.getByRole("region", {
-      name: "Event details",
-      exact: true,
-    });
+    const panel = page.getByLabel("Event details", { exact: true });
     await expect(panel).toBeVisible();
     await expect(
       panel.getByRole("heading", {
@@ -561,13 +578,13 @@ test.describe("continuous schedule @flow @fixture", () => {
       })),
     ).toEqual(beforeOpen);
     expect(await page.locator("audio, video, iframe").count()).toBe(0);
-    expect(await page.getByRole("dialog").count()).toBe(0);
-    const initial = await chart.evaluate((el) => el.scrollLeft);
-    await chart.focus();
-    await chart.press("ArrowRight");
-    await expect
-      .poll(() => chart.evaluate((el) => el.scrollLeft))
-      .not.toBe(initial);
+    expect(await page.getByRole("dialog").count()).toBe(isMobile ? 1 : 0);
+    if (!isMobile) {
+      const initial = await chart.evaluate((el) => el.scrollLeft);
+      await chart.focus();
+      await chart.press("ArrowRight");
+      await expect.poll(() => chart.evaluate((el) => el.scrollLeft)).not.toBe(initial);
+    }
     await expect(panel).toBeVisible();
     await expect(
       panel.getByRole("button", { name: "Expand", exact: true }),
@@ -849,10 +866,7 @@ test.describe("continuous schedule @flow @fixture", () => {
         exact: true,
       })
       .click();
-    const cancelledPanel = page.getByRole("region", {
-      name: "Event details",
-      exact: true,
-    });
+    const cancelledPanel = page.getByLabel("Event details", { exact: true });
     await expect(
       cancelledPanel.getByText("Cancelled", { exact: true }),
     ).toBeVisible();
@@ -913,7 +927,7 @@ test.describe("continuous schedule @flow @fixture", () => {
     await expect(chartIncluded).toHaveAttribute("title", "Included with event");
     await chartIncluded.dispatchEvent("click");
     await bar.getByRole("button", { name: `Open ${title}`, exact: true }).click();
-    const panel = page.getByRole("region", { name: "Event details", exact: true });
+    const panel = page.getByLabel("Event details", { exact: true });
     const included = panel.getByRole("button", { name: "Included with event: Aurora", exact: true });
     await expect(included).toBeDisabled();
     await included.dispatchEvent("click");
@@ -929,11 +943,9 @@ test.describe("continuous schedule @flow @fixture", () => {
   test("detail replacement, hostless navigation and vanished-invoker focus", async ({
     page,
     timelineFixture,
+    isMobile,
   }) => {
-    const panel = page.getByRole("region", {
-      name: "Event details",
-      exact: true,
-    });
+    const panel = page.getByLabel("Event details", { exact: true });
 
     await page
       .getByRole("button", {
@@ -951,6 +963,7 @@ test.describe("continuous schedule @flow @fixture", () => {
       name: "Open Low Tide",
       exact: true,
     });
+    if (isMobile) await panel.getByRole("button", { name: "Close", exact: true }).click();
     await other.focus();
     await other.press("Enter");
     await expect(
@@ -965,6 +978,13 @@ test.describe("continuous schedule @flow @fixture", () => {
     await expect(
       panel.getByRole("link", { name: "Open full event page", exact: true }),
     ).toHaveCount(0);
+    if (isMobile) {
+      await panel.getByRole("button", { name: "Close", exact: true }).click();
+      await expect(other).toBeFocused();
+      await page.getByLabel("Schedule date", { exact: true }).fill("2026-11-02");
+      await expect(other).toHaveCount(0);
+      return;
+    }
     await page.getByLabel("Schedule date", { exact: true }).fill("2026-11-02");
     await expect(other).toHaveCount(0);
     await expect(
@@ -1075,10 +1095,7 @@ test.describe("continuous schedule @flow @fixture", () => {
           exact: true,
         })
         .click();
-      const panel = page.getByRole("region", {
-        name: "Event details",
-        exact: true,
-      });
+      const panel = page.getByLabel("Event details", { exact: true });
       const rows = panel.getByRole("listitem");
       await expect(rows).toHaveCount(80);
       await expect(panel.locator('[data-selected="true"]')).toHaveCount(0);
@@ -1109,6 +1126,7 @@ test.describe("continuous schedule @flow @fixture", () => {
       page,
       request,
       timelineFixture,
+      isMobile,
     }, info) => {
 
       const later = page.getByRole("button", {
@@ -1118,10 +1136,7 @@ test.describe("continuous schedule @flow @fixture", () => {
       await later.focus();
       const beforeSelection = await page.evaluate(() => window.scrollY);
       await later.press("Enter");
-      const panel = page.getByRole("region", {
-        name: "Event details",
-        exact: true,
-      });
+      const panel = page.getByLabel("Event details", { exact: true });
       const row = panel.locator('[data-selected="true"]');
       await expect(row).toHaveAttribute(
         "data-slot-id",
@@ -1133,6 +1148,7 @@ test.describe("continuous schedule @flow @fixture", () => {
         name: "Open Aurora at ORBIT: Interstellar Bassline Orchestra",
         exact: true,
       });
+      if (isMobile) await panel.getByRole("button", { name: "Close", exact: true }).click();
       await firstSet.focus();
       const beforeSameEvent = await page.evaluate(() => window.scrollY);
       await firstSet.press("Enter");
@@ -1142,6 +1158,7 @@ test.describe("continuous schedule @flow @fixture", () => {
       );
       await expect(row).toBeInViewport();
       expect(await page.evaluate(() => window.scrollY)).toBe(beforeSameEvent);
+      if (isMobile) await panel.getByRole("button", { name: "Close", exact: true }).click();
       await later.focus();
       await later.press("Enter");
       await expect(row).toHaveAttribute(

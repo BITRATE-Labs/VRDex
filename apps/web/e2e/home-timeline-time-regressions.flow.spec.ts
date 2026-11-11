@@ -21,7 +21,7 @@ test.describe("recent event timestamps @flow @fixture", () => {
     await softFocus.scrollIntoViewIfNeeded();
     await page.screenshot({ path: info.outputPath("recent-event-timestamps.png"), fullPage: true });
     await softFocus.click();
-    const detail = page.getByRole("region", { name: "Event details", exact: true });
+    const detail = page.getByLabel("Event details", { exact: true });
     await expect(detail.locator("p").filter({ hasText: "Time TBA" }).first()).toBeVisible();
 
     await page.goto(`/?at=${TIMELINE_NOW - 72 * hour}&tz=UTC`);
@@ -110,10 +110,7 @@ test.describe("timeline time regressions @flow @fixture", () => {
         exact: true,
       })
       .click();
-    const panel = page.getByRole("region", {
-      name: "Event details",
-      exact: true,
-    });
+    const panel = page.getByLabel("Event details", { exact: true });
     await expect(
       panel.locator('time[datetime="2026-10-26T21:00:00.000Z"]').first(),
     ).toHaveText("Oct 26, 5:00 PM");
@@ -232,7 +229,7 @@ test.describe("timeline time regressions @flow @fixture", () => {
       await page.goto(`/?at=${TIMELINE_NOW}&tz=UTC`);
       await expect(page.getByLabel("Hour format", { exact: true }).locator("..")).toHaveText("24h");
       await page.getByRole("button", { name: "Open Aurora at ORBIT: Interstellar Bassline Orchestra", exact: true }).click();
-      const panel = page.getByRole("region", { name: "Event details", exact: true });
+      const panel = page.getByLabel("Event details", { exact: true });
       await expect(panel.getByText(/UTC . 24h/, { exact: true })).toBeVisible();
       await expect(panel.locator('[data-selected="true"]')).toHaveAttribute("data-slot-id", timelineFixture.slotIds[6]);
       const times = await panel.locator("time").evaluateAll(elements => elements.map(element => ({ instant: element.getAttribute("datetime"), label: element.textContent })));
@@ -258,7 +255,7 @@ test.describe("timeline time regressions @flow @fixture", () => {
       await marker.scrollIntoViewIfNeeded();
       await expect(marker).toBeInViewport();
       await marker.getByRole("button", { name: /^Open Day Gathering/ }).click();
-      await expect(page.getByRole("region", { name: "Event details", exact: true })).toBeVisible();
+      await expect(page.getByLabel("Event details", { exact: true })).toBeVisible();
     });
     test("panelTimesCrossDstWithoutRepeatedOffsets", async ({
       page,
@@ -273,10 +270,7 @@ test.describe("timeline time regressions @flow @fixture", () => {
           exact: true,
         })
         .click();
-      const panel = page.getByRole("region", {
-        name: "Event details",
-        exact: true,
-      });
+      const panel = page.getByLabel("Event details", { exact: true });
       await expect(
         panel.getByText(/ (12|24)h$/, { exact: true }),
       ).toHaveText("America/New York · 12h");

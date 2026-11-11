@@ -168,7 +168,7 @@ test("profile submission writes through to public profile and discovery @flow", 
 
       if (rendersWatchControls) {
         await expect(questCopy).toBeVisible();
-        await expect(page.getByRole("link", { name: "Open preview" })).toHaveCount(0);
+        if (targetRunsCurrentRevision) await expect(page.getByRole("link", { name: "Open preview" })).toHaveCount(0);
         const playbackLinks = page.getByText("Playback links", { exact: true });
         if (await playbackLinks.count()) await playbackLinks.click();
         await expect(page.getByText(questUrl, { exact: true })).toBeVisible();
