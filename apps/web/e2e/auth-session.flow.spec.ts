@@ -109,17 +109,18 @@ test("a Clerk session resolves to a verified Convex identity and clears on sign-
     await gotoFlowPage(page, "/account");
     await expect(page).toHaveURL(/\/sign-in\?returnTo=/, hostedExpectOptions);
   } finally {
+    await context.close();
     if (account !== undefined) {
       const cleanup = await request.delete("/api/e2e/auth", {
         headers: { "x-vrdex-e2e-token": e2eToken },
         data: { email: account.email },
-      });
-      await expect.soft(cleanup).toBeOK();
-      const deleted = await deleteClerkTestAccount(account);
-      expect.soft(deleted?.ok || deleted?.status === 404, "Clerk disposable account must be deleted").toBe(true);
+      }).catch(() => undefined);
+      expect.soft(cleanup?.ok(), "Convex cleanup must succeed; preserve the Clerk identity on failure").toBe(true);
+      if (cleanup?.ok()) {
+        const deleted = await deleteClerkTestAccount(account);
+        expect.soft(deleted?.ok || deleted?.status === 404, "Clerk disposable account must be deleted").toBe(true);
+      }
     }
-
-    await context.close();
   }
 });
 
