@@ -551,7 +551,10 @@ jobs:
 
       - name: Install Playwright Chromium
         working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 5
+        run: |
+          bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
+          pnpm exec playwright install --with-deps chromium
 
       - name: Verify review capture modes
         env:
@@ -615,7 +618,10 @@ jobs:
 
       - name: Install Playwright Chromium
         working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 5
+        run: |
+          bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
+          pnpm exec playwright install --with-deps chromium
 
       - name: Run current-branch signed-in claim regression
         id: claim-auth
@@ -663,7 +669,9 @@ jobs:
         run: pnpm --filter web exec playwright test --grep @flow --project=desktop-chromium --workers=1
 
       - name: Install synthetic media tools
+        timeout-minutes: 5
         run: |
+          bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
           sudo apt-get update && sudo apt-get install -y ffmpeg pulseaudio pulseaudio-utils
           pnpm --filter web exec playwright install --with-deps firefox
 
@@ -781,7 +789,10 @@ jobs:
       - name: Install Playwright Chromium
         if: steps.gate.outputs.enabled == 'true'
         working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 5
+        run: |
+          bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
+          pnpm exec playwright install --with-deps chromium
 
       - name: Run hosted mutation-backed profile submission flow
         if: steps.gate.outputs.enabled == 'true'
@@ -953,7 +964,10 @@ jobs:
 
       - name: Install Playwright Chromium
         working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 5
+        run: |
+          bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
+          pnpm exec playwright install --with-deps chromium
 
       - name: Run public route assertions and selected captures
         id: visual
@@ -1075,7 +1089,10 @@ jobs:
 
       - name: Install Playwright Chromium
         working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 5
+        run: |
+          bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
+          pnpm exec playwright install --with-deps chromium
 
       - name: Compare public route screenshots to baselines
         id: snapshots
@@ -1156,7 +1173,10 @@ jobs:
 
       - name: Install Playwright Chromium
         working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 5
+        run: |
+          bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
+          pnpm exec playwright install --with-deps chromium
 
       - name: Run Storybook assertions and selected captures
         id: visual
@@ -1225,7 +1245,10 @@ jobs:
 
       - name: Install Playwright Chromium
         working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 5
+        run: |
+          bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
+          pnpm exec playwright install --with-deps chromium
 
       - name: Compare Storybook component screenshots to baselines
         id: snapshots
