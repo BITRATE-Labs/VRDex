@@ -105,7 +105,8 @@ The normal case switches a public video through Quick switch, pauses a real work
 observation, requests Stop through its confirmation, then releases the observation.
 Acceptance requires a superseded report, a succeeded Stop command, an ended session,
 physical worker/receiver exit, and independently decoded video/audio from the capture.
-The confirmation is prepared before pausing. The production three-second request
+The confirmation is prepared before pausing; the fixture waits for Stop to persist
+before releasing the observation. The production three-second request
 deadline remains enforced, and recorded pause time must stay within it. Receiver
 DNS must resolve exclusively to loopback before publication. The published test
 community option is restricted to local deployments; normal fixtures remain private.

@@ -361,6 +361,8 @@ steps have a ten-minute timeout for system dependencies and browser downloads. T
 retains Ubuntu package signature verification and the existing HTTPS fallbacks.
 Runners without a mirror-list file explicitly report that their configured sources
 remain in use.
+Linux tests execute the helper against disposable missing, empty, unterminated and
+repeated mirror lists, including preservation of existing fallbacks.
 
 Default PR CI runs lint, types, unit tests, docs, API/MCP checks, the existing backend/restream checks, and the web build. Browser suites and the Storybook build are opt-in.
 

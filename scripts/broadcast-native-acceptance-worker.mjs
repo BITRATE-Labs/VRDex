@@ -37,9 +37,14 @@ const worker = createEventWorker({
       pausedAt = performance.now();
       await new Promise(resolve => { release = resolve; emit({event:'observation-paused'}); });
     }
-    const result = await nativeControl(name, args, signal);
-    if (name === 'observeProgram') emit({event:'observation-result',kind:result.kind,...(pausedAt===undefined?{}:{pausedMs:performance.now()-pausedAt})});
-    return result;
+    try {
+      const result = await nativeControl(name, args, signal);
+      if (name === 'observeProgram') emit({event:'observation-result',kind:result.kind,...(pausedAt===undefined?{}:{pausedMs:performance.now()-pausedAt})});
+      return result;
+    } catch (error) {
+      if(pausedAt!==undefined)emit({event:'observation-result',kind:'request-failed',pausedMs:performance.now()-pausedAt});
+      throw error;
+    }
   },
   createRenderer: createProgramRenderer,
   createOutputs: options => createEventOutputs({...options, env:{

@@ -79,7 +79,9 @@ test('candidate browser, real Convex and packaged native worker settle Stop and 
       const closed=new Promise<number|null>(resolve=>child.once('exit',resolve));
       child.stdin.on('error',()=>{});
       const events:Record<string,unknown>[]=[];let buffer='';
-      child.stdout.on('data',chunk=>{buffer+=chunk.toString();let end;while((end=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,end);buffer=buffer.slice(end+1);try{events.push(JSON.parse(line));}catch{}}});
+      let observationPaused:()=>void=()=>{};
+      const paused=new Promise<void>(resolve=>{observationPaused=resolve;});
+      child.stdout.on('data',chunk=>{buffer+=chunk.toString();let end;while((end=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,end);buffer=buffer.slice(end+1);try{const event=JSON.parse(line);events.push(event);if(event.event==='observation-paused')observationPaused();}catch{}}});
       let diagnostics='';child.stderr.on('data',chunk=>{if(diagnostics.length<4096)diagnostics+=chunk.toString();});
       child.stdin.write(JSON.stringify({init:{url:'http://127.0.0.1:3210',token:bridgeToken,identity:{eventId:event.eventId,sessionId,workerId:dispatchId,epoch:0}}})+'\n');
       try {
@@ -95,7 +97,7 @@ test('candidate browser, real Convex and packaged native worker settle Stop and 
         await refreshAuth();
         await page.getByRole('button',{name:'Stop',exact:true}).click();
         child.stdin.write('{"arm":true}\n');
-        await expect.poll(()=>events.some(e=>e.event==='observation-paused'),{timeout:5000}).toBe(true);
+        await Promise.race([paused,new Promise<never>((_,reject)=>setTimeout(()=>reject(Error('Native observation did not pause.')),5000))]);
         await page.getByRole('dialog').getByRole('button',{name:'Stop broadcast',exact:true}).click();
         await expect.poll(async()=>(await owner.query(api.events.getEventMediaControlStatus,{currentSlug:event.slug})).sessions.find(s=>s.sessionId===sessionId)?.status,{timeout:1500,intervals:[20,40,80]}).toBe('stopping');
         if(scenario==='cancelled')await owner.mutation(api.events.setCommunityEventCancelled,{currentSlug:event.slug,cancelled:true,reason:'Isolated native acceptance'});
