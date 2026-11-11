@@ -1,4 +1,4 @@
-export type SourceObservation = { state: 'live' | 'offline' | 'unavailable'; observedAt: number };
+export type SourceObservation = { state: 'live' | 'offline' | 'unavailable' | 'unknown'; observedAt: number };
 export type PublicStatusSource = { key: string; url: string };
 export function reportedSourceState(value: SourceObservation | undefined, now: number): SourceObservation['state'] | 'unknown' {
  return value && now-value.observedAt<=60_000 && value.observedAt<=now ? value.state : 'unknown';
@@ -44,7 +44,7 @@ export function parseSourceObservations(value: unknown): Record<string, SourceOb
  const entries: Array<[string,SourceObservation]> = [];
  for(const [key,observation] of Object.entries(value)) {
   if(typeof observation!=='object' || observation===null || !('state' in observation) || !('observedAt' in observation)) continue;
-  if((observation.state==='live' || observation.state==='offline' || observation.state==='unavailable') && typeof observation.observedAt==='number' && Number.isFinite(observation.observedAt)) entries.push([key,{state:observation.state,observedAt:observation.observedAt}]);
+  if((observation.state==='live' || observation.state==='offline' || observation.state==='unavailable' || observation.state==='unknown') && typeof observation.observedAt==='number' && Number.isFinite(observation.observedAt)) entries.push([key,{state:observation.state,observedAt:observation.observedAt}]);
  }
  return Object.fromEntries(entries);
 }

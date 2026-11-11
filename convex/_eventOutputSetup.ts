@@ -1,3 +1,4 @@
+import {managedSecretRefAllowed} from "./_eventBroadcastConnections";
 import { getVrcdnOutputAccount } from "./_vrcdnOutputAccounts";
 import type { Doc } from "./_generated/dataModel";
 import { v } from "convex/values";
@@ -12,7 +13,7 @@ export const twitchSetupValidator = v.object({
 });
 export const outputHealthValidator = v.object({
   outputId: v.id("eventMediaOutputs"),
-  destination: v.union(v.literal("vrcdn"), v.literal("twitch")),
+  destination: v.union(v.literal("vrcdn"), v.literal("twitch"),v.literal("custom")),
   status: v.union(
     ...(
       [
@@ -177,6 +178,7 @@ export function eventOutputIsAuthorized(
   event: Pick<Doc<"events">, "communityProfileId">,
   output: Doc<"eventMediaOutputs">,
 ) {
+  if(output.managedConnection){const managed=output.managedConnection;return managed.communityProfileId===event.communityProfileId && !!output.credential && managedSecretRefAllowed(output.credential.secretRef,managed.communityProfileId,output.eventId,managed.requestId);}
   if (output.type === "vrcdn") {
     if (output.twitchSetup || !output.credential) return false;
     try {

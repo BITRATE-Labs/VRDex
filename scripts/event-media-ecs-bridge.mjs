@@ -161,7 +161,7 @@ function run(command, args, options = {}) {
 }
 
 function aws(config, args) {
-  return run(config.awsCommand, [...args, "--region", config.region], { redactValues: config.redactValues });
+  return run(config.awsCommand, [...(config.awsCommandArgs ?? []), ...args, "--region", config.region], { redactValues: config.redactValues });
 }
 
 export function loadConfig(options = {}) {
@@ -206,6 +206,7 @@ export function loadConfig(options = {}) {
     once: process.argv.includes("--once"),
     configCheckOnly: process.env.VRDEX_EVENT_MEDIA_ECS_BRIDGE_CONFIG_CHECK_ONLY === "true",
     secretRefMap,
+    managedOutputSecretArnPrefix:process.env.VRDEX_EVENT_OUTPUT_SECRET_ARN_PREFIX,
     baseEnvironment,
     redactValues: [bridgeToken, ...Object.values(secretRefMap)],
   };
@@ -240,6 +241,12 @@ function environmentEntries(command, config, snapshot) {
   }).map(([name, value]) => ({ name, value: String(value) }));
 }
 
+export function resolveOutputSecretArn(ref,config) {
+ if(Object.hasOwn(config.secretRefMap,ref))return config.secretRefMap[ref];
+ const prefix=config.managedOutputSecretArnPrefix;
+ if(typeof prefix==='string' && /^arn:aws[a-z-]*:secretsmanager:[a-z0-9-]+:\d{12}:secret:$/.test(prefix) && typeof ref==='string' && ref.startsWith(prefix+'vrdex/broadcast/') && /^vrdex\/broadcast\/[A-Za-z0-9]{1,64}\/[A-Za-z0-9]{1,64}\/[a-f0-9-]{36}-[A-Za-z0-9]{6}$/.test(ref.slice(prefix.length)))return ref;
+ throw Error('Output secret reference has no authorized mapping');
+}
 export function taskDefinitionFor(command, config, resolve = resolveWorkerAllocation) {
   validateBaseEnvironment(config.baseEnvironment);
   const snapshot = validateAllocationSnapshot(command.session);
@@ -247,7 +254,7 @@ export function taskDefinitionFor(command, config, resolve = resolveWorkerAlloca
   if (command.output && command.output.outputId !== snapshot.outputId) throw Error('Mismatched primary destination');
   if ((command.optionalOutputs ?? []).some(output => !snapshot.destinationProfiles.some(d => d.destination === 'twitch' && d.outputId === output.outputId))) throw Error('Mismatched optional destination');
   const credentialRef = command.output?.credentialRef;
-  const secretArn = credentialRef === undefined ? undefined : config.secretRefMap[credentialRef];
+  const secretArn = credentialRef === undefined ? undefined : resolveOutputSecretArn(credentialRef,config);
 
   if (credentialRef !== undefined && secretArn === undefined) {
     throw new Error(`No AWS secret ARN is configured for credential reference ${credentialRef}.`);
@@ -259,8 +266,10 @@ export function taskDefinitionFor(command, config, resolve = resolveWorkerAlloca
   if (secretArn && config.outputSecretEnvName !== "VRDEX_EVENT_MEDIA_OUTPUT_INGEST_SECRET_JSON") additionalSecrets.push({name:"VRDEX_EVENT_MEDIA_OUTPUT_INGEST_SECRET_JSON", valueFrom:secretArn});
   for (const output of optional) {
     const ref = output?.credentialRef;
-    const arn = ref && config.secretRefMap[ref];
     // Missing optional binding is a destination setup fault, not primary failure.
+    let arn;
+    try { arn = ref && resolveOutputSecretArn(ref,config); }
+    catch { continue; }
     if (!arn) continue;
     bindings[ref] = arn;
   }

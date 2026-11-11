@@ -21,7 +21,7 @@ export function timelineLimit(limit = 8): number {
   return Math.max(1, Math.min(50, limit));
 }
 
-export type EventPhase = "starts" | "ongoing" | "dates";
+export type EventPhase = "starts" | "ongoing" | "dates" | "lineupStarts" | "lineupEnds";
 export type RosterPhase = "slots" | "lineup" | "participants";
 type Phase = EventPhase | RosterPhase;
 type Cursor<P extends Phase> = { phase: P; databaseCursor: string | null };
@@ -68,6 +68,11 @@ export function overlapsTimeline(schedule: TimelineSchedule, range: TimelineRang
       return schedule.eventDate >= first && schedule.eventDate <= last;
     }
   }
+}
+/** Discovery includes actual end timestamps as well as interval overlap. */
+export function touchesTimeline(schedule: TimelineSchedule, range: TimelineRange): boolean {
+  return overlapsTimeline(schedule, range) || (schedule.kind === "timed" &&
+    schedule.endAt >= range.startAt && schedule.endAt < range.endAt);
 }
 export async function timelineEventIdentity(db: DatabaseReader, event: Doc<"events">, options: { includeCancelled?: boolean; includeHostImage?: boolean } = {}): Promise<TimelineEventIdentity | null> {
   if (event.publicationState !== "published" || event.slug === undefined ||

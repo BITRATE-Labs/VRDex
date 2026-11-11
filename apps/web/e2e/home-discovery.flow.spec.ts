@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api";
+import { loadCompleteSchedule } from "./home-timeline-fixture";
 import {
   test,
   TIMELINE_NOW,
@@ -722,11 +723,7 @@ test.describe("dense Home discovery @flow @fixture", () => {
     await initializeDiscovery(page, timelineFixture);
     const queries = observeDiscoveryQueries(page);
     await page.goto("/");
-    await expect(page.getByLabel("Schedule data state")).toHaveAttribute(
-      "data-state",
-      "ready",
-      { timeout: 20000 },
-    );
+    await loadCompleteSchedule(page);
     const activation = performance.now();
     const discover = await usableDiscovery(page);
     const usableAt = performance.now();

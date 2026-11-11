@@ -265,6 +265,14 @@ deploy; a malformed configured key still fails validation. Do not commit the key
 or substitute a PostHog personal API key. `POSTHOG_INGEST_HOST` is optional and
 defaults to `https://us.i.posthog.com`; a configured override must use HTTPS.
 
-The checked-in PostHog stack declares one claim funnel and one terminal-outcome
+Claim delivery also requires `POSTHOG_DEPLOYMENT_CATEGORY`, explicitly set to
+`development`, `preview`, `staging` or `production` on Convex. Production provisioning
+sets production with the key. Other deployment owners must set their actual category.
+Missing category suppresses optional events without blocking claims. Eligibility
+requires account On, an eligible original browser choice and the same preference
+revision at delivery. Legacy untagged rows become terminally suppressed. Production
+reports exclude historical untagged traffic and non-Full sessions.
+
+The checked-in PostHog stack declares one claim milestone-reach and one terminal-outcome
 view. Apply it separately with a reviewed Terraform plan; repository changes do
 not mutate hosted PostHog state.

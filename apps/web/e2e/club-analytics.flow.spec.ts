@@ -165,6 +165,15 @@ test("@flow real analytics history and persisted personal dashboard", async ({
   await expect(
     page.getByText("Instance detail", { exact: true }),
   ).toBeVisible();
+  const instanceChart = page.getByRole("group", { name: "Instance population chart", exact: true });
+  await expect(instanceChart.locator('.recharts-line-curve[name="Queue"]')).toHaveCount(1);
+  await expect(instanceChart.locator('.recharts-line-curve[name="Windows"]')).toHaveCount(1);
+  await expect(instanceChart.locator('.recharts-reference-line')).toHaveCount(1);
+  await page.getByRole("button", { name: "Show data table", exact: true }).click();
+  const instanceValues = page.getByRole("table", { name: "Instance population values", exact: true });
+  expect(await instanceValues.getByRole("row").last().getByRole("cell").allTextContents()).toEqual(["25", "20", "4", "7"]);
+  await page.getByText("Diagnostics", { exact: true }).click();
+  await expect(page.getByRole("table", { name: "Instance diagnostic counts", exact: true })).toContainText("24");
   await page.goBack();
   await expect(page.getByLabel("Inspect day")).toHaveValue("2026-09-08");
   await page.goForward();
@@ -185,6 +194,11 @@ test("@flow real analytics history and persisted personal dashboard", async ({
     .getByRole("button", { name: "Back to range", exact: true })
     .click();
   await expect(page.getByLabel("Inspect day")).toHaveValue("");
+  await page.goto(`${root}?instance=${data.aliasId}`);
+  await expect(page.getByRole("group", { name: "Instance population chart", exact: true })).toBeVisible();
+  const retained = await ownerClient.query(query("clubAnalytics:getInstance"), { ...club, sessionId: data.aliasId });
+  expect(retained.id).toBe(data.sessionId);
+  await page.getByRole("button", { name: "Back to instances", exact: true }).click();
   await ownerClient.mutation(mutation("clubStaff:seedPresetRoles"), club);
   const workspace = await ownerClient.query(
     query("clubStaff:getWorkspace"),
@@ -218,6 +232,15 @@ test("@flow real analytics history and persisted personal dashboard", async ({
       staffRoleIds: null,
       expected: workspace.visibility.group_size,
     });
+    await ownerClient.mutation(mutation("clubStaff:setCategoryVisibility"), {
+      ...club, category: "instance_history", audience: "owner", staffRoleIds: null, expected: workspace.visibility.instance_history,
+    });
+    await expect(staffClient.query(query("clubAnalytics:getInstanceSeries"), {
+      ...club, sessionId: data.sessionId, startAt: data.startAt, endAt: data.endAt,
+      paginationOpts: { numItems: 500, cursor: null },
+    })).rejects.toThrow();
+    await staffPage.goto(`${root}/instances?instance=${data.sessionId}`);
+    await expect(staffPage.getByText("Instance history is restricted.", { exact: true })).toBeVisible();
     const restricted = await staffClient.query(
       query("clubAnalytics:getBucket"),
       { ...club, startAt: data.startAt, endAt: data.endAt },

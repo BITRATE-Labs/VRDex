@@ -1,7 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { test as base, expect } from "@playwright/test";
+import { test as base, expect, type Page } from "@playwright/test";
 import { withTimelineFixtureLease } from "./home-timeline-lease";
 export const TIMELINE_NOW = Date.UTC(2026, 9, 26, 21, 30);
+export async function loadCompleteSchedule(page: Page) {
+  const state = page.getByLabel("Schedule data state");
+  for (let batch = 0; batch < 5; batch++) {
+    await expect(state).toHaveAttribute("data-state", /^(ready|partial)$/, { timeout: 20000 });
+    if (await state.getAttribute("data-state") === "ready") return;
+    await page.getByRole("button", { name: "More", exact: true }).click();
+  }
+  await expect(state).toHaveAttribute("data-state", "ready", { timeout: 20000 });
+}
 export type TimelineFixture = {
   runId: string;
   eventIds: string[];
@@ -22,7 +31,8 @@ export const test = base.extend<{
     | "discovery-clubs"
     | "discovery-roster"
     | "timeline-visual"
-    | "short-sets";
+    | "short-sets"
+    | "recent-timestamps";
   timelineStartAt: number;
 }>({
   timelineScenario: ["default", { option: true }],
@@ -166,6 +176,7 @@ export const test = base.extend<{
         "discovery-roster": { events: 2, profiles: 17, slots: 95 },
         "timeline-visual": { events: 10, profiles: 5, slots: 10 },
         "short-sets": { events: 8, profiles: 2, slots: 8 },
+        "recent-timestamps": { events: 8, profiles: 2, slots: 8 },
       }[timelineScenario];
       let created = false;
       let stage = "request";
@@ -193,6 +204,7 @@ export const test = base.extend<{
                       timelineScenario === "detail-visual" ||
                       timelineScenario === "timeline-visual" ||
                       timelineScenario === "short-sets" ||
+                      timelineScenario === "recent-timestamps" ||
                       timelineScenario.startsWith("discovery")
                         ? { scenario: timelineScenario }
                         : {}),

@@ -285,7 +285,7 @@ for (const [path, exports] of Object.entries(expected)) test(`R93 whole DATA own
 });
 test('R93 package includes all five whole DATA owners uniquely; workers import production settings', async () => {
   const manifest = JSON.parse(await readFile(join(root,'workers/restream/packaging-manifest.json')));
-  assert.equal(manifest.length, 134);
+  assert.equal(manifest.length, 144);
   assert.equal(new Set(manifest).size, manifest.length);
   for (const path of Object.keys(expected)) assert(manifest.includes(path), path);
   assert(!manifest.includes('tests/scripts/event-marker-data-separation.test.mjs'));

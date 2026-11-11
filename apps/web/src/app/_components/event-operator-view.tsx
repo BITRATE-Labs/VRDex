@@ -2,12 +2,17 @@
 
 import Link from "next/link";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
-import type { FunctionReturnType } from "convex/server";
+import type { FunctionReturnType, FunctionArgs } from "convex/server";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@convex-generated-api";
-import { eventBroadcastObservationFresh } from "@/lib/event-broadcast-observation";
+import { EventBroadcastQuickSwitch, type PreparedBroadcastSource } from "./event-broadcast-quick-switch";
 import { Button } from "@/components/ui/button";
-import { PageContainer, PageShell } from "@/components/ui/page-shell";
+import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { CopyValueRow } from "@/components/ui/copy-value-row";
+import { EventOperatorPreview } from "./event-operator-preview";
+import { parseBroadcastInputUrl } from "../../../../../convex/_broadcastInputUrl";
+import { eventBroadcastObservationFresh } from "@/lib/event-broadcast-observation";
+import { Radio, ArrowUpRight } from "lucide-react";
 import { ViewerLocalEventDateTime } from "./viewer-local-event-times";
 import { operatorViewState } from "@/lib/event-operator-state";
 import {
@@ -26,6 +31,7 @@ export type OperatorStatus = FunctionReturnType<
   typeof api.events.getEventMediaControlStatus
 >;
 type Command =
+  | "resume_previous"
   | "switch_next"
   | "switch_source"
   | "switch_hold"
@@ -44,6 +50,7 @@ export function EventOperatorView({
     api.events.getEventMediaControlStatus,
     isAuthenticated ? { currentSlug } : "skip",
   );
+  const nextSource = useQuery(api.events.getNextEventMediaSource,isAuthenticated ? {currentSlug} : "skip");
   const queue = useMutation(api.events.queueEventMediaCommand);
   const start = useMutation(api.events.scheduleEventMediaWorker);
   const stop = useMutation(api.events.stopEventMediaWorker);
@@ -62,6 +69,7 @@ export function EventOperatorView({
       <EventOperatorControls
         key={current.eventId}
         status={current}
+        nextSource={nextSource}
         onCancel={(commandId) =>
           cancel({
             currentSlug,
@@ -70,20 +78,22 @@ export function EventOperatorView({
           })
         }
         onCreate={(input) => create({ currentSlug, ...input })}
-        onReplace={(source, input) =>
-          replace({ currentSlug, sourceId: source.sourceId, ...input })
+        onPrepare={(label,url,idempotencyKey) => create({currentSlug,label,url,idempotencyKey,...{temporary:true}})}
+        onReplace={(source, input, expected) =>
+          replace({ currentSlug, sourceId: source.sourceId, ...input, ...expected })
         }
-        onRemove={(source) =>
-          remove({ currentSlug, sourceId: source.sourceId })
+        onRemove={(source, expected) =>
+          remove({ currentSlug, sourceId: source.sourceId, ...expected })
         }
         onSaveSettings={(input) => settings({ currentSlug, ...input })}
         title={current.eventTitle}
         onTwitch={(input) => configureTwitch({ currentSlug, ...input })}
-        onCommand={(type, targetSourceKey) =>
+        onCommand={(type, targetSourceKey, expected) =>
           queue({
             currentSlug,
             type,
             targetSourceKey,
+            ...expected,
             idempotencyKey: crypto.randomUUID(),
           })
         }
@@ -110,11 +120,15 @@ type TwitchInput = {
   providerRulesAccepted: boolean;
   rightsClearedMediaAccepted: boolean;
 };
+type CommandExpected = Pick<FunctionArgs<typeof api.events.queueEventMediaCommand>, "expectedSourceRevision" | "expectedSessionId" | "expectedIntentSequence">;
+type AuthoringExpected = Pick<FunctionArgs<typeof api.eventMediaSources.remove>, "expectedSourceRevision" | "expectedSessionId" | "expectedIntentSequence">;
 type ControlsProps = {
+  nextSource?: FunctionReturnType<typeof api.events.getNextEventMediaSource>;
+  onPrepare?: (label:string,url:string,idempotencyKey:string)=>Promise<PreparedBroadcastSource>;
   title?: string;
   onTwitch: (input: TwitchInput) => Promise<unknown>;
   status: OperatorStatus;
-  onCommand: (type: Command, key?: string) => Promise<unknown>;
+  onCommand: (type: Command, key?: string, expected?:CommandExpected) => Promise<unknown>;
   onStart: (key: string) => Promise<unknown>;
   onStop: (
     id: OperatorStatus["sessions"][number]["sessionId"],
@@ -127,14 +141,14 @@ type ControlsProps = {
   onReplace: (
     source: OperatorStatus["sources"][number],
     input: SourceAuthoring,
+    expected?: AuthoringExpected,
   ) => Promise<unknown>;
-  onRemove: (source: OperatorStatus["sources"][number]) => Promise<unknown>;
+  onRemove: (source: OperatorStatus["sources"][number], expected?:AuthoringExpected) => Promise<unknown>;
   onSaveSettings: (input: StreamSettings) => Promise<unknown>;
 };
 export function EventOperatorControls({
   status,
   title,
-  onTwitch,
   onCommand,
   onStart,
   onStop,
@@ -144,6 +158,8 @@ export function EventOperatorControls({
   onReplace,
   onRemove,
   onSaveSettings,
+  onPrepare,
+  nextSource,
 }: ControlsProps) {
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
@@ -152,13 +168,10 @@ export function EventOperatorControls({
   const cancelLock = useRef(false);
   const [cutBusy, setCutBusy] = useState(false);
   const [stopBusy, setStopBusy] = useState(false);
-  const [twitchAccount, setTwitchAccount] = useState("");
-  const [twitchLabel, setTwitchLabel] = useState("Twitch");
-  const [twitchChannel, setTwitchChannel] = useState("");
-  const [simulcast, setSimulcast] = useState(false);
-  const [consent, setConsent] = useState(false);
   const [failure, setFailure] = useState(false);
-  const [confirmStop, setConfirmStop] = useState(false);
+  const [change, setChange] = useState<{title:string; message:string; label:string; sessionId:string; epoch?:number; run:()=>Promise<unknown>; cancel?:()=>void} | null>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {if (change) dialog.current?.showModal(); else dialog.current?.close();}, [change]);
   const [outputKey, setOutputKey] = useState("");
   const [overrun, setOverrun] = useState(
     status.program?.broadcastPolicy?.maxOverrunMs === undefined
@@ -200,6 +213,7 @@ export function EventOperatorControls({
   );
   const disabled =
     busy ||
+    Boolean(session?.connectionTest) ||
     Boolean(view.pending) ||
     !status.canControl ||
     stopBusy ||
@@ -211,14 +225,16 @@ export function EventOperatorControls({
       !status.canControl ||
       session?.status === "stopping"
     )
-      return;
+      return false;
     lock.current = true;
     setBusy(true);
     setFailure(false);
     try {
       await action();
+      return true;
     } catch {
       setFailure(true);
+      return false;
     } finally {
       lock.current = false;
       setBusy(false);
@@ -236,16 +252,16 @@ export function EventOperatorControls({
     } finally {
       stopLock.current = false;
       setStopBusy(false);
-      setConfirmStop(false);
+      setChange(null);
     }
   }
-  async function cut() {
+  async function cut(expected?:CommandExpected) {
     if (cutLock.current || stopLock.current || !view.canCut) return;
     cutLock.current = true;
     setCutBusy(true);
     setFailure(false);
     try {
-      await onCommand("switch_hold");
+      await onCommand("switch_hold", undefined, expected);
     } catch {
       setFailure(true);
     } finally {
@@ -271,25 +287,152 @@ export function EventOperatorControls({
       cancelLock.current = false;
     }
   }
+  function requestCommand(type: Command, key?:string, label?:string) {
+    if (!session || !status.canControl) return;
+    const source = type === "switch_next" ? nextSource : type === "hold_current" ? status.sources.find(row=>row.sourceId === session.currentSourceId) : key ? status.sources.find(row => row.key === key) : undefined;
+    const capturedKey = type === "hold_current" ? source?.key ?? "hold-slate" : key;
+    const expected = {expectedSessionId:session.sessionId,expectedIntentSequence:session.intentSequence ?? 0, ...(source ? {expectedSourceRevision:source.revision} : {})};
+    setChange({title:label ?? "Change broadcast?", label:label ?? "Confirm", sessionId:session.sessionId, epoch:session.epoch,
+      message:type === "switch_next" ? "Advance the lineup. The current automatic or manual mode stays the same." : type === "set_automatic_mode" ? "Resume following the event lineup." : type === "resume_previous" ? "Return to the previous source. Automatic switching stays paused." : type === "switch_source" ? "Put this source on air and pause automatic switching." : "Pause automatic switching and hold this output.",
+      run:() => type === "switch_hold" ? cut(expected) : submit(() => onCommand(type,capturedKey,expected)),
+    });
+  }
+  async function confirmChange() {
+    if (!change || !status.canControl || change.sessionId !== session?.sessionId || change.epoch !== session?.epoch) {
+      change?.cancel?.(); setChange(null); setFailure(true); return;
+    }
+    const action = change.run; setChange(null); await action();
+  }
+  function dismissChange() {
+    change?.cancel?.();
+    setChange(null);
+  }
+  function outputHealth(output:OperatorStatus["outputs"][number]) {
+    const fresh=observationFresh && output.authorized !== false && eventBroadcastObservationFresh({serverNow:status.serverNow,elapsedMs:elapsed,leaseExpiresAt:session?.leaseExpiresAt,observedAt:session?.outputHealthObservedAt,status:session?.status});
+    return fresh ? session?.outputHealth.find(row=>row.outputId===output.outputId)?.status ?? "Unknown" : "Unknown";
+  }
+  const usableOutputs = status.outputs.filter(row => row.authorized !== false && ["ready", "active"].includes(row.state));
+  const primaryOutputs = usableOutputs.filter(row=>!row.simulcastEnabled);
+  const readyOutputs = primaryOutputs.length ? primaryOutputs : usableOutputs;
+  const actualLabel = observationFresh ? status.sources.find(source=>source.sourceId===session?.currentSourceId)?.label ?? view.actual : "Unknown";
+  const selectedOutput = readyOutputs.length === 1 ? readyOutputs[0].key : outputKey;
+  const destination = (active ? status.outputs.find(row=>row.outputId===status.program?.currentOutputId) : undefined) ?? status.outputs.find(row => row.key === selectedOutput) ?? status.outputs[0];
+  const outputLink = destination?.playbackLinks.find(link=>link.platform === "standalone") ?? destination?.playbackLinks[0];
+  const destinationLinks = destination?.playbackLinks.filter(link=>link.platform !== "browser" || !destination.playbackLinks.some(other=>other.platform !== "browser" && other.url === link.url)) ?? [];
+  let outputInput: OperatorStatus["sources"][number]["input"];
+  try {outputInput = outputLink ? parseBroadcastInputUrl(outputLink.url) : undefined;} catch { /* Keep the public playback link available. */ }
+  const setupPath = `${status.eventPath}/operate/setup`;
   return (
-    <PageShell className="py-10">
+    <PageShell className="py-5">
       <PageContainer max="6xl">
-        <div
-          className="ph-no-capture space-y-8"
-          data-ph-no-capture
-          data-testid="event-operator-controls"
-        >
-          <nav className="flex flex-wrap gap-5 text-sm">
-            <Link href={status.eventPath}>Event</Link>
-            <Link href={`${status.eventPath}/host`}>Host view</Link>
-            <Link href={`${status.eventPath}/edit`}>Edit event</Link>
-          </nav>
-          <header>
-            <p className="text-sm text-muted">Broadcast controls</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-              {title ?? "Broadcast controls"}
-            </h1>
+        <div className="ph-no-capture space-y-8" data-ph-no-capture data-testid="event-operator-controls">
+          <PageNav showMyEvents={false}><BrandLink /><Link href={status.eventPath}>Event</Link><Link href={`${status.eventPath}/host`}>Host view</Link><Link href={`${status.eventPath}/edit`}>Edit event</Link></PageNav>
+          <header className="flex flex-wrap items-center justify-between gap-4">
+            <div><Link className="text-sm text-muted" href={status.eventPath}>{title ?? status.eventTitle}</Link><h1 className="mt-2 text-4xl font-semibold tracking-tight">Broadcast</h1></div>
+            <div className="flex items-center gap-4"><span className="text-sm capitalize" role="status">{workerStatus}</span><Button variant="secondary" disabled={stopBusy || !status.canControl || !active || session?.status === "stopping"} onClick={() => session && setChange({title:"Stop this broadcast?",message:"The output will stop.",label:"Stop broadcast",sessionId:session.sessionId,epoch:session.epoch,run:confirmAndStop})}>Stop</Button></div>
           </header>
+          <div className="grid items-start gap-8 min-[850px]:grid-cols-[minmax(0,1fr)_310px]">
+            <section className="min-w-0" aria-label="Broadcast output">
+              <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-semibold">Output</h2><span className="text-sm text-muted">{active || status.outputConfigurationLocked ? actualLabel : "Off air"}</span></div>
+              {active && observationFresh && outputInput && outputLink ? <EventOperatorPreview source={{label:destination?.label ?? "Output",input:outputInput,publicUrl:outputLink.url}}/> : <div className="flex aspect-video flex-col items-center justify-center gap-3 rounded-control border border-border bg-[#070b12] text-white">
+                <Radio aria-hidden="true" className="size-10 text-accent"/><strong className="text-xl">{active ? actualLabel : "Starting soon"}</strong><span className="text-sm text-slate-400">{active ? workerStatus : title ?? status.eventTitle}</span>
+              </div>}
+              <dl className="flex flex-wrap gap-8 border-b border-border py-4"><div><dt className="text-xs text-muted">On air</dt><dd className="mt-1 text-sm font-medium">{active ? actualLabel : "None"}</dd></div><div><dt className="text-xs text-muted">Up next</dt><dd className="mt-1 text-sm font-medium">{nextSource?.label ?? status.nextSlot?.displayLabel ?? "End of lineup"}</dd></div><div><dt className="text-xs text-muted">Switching</dt><dd className="mt-1 text-sm font-medium">{observationFresh ? session?.broadcastMode ?? "Unknown" : active ? "Unknown" : "Automatic"}</dd></div></dl>
+              <div className="mt-4 flex flex-wrap gap-3">
+            {active && session?.status === "hold" && session.resumeSource && <Button disabled={disabled} onClick={()=>requestCommand("resume_previous",status.sources.find(source=>source.sourceId===session.resumeSource?.sourceId)?.key,"Resume previous source")}>Resume previous source</Button>}
+            <Button
+              disabled={disabled || !active || !nextSource}
+              onClick={() => requestCommand("switch_next", nextSource?.key, nextSource ? `Next DJ: ${nextSource.label}` : "Next DJ") }
+            >
+              {nextSource ? `Next DJ: ${nextSource.label}` : "Next"}
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={disabled || !active}
+              onClick={() => requestCommand("hold_current", undefined, "Hold current")}
+            >
+              Hold current
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={!view.canCut || cutBusy}
+              onClick={() => requestCommand("switch_hold", undefined, "Hold slate")}
+            >
+              Cut to slate
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={disabled || !active}
+              onClick={() => requestCommand("set_automatic_mode", undefined, "Return to auto")}
+            >
+              Return to auto
+            </Button>
+          </div>
+
+            </section>
+            <aside className="min-w-0 rounded-control border border-border bg-surface p-5" aria-label="Destination">
+              {destination ? <>
+                <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">Destination</h2>{status.canControl && !status.outputConfigurationLocked && <Link className="text-sm text-muted" href={setupPath}>Edit connection</Link>}</div>
+                <div className="mb-4 flex items-center justify-between gap-3"><strong className="text-sm">{destination.label}</strong><span className="text-sm capitalize text-muted">{active ? outputHealth(destination) : destination.testState === "not_tested" ? "Not tested" : destination.testState === "failed" ? "Test failed" : destination.testState === "passed" ? "Test passed" : destination.state}</span></div>
+                {!active && readyOutputs.length > 1 && <label className="mb-4 grid gap-2 text-sm">Primary output<select aria-label="Primary output" className="rounded-control border border-border bg-surface p-2" value={outputKey} onChange={e=>setOutputKey(e.target.value)}><option value="">Select output</option>{readyOutputs.map(row=><option key={row.outputId} value={row.key}>{row.label}</option>)}</select></label>}
+                {!active && <Button className="w-full" disabled={busy || sessionPending || !status.canControl || Boolean(active) || status.outputConfigurationLocked || !selectedOutput} onClick={()=>submit(()=>onStart(selectedOutput))}>Start</Button>}
+                {destinationLinks.length > 0 && <div className="mt-4 border-t border-border pt-1">{destinationLinks.map(link=><CopyValueRow key={`${link.platform}:${link.url}`} label={link.label ?? `${link.platform} URL`} value={link.url}/>)}</div>}
+                <details className="mt-5 border-t border-border pt-3"><summary className="cursor-pointer text-sm">Stream settings</summary><div className="pt-4"><EventStreamSettings embedded settings={status.program?.mediaSettings ?? NEW_PROGRAM_MEDIA_SETTINGS} activeSettings={active ? session?.mediaSettings : undefined} canControl={status.canControl} onSave={onSaveSettings}/></div></details>
+              </> : <Link aria-disabled={!status.canControl} href={status.canControl ? setupPath : status.eventPath} className="flex min-h-[100px] items-center gap-4 rounded-control bg-gradient-to-br from-accent/15 to-surface p-1"><Radio aria-hidden="true" className="size-8 shrink-0 text-accent"/><span className="flex-1 text-lg font-semibold">Set up broadcast</span><ArrowUpRight aria-hidden="true" className="size-5"/></Link>}
+            </aside>
+          </div>
+          {change && <dialog ref={dialog} onCancel={dismissChange} aria-labelledby="broadcast-change-title" className="m-auto w-full max-w-md rounded-control border border-border bg-surface-strong p-6 text-foreground backdrop:bg-black/60">
+            <h2 id="broadcast-change-title" className="text-xl font-semibold">{change?.title}</h2><p className="my-4 text-sm text-muted">{change?.message}</p><div className="flex gap-3"><Button autoFocus onClick={dismissChange}>Cancel</Button><Button variant={change?.label === "Stop broadcast" ? "danger" : "primary"} disabled={!status.canControl} onClick={() => void confirmChange()}>{change?.label}</Button></div>
+          </dialog>}
+          <p role="status">
+            {failure
+              ? "Command failed"
+              : stopBusy || session?.status === "stopping"
+                ? "Stopping"
+                : view.pending?.phase === "preparing"
+                  ? "Preparing"
+                  : view.pending?.phase === "promoting"
+                    ? "Promoting"
+                    : busy || pending
+                      ? "Command pending"
+                      : ""}
+          </p>
+          {onPrepare && <EventBroadcastQuickSwitch eventPath={status.eventPath} disabled={!status.canControl || stopBusy || session?.status === "stopping"} canTake={view.canTake} onPrepare={onPrepare} onTake={source => {
+            if (!session) return;
+            const expected = {expectedSessionId:session.sessionId,expectedIntentSequence:session.intentSequence ?? 0,expectedSourceRevision:source.revision};
+            setChange({title:`Put ${source.label} on air?`,message:"This replaces the current output and pauses automatic switching.",label:`Put ${source.label} on air`,sessionId:session.sessionId,epoch:session.epoch,run:()=>submit(()=>onCommand("switch_source",source.key,expected))});
+          }} />}
+          <EventOperatorSources
+            sources={status.sources}
+            control={{
+              status,
+              canTake: view.canTake,
+              canCancel: view.canCancel,
+              pending: view.pending ?? null,
+              now: status.serverNow + elapsed,
+            }}
+            canControl={
+              status.canControl && !stopBusy && session?.status !== "stopping"
+            }
+            onTake={(source) =>
+              requestCommand("switch_source", source.key, `Put ${source.label} on air`)
+            }
+            onCancel={() => {if (!session) return;setChange({title:"Cancel this switch?",message:"Keep the current output.",label:"Cancel switch",sessionId:session.sessionId,epoch:session.epoch,run:cancel});}}
+            onCreate={onCreate}
+            onReplace={(source,input) => {
+              const expected = {expectedSourceRevision:source.revision,...(active && session ? {expectedSessionId:session.sessionId,expectedIntentSequence:session.intentSequence ?? 0} : {})};
+              if (!active || !session) return onReplace(source,input,expected);
+              return new Promise<boolean>(resolve => setChange({title:`Replace ${source.label}?`,message:"Update this input for the broadcast.",label:"Replace source",sessionId:session.sessionId,epoch:session.epoch,cancel:()=>resolve(false),run:async()=>resolve(await submit(()=>onReplace(source,input,expected)))}));
+            }}
+            onRemove={source => {
+              const expected = {expectedSourceRevision:source.revision,...(active && session ? {expectedSessionId:session.sessionId,expectedIntentSequence:session.intentSequence ?? 0} : {})};
+              if (!active || !session) return onRemove(source,expected);
+              setChange({title:`Remove ${source.label}?`,message:"Remove this source from the broadcast lineup.",label:"Remove source",sessionId:session.sessionId,epoch:session.epoch,run:()=>submit(()=>onRemove(source,expected))});
+              return Promise.resolve();
+            }}
+          />
+
+          <details className="border-t border-border pt-4"><summary className="cursor-pointer text-sm text-muted">Broadcast details</summary><div className="mt-5 space-y-6">
           <dl className="grid grid-cols-2 gap-6 border-y border-border py-6 sm:grid-cols-4">
             <div>
               <dt className="text-sm text-muted">Scheduled now</dt>
@@ -336,279 +479,9 @@ export function EventOperatorControls({
               </dd>
             </div>
           </dl>
-          <div className="flex flex-wrap gap-3">
-            <Button
-              disabled={disabled || !active}
-              onClick={() => submit(() => onCommand("switch_next"))}
-            >
-              Next
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={disabled || !active}
-              onClick={() => submit(() => onCommand("hold_current"))}
-            >
-              Hold current
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={!view.canCut || cutBusy}
-              onClick={() => void cut()}
-            >
-              Cut to slate
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={disabled || !active}
-              onClick={() => submit(() => onCommand("set_automatic_mode"))}
-            >
-              Return to auto
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={
-                stopBusy ||
-                !status.canControl ||
-                !active ||
-                session?.status === "stopping"
-              }
-              onClick={() => setConfirmStop(true)}
-            >
-              Stop
-            </Button>
-          </div>
-          {confirmStop ? (
-            <div
-              role="group"
-              aria-label="Confirm stop"
-              className="flex flex-wrap gap-3"
-            >
-              <Button
-                disabled={stopBusy || !status.canControl}
-                onClick={() => void confirmAndStop()}
-              >
-                Confirm stop
-              </Button>
-              <Button variant="secondary" onClick={() => setConfirmStop(false)}>
-                Cancel
-              </Button>
-            </div>
-          ) : null}
-          <p role="status">
-            {failure
-              ? "Command failed"
-              : stopBusy || session?.status === "stopping"
-                ? "Stopping"
-                : view.pending?.phase === "preparing"
-                  ? "Preparing"
-                  : view.pending?.phase === "promoting"
-                    ? "Promoting"
-                    : busy || pending
-                      ? "Command pending"
-                      : ""}
-          </p>
-          <EventOperatorSources
-            sources={status.sources}
-            control={{
-              status,
-              canTake: view.canTake,
-              canCancel: view.canCancel,
-              pending: view.pending ?? null,
-              now: status.serverNow + elapsed,
-            }}
-            canControl={
-              status.canControl && !stopBusy && session?.status !== "stopping"
-            }
-            onTake={(source) =>
-              void submit(() => onCommand("switch_source", source.key))
-            }
-            onCancel={() => void cancel()}
-            onCreate={onCreate}
-            onReplace={onReplace}
-            onRemove={onRemove}
-          />
-          <EventStreamSettings
-            settings={
-              status.program?.mediaSettings ?? NEW_PROGRAM_MEDIA_SETTINGS
-            }
-            activeSettings={active ? session?.mediaSettings : undefined}
-            canControl={status.canControl}
-            onSave={onSaveSettings}
-          />
-          <EventOperatorDiagnostics
-            session={session}
-            now={status.serverNow + elapsed}
-          />
-          <section className="space-y-3">
-            <h2 className="text-xl font-semibold">Destinations</h2>
-            {status.outputs.map((output) => {
-              const health = session?.outputHealth.find(
-                (row) => row.outputId === output.outputId,
-              );
-              const fresh =
-                observationFresh &&
-                output.authorized !== false &&
-                eventBroadcastObservationFresh({
-                  serverNow: status.serverNow,
-                  elapsedMs: elapsed,
-                  leaseExpiresAt: session?.leaseExpiresAt,
-                  observedAt: session?.outputHealthObservedAt,
-                  status: session?.status,
-                });
-              return (
-                <div
-                  key={output.outputId}
-                  className="flex flex-wrap justify-between gap-3 border-b border-border py-3"
-                >
-                  <span>
-                    {output.label}
-                    {output.simulcastEnabled ? " · Simulcast" : ""}
-                  </span>
-                  <span
-                    title={
-                      session?.outputHealthObservedAt
-                        ? new Date(session.outputHealthObservedAt).toISOString()
-                        : undefined
-                    }
-                  >
-                    {health && fresh ? health.status : "Unknown"}
-                  </span>
-                </div>
-              );
-            })}
-            <label className="block text-sm">
-              Primary output
-              <select
-                className="ml-3 max-w-full rounded border border-border bg-surface p-2"
-                aria-label="Primary output"
-                value={outputKey}
-                onChange={(e) => setOutputKey(e.target.value)}
-              >
-                <option value="">Select output</option>
-                {status.outputs
-                  .filter(
-                    (row) =>
-                      row.authorized !== false &&
-                      ["ready", "active"].includes(row.state),
-                  )
-                  .map((row) => (
-                    <option key={row.outputId} value={row.key}>
-                      {row.label}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            <Button
-              disabled={
-                busy ||
-                sessionPending ||
-                !status.canControl ||
-                Boolean(active) ||
-                status.outputConfigurationLocked ||
-                !outputKey
-              }
-              onClick={() => submit(() => onStart(outputKey))}
-            >
-              Start
-            </Button>
-          </section>
-          <details className="space-y-4">
-            <summary className="cursor-pointer text-sm">Twitch setup</summary>
-            <fieldset
-              disabled={disabled || status.outputConfigurationLocked}
-              className="grid gap-4 sm:max-w-md"
-            >
-              <label className="grid gap-2 text-sm">
-                Output account
-                <select
-                  className="rounded border border-border bg-surface p-2"
-                  aria-label="Output account"
-                  value={twitchAccount}
-                  onChange={(e) => {
-                    setTwitchAccount(e.target.value);
-                    setTwitchChannel(
-                      status.twitchAccounts.find(
-                        (account) => account.key === e.target.value,
-                      )?.channel ?? "",
-                    );
-                  }}
-                >
-                  <option value="">
-                    {status.twitchAccounts.length
-                      ? "Select account"
-                      : "Unavailable"}
-                  </option>
-                  {status.twitchAccounts.map((account) => (
-                    <option key={account.key} value={account.key}>
-                      {account.channel}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid gap-2 text-sm">
-                Output label
-                <input
-                  className="rounded border border-border bg-surface p-2"
-                  value={twitchLabel}
-                  onChange={(e) => setTwitchLabel(e.target.value)}
-                />
-              </label>
-              <label className="grid gap-2 text-sm">
-                Channel
-                <input
-                  className="rounded border border-border bg-surface p-2"
-                  value={twitchChannel}
-                  readOnly
-                />
-              </label>
-              <label className="flex gap-3 text-sm">
-                <input
-                  type="checkbox"
-                  checked={simulcast}
-                  onChange={(e) => setSimulcast(e.target.checked)}
-                />
-                Simulcast
-              </label>
-              <label className="flex items-start gap-3 text-sm">
-                <input
-                  type="checkbox"
-                  checked={consent}
-                  onChange={(e) => setConsent(e.target.checked)}
-                />
-                I confirm I am authorized to publish this event through the
-                selected output account.
-              </label>
-              <Button
-                variant="secondary"
-                disabled={
-                  status.outputConfigurationLocked ||
-                  !consent ||
-                  !twitchAccount.trim() ||
-                  !twitchLabel.trim() ||
-                  !twitchChannel.trim()
-                }
-                onClick={() =>
-                  submit(() =>
-                    onTwitch({
-                      key:
-                        status.outputs.find((output) => output.twitchSetup)
-                          ?.key ?? "twitch",
-                      label: twitchLabel,
-                      channel: twitchChannel,
-                      outputAccountKey: twitchAccount,
-                      simulcastEnabled: simulcast,
-                      sourceConsentAccepted: consent,
-                      destinationAuthorityAccepted: consent,
-                      providerRulesAccepted: consent,
-                      rightsClearedMediaAccepted: consent,
-                    }),
-                  )
-                }
-              >
-                Save Twitch
-              </Button>
-            </fieldset>
-          </details>
+{!destination && <EventStreamSettings settings={status.program?.mediaSettings ?? NEW_PROGRAM_MEDIA_SETTINGS} activeSettings={active ? session?.mediaSettings : undefined} canControl={status.canControl} onSave={onSaveSettings}/>}
+<section className="space-y-3"><h2 className="text-lg font-semibold">Output health</h2>{status.outputs.map(output=><div key={output.outputId} className="flex justify-between gap-3 border-b border-border py-2 text-sm"><span>{output.label}</span><span>{outputHealth(output)}</span></div>)}</section>
+<EventOperatorDiagnostics session={session} now={status.serverNow + elapsed}/>
           <section className="space-y-3">
             <h2 className="text-xl font-semibold">Handoff policy</h2>
             <label className="block text-sm">
@@ -637,25 +510,6 @@ export function EventOperatorControls({
               Save policy
             </Button>
           </section>
-          <details>
-            <summary className="cursor-pointer text-sm">Details</summary>
-            <dl className="mt-4 grid grid-cols-2 gap-4">
-              {" "}
-              <div>
-                <dt className="text-sm text-muted">Acknowledged sequence</dt>
-                <dd>{session?.lastAcknowledgedSequence ?? "None"}</dd>
-              </div>
-              <div>
-                <dt className="text-sm text-muted">Lease</dt>
-                <dd>
-                  {session?.leaseExpiresAt &&
-                  session.leaseExpiresAt > status.serverNow + elapsed
-                    ? "Active"
-                    : "Expired"}
-                </dd>
-              </div>
-            </dl>
-          </details>
           <section className="space-y-3">
             <h2 className="text-xl font-semibold">Commands</h2>
             {status.commands.slice(0, 10).map((command) => (
@@ -672,6 +526,8 @@ export function EventOperatorControls({
               </div>
             ))}
           </section>
+
+          </div></details>
         </div>
       </PageContainer>
     </PageShell>

@@ -178,6 +178,8 @@ describe("browser auth-session authorization boundary", () => {
 
   it("inventories every Next route or server page that forwards a browser JWT to Convex", () => {
     const inventory = new Map<string, string>([
+      ["apps/web/src/app/[slug]/events/[eventSlug]/operate/setup/page.tsx", "api.events.getEventMediaControlStatus"],
+      ["apps/web/src/app/api/event-broadcast/connections/route.ts", "eventBroadcastConnections:prepareConnection"],
       ["apps/web/src/app/[slug]/events/[eventSlug]/operate/page.tsx", "api.events.getEventMediaControlStatus"],
       ["apps/web/src/app/[slug]/events/[eventSlug]/operate/status/route.ts", "api.events.getEventMediaControlStatus"],
       ["apps/web/src/app/api/account/media-contributions/submissions/[submissionId]/file/route.ts", "api.profileMediaSubmissions.publisherDetail"],
@@ -253,6 +255,21 @@ describe("browser auth-session authorization boundary", () => {
 
     for (const [file, guardedCall] of inventory) {
       assert.match(source(file), new RegExp(guardedCall.replaceAll(".", "\\.")));
+      if(file.endsWith("/operate/setup/page.tsx")){
+        const page=source(file);
+        assert.match(page,/if \(!token\) redirect\(signInPath/);
+        assert.match(page,/fetchQuery\(api\.events\.getEventMediaControlStatus,.*\{token\}/);
+        assert.match(page,/if \(status\.eventPath!==path \|\| !status\.canControl\) notFound\(\)/);
+        assert.ok(page.indexOf("api.events.getEventMediaControlStatus")<page.indexOf("if (status.eventPath"));
+        assert.ok(page.indexOf("if (status.eventPath")<page.indexOf("return <EventBroadcastSetup"));
+        continue;
+      }
+      if(file.endsWith("/api/event-broadcast/connections/route.ts")){
+        const route=source(file);
+        assert.match(route,/client\.setAuth\(token\)/);
+        assert.ok(route.indexOf("if (!token)")<route.indexOf("await provisionConnection("));
+        assert.ok(route.indexOf('request.headers.get("origin")')<route.indexOf("await provisionConnection("));
+      }
       if (guardedCall === "api.events.getEventMediaControlStatus") {
         const page = source(file);
         assert.match(page, /\{ token \}/);

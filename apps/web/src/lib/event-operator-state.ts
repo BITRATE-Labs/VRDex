@@ -12,7 +12,9 @@ export function operatorViewState(
     ? status.sessions.find(
         (row) => row.sessionId === status.program?.activeSessionId,
       )
-    : status.sessions.find((row) => ["ended", "error"].includes(row.status));
+    : status.sessions.find(
+        (row) => !row.connectionTest && ["ended", "error"].includes(row.status),
+      );
   const active = Boolean(
     session && !["ended", "error"].includes(session.status),
   );
@@ -41,7 +43,8 @@ export function operatorViewState(
   };
   const intent = session?.committedIntent;
   const pending = session?.pendingOperation;
-  const canOperate = status.canControl && active && !stopPending;
+  const canStop = status.canControl && active && !stopPending;
+  const canOperate = canStop && !session?.connectionTest;
   return {
     session,
     active,
@@ -70,7 +73,7 @@ export function operatorViewState(
     canTake: canOperate && !submitting && !pending,
     canCancel: canOperate && pending?.phase === "preparing",
     canCut: canOperate,
-    canStop: canOperate,
+    canStop,
   };
 }
 export function resourceFresh(

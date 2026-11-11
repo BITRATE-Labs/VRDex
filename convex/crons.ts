@@ -4,6 +4,7 @@ import { cronJobs } from "convex/server";
 import { internal } from "./_generated/api";
 
 const crons = cronJobs();
+crons.hourly("prune completed broadcast connection tests", {minuteUTC: 35}, internal.eventBroadcastConnectionTests.pruneConnectionTests, {});
 crons.interval("refresh admission monitoring", { minutes: 1 }, makeFunctionReference<"mutation">("groupObservations:refreshAdmissionMonitoring"), {});
 
 crons.interval(

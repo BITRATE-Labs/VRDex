@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import vm from "node:vm";
 import ts from "typescript";
-const requireWeb = createRequire(path.resolve("apps/web/package.json"));
+const requireWeb = createRequire(path.resolve("apps/web/src/app/events/slot-broadcast-input-select.tsx"));
 const output = ts.transpileModule(
   readFileSync(
     "apps/web/src/app/events/slot-broadcast-input-select.tsx",

@@ -118,6 +118,53 @@ async function finishImmediateSchedules(t: ReturnType<typeof convexTest>, iterat
 }
 
 describe("community telemetry control plane", () => {
+  it("retains independent private diagnostics without changing population or legacy rows", async () => {
+    const t = convexTest({ schema, modules });
+    await seedCommunity(t);
+    const collectorAccountId = await registerAccount(t);
+    const integrationId = await t.withIdentity(identity).mutation(api.communityTelemetry.connectGroup, {
+      communitySlug: "faceless", vrchatGroupId: "grp_00000000-0000-4000-8000-000000000001", groupVisibility: "public", joinPolicy: "free",
+    });
+    await grantVisibilityOwner(t);
+    const now = Date.now() + 1000;
+    const [claim] = (await t.mutation(internal.communityTelemetry.claimDueAssignments, { collectorAccountId, workerId: "diagnostics-worker", now })).assignments;
+    assert.ok(claim);
+    const instance = { providerInstanceId: "paired", providerLocation: "wrld_example:paired", vrchatWorldId: "wrld_example", population: 4 };
+    const poll = { integrationId, collectorAccountId, workerId: "diagnostics-worker", fencingToken: claim.fencingToken, collectorVersion: "test", source: "first_party" as const, groupMemberCount: 50, nextPollAt: now + 60_000, now };
+    const samples = [{}, { userCount: null, queueSize: null, platforms: null }, { userCount: 95, queueSize: 120, platforms: { standalonewindows: 82, android: 0, future_platform: 3 } }, { userCount: 0, queueSize: 0, platforms: {} }];
+    for (const [index, diagnostics] of samples.entries()) {
+      await t.mutation(internal.communityTelemetry.ingestAggregatePoll, { ...poll, pollId: `paired-${index}`, observedAt: now + index, instances: [{ ...instance, ...diagnostics }] });
+    }
+    const rows = await t.run(ctx => ctx.db.query("instancePopulationObservations").collect());
+    assert.equal(rows.length, 4);
+    for (const row of rows.slice(0, 2)) for (const key of ["userCount", "queueSize", "platforms"]) assert.equal(Object.hasOwn(row, key), false);
+    assert.equal(rows[2]!.userCount, 95);
+    assert.equal(rows[2]!.queueSize, 120);
+    assert.deepEqual(rows[2]!.platforms, { standalonewindows: 82, android: 0, future_platform: 3 });
+    assert.equal(rows[3]!.queueSize, 0);
+    const args = { communitySlug: "faceless", sessionId: rows[0]!.sessionId, startAt: now + 1, endAt: now + 3, paginationOpts: { numItems: 10, cursor: null } };
+    const series = await t.withIdentity(identity).query(api.clubAnalytics.getInstanceSeries, args);
+    assert.equal(series.page[1]!.userCount, 95);
+    assert.equal(series.page[1]!.queueSize, 120);
+    assert.deepEqual(series.page[1]!.platforms, { standalonewindows: 82, android: 0, future_platform: 3 });
+    assert.equal(Object.hasOwn(series.before!, "queueSize"), false);
+    assert.equal(series.after!.queueSize, 0);
+    await assert.rejects(t.query(api.clubAnalytics.getInstanceSeries, args));
+    await assert.rejects(t.withIdentity({ subject: "unrelated", issuer: "test", tokenIdentifier: "test|unrelated" }).query(api.clubAnalytics.getInstanceSeries, args));
+    assert.deepEqual((await t.run(ctx => ctx.db.query("communityPopulationObservations").collect())).map(row => row.totalPopulation), [4, 4, 4, 4]);
+    const dashboard = await t.withIdentity(identity).query(api.communityTelemetry.getPrivateDashboard, { communitySlug: "faceless", now: now + 3 });
+    assert.ok(dashboard);
+    for (const row of dashboard.instancePopulation) for (const key of ["userCount", "queueSize", "platforms"]) assert.equal(Object.hasOwn(row, key), false);
+    await t.run(ctx => ctx.db.patch(integrationId, { publicMetrics: { currentPopulation: true, populationHistory: true, groupMemberCount: false, groupMemberGrowth: false, eventRecaps: false } }));
+    const publicView = await t.query(api.communityTelemetry.getPublicForCommunity, { communitySlug: "faceless", now: now + 3 });
+    assert.equal(publicView?.currentPopulation?.value, 4);
+    assert.equal(/userCount|queueSize|platforms/.test(JSON.stringify(publicView)), false);
+    for (const diagnostics of [{ userCount: -1 }, { queueSize: 1.5 }, { userCount: Number.MAX_SAFE_INTEGER + 1 }, { platforms: { windows: -1 } }, { platforms: { windows: Number.MAX_SAFE_INTEGER + 1 } }, { platforms: { "bad key": 1 } }, { platforms: { usr_private: 1 } }, { platforms: { USR_private: 1 } }, { platforms: { ["a".repeat(65)]: 1 } }, { platforms: Object.fromEntries(Array.from({ length: 17 }, (_, i) => [`platform${i}`, 0])) }]) {
+      await assert.rejects(t.mutation(internal.communityTelemetry.ingestAggregatePoll, { ...poll, pollId: "invalid", observedAt: now + 5, instances: [{ ...instance, ...diagnostics }] }));
+    }
+    assert.equal((await t.run(ctx => ctx.db.query("instancePopulationObservations").collect())).length, 4);
+  });
+
   it("closes a provider-confirmed instance immediately without dropping its remaining occupants or duplicating history", async test => {
     const t = convexTest({ schema, modules });
     await seedCommunity(t);

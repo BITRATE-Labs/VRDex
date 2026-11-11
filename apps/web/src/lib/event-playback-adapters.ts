@@ -17,14 +17,8 @@ import {
   type VrcdnTransport,
 } from "./vrcdn-transport";
 
-export function createEventPlaybackAdapter(
-  request: PlaybackRequest,
-  mount: HTMLElement,
-  notify: AdapterNotify,
-  loadMpegts = () => import("mpegts.js"),
-): PlaybackAdapter {
-  if (request.kind === "twitch")
-    return createTwitchAdapter(request, mount, notify);
+export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTMLElement, notify: AdapterNotify, loadMpegts = () => import("mpegts.js"), loadHls = () => import("hls.js")): PlaybackAdapter {
+  if (request.kind === "twitch") return createTwitchAdapter(request, mount, notify);
   if (request.kind === "performer_sequence") {
     let previousEvent = JSON.stringify(request.event);
     const session = new EventLineupSession(request.event, mount, (lineup) =>
@@ -74,6 +68,19 @@ export function createEventPlaybackAdapter(
     disposed = false,
     attempt = 0;
   let failed = false;
+  let hls: { destroy(): void } | undefined;
+  let guardVolume = false, audible = false, beforeUnmute: (() => boolean) | undefined;
+  const volumeChange = () => {
+    if (guardVolume || !beforeUnmute) return;
+    const nextAudible = !video.muted && video.volume > 0;
+    if (nextAudible === audible) return;
+    audible = nextAudible;
+    if (!nextAudible) return;
+    guardVolume = true;
+    video.muted = true;
+    try { if (beforeUnmute()) video.muted = false; } finally { audible = !video.muted && video.volume > 0; guardVolume = false; }
+  };
+  video.addEventListener("volumechange", volumeChange);
   const connectionEnded = () => {
     if (disposed || failed) return;
     if ("profileId" in request) {
@@ -108,66 +115,31 @@ export function createEventPlaybackAdapter(
       },
     ],
   ];
-  for (const [event, listener] of listeners)
-    video.addEventListener(event, listener);
-  const ready =
-    request.transport === "video"
-      ? Promise.resolve().then(() => {
-          if (!disposed) video.src = request.src;
-        })
-      : loadMpegts().then(({ default: mpegts }) => {
-          if (disposed) return;
-          if (!mpegts.isSupported())
-            throw new Error("Unsupported media transport");
-          player = attachVrcdnTransport(mpegts, video, request.src, {
-            ...( "profileId" in request ? { onLoadingComplete: connectionEnded } : {} ),
-            onError: () => {
-              if (!disposed) {
-                failed = true;
-                notify({ status: "unavailable" });
-              }
-            },
-          });
-        });
+  for (const [event, listener] of listeners) video.addEventListener(event, listener);
+  const ready = request.transport === "video" ? Promise.resolve().then(() => { if (!disposed) video.src = request.src; }) : request.transport === "hls" ? Promise.resolve().then(async () => {
+    if (disposed) return;
+    if (video.canPlayType("application/vnd.apple.mpegurl")) { video.src = request.src; return; }
+    const { default: Hls } = await loadHls();
+    if (disposed) return;
+    if (!Hls.isSupported()) throw new Error("Unsupported media transport");
+    const instance = new Hls({ enableWorker: true, maxBufferLength: 15, maxMaxBufferLength: 30 });
+    hls = instance;
+    instance.on(Hls.Events.ERROR, (_event, data) => { if (!disposed && data.fatal) { failed = true; notify({ status: "unavailable" }); } });
+    instance.loadSource(request.src); instance.attachMedia(video);
+  }) : loadMpegts().then(({ default: mpegts }) => {
+    if (disposed) return;
+    if (!mpegts.isSupported()) throw new Error("Unsupported media transport");
+    player = attachVrcdnTransport(mpegts, video, request.src, { ...("profileId" in request ? {onLoadingComplete:connectionEnded} : {}), onError: () => { if (!disposed) { failed = true; notify({ status: "unavailable" }); } } });
+  });
   // The owner may close before Play awaits the transport import.
   void ready.catch(() => {});
   return {
-    async play() {
-      const current = ++attempt;
-      await ready;
-      if (disposed || current !== attempt) return false;
-      try {
-        await video.play();
-        return !disposed && current === attempt;
-      } catch {
-        return false;
-      }
-    },
-    pause() {
-      attempt++;
-      video.pause();
-    },
-    setVolume(value) {
-      video.volume = value;
-    },
-    setMuted(value) {
-      video.muted = value;
-    },
-    update(value) {
-      video.title = value.title;
-    },
-    dispose() {
-      if (disposed) return;
-      disposed = true;
-      attempt++;
-      for (const [event, listener] of listeners)
-        video.removeEventListener(event, listener);
-      video.pause();
-      if (player) releaseVrcdnTransport(player);
-      video.removeAttribute("src");
-      video.load();
-      video.remove();
-    },
+    enableControls(callback) { beforeUnmute = callback; video.controls = true; },
+    async play() { const current = ++attempt; await ready; if (disposed || current !== attempt) return false;
+      try { await video.play(); return !disposed && current === attempt; } catch { return false; } },
+    pause() { attempt++; video.pause(); }, setVolume(value) { if (value === 0) audible = false; video.volume = value; }, setMuted(value) { if (value) audible = false; video.muted = value; },
+    update(value) { video.title = value.title; },
+    dispose() { if (disposed) return; disposed = true; attempt++; for (const [event, listener] of listeners) video.removeEventListener(event, listener); video.pause(); video.removeEventListener("volumechange", volumeChange); hls?.destroy(); if (player) releaseVrcdnTransport(player); video.removeAttribute("src"); video.load(); video.remove(); },
   };
 }
 

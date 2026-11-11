@@ -228,13 +228,27 @@ test('API and MCP verification installs FFmpeg before full script coverage', asy
  const verify = steps.findIndex(step => step.name === 'Run MCP package verification');
  assert.ok(install >= 0 && install < verify, 'FFmpeg must be installed before MCP verification');
  assert.equal(steps[install]['timeout-minutes'], 5);
- assert.match(steps[install].run, /\/etc\/apt\/apt-mirrors\.txt/);
- assert.match(steps[install].run, /sudo sed -i '[^']*azure[^']*\/d' \/etc\/apt\/apt-mirrors\.txt/);
+ assert.match(steps[install].run, /sudo "\$\(command -v node\)" \.github\/scripts\/configure-ubuntu-mirror\.mjs/);
  assert.match(steps[install].run, /sudo apt-get update/);
  assert.match(steps[install].run, /sudo apt-get install --no-install-recommends --yes ffmpeg/);
  assert.match(steps[install].run, /ffmpeg -version/);
  assert.equal(steps[verify].run, 'pnpm verify:vrdex-mcp');
 });
+test('media CI prefers independent HTTPS mirrors without weakening package verification', async () => {
+ const { parse } = await import('yaml');
+ const workflow = parse(await readFile('.github/workflows/baseline-checks.yml', 'utf8'));
+ workflow.jobs.reusableProbe = { uses: './.github/workflows/reusable.yml' };
+ const installs = Object.values(workflow.jobs).flatMap(job => job.steps ?? []).filter(step => ['Install script media test prerequisites', 'Install backend media test prerequisites', 'Install FFmpeg'].includes(step.name));
+ assert.equal(installs.length, 3);
+ for (const step of installs) {
+  assert.equal(step['timeout-minutes'], 5);
+  const mirror = step.run.indexOf('sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs');
+  assert.ok(mirror >= 0 && mirror < step.run.indexOf('sudo apt-get update'));
+  assert.doesNotMatch(step.run, /allow-unauthenticated|AllowInsecureRepositories|Check-Valid-Until=false|trusted=yes/);
+  assert.doesNotMatch(await readFile('.github/scripts/configure-ubuntu-mirror.mjs', 'utf8'), /allow-unauthenticated|AllowInsecureRepositories|Check-Valid-Until=false|trusted=yes/);
+ }
+});
+
 test('rehearsal IAM resources are opt-in, standalone, exact and additive', async () => {
  const worker = await readFile('infra/terraform/restream-worker/rehearsal.tf', 'utf8');
  const image = await readFile('infra/terraform/state-mgmt/restream-proof.tf', 'utf8');

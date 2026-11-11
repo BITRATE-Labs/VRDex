@@ -110,10 +110,7 @@ jobs:
       - name: Install script media test prerequisites
         timeout-minutes: 5
         run: |
-          # Keep the runner's official HTTPS fallbacks; Azure HTTP downloads can crawl.
-          if [[ -f /etc/apt/apt-mirrors.txt ]]; then
-            sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
-          fi
+          sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
           sudo apt-get update
           sudo apt-get install --no-install-recommends --yes ffmpeg
           ffmpeg -version
@@ -198,10 +195,7 @@ jobs:
       - name: Install backend media test prerequisites
         timeout-minutes: 5
         run: |
-          # Keep the runner's official HTTPS fallbacks; Azure HTTP downloads can crawl.
-          if [[ -f /etc/apt/apt-mirrors.txt ]]; then
-            sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
-          fi
+          sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
           sudo apt-get update
           sudo apt-get install --no-install-recommends --yes ffmpeg
           ffmpeg -version
@@ -335,6 +329,16 @@ jobs:
         timeout-minutes: 7
         run: node .github/scripts/restream-native.mjs
 
+      - name: Verify captured transport with packaged runtime
+        timeout-minutes: 5
+        run: |
+          docker run --rm --network none --read-only --cap-drop ALL \
+            --memory 4g --cpus 4 --tmpfs /tmp:rw,size=1g \
+            -v "$PWD/tests:/tests:ro" \
+            -e CAPTURED_TRANSPORT_NATIVE=1 \
+            -e CAPTURED_TRANSPORT_RUNTIME_ROOT=/app \
+            vrdex-restream-worker:ci node --test /tests/scripts/event-captured-transport.test.mjs
+
       - name: Install dependencies
         if: steps.changes.outputs.enabled == 'true'
         run: pnpm install --frozen-lockfile
@@ -343,10 +347,7 @@ jobs:
         if: steps.changes.outputs.enabled == 'true'
         timeout-minutes: 5
         run: |
-          # Keep the runner's official HTTPS fallbacks; Azure HTTP downloads can crawl.
-          if [[ -f /etc/apt/apt-mirrors.txt ]]; then
-            sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
-          fi
+          sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
@@ -495,6 +496,7 @@ jobs:
             exit 1
           fi
           printf '%s' "$POSTHOG_PROJECT_API_KEY" | pnpm exec convex env set POSTHOG_PROJECT_API_KEY
+          pnpm exec convex env set POSTHOG_DEPLOYMENT_CATEGORY production
 
       - name: Deploy Convex functions and schema
         if: steps.gate.outputs.enabled == 'true'
@@ -535,6 +537,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Configure Ubuntu package mirror
+        run: sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
+
       - name: Install Playwright Chromium
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
@@ -552,6 +557,11 @@ jobs:
           VRDEX_E2E_BROWSER_TOKEN: local-playwright-token
           VRDEX_E2E_CONVEX_SECRET: local-convex-e2e-secret
         run: pnpm --filter web exec playwright test public-routes.smoke.spec.ts --project=desktop-chromium --project=mobile-chromium --workers=1
+
+      - name: Verify synthetic analytics and disabled presentation
+        run: |
+          pnpm --filter web exec playwright test --config playwright.analytics.config.mjs --workers=1
+          NEXT_PUBLIC_POSTHOG_FOUNDATION_ENABLED=false pnpm --filter web exec playwright test --config playwright.analytics.config.mjs --workers=1
 
       - name: Upload public smoke artifacts
         id: upload
@@ -593,6 +603,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Configure Ubuntu package mirror
+        run: sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
 
       - name: Install Playwright Chromium
         working-directory: apps/web
@@ -645,6 +658,7 @@ jobs:
 
       - name: Install synthetic media tools
         run: |
+          sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
           sudo apt-get update && sudo apt-get install -y ffmpeg pulseaudio pulseaudio-utils
           pnpm --filter web exec playwright install --with-deps firefox
 
@@ -758,6 +772,10 @@ jobs:
       - name: Install dependencies
         if: steps.gate.outputs.enabled == 'true'
         run: pnpm install --frozen-lockfile
+
+      - name: Configure Ubuntu package mirror
+        if: steps.gate.outputs.enabled == 'true'
+        run: sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
 
       - name: Install Playwright Chromium
         if: steps.gate.outputs.enabled == 'true'
@@ -932,6 +950,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Configure Ubuntu package mirror
+        run: sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
+
       - name: Install Playwright Chromium
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
@@ -1054,6 +1075,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Configure Ubuntu package mirror
+        run: sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
+
       - name: Install Playwright Chromium
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
@@ -1135,6 +1159,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Configure Ubuntu package mirror
+        run: sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
+
       - name: Install Playwright Chromium
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
@@ -1203,6 +1230,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Configure Ubuntu package mirror
+        run: sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
 
       - name: Install Playwright Chromium
         working-directory: apps/web

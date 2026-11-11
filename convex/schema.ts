@@ -1,6 +1,8 @@
+import {managedConnectionValidator,connectionProvider} from "./_eventBroadcastConnections";
 import { mediaRelayTables } from "./_mediaRelayTables";
 import { statisticsAdmissionValidator } from "./_groupAdmission";
 import { admissionDiagnosticsValidator } from "./_groupObservationMonitoring";
+import { analyticsPreference, deploymentCategory } from "./_analyticsPreference";
 import { destinationGroupMetadataValidator } from "./_profileLinkDestination";
 import { collectionScopeValidator, groupObservationDecisionValidator } from "./_communityTelemetry";
 import { resourceSnapshotValidator, computeRuntimeValidator } from "./_eventBroadcastResources";
@@ -783,10 +785,19 @@ export default defineSchema({
     phone: v.optional(v.string()),
     phoneVerificationTime: v.optional(v.number()),
     defaultEventTimezone: v.optional(v.string()),
+    analyticsPreference: v.optional(analyticsPreference),
+    analyticsId: v.optional(v.string()),
   })
     .index("clerkUserId", ["clerkUserId"])
     .index("email", ["email"])
     .index("phone", ["phone"]),
+  analyticsDeletionRequests: defineTable({
+    ownerUserId: v.id("users"),
+    analyticsId: v.string(),
+    requestedAt: v.number(),
+    state: v.literal("blocked_authorization"),
+  }).index("by_analyticsId", ["analyticsId"])
+    .index("by_state", ["state"]),
   profiles: defineTable(
     v.union(
       v.object({
@@ -1510,6 +1521,9 @@ export default defineSchema({
     .index("by_eventId_startAt", ["eventId", "startAt"])
     .index("by_eventId_personProfileId_reviewState", ["eventId", "personProfileId", "reviewState"])
     .index("by_eventId_reviewState_startAt", ["eventId", "reviewState", "startAt"])
+      .index("by_eventId_reviewState_endAt", ["eventId", "reviewState", "endAt"])
+      .index("by_reviewState_startAt", ["reviewState", "startAt"])
+      .index("by_reviewState_endAt", ["reviewState", "endAt"])
     .index("by_personProfileId_reviewState_startAt", [
       "personProfileId",
       "reviewState",
@@ -1573,6 +1587,7 @@ export default defineSchema({
     .index("by_communityProfileId_state", ["communityProfileId", "state"])
     .index("by_state_updatedAt", ["state", "updatedAt"]),
   eventMediaSources: defineTable({
+    temporaryExpiresAt: v.optional(v.number()),
     input: v.optional(broadcastInputValidator),
     revision: v.optional(v.number()),
     programId: v.id("eventMediaPrograms"),
@@ -1626,6 +1641,7 @@ export default defineSchema({
     credential: v.optional(eventMediaOutputCredential),
     vrcdnSetup: v.optional(eventMediaVrcdnSetup),
     twitchSetup: v.optional(twitchSetupValidator),
+    managedConnection:v.optional(managedConnectionValidator),
     simulcastEnabled: v.optional(v.boolean()),
     compliance: v.optional(eventMediaOutputCompliance),
     playbackLinks: v.array(eventMediaPublicLinkValidator),
@@ -1635,6 +1651,7 @@ export default defineSchema({
     .index("by_programId_key", ["programId", "key"])
     .index("by_programId_state", ["programId", "state"])
     .index("by_eventId_type", ["eventId", "type"]),
+  eventBroadcastConnectionGrants:defineTable({eventId:v.id("events"),programId:v.id("eventMediaPrograms"),communityProfileId:v.id("profiles"),actor:v.string(),requestId:v.string(),payload:v.string(),provider:connectionProvider,serverUrl:v.string(),playbackUrl:v.string(),replaceKey:v.boolean(),expectedRevision:v.number(),createdAt:v.optional(v.number()),expiresAt:v.number(),outputId:v.optional(v.id("eventMediaOutputs"))}).index("by_event_request",["eventId","requestId"]).index("by_community_createdAt",["communityProfileId","createdAt"]),
   eventMediaControlRequests: defineTable({
     eventId:v.id("events"), sessionId:v.optional(v.id("eventMediaSessions")), actorKey:v.string(), key:v.string(),
     payload:v.string(), commandId:v.id("eventMediaCommands"), createdAt:v.number(),
@@ -1688,7 +1705,18 @@ export default defineSchema({
     .index("by_sessionId_sequence", ["sessionId", "sequence"])
     .index("by_session_scope_status_sequence", ["sessionId", "eventId", "programId", "status", "sequence", "createdAt"])
     .index("by_program_scope_session_status_createdAt", ["programId", "eventId", "sessionId", "status", "createdAt"]),
+  eventBroadcastConnectionTests: defineTable({
+    communityProfileId:v.optional(v.id("profiles")),
+    eventId:v.id("events"), outputId:v.id("eventMediaOutputs"), sessionId:v.id("eventMediaSessions"),
+    revision:v.number(), idempotencyKey:v.string(), marker:v.string(),
+    state:v.union(v.literal("queued"),v.literal("running"),v.literal("stopping"),v.literal("passed"),v.literal("failed"),v.literal("cancelled")),
+    cancelRequestedAt:v.optional(v.number()), decodedAt:v.optional(v.number()), failure:v.optional(v.string()),
+    deadlineAt:v.number(), queueDeadlineAt:v.number(), startedAt:v.optional(v.number()), createdAt:v.number(), updatedAt:v.number(),
+  }).index("by_eventId_createdAt",["eventId","createdAt"]).index("by_eventId_idempotencyKey",["eventId","idempotencyKey"]).index("by_community_createdAt",["communityProfileId","createdAt"]).index("by_state_createdAt",["state","createdAt"]),
   eventMediaSessions: defineTable({
+    connectionTest:v.optional(v.object({jobId:v.id("eventBroadcastConnectionTests"),revision:v.number(),marker:v.string(),deadlineAt:v.number()})),
+    resumeSource:v.optional(v.object({sourceId:v.id("eventMediaSources"),revision:v.number(),slotKey:v.string()})),
+    lineupCursor:v.optional(v.object({sourceId:v.id("eventMediaSources"),revision:v.number(),slotKey:v.string()})),
     resourceSnapshot: v.optional(resourceSnapshotValidator),
     resourceObservedAt: v.optional(v.number()),
     computeRuntime: v.optional(computeRuntimeValidator),
@@ -2116,6 +2144,9 @@ export default defineSchema({
     providerInstanceId: v.string(),
     vrchatWorldId: v.string(),
     population: v.number(),
+    userCount: v.optional(v.number()),
+    queueSize: v.optional(v.number()),
+    platforms: v.optional(v.record(v.string(), v.number())),
     observedAt: v.number(),
     source: telemetrySourceValidator,
     collectorVersion: v.string(),
@@ -2842,6 +2873,10 @@ export default defineSchema({
     .index("by_event_targetType_createdAt", ["event", "targetType", "createdAt"])
     .index("by_attemptId_createdAt", ["attemptId", "createdAt"]),
   claimAnalyticsOutbox: defineTable({
+    ownerUserId: v.optional(v.id("users")),
+    preferenceRevision: v.optional(v.number()),
+    analyticsId: v.optional(v.string()),
+    deploymentCategory: v.optional(deploymentCategory),
     eventKey: v.string(),
     journeyId: v.string(),
     event: v.union(
@@ -2888,6 +2923,7 @@ export default defineSchema({
       v.literal("delivered"),
       v.literal("failed"),
       v.literal("disabled"),
+      v.literal("suppressed"),
     ),
     attemptCount: v.number(),
     nextAttemptAt: v.number(),
@@ -2895,6 +2931,7 @@ export default defineSchema({
     deliveredAt: v.optional(v.number()),
   })
     .index("by_eventKey", ["eventKey"])
+    .index("by_journeyId", ["journeyId"])
     .index("by_state_occurredAt", ["state", "occurredAt"])
     .index("by_state_deliveredAt", ["state", "deliveredAt"])
     .index("by_state_nextAttemptAt", ["state", "nextAttemptAt"])

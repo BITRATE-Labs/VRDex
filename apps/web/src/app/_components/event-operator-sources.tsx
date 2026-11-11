@@ -110,7 +110,7 @@ export function EventOperatorSources({
     setBusy(true);
     setFailed(false);
     try {
-      await action();
+      if (await action() === false) return;
       setEditing(undefined);
       setLabel("");
       setUrl("");
@@ -124,7 +124,7 @@ export function EventOperatorSources({
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap justify-between gap-3">
-        <h2 className="text-xl font-semibold">Sources</h2>
+        <h2 className="text-xl font-semibold">Inputs</h2>
         {control.canCancel ? (
           <div role="group" aria-label="Preparation">
             <Button variant="secondary" onClick={onCancel}>
@@ -133,6 +133,7 @@ export function EventOperatorSources({
           </div>
         ) : null}
       </div>
+      <div className={preview ? "grid items-start gap-8 min-[1000px]:grid-cols-[minmax(0,1fr)_430px]" : ""}><div>
       {visible.map((source) => {
         const target = source.publicUrl
           ? eventDjTarget(source.publicUrl)
@@ -145,13 +146,13 @@ export function EventOperatorSources({
           <article
             key={source.sourceId}
             aria-label={source.label}
-            className="space-y-3 border-b border-border py-3"
+            className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-4"
           >
             <div className="flex flex-wrap justify-between gap-2">
               <div>
                 <span className="font-medium">{source.label}</span>
                 <span className="ml-2 text-sm text-muted">
-                  {source.editable ? "Custom" : "Lineup"} · r{source.revision}
+                  {source.editable ? "Custom" : "Lineup"}
                 </span>
               </div>
               <span className="capitalize text-sm text-muted">{state}</span>
@@ -168,7 +169,7 @@ export function EventOperatorSources({
                 aria-label={`Take ${source.label}`}
                 onClick={() => onTake(source)}
               >
-                Take
+                Put on air
               </Button>
               <Button
                 size="sm"
@@ -249,6 +250,7 @@ export function EventOperatorSources({
           </Button>
         </nav>
       ) : null}
+      </div>
       {preview ? (
         <EventOperatorPreview
           key={`${preview.sourceId}:${preview.revision}`}
@@ -256,8 +258,9 @@ export function EventOperatorSources({
           onClose={() => setPreviewId(undefined)}
         />
       ) : null}
+      </div>
       <details open={editing ? true : undefined}>
-        <summary className="cursor-pointer text-sm">Custom source</summary>
+        <summary className="cursor-pointer text-sm">Add input</summary>
         <fieldset
           disabled={!canControl || busy}
           className="mt-4 grid gap-3 sm:grid-cols-2"
@@ -271,7 +274,7 @@ export function EventOperatorSources({
             />
           </Field>
           <Field>
-            Source URL
+            Video or stream link
             <Input
               value={url}
               onChange={(event) => setUrl(event.target.value)}

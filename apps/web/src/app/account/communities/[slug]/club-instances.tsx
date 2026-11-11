@@ -12,11 +12,11 @@ import { Button } from "@/components/ui/button";
 import { Card, SectionTitle } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
 import {
-  ClubChart,
   metricNumber,
   metricTime,
 } from "./club-chart";
-import { observedChartPoints } from "./club-analytics-model";
+import { ClubInstanceChart } from "./club-instance-chart";
+import { instanceChartPoints } from "./club-instance-chart-model";
 export { observedChartPoints } from "./club-analytics-model";
 import { useClubWorkspace } from "./club-workspace";
 import { ClubEventAssociation } from "./club-event-association";
@@ -290,10 +290,7 @@ function InstanceDetailContent({
         {!metrics.complete ? (
           <Notice role="status">Loading complete instance history…</Notice>
         ) : (
-          <ClubChart
-            points={observedChartPoints(metrics.results)}
-            label="People"
-          />
+          <ClubInstanceChart points={instanceChartPoints(metrics.results)} closedAt={session.closedAt} />
         )}
         <details className="mt-5 border-t border-border pt-4 text-sm">
           <summary className="cursor-pointer">Data completeness</summary>

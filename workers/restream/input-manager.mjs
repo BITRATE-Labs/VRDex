@@ -8,6 +8,7 @@ export function createInputManager({
   settings,
   createVrcdnInput,
   createTwitchInput,
+  createDirectMediaInput,
   onState = () => {},
 }) {
   let bound,
@@ -82,7 +83,9 @@ export function createInputManager({
       live.set(entry.key, entry);
       try {
         const factory =
-          entry.source.input?.kind === "twitch"
+          entry.source.input?.kind === "direct_media"
+            ? createDirectMediaInput
+            : entry.source.input?.kind === "twitch"
             ? createTwitchInput
             : createVrcdnInput;
         entry.handle = factory({
@@ -102,6 +105,9 @@ export function createInputManager({
           (result) => {
             if (valid(entry)) {
               entry.url = result.url;
+              entry.transport = result.transport;
+              entry.finite = result.finite;
+              entry.demuxer = result.demuxer;
               state(entry, { kind: "transport_ready" });
             }
           },
@@ -167,6 +173,9 @@ export function createInputManager({
           sourceId: entry.source.id,
           revision: entry.source.revision,
           url: entry.url,
+          ...(entry.transport ? { transport: entry.transport } : {}),
+          ...(entry.demuxer ? { demuxer: entry.demuxer } : {}),
+          ...(entry.finite !== undefined ? { finite: entry.finite } : {}),
         })),
     stop() {
       if (stopPromise) return stopPromise;

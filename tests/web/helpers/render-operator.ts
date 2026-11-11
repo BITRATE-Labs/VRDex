@@ -10,6 +10,7 @@ const { renderToStaticMarkup } = requireWeb("react-dom/server");
 /** Execute real components with framework/network boundaries replaced; no services. */
 export function renderOperator(status: unknown) {
   const mocks: Record<string, unknown> = {
+    "./event-broadcast-quick-switch": {EventBroadcastQuickSwitch:()=>null},
     "next/link": {
       default: (props: object) => React.createElement("a", props),
     },
@@ -21,6 +22,8 @@ export function renderOperator(status: unknown) {
         React.createElement("button", props),
     },
     "@/components/ui/page-shell": {
+      PageNav: (props: object) => React.createElement("nav", props),
+      BrandLink: () => React.createElement("a", {href:"/"}, "VRDex"),
       PageContainer: ({ max: _m, ...props }: Record<string, unknown>) =>
         React.createElement("div", props),
       PageShell: (props: object) => React.createElement("div", props),

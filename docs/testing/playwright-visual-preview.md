@@ -349,6 +349,13 @@ Each data-flow run uses a unique `VRDEX_E2E_RUN_ID` prefix and creates only `e2e
 
 ## CI behavior
 
+The API/MCP, backend and restream host prerequisite steps give the
+[Linux Kernel Archives Ubuntu mirror](https://mirrors.kernel.org/) explicit APT priority
+over the runner's Canonical mirrors to reduce reliance on Canonical DNS.
+The runner's HTTPS fallbacks and Ubuntu package-signature verification remain in place.
+Installation keeps its five-minute bound. The native transport gate still uses its packaged runtime.
+Playwright browser and synthetic-media installation use the runner's default mirrors.
+
 Default PR CI runs lint, types, unit tests, docs, API/MCP checks, the existing backend/restream checks, and the web build. Browser suites and the Storybook build are opt-in.
 
 | Labels when a normal PR run starts | Browser assertions and Storybook build | Review screenshots and both image comparisons |
@@ -696,3 +703,7 @@ Full command outputs, raw observations, coverage composition, VLM notes and
 recovery proofs are retained at
 `/workspace/previews/vrdex-home-polish/task-7` in the execution workspace.
 The controller owns whole-branch review and selected browser/visual CI.
+
+### Ubuntu package prerequisites
+
+Baseline browser and media jobs use `.github/scripts/configure-ubuntu-mirror.mjs` before APT dependency installation. It applies the same reachable Ubuntu mirror to direct source files and mirror lists, retaining distribution suites, components and signing configuration. This avoids Canonical/Azure DNS failures without dropping browser fonts, FFmpeg or any test lane. `tests/scripts/ubuntu-mirror.test.mjs` covers both source formats and idempotence.

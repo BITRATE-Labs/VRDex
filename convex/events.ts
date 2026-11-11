@@ -1,7 +1,7 @@
 import { projectSessionResources } from "./_eventBroadcastResources";
 import { resolveWorkerAllocation, validateMeasuredSnapshot } from '../workers/restream/broadcast-capacity.mjs';
 import { validateAllocationSnapshot } from '../workers/restream/worker-allocation.mjs';
-import {admitControlOperation,cancelControlOperation,isControl,supersedePending,findControlRequest,recordControlRequest} from "./_eventBroadcastControl";
+import {resolveControlTarget,admitControlOperation,cancelControlOperation,isControl,supersedePending,findControlRequest,recordControlRequest} from "./_eventBroadcastControl";
 import {canManageEventMedia} from "./_eventBroadcastAuthority";
 import { NEW_PROGRAM_MEDIA_SETTINGS, parseMediaSettings, resolveDestinationProfile } from "../workers/restream/broadcast-profiles.mjs";
 import { broadcastInputValidator, authoredBroadcastInput, eventProfileBroadcastInputChoices, resolveBroadcastInput, broadcastInputPublicUrl, eventMediaSourceBroadcastInput, eventMediaSourceProjectionAvailable, listUsableEventMediaSources } from "./_eventBroadcastSources";
@@ -9,7 +9,7 @@ import { sanitizeTwitchOutput, getTwitchOutputAccount, listTwitchOutputAccounts,
 import { EVENT_BROADCAST_MAX_OUTPUTS, validateBroadcastPolicy, allocateSessionCommandSequence, settleTerminalSessionCommands, requireEventMediaBridgeToken } from "./_eventBroadcastInputs";
 import { dateOnlyEventsEnabled, eventDateForInstant, eventSortAt, eventSortEndAt, normalizeEventSchedule, publicEventSchedule, requireDateOnlyEventsEnabled } from "./_eventSchedule";
 import { eventProfileStreamChoices, resolveEventStream } from "./_eventPlayback";
-import { ConvexError, v } from "convex/values";
+import { ConvexError, v, type Infer } from "convex/values";
 import {syncClubEventOperations} from "./_clubOperationEvents";
 import { internal } from "./_generated/api";
 
@@ -249,6 +249,9 @@ const eventMediaWorkerScheduleArgs = {
 };
 
 const eventMediaCommandArgs = {
+  expectedSessionId:v.optional(v.id("eventMediaSessions")),
+  expectedSourceRevision:v.optional(v.number()),
+  expectedIntentSequence:v.optional(v.number()),
   idempotencyKey:v.string(),
   currentSlug: v.string(),
   type: eventMediaCommandTypeValidator,
@@ -1518,7 +1521,7 @@ export async function getOrCreateEventMediaProgram(
   });
 }
 
-async function getLatestEventMediaProgram(
+export async function getLatestEventMediaProgram(
   db: DatabaseReader,
   eventId: Id<"events">,
 ): Promise<Doc<"eventMediaPrograms"> | null> {
@@ -1672,8 +1675,13 @@ async function getOpenEventMediaSession(
 }
 
 /** Configuration is immutable until every session has stopped or released admission. */
-async function eventOutputConfigurationLocked(db: DatabaseReader, program: Doc<"eventMediaPrograms">) {
+export async function eventOutputConfigurationLocked(db: DatabaseReader, program: Doc<"eventMediaPrograms">) {
   if (await getOpenEventMediaSession(db, program)) return true;
+
+  for(const status of ["ended","error"] as const) {
+    const cleaning=await db.query("eventMediaSessions").withIndex("by_programId_status",q=>q.eq("programId",program._id).eq("status",status)).filter(q=>q.and(q.neq(q.field("connectionTest"),undefined),q.eq(q.field("workerTaskCleanupPending"),true))).first();
+    if(cleaning)return true;
+  }
   for (const status of ["ended", "error"] as const) {
     const held = await db.query("eventMediaSessions")
       .withIndex("by_programId_status", q => q.eq("programId", program._id).eq("status", status))
@@ -1688,7 +1696,7 @@ async function eventOutputConfigurationLocked(db: DatabaseReader, program: Doc<"
   return false;
 }
 
-async function requireStoppedOutputSessions(db: DatabaseReader, programId: Id<"eventMediaPrograms">) {
+export async function requireStoppedOutputSessions(db: DatabaseReader, programId: Id<"eventMediaPrograms">) {
   const program = await db.get(programId);
   if (program && await eventOutputConfigurationLocked(db, program)) {
     throw new Error("An event media worker session is already active for this event.");
@@ -2019,11 +2027,13 @@ export async function reconcileEventMediaScheduleChange(
 
 function workerSessionStatus(session: Doc<"eventMediaSessions">) {
   return {
+    resumeSource:session.resumeSource,
     committedIntent:session.committedIntent,intentSequence:session.intentSequence,pendingControlCommandId:session.pendingControlCommandId,
     mediaSettings: parseMediaSettings(session.mediaSettings),
     controlProtocolVersion: session.controlProtocolVersion,
     destinationProfiles: session.destinationProfiles ?? [],
     allocation: session.allocation,
+    connectionTest: session.connectionTest,
     currentSourceId: session.currentSourceId,
     programObservedAt: session.programObservedAt,
     observedSourceRevision: session.observedSourceRevision,
@@ -2433,6 +2443,25 @@ export const getHostBySlug = query({
   },
 });
 
+export const getNextEventMediaSource = query({
+  args:{currentSlug:v.string()},
+  returns:v.union(v.null(),v.object({sourceId:v.id("eventMediaSources"),key:v.string(),label:v.string(),revision:v.number()})),
+  handler:async (ctx,args) => {
+    const subject = await requireAuthenticatedSubject(ctx);
+    const {event} = await getOperationsReadableEventBySlug(ctx,args.currentSlug,subject);
+    const program = await getLatestEventMediaProgram(ctx.db,event._id);
+    if (!program) return null;
+    const session = await getOpenEventMediaSession(ctx.db,program);
+    if (!session || session.controlProtocolVersion !== 2 || session.stopRequestedAt !== undefined || ["stopping","ended","error"].includes(session.status)) return null;
+    try {
+      const target = await resolveControlTarget(ctx.db,session,{type:"switch_next",publicFallbackLinks:[]});
+      if (target.kind !== "source") return null;
+      const source = await ctx.db.get(target.source.sourceId);
+      return source ? {sourceId:source._id,key:source.key,label:source.label,revision:target.source.revision} : null;
+    } catch {return null;}
+  },
+});
+
 export const getEventMediaControlStatus = query({
   args: {
     currentSlug: v.string(),
@@ -2555,6 +2584,8 @@ export const getEventMediaControlStatus = query({
           simulcastEnabled: output.simulcastEnabled ?? false,
           twitchSetup: output.twitchSetup,
           playbackLinkCount: output.playbackLinks.length,
+          ...(output.managedConnection ? {testState:output.managedConnection.testState} : {}),
+          playbackLinks: eventOutputIsAuthorized(event,output) ? output.playbackLinks : [],
           updatedAt: output.updatedAt,
         })),
       sessions: await Promise.all(sessions.sort((first, second) => second.updatedAt - first.updatedAt).map(async session => {
@@ -2620,6 +2651,7 @@ export const queueEventMediaCommand = mutation({
     }
 
     const session = await getOpenEventMediaSession(ctx.db, program);
+    if (session?.connectionTest) throw Error("Connection test session cannot accept source commands.");
     if(command.type === "preview_source")throw Error("Preview is local and cannot queue a worker command.");
     if(isControl(command.type)) {
       const receipt=await admitControlOperation(ctx.db,event,session,subject,args.idempotencyKey,command);
@@ -3836,6 +3868,7 @@ export const configureVrcdnOutput = mutation({
       accountModel: output.accountModel,
       state: output.state,
       label: output.label,
+      managedConnection: undefined,
       ...(credential === undefined ? {} : { credential }),
       vrcdnSetup: output.vrcdnSetup,
       compliance: output.compliance,
@@ -3893,11 +3926,8 @@ export const configureTwitchOutput = mutation({
   },
 });
 
-/** Bind capacity authority at construction; public callers cannot override it. */
-export function createScheduleEventMediaWorker(resolveAllocation: typeof resolveWorkerAllocation) {
-  return mutation({
-  args: eventMediaWorkerScheduleArgs,
-  handler: async (ctx, args) => {
+/** Shared transaction seam. Tests use the same measured allocation and scheduling authority. */
+export async function scheduleEventMediaWorkerInContext(ctx: MutationCtx, args: Infer<ReturnType<typeof workerScheduleValidator>>, resolveAllocation: typeof resolveWorkerAllocation = resolveWorkerAllocation, connectionTest = false) {
     const subject = await requireAuthenticatedSubject(ctx);
     const { event, slug } = await getMediaManageableEventBySlug(ctx, args.currentSlug, subject);
     if (event.eventStatus !== "scheduled") {
@@ -3911,7 +3941,7 @@ export function createScheduleEventMediaWorker(resolveAllocation: typeof resolve
 
     const outputKey = optionalTrimmedText(args.outputKey, "Output key", 64)?.toLowerCase();
     const output = await getReadyEventMediaOutput(ctx.db, program, outputKey);
-    if (event.startAt === undefined || event.scheduleKind === "date_only") throw new Error("Set an event time before scheduling a media worker.");
+    if (!connectionTest && (event.startAt === undefined || event.scheduleKind === "date_only")) throw new Error("Set an event time before scheduling a media worker.");
     const now = Date.now();
     if (args.startImmediately && (args.scheduledStartAt !== undefined || args.readyDeadlineAt !== undefined)) {
       throw new Error("Immediate start cannot include scheduled start or ready deadline fields.");
@@ -3921,7 +3951,7 @@ export function createScheduleEventMediaWorker(resolveAllocation: typeof resolve
     const schedule = args.startImmediately
       ? { scheduledStartAt: now, readyDeadlineAt: now + EVENT_MEDIA_WORKER_START_LEAD_MS - EVENT_MEDIA_WORKER_READY_LEAD_MS }
       : sanitizeEventMediaWorkerSchedule({
-          eventStartAt: event.startAt,
+          eventStartAt: event.startAt ?? now,
           scheduledStartAt: args.scheduledStartAt,
           readyDeadlineAt: args.readyDeadlineAt,
         });
@@ -3930,6 +3960,10 @@ export function createScheduleEventMediaWorker(resolveAllocation: typeof resolve
     const workerTaskId = optionalTrimmedText(args.workerTaskId, "Worker task id", 512);
     const workerTaskStatusReason = optionalTrimmedText(args.workerTaskStatusReason, "Worker task status reason", 500);
     const artifactLinks = sanitizeEventMediaWorkerArtifactLinks(args.artifactLinks);
+    for(const status of ["ended","error"] as const){
+      const cleaning=await ctx.db.query("eventMediaSessions").withIndex("by_programId_status",q=>q.eq("programId",program._id).eq("status",status)).filter(q=>q.and(q.neq(q.field("connectionTest"),undefined),q.eq(q.field("workerTaskCleanupPending"),true))).first();
+      if(cleaning)throw Error("The stream test is still cleaning up.");
+    }
     const openSession = await getOpenEventMediaSession(ctx.db, program);
 
     if (openSession !== null && openSession.status !== "scheduled") {
@@ -3954,8 +3988,8 @@ export function createScheduleEventMediaWorker(resolveAllocation: typeof resolve
     }
     const mediaSettings = parseMediaSettings(openSession ? openSession.mediaSettings : program.mediaSettings);
     const configuredOutputs = await ctx.db.query("eventMediaOutputs").withIndex("by_programId_key", q => q.eq("programId", program._id)).take(9);
-    const destinationProfiles = configuredOutputs.filter(o => o.eventId === event._id && (o._id === output._id || (o.type === "external_rtmp" && o.twitchSetup && o.simulcastEnabled)) && ["ready", "active"].includes(o.state) && eventOutputIsAuthorized(event,o)).map(o => {
-      const destination = o.type === "vrcdn" ? "vrcdn" as const : "twitch" as const;
+    const destinationProfiles = configuredOutputs.filter(o => o.eventId === event._id && (o._id === output._id || (!connectionTest && o.type === "external_rtmp" && o.twitchSetup && o.simulcastEnabled)) && ["ready", "active"].includes(o.state) && eventOutputIsAuthorized(event,o)).map(o => {
+      const destination = o.managedConnection?.provider ?? (o.type === "vrcdn" ? "vrcdn" as const : "twitch" as const);
       return {outputId:o._id,destination,profile:resolveDestinationProfile({settings:mediaSettings,destination})};
     });
     const frozenDestinations = openSession?.destinationProfiles ?? destinationProfiles;
@@ -4054,8 +4088,11 @@ export function createScheduleEventMediaWorker(resolveAllocation: typeof resolve
       readyDeadlineAt: schedule.readyDeadlineAt,
       ...(startCommandId === undefined ? {} : { startCommandId }),
     };
-  },
-  });
+}
+function workerScheduleValidator() { return v.object(eventMediaWorkerScheduleArgs); }
+/** Bind capacity authority at construction; public callers cannot override it. */
+export function createScheduleEventMediaWorker(resolveAllocation: typeof resolveWorkerAllocation) {
+ return mutation({args:eventMediaWorkerScheduleArgs,handler:(ctx,args)=>scheduleEventMediaWorkerInContext(ctx,args,resolveAllocation)});
 }
 
 export const scheduleEventMediaWorker = createScheduleEventMediaWorker(resolveWorkerAllocation);

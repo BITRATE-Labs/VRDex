@@ -1,3 +1,10 @@
+locals {
+  production_full_properties = [
+    { key = "deployment_category", type = "event", operator = "exact", value = ["production"] },
+    { key = "analytics_mode", type = "event", operator = "exact", value = ["full"] },
+  ]
+}
+
 resource "posthog_project" "vrdex" {
   organization_id = var.posthog_organization_id
   name            = var.posthog_project_name
@@ -79,8 +86,9 @@ resource "posthog_insight" "auth_restore_outcomes" {
         breakdown      = "outcome"
         breakdown_type = "event"
       }
-      interval = "day"
-      kind     = "TrendsQuery"
+      interval   = "day"
+      kind       = "TrendsQuery"
+      properties = local.production_full_properties
       series = [{
         event = "auth_session_restore_completed"
         kind  = "EventsNode"
@@ -94,7 +102,7 @@ resource "posthog_insight" "auth_restore_outcomes" {
 
 resource "posthog_insight" "auth_restore_latency" {
   name        = "Authentication restore latency"
-  description = "Completed authentication restoration grouped by coarse latency bucket."
+  description = "Measured authentication restoration grouped by coarse latency bucket. Excludes receipts without a latency measurement."
   query_json = jsonencode({
     kind = "InsightVizNode"
     source = {
@@ -102,8 +110,9 @@ resource "posthog_insight" "auth_restore_latency" {
         breakdown      = "latency_bucket"
         breakdown_type = "event"
       }
-      interval = "day"
-      kind     = "TrendsQuery"
+      interval   = "day"
+      kind       = "TrendsQuery"
+      properties = concat(local.production_full_properties, [{ key = "latency_bucket", operator = "is_set", type = "event" }])
       series = [{
         event = "auth_session_restore_completed"
         kind  = "EventsNode"
@@ -121,8 +130,9 @@ resource "posthog_insight" "auth_restore_slow" {
   query_json = jsonencode({
     kind = "InsightVizNode"
     source = {
-      interval = "day"
-      kind     = "TrendsQuery"
+      interval   = "day"
+      kind       = "TrendsQuery"
+      properties = local.production_full_properties
       series = [{
         event = "auth_session_restore_slow"
         kind  = "EventsNode"
@@ -146,7 +156,7 @@ resource "posthog_insight" "auth_state_change_intent" {
       }
       interval = "day"
       kind     = "TrendsQuery"
-      properties = [
+      properties = concat(local.production_full_properties, [
         {
           key      = "from"
           operator = "exact"
@@ -159,7 +169,7 @@ resource "posthog_insight" "auth_state_change_intent" {
           type     = "event"
           value    = ["anonymous"]
         },
-      ]
+      ])
       series = [{
         event = "auth_session_state_changed"
         kind  = "EventsNode"
@@ -181,8 +191,9 @@ resource "posthog_insight" "auth_restore_by_deployment" {
         breakdown      = "deployment_category"
         breakdown_type = "event"
       }
-      interval = "day"
-      kind     = "TrendsQuery"
+      interval   = "day"
+      kind       = "TrendsQuery"
+      properties = local.production_full_properties
       series = [{
         event = "auth_session_restore_completed"
         kind  = "EventsNode"
@@ -204,8 +215,9 @@ resource "posthog_insight" "auth_restore_by_browser" {
         breakdown      = "browser_family"
         breakdown_type = "event"
       }
-      interval = "day"
-      kind     = "TrendsQuery"
+      interval   = "day"
+      kind       = "TrendsQuery"
+      properties = local.production_full_properties
       series = [{
         event = "auth_session_restore_completed"
         kind  = "EventsNode"
@@ -265,13 +277,13 @@ resource "posthog_dashboard_layout" "auth_session_health" {
 
 resource "posthog_dashboard" "claim_adoption" {
   name        = "Claim adoption and verification"
-  description = "Sanitized claim-journey conversion, verification, terminal outcomes, and browser-to-backend reconciliation. Journey IDs are opaque random UUIDs; no user, profile, provider, proof, target, slug, or error identifiers are collected."
+  description = "Production Full analytics: claim milestone reach, verification outcomes and browser-to-backend reconciliation. Opaque analytics identifiers link consenting accounts; journey UUIDs join milestones. This is not an ordered funnel."
   pinned      = true
   tags        = ["managed-by:terraform", "surface:claim"]
 }
 
 resource "posthog_insight" "claim_journey_funnel" {
-  name        = "Claim journey funnel"
+  name        = "Claim milestone reach"
   description = "Unique opaque journeys reaching each client and authoritative backend milestone over the last 30 days."
   query_json = jsonencode({
     kind = "DataTableNode"
@@ -291,7 +303,9 @@ resource "posthog_insight" "claim_journey_funnel" {
             groupUniqArray(event) AS milestones,
             max(if(event = 'claim_resolved' AND properties.connection_only = 'true', 1, 0)) AS connection_only
           FROM events
-          WHERE event IN (
+          WHERE properties.deployment_category = 'production'
+            AND properties.analytics_mode = 'full'
+            AND event IN (
             'claim_journey_viewed',
             'claim_method_selected',
             'claim_submitted',
@@ -324,12 +338,12 @@ resource "posthog_insight" "claim_terminal_outcomes" {
       }
       interval = "day"
       kind     = "TrendsQuery"
-      properties = [{
+      properties = concat(local.production_full_properties, [{
         key      = "connection_only"
         operator = "exact"
         type     = "event"
         value    = ["false"]
-      }]
+      }])
       series = [{
         event = "claim_resolved"
         kind  = "EventsNode"

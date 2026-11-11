@@ -38,6 +38,11 @@ export function createTwitchAdapter(request: Extract<PlaybackRequest, { kind: "t
     on(sdk.Player.OFFLINE, () => { if (disposed) return; finish(false); notify({ status: "unavailable" }); });
   });
   return {
+    enableControls(beforeUnmute) {
+      // A selected Twitch preview owns audio before its cross-origin controls
+      // become interactive. Losing that ownership disposes the whole iframe.
+      if (!beforeUnmute()) { muted = true; player?.setMuted(true); }
+    },
     async play() {
       paused = false;
       finish(false);

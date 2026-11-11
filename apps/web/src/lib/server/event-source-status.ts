@@ -10,6 +10,7 @@ export const getEventSourceStatuses = createSourceStatusReader(async source=>{
  if(!target || target.key!==source.key) throw Error('Invalid public source');
  const stream=parseVrcdnStreamLinks(target.url);
  if(stream && !stream.directVideoUrl) return getVrcdnLiveObservation(stream.streamId);
+ if(target.key.startsWith('direct_media:') || stream?.directVideoUrl) return {state:'unknown',observedAt:Date.now()};
  if(target.key.startsWith('twitch:')) {
   const result=await getTwitchLiveObservation([{url:target.url,type:'twitch',source:'owner_authored'}]);
   if(result) return {state:result.state.status,observedAt:result.observedAt};
