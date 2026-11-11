@@ -33,7 +33,7 @@ it("uses Limited only after preferences resolve, with either Off restriction win
 
 it("strips SDK identity, URLs and arbitrary strings from independent Limited counts", () => {
   const source = { event: "search_submitted", $set: { email: "root-private@example.test" }, properties: {
-    distinct_id: "old-user", $device_id: "device", $session_id: "session", $current_url: "/search?q=secret",
+    token: "phc_synthetic", distinct_id: "old-user", $device_id: "device", $session_id: "session", $current_url: "/search?q=secret",
     $set: { email: "private@example.test" }, query: "secret", surface: "home", view_key: "standard",
   } };
   const first = filterAnalyticsEvent(source, "limited", "staging", true)!;
@@ -42,7 +42,7 @@ it("strips SDK identity, URLs and arbitrary strings from independent Limited cou
   assert.notEqual(first.properties.distinct_id, second.properties.distinct_id);
   const { distinct_id: id, ...properties } = first.properties;
   assert.ok(id);
-  assert.deepEqual(properties, { surface: "home", view_key: "standard", deployment_category: "staging", analytics_mode: "limited", $process_person_profile: false, $geoip_disable: true, $ip: null });
+  assert.deepEqual(properties, { token: "phc_synthetic", surface: "home", view_key: "standard", deployment_category: "staging", analytics_mode: "limited", $process_person_profile: false, $geoip_disable: true, $ip: null });
   assert.equal(filterAnalyticsEvent({ event: "$snapshot", properties: {} }, "limited", "staging", true), null);
   assert.equal(filterAnalyticsEvent({ event: "claim_completed", properties: {} }, "limited", "staging", true), null);
   assert.equal(filterAnalyticsEvent(source, "limited", "staging", false), null);

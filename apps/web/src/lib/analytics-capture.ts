@@ -44,6 +44,7 @@ export function filterAnalyticsEvent<T extends { event: string; properties: Reco
   }
   const filtered = { ...event, properties: {
     ...properties,
+    ...(typeof event.properties.token === "string" ? { token: event.properties.token } : {}),
     distinct_id: crypto.randomUUID(),
     deployment_category: category,
     analytics_mode: "limited",

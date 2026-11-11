@@ -52,7 +52,9 @@ An unresolved or disabled browser mode no longer masquerades as an explicit Off 
 
 Playback remains outside Convex's provisioning gate so auth reconciliation cannot unmount the persistent owner. A root-boundary regression protects that placement, and the synthetic browser lane includes existing retained-media/layout-transition tests. Analytics output directories are separate children of `test-results`, preserving public-smoke artifacts. The latency insight now excludes receipts without measured latency. Account withdrawal remains immediate; re-enabling within 60 seconds of withdrawal is rejected to bound deletion-request churn. Repeated same-choice saves remain idempotent.
 
-Follow-up local checks passed 46 backend cases, 11 preference/transport/root-boundary cases, 42 enabled analytics/playback browser cases and two disabled-gate cases. The browser configuration runs synthetic intercepted transport and separately tests disabled presentation/capture on desktop and mobile. Types, lint and Terraform validation/mocked reporting checks passed. Linux CI includes both configurations in the selected public-smoke lane. Original broad local results below precede these follow-ups; current Linux CI verifies the complete branch.
+Follow-up local checks passed 46 backend cases, 12 preference/transport/root-boundary cases, 42 enabled analytics/playback browser cases and two disabled-gate cases. The browser configuration runs synthetic intercepted transport and separately tests disabled presentation/capture on desktop and mobile. Types, lint and Terraform validation/mocked reporting checks passed. Linux CI includes both configurations in the selected public-smoke lane. Original broad local results below precede these follow-ups; current Linux CI verifies the complete branch.
+
+The coarse auth-outcome tracker also lives outside the provider component so provisioning remounts preserve anonymous-to-authenticated transitions. Limited envelopes preserve the non-identifying project ingestion token; both the sanitizer unit check and actual intercepted SDK payload assert its presence.
 
 ## Original implementation verification
 

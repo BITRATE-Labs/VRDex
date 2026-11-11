@@ -17,6 +17,8 @@ let activeMode: AnalyticsMode | undefined;
 let activeClient: PostHog | undefined;
 let previousIdentity: string | undefined;
 let previousMode: AnalyticsMode | undefined;
+// Provisioning can unmount the provider during sign-in; keep this document's coarse auth history alive.
+const authSessionRef: { current: "anonymous" | "authenticated" | undefined } = { current: undefined };
 
 function NavigationCapture() {
   const pathname = usePathname();
@@ -85,7 +87,6 @@ function initializeClient(token: string, mode: "limited" | "full", analyticsId: 
 export function PostHogProvider({ children }: { children: ReactNode }) {
   const { mode, analyticsId, identityKey, pauseRef } = useAnalyticsPreferences();
   const [client, setClient] = useState<PostHog>(posthog);
-  const authSessionRef = useRef<"anonymous" | "authenticated" | undefined>(undefined);
   useLayoutEffect(() => {
     pauseRef.current = pauseCapture;
     authSessionRef.current = retainAnalyticsAuthOutcome(authSessionRef.current, mode);

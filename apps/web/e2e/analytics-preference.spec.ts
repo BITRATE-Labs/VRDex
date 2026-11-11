@@ -55,6 +55,7 @@ test("Limited envelopes are independent and Off sends no optional requests", asy
   await expect.poll(() => events.filter((event) => event.event === "$pageview").length).toBe(1);
   const first = events.find((event) => event.event === "$pageview")!;
   expect(first.properties.analytics_mode).toBe("limited");
+  expect(first.properties.token).toBe("phc_synthetic_analytics_test");
   expect(JSON.stringify(first)).not.toContain("private-synthetic-text");
   expect(first.properties.$session_id).toBeUndefined();
   expect(first.properties.$device_id).toBeUndefined();
