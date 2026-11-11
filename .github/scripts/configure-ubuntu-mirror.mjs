@@ -10,7 +10,12 @@ export async function configureUbuntuMirror(root) {
   const mirrorFile=path.join(root,"apt-mirrors.txt");
   const current=await readOptional(mirrorFile);
   if(current!==null) {
-    const remaining=current.split(/\r?\n/).filter(line=>!line.includes("azure.archive.ubuntu.com")&&!line.startsWith(mirror)).join("\n");
+    const remaining=current.split(/\r?\n/).filter(line=>{
+      try {
+        const url=new URL(line.trim().split(/\s+/)[0]);
+        return url.hostname!=="azure.archive.ubuntu.com" && url.href!==mirror;
+      } catch { return true; }
+    }).join("\n");
     await writeFile(mirrorFile,`${mirror}\tpriority:1\n${remaining}`);
   }
   let entries=[];
