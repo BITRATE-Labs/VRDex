@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     body.op === "lookup"
       ? { secret, runId: body.runId }
       : body.op === "seed"
-        ? { secret, runId: body.runId, ownerClerkUserId: body.ownerClerkUserId }
+        ? { secret, runId: body.runId, ownerClerkUserId: body.ownerClerkUserId, ...(body.publishForLocalBroadcast === true ? {publishForLocalBroadcast:true} : {}) }
         : {
             secret,
             runId: body.runId,

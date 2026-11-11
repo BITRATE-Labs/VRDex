@@ -1,5 +1,6 @@
 // Local acceptance instrumentation, mounted into the packaged worker image.
 import { createInterface } from 'node:readline';
+import { lookup } from 'node:dns/promises';
 import { createEventWorker, createHttpControl } from '/app/workers/restream/event-worker.mjs';
 import { createProgramRenderer } from '/app/workers/restream/program-renderer.mjs';
 import { createEventOutputs } from '/app/workers/restream/output-sender.mjs';
@@ -20,6 +21,9 @@ lines.on('line', line => {
 const config = await init;
 if (config.url !== 'http://127.0.0.1:3210' || !config.token || !config.identity?.sessionId)
   throw Error('Isolated local broadcast acceptance only.');
+const addresses=await lookup('ingest.vrcdn.live',{all:true});
+if(!addresses.length||addresses.some(entry=>entry.address!=='127.0.0.1'))
+  throw Error('Native acceptance receiver must resolve exclusively to loopback.');
 const emit = event => process.stdout.write(JSON.stringify(event) + '\n');
 const nativeControl = createHttpControl({url: config.url, token: config.token});
 const relay = await createSourceRelay();
@@ -27,12 +31,14 @@ const direct = await createDirectMediaRelay();
 const worker = createEventWorker({
   identity: config.identity,
   control: async (name, args, signal) => {
+    let pausedAt;
     if (name === 'observeProgram' && armed && ['live', 'hold'].includes(args.state)) {
       armed = false;
+      pausedAt = performance.now();
       await new Promise(resolve => { release = resolve; emit({event:'observation-paused'}); });
     }
     const result = await nativeControl(name, args, signal);
-    if (name === 'observeProgram') emit({event:'observation-result',kind:result.kind});
+    if (name === 'observeProgram') emit({event:'observation-result',kind:result.kind,...(pausedAt===undefined?{}:{pausedMs:performance.now()-pausedAt})});
     return result;
   },
   createRenderer: createProgramRenderer,

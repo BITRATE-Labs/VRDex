@@ -1,4 +1,5 @@
 import { readManagedIntegration } from "./_groupObservationPolicy";
+import { requireLocalDeployment } from "./_localDeployment";
 import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
@@ -48,9 +49,10 @@ async function fixture(
 }
 
 export const seed = internalMutation({
-  args: { secret: v.string(), runId: v.string(), ownerClerkUserId: v.string() },
+  args: { secret: v.string(), runId: v.string(), ownerClerkUserId: v.string(), publishForLocalBroadcast: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
     guard(args.secret);
+    if(args.publishForLocalBroadcast)requireLocalDeployment();
     const slug = runSlug(args.runId);
     const owner = await ctx.db
       .query("users")
@@ -75,8 +77,8 @@ export const seed = internalMutation({
       profileType: "community",
       community: { categoryTags: [] },
       claimState: "claimed_verified",
-      publicationState: "draft_private",
-      publicSurfacingState: "opted_out",
+      publicationState: args.publishForLocalBroadcast ? "published" : "draft_private",
+      publicSurfacingState: args.publishForLocalBroadcast ? "public" : "opted_out",
       creationSource: "community",
       updatedAt: now,
       sourceAttribution: {

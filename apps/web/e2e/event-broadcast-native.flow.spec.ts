@@ -27,9 +27,9 @@ test('candidate browser, real Convex and packaged native worker settle Stop and 
   admin.setAdminAuth(config.adminKey);
   const bridgeToken = randomUUID();
   const localEnv = async (name:string,value:string) => {
-    await run(process.execPath,[path.join(root,'node_modules/convex/bin/main.js'),'env','set',name,value], {
-      cwd:root,timeout:30000,env:{...process.env,CONVEX_DEPLOYMENT:'',CONVEX_DEPLOY_KEY:'',CONVEX_SELF_HOSTED_URL:'http://127.0.0.1:3210',CONVEX_SELF_HOSTED_ADMIN_KEY:config.adminKey},
-    });
+    // Same local admin endpoint used by Convex's CLI, without CLI startup inside the race.
+    const response=await fetch('http://127.0.0.1:3210/api/update_environment_variables',{method:'POST',redirect:'error',signal:AbortSignal.timeout(2000),headers:{Authorization:`Convex ${config.adminKey}`,'Content-Type':'application/json'},body:JSON.stringify({changes:[{name,value}]})});
+    if(!response.ok)throw Error('Local acceptance environment update failed.');
   };
   const id = `invite-${randomUUID()}`;
   const emails:string[] = [];
@@ -41,22 +41,26 @@ test('candidate browser, real Convex and packaged native worker settle Stop and 
   try {
     const account=await createClerkTestAccount(`${id}-owner`,{onEmailReserved:email=>emails.push(email)});
     await signInClerkTestAccount(page,account);
-    const club=await helper('seed',{ownerClerkUserId:account.clerkUserId});
-    const jwt=await page.evaluate(async()=>{
+    const club=await helper('seed',{ownerClerkUserId:account.clerkUserId,publishForLocalBroadcast:true});
+    const owner=new ConvexHttpClient('http://127.0.0.1:3210');
+    const refreshAuth=async()=>{
+      const jwt=await page.evaluate(async()=>{
       const sdk=window.Clerk;
       if(!sdk?.session)throw Error('Development Clerk session unavailable.');
       return sdk.session.getToken({template:'convex'});
-    });
-    if(typeof jwt!=='string')throw Error('Real development Clerk token required.');
-    const owner=new ConvexHttpClient('http://127.0.0.1:3210');owner.setAuth(jwt);
+      });
+      if(typeof jwt!=='string')throw Error('Real development Clerk token required.');
+      owner.setAuth(jwt);
+    };
     await localEnv('VRDEX_EVENT_MEDIA_BRIDGE_TOKEN',bridgeToken);
     const registry=JSON.stringify([{key:'local-native',label:'Local native',credentialRef:'local-native/output',ownerCommunityProfileId:club.profileId,playbackLinks:[]}]);
     const workerMutation=(name:string,args:Record<string,unknown>)=>admin.mutation(makeFunctionReference<'mutation'>(`eventMediaWorker:${name}`),{bridgeToken,...args});
     for(const scenario of ['stop','cancelled','revoked']) {
+      await refreshAuth();
       await localEnv('VRDEX_VRCDN_OUTPUT_ACCOUNTS_JSON',registry);
       const event=await owner.mutation(api.events.createCommunityEvent,{communitySlug:club.slug,title:`Native acceptance ${scenario}`,startAt:Date.now()+3600000,timezone:'UTC'});
       await owner.mutation(api.events.configureVrcdnOutput,{currentSlug:event.slug,key:'main',label:'Local receiver',outputAccountKey:'local-native',sourceConsentAccepted:true,destinationAuthorityAccepted:true,providerRulesAccepted:true,rightsClearedMediaAccepted:true,playbackLinks:[]});
-      const status=()=>owner.query(api.events.getEventMediaControlStatus,{currentSlug:event.slug});
+      const status=async()=>{await refreshAuth();return owner.query(api.events.getEventMediaControlStatus,{currentSlug:event.slug});};
       await page.goto(`${baseURL}/${club.slug}/events/${event.slug}/operate`);
       await page.getByRole('button',{name:'Start',exact:true}).click();
       await expect.poll(async()=>(await status()).program?.activeSessionId).toBeTruthy();
@@ -85,9 +89,10 @@ test('candidate browser, real Convex and packaged native worker settle Stop and 
           await expect.poll(async()=>(await status()).sessions.find(s=>s.sessionId===sessionId)?.status,{timeout:30000}).toBe('live');
           await page.screenshot({path:info.outputPath('candidate-native-live.png')});
         }
+        await refreshAuth();
+        await page.getByRole('button',{name:'Stop',exact:true}).click();
         child.stdin.write('{"arm":true}\n');
         await expect.poll(()=>events.some(e=>e.event==='observation-paused'),{timeout:5000}).toBe(true);
-        await page.getByRole('button',{name:'Stop',exact:true}).click();
         await page.getByRole('dialog').getByRole('button',{name:'Stop broadcast',exact:true}).click();
         if(scenario==='cancelled')await owner.mutation(api.events.setCommunityEventCancelled,{currentSlug:event.slug,cancelled:true,reason:'Isolated native acceptance'});
         if(scenario==='revoked')await localEnv('VRDEX_VRCDN_OUTPUT_ACCOUNTS_JSON','[]');
@@ -101,7 +106,10 @@ test('candidate browser, real Convex and packaged native worker settle Stop and 
         const session=terminal.sessions.find(s=>s.sessionId===sessionId)!;
         expect(session.status).toBe(scenario==='stop'?'ended':'error');
         if(scenario==='stop')expect(terminal.commands.find(c=>c.sessionId===sessionId&&c.commandType==='stop_program')?.status).toBe('succeeded');
-        expect(events.some(e=>e.event==='observation-result'&&e.kind===(scenario==='stop'?'superseded':'fenced'))).toBe(true);
+        const pausedResult=events.find(e=>e.event==='observation-result'&&typeof e.pausedMs==='number');
+        expect(pausedResult?.kind).toBe(scenario==='stop'?'superseded':'fenced');
+        expect(pausedResult?.pausedMs).toBeLessThan(3000);
+        expect(events.some(e=>e.event==='event_worker_control_failure'&&e.category!=='authority-denied')).toBe(false);
         const {stdout}=await run('ffprobe',['-v','error','-show_streams','-of','json',capture],{timeout:10000});
         const streams=JSON.parse(stdout).streams;
         expect(streams.some((s:{codec_type:string})=>s.codec_type==='video')).toBe(true);

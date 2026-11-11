@@ -46,6 +46,18 @@ it("refuses non-allowlisted deployment even with valid helper credentials", asyn
     /unavailable/,
   );
 });
+it('published broadcast fixture is local-only and normal fixtures stay private', async()=>{
+  enable();
+  const t=convexTest({schema,modules});
+  await t.run(({db})=>db.insert('users',{clerkUserId:'user_test',email:'unit+clerk_test@e2e.vrdex.net'}));
+  const args={secret:'test-only-secret',ownerClerkUserId:'user_test'};
+  const local=await t.mutation(ref('seed'),{...args,runId:'local-broadcast',publishForLocalBroadcast:true});
+  assert.equal((await t.run(({db})=>db.get(local.profileId)))?.publicationState,'published');
+  const ordinary=await t.mutation(ref('seed'),{...args,runId:'ordinary'});
+  assert.equal((await t.run(({db})=>db.get(ordinary.profileId)))?.publicationState,'draft_private');
+  process.env.CONVEX_CLOUD_URL='https://scrupulous-corgi-247.convex.cloud';
+  await assert.rejects(t.mutation(ref('seed'),{...args,runId:'hosted-broadcast',publishForLocalBroadcast:true}),/Local fixtures/);
+});
 it("requires both flags and the secret for every fixture operation", async () => {
   enable();
   const t = convexTest({ schema, modules });
