@@ -30,7 +30,7 @@ export async function deletePosthogIdentity(config: ManagementConfig, target: De
     return { status: response.status, data };
   };
   try {
-    if (target.personId) {
+    if (target.personId && target.acceptedAt !== undefined) {
       const { status, data } = await request(`${base}deletion_status/?person_uuid=${encodeURIComponent(target.personId)}&limit=1`);
       if (status === 401 || status === 403) return { kind: "authorization" };
       if (!record(data) || !Array.isArray(data.results)) return { kind: "retry" };
@@ -41,14 +41,18 @@ export async function deletePosthogIdentity(config: ManagementConfig, target: De
       }
       if (target.acceptedAt !== undefined) return { kind: "retry" };
     }
-    const lookup = await request(`${base}?distinct_id=${encodeURIComponent(target.analyticsId)}&limit=2`);
-    if (lookup.status === 401 || lookup.status === 403) return { kind: "authorization" };
-    if (!record(lookup.data) || !Array.isArray(lookup.data.results) || lookup.data.results.length !== 1) return { kind: "retry" };
-    const person: unknown = lookup.data.results[0];
-    if (!record(person)) return { kind: "retry" };
-    const personId = typeof person.uuid === "string" ? person.uuid : person.id;
-    if (typeof personId !== "string" || !personId || (target.personId && target.personId !== personId)) return { kind: "retry" };
-    await rememberPerson?.(personId);
+    let personId = target.personId;
+    if (!personId) {
+      const lookup = await request(`${base}?distinct_id=${encodeURIComponent(target.analyticsId)}&limit=2`);
+      if (lookup.status === 401 || lookup.status === 403) return { kind: "authorization" };
+      if (!record(lookup.data) || !Array.isArray(lookup.data.results) || lookup.data.results.length !== 1) return { kind: "retry" };
+      const person: unknown = lookup.data.results[0];
+      if (!record(person) || !Array.isArray(person.distinct_ids) || !person.distinct_ids.includes(target.analyticsId)) return { kind: "retry" };
+      const resolvedId = typeof person.uuid === "string" ? person.uuid : person.id;
+      if (typeof resolvedId !== "string" || !resolvedId) return { kind: "retry" };
+      personId = resolvedId;
+      await rememberPerson?.(personId);
+    }
     const deletion = await request(`${base}bulk_delete/`, { ids: [personId], delete_events: true, delete_recordings: true });
     if (deletion.status === 401 || deletion.status === 403) return { kind: "authorization" };
     const data = deletion.data;
@@ -133,7 +137,7 @@ export const sweepCompleted = internalMutation({
       .withIndex("by_state_completedAt", (q) => q.eq("state", "completed").lte("completedAt", now - 30 * 86_400_000)).take(100);
     for (const row of rows) {
       const guest = await ctx.db.query("analyticsGuestReceipts").withIndex("by_analyticsId", (q) => q.eq("analyticsId", row.analyticsId)).unique();
-      if (guest?.withdrawnAt !== undefined) await ctx.db.delete(guest._id);
+      if (guest?.withdrawnAt !== undefined) await ctx.db.patch(guest._id, { analyticsId: undefined });
       await ctx.db.delete(row._id);
     }
     if (rows.length === 100) await ctx.scheduler.runAfter(0, internal.analyticsDeletion.sweepCompleted, {});

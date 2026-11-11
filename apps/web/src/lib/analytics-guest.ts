@@ -23,12 +23,12 @@ async function post(body: { action: "start" } | { action: "withdraw"; receipt: s
   return response;
 }
 
-async function withdrawStored() {
+async function withdrawStored(expected: GuestReceipt) {
   const current = read();
-  if (!current) return;
+  if (!current || current.receipt !== expected.receipt) return;
   localStorage.setItem(ANALYTICS_GUEST_KEY, JSON.stringify({ ...current, withdrawn: true }));
   await post({ action: "withdraw", receipt: current.receipt });
-  localStorage.removeItem(ANALYTICS_GUEST_KEY);
+  if (read()?.receipt === expected.receipt) localStorage.removeItem(ANALYTICS_GUEST_KEY);
 }
 
 export async function ensureGuestReceipt(): Promise<GuestReceipt> {
@@ -37,7 +37,7 @@ export async function ensureGuestReceipt(): Promise<GuestReceipt> {
   return navigator.locks.request(ANALYTICS_GUEST_KEY, async () => {
     const current = read();
     if (current && !current.withdrawn) return current;
-    if (current) await withdrawStored();
+    if (current) await withdrawStored(current);
     // Reserve receipt-sized storage before creating a server identity.
     localStorage.setItem(ANALYTICS_GUEST_KEY, " ".repeat(512));
     localStorage.removeItem(ANALYTICS_GUEST_KEY);
@@ -51,5 +51,7 @@ export async function ensureGuestReceipt(): Promise<GuestReceipt> {
 
 export async function withdrawGuestReceipt() {
   if (!navigator.locks) return;
-  await navigator.locks.request(ANALYTICS_GUEST_KEY, withdrawStored);
+  const expected = read();
+  if (!expected) return;
+  await navigator.locks.request(ANALYTICS_GUEST_KEY, () => withdrawStored(expected));
 }

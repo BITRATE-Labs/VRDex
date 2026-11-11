@@ -74,8 +74,13 @@ operator attention. After fixing the cause, use internal
 `analyticsDeletion.retryFailed` with the exact request ID. Authorization failures
 remain blocked and retry hourly. Aggregate counts are exposed by
 `claimAnalytics.deliveryOperationalHealth`; they contain no visitor identifiers.
-Completed mappings and associated withdrawn guest receipts expire after 30 days.
+Completed analytics mappings expire after 30 days. Retired guest receipt hashes
+remain as unlinked acknowledgements, without an analytics ID, so old browser
+retries can be recognized. Unknown receipts are rejected and retained client-side.
 Pending, accepted, blocked and failed targets are never swept.
+Only a validated acknowledgement of every requested deletion step permits status
+polling to mark completion. Unacknowledged submissions retry all steps against the
+remembered person UUID; event-only status cannot prove profile or replay deletion.
 
 Consented backend claim events also create the opaque account person profile,
 so withdrawal covers accounts whose browser ingestion was blocked. Operational
@@ -92,6 +97,8 @@ signing secret or public arbitrary-ID deletion endpoint is introduced. Guest Ful
 requires Web Locks; unsupported browsers keep optional capture disabled. Background
 receipt failures stay quiet and retry on reconnect or an explicit save. New
 withdrawals start pending; blocked means a provider authorization failure.
+Queued guest withdrawal remains bound to its original receipt, including across
+an overlapping new On save. It cannot withdraw a later consent period.
 
 This configuration prepares withdrawal handling. It does not enable browser
 collection or project recording. See [activation](posthog-foundation-activation.md)

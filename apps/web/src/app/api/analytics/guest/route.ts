@@ -34,8 +34,7 @@ export async function POST(request: Request) {
     const client = optionalConvexAdminHttpClient();
     if (!client) return problem(503);
     if (input.action === "start") return Response.json(await client.mutation(internal.analyticsGuest.start, {}), { headers });
-    // Retired or unknown receipts are idempotent no-ops and cannot select a deletion target.
-    await client.mutation(internal.analyticsGuest.withdraw, { receipt: input.receipt });
-    return Response.json({ accepted: true }, { headers });
+    const recognized = await client.mutation(internal.analyticsGuest.withdraw, { receipt: input.receipt });
+    return recognized ? Response.json({ accepted: true }, { headers }) : problem(409);
   } catch { return problem(503); }
 }

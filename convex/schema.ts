@@ -807,7 +807,7 @@ export default defineSchema({
     .index("by_state_nextAttemptAt", ["state", "nextAttemptAt"])
     .index("by_state_completedAt", ["state", "completedAt"]),
   analyticsGuestReceipts: defineTable({
-    analyticsId: v.string(),
+    analyticsId: v.optional(v.string()),
     receiptHash: v.string(),
     createdAt: v.number(),
     withdrawnAt: v.optional(v.number()),

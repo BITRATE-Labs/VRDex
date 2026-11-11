@@ -44,15 +44,18 @@ it("requires a server management key and exact project, refusing ingestion keys 
 });
 
 it("requests event and recording deletion for the exact stored identity, recording acceptance rather than completion", async () => {
-  const requests = responses([{ body: { results: [{ id: 123, uuid: "person-uuid" }] } }, { status: 202, body: acknowledged }]);
+  const requests = responses([{ body: { results: [{ id: 123, uuid: "person-uuid", distinct_ids: ["opaque-consent-id"] }] } }, { status: 202, body: acknowledged }]);
   assert.deepEqual(await deletePosthogIdentity(config, { analyticsId: "opaque-consent-id" }), { kind: "accepted", personId: "person-uuid" });
   assert.match(requests[0].url, /distinct_id=opaque-consent-id/);
   assert.deepEqual(JSON.parse(String(requests[1].init?.body)), { ids: ["person-uuid"], delete_events: true, delete_recordings: true });
 });
 
 it("does not treat 202 errors, missing acknowledgements or unmatched identities as success", async () => {
+  const wrongTarget = responses([{ body: { results: [{ id: "unrelated-person", distinct_ids: ["other-identity"] }] } }, { status: 202, body: acknowledged }]);
+  assert.equal((await deletePosthogIdentity(config, { analyticsId: "opaque-consent-id" })).kind, "retry");
+  assert.equal(wrongTarget.length, 1);
   for (const body of [{ ...acknowledged, deletion_errors: [{ step: "events" }] }, { ...acknowledged, recordings_queued_for_deletion: false }, { ...acknowledged, persons_found: 0 }]) {
-    responses([{ body: { results: [{ id: "person-uuid" }] } }, { status: 202, body }]);
+    responses([{ body: { results: [{ id: "person-uuid", distinct_ids: ["opaque-consent-id"] }] } }, { status: 202, body }]);
     assert.equal((await deletePosthogIdentity(config, { analyticsId: "opaque-consent-id" })).kind, "retry");
   }
   responses([{ body: { results: [] } }]);
@@ -76,14 +79,15 @@ it("keeps authorization failures distinct from transient provider failures witho
   assert.deepEqual(await deletePosthogIdentity(config, { analyticsId: "opaque-consent-id" }), { kind: "retry" });
 });
 
-it("retains the provider target before submission so a lost acknowledgement can recover by exact status", async () => {
+it("retains the provider target and retries every unacknowledged deletion step", async () => {
   let personId: string | undefined;
-  responses([{ body: { results: [{ id: "remembered-person" }] } }, { status: 503, body: {} }]);
+  responses([{ body: { results: [{ id: "remembered-person", distinct_ids: ["opaque-consent-id"] }] } }, { status: 503, body: {} }]);
   await deletePosthogIdentity(config, { analyticsId: "opaque-consent-id" }, async (id) => { personId = id; });
   assert.equal(personId, "remembered-person");
-  const requests = responses([{ body: { results: [{ person_uuid: personId, status: "pending" }] } }]);
-  assert.deepEqual(await deletePosthogIdentity(config, { analyticsId: "opaque-consent-id", personId }), { kind: "accepted", personId });
+  const requests = responses([{ status: 202, body: { ...acknowledged, deletion_errors: [{ step: "recordings" }] } }]);
+  assert.deepEqual(await deletePosthogIdentity(config, { analyticsId: "opaque-consent-id", personId }), { kind: "retry" });
   assert.equal(requests.length, 1);
+  assert.equal(requests[0].init?.method, "POST", "unacknowledged steps must be resubmitted, not inferred from event-only status");
 });
 
 it("leases each saved withdrawal once, rejects stale workers, retains accepted targets and verifies completion", async () => {
@@ -161,7 +165,10 @@ it("expires only completed deletion mappings after 30 days, retaining every unre
     await ctx.db.insert("analyticsDeletionRequests", { analyticsId: "accepted", requestedAt: 0, state: "accepted", acceptedAt: 1 });
   });
   assert.deepEqual(await t.mutation(sweep, { now: 31 * 86_400_000 }), { deletedCount: 1 });
-  assert.equal((await t.run(async (ctx) => ctx.db.query("analyticsGuestReceipts").collect())).length, 0);
+  const retired = await t.run(async (ctx) => ctx.db.query("analyticsGuestReceipts").collect());
+  assert.equal(retired.length, 1);
+  assert.equal(retired[0].analyticsId, undefined);
+  assert.equal(await t.mutation(withdrawGuest, { receipt: guest.receipt }), true);
   assert.deepEqual((await t.run(async (ctx) => ctx.db.query("analyticsDeletionRequests").collect())).map((r) => r.analyticsId).sort(), ["accepted", "pending"]);
 });
 
