@@ -238,7 +238,8 @@ test('API and MCP verification installs FFmpeg before full script coverage', asy
 test('media CI prefers independent HTTPS mirrors without weakening package verification', async () => {
  const { parse } = await import('yaml');
  const workflow = parse(await readFile('.github/workflows/baseline-checks.yml', 'utf8'));
- const installs = Object.values(workflow.jobs).flatMap(job => job.steps).filter(step => ['Install script media test prerequisites', 'Install backend media test prerequisites', 'Install FFmpeg'].includes(step.name));
+ workflow.jobs.reusableProbe = { uses: './.github/workflows/reusable.yml' };
+ const installs = Object.values(workflow.jobs).flatMap(job => job.steps ?? []).filter(step => ['Install script media test prerequisites', 'Install backend media test prerequisites', 'Install FFmpeg'].includes(step.name));
  assert.equal(installs.length, 3);
  for (const step of installs) {
   assert.equal(step['timeout-minutes'], 5);
