@@ -1186,3 +1186,67 @@ it("preserves omitted and null split/end cursors in the pagination protocol", ()
     { ...start, cursor: "middle", endCursor: "end" },
   );
 });
+
+for (const count of [20, 55]) {
+  it(`resumes every inherited replacement in a ${count}-item queue one row at a time`, async () => {
+    const f = await fixture();
+    const detail = await f.actor.query(api.profileMediaSubmissions.reviewDetail, { submissionId: f.intent.submissionId });
+    assert.ok(detail);
+    await f.actor.mutation(api.profileMediaSubmissions.decideWithReceipt, {
+      submissionId: f.intent.submissionId, expectedReviewVersion: detail.reviewVersion,
+      decision: "approve", privateReason: "Reviewed original", idempotencyKey: "source-approved",
+    });
+    const expected = await f.t.run(async ctx => {
+      const source = await ctx.db.get(f.intent.submissionId);
+      assert.ok(source?.approvedAssetId);
+      const { _id, _creationTime, ...fields } = source;
+      await ctx.db.insert("accountFeatureGrants", {
+        userId: f.s.contributorUserId, feature: count === 20 ? "trusted_contributor" : "super_admin", state: "active",
+        grantedBy: { issuer: "test", subject: "operator", tokenIdentifier: "test:operator" },
+        grantedAt: Date.now(), updatedAt: Date.now(),
+      });
+      const ids = [];
+      for (let i = 0; i < count; i++) ids.push(await ctx.db.insert("profileMediaSubmissions", {
+        ...fields, status: "submitted", requestKind: "identity_placement", requestedPlacement: "profile_image",
+        candidateAssetId: source.approvedAssetId, approvedAssetId: undefined,
+        expiresAt: Date.now() + 600000, createdAt: Date.now() + i,
+      }));
+      return ids;
+    });
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    for (let pageNumber = 0; pageNumber < count + 10; pageNumber++) {
+      const page = await f.actor.query(api.profileMediaSubmissions.listForReview, {
+        batchId: f.batchId, paginationOpts: { cursor, numItems: 1 },
+      });
+      seen.push(...page.page.map(row => row.submissionId));
+      if (page.isDone) break;
+      assert.notEqual(page.continueCursor, cursor);
+      cursor = page.continueCursor;
+    }
+    assert.deepEqual(seen.slice().sort(), expected.slice().sort());
+    assert.equal(new Set(seen).size, count);
+    // A split window ending inside one replacement page must replay exactly.
+    let start: string | null = null;
+    let parent = await f.actor.query(api.profileMediaSubmissions.listForReview, {
+      batchId: f.batchId, paginationOpts: { cursor: start, numItems: 10 },
+    });
+    if (!parent.page.length && !parent.isDone) {
+      start = parent.continueCursor;
+      parent = await f.actor.query(api.profileMediaSubmissions.listForReview, {
+        batchId: f.batchId, paginationOpts: { cursor: start, numItems: 10 },
+      });
+    }
+    const window: string[] = [];
+    let next = start;
+    for (let i = 0; i < 15; i++) {
+      const split = await f.actor.query(api.profileMediaSubmissions.listForReview, {
+        batchId: f.batchId, paginationOpts: { cursor: next, endCursor: parent.continueCursor, numItems: 1 },
+      });
+      window.push(...split.page.map(row => row.submissionId));
+      if (split.isDone) break;
+      next = split.continueCursor;
+    }
+    assert.deepEqual(window, parent.page.map(row => row.submissionId));
+  });
+}

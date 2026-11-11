@@ -1070,8 +1070,13 @@ export async function finalizeProfileAssetUploadIntentUpload(
   }
   if(intent.purpose === "community_proposal"){
     if(process.env.VRDEX_CONTRIBUTION_INTAKE_PAUSED === "true")throw new Error("CONTRIBUTION_INTAKE_PAUSED");
-    const contribution=intent.targetSubmissionId?await db.get(intent.targetSubmissionId):null;
-    if(contribution)await assertCapacityNotRevoked(db,contribution.submitterUserId,contribution.createdAt);
+    const contribution = intent.targetSubmissionId ? await db.get(intent.targetSubmissionId) : null;
+    const profile = contribution ? await db.get(contribution.profileId) : null;
+    if (!contribution || !profile || intent.targetProfileId !== profile._id ||
+      profile.claimState !== "unclaimed" || profile.publicationState !== "published" ||
+      profile.publicSurfacingState !== "public")
+      throw new ConvexError({ code: "MEDIA_RESOURCE_UNAVAILABLE", message: "Media contribution unavailable." });
+    await assertCapacityNotRevoked(db, contribution.submitterUserId, contribution.createdAt);
   }
 
   if (intent.targetProfileId !== undefined && intent.purpose !== "community_proposal") {

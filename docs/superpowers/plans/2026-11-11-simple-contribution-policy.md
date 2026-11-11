@@ -109,7 +109,7 @@ No new admin wizard, temporary grant, claimed-profile override, credential store
 - [ ] Compile/push Convex only to the explicitly authorized local verification runtime using `pnpm verify:backend:local`; do not bind anonymous mode over an existing hosted account or deploy production. Confirm generated code is consistent. If the local runtime is unavailable, report that gap rather than treating typecheck as deployment proof.
 - [ ] Review exact branch changes for unauthorized publication, claim/suppression bypass, unbounded scans, stale role use, unnecessary new abstractions, and source/credit exposure. Fix valid findings and repeat affected checks.
 - [ ] Verify Executor's source/tool registration behavior. Refresh its tool definitions if the normal authorized development flow requires it; public app publication and live-account acceptance remain separately authorized. No live logo upload is proof of these changes before deployment.
-- [ ] Present the exact changed behavior, verification, and remaining risks. Commit/push only intentional files under the repository's rules. If a PR is created, add `ci:browsers` and `ci:visuals` as applicable and attach the PR to this chat. Do not call it merge-ready before the required 30-minute exact-head review window and final checks refresh.
+- [ ] Present the exact changed behavior, verification, and remaining risks. Commit/push only intentional files under the repository's rules. If a PR is created, add `ci:browsers` and `ci:visuals` as applicable and attach the PR to this chat. Do not call it merge-ready before checks finish on the pushed head and all readiness/feedback surfaces have been refreshed, following the latest operator instructions.
 
 ## Evidence and current limits
 

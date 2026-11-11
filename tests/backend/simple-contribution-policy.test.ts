@@ -72,4 +72,17 @@ it("authenticated superadmin discovery skips unlimited submission history and re
   assert.equal(capacity.usage.creations24h, null);
   assert.equal(capacity.retryAt, null);
   assert.equal(capacity.deployment.concurrency, 16);
+  await t.run(async ctx => {
+    await ctx.db.insert("contributionCapacity", { scope: "deployment", bytes: 100, processing: 2,
+      byteLimit: 1000, processingLimit: 3 });
+    await ctx.db.insert("contributionCapacity", { scope: "published", bytes: 200, processing: 0 });
+  });
+  const shared = await t.query(internal.contributionCapacity.get, {
+    actorUserId: s.moderatorUserId, oauthClientId: "client", oauthTokenId: "admin-capacity",
+    emailVerified: true, emailVerificationAttestedAt: Date.now(),
+  });
+  assert.equal(shared.deployment.bytes, 1000);
+  assert.equal(shared.deployment.concurrency, 3);
+  assert.equal(shared.deployment.remaining.bytes, 700);
+  assert.equal(shared.deployment.remaining.concurrency, 1);
 });

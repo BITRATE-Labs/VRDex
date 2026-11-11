@@ -180,7 +180,9 @@ checks, validation, cleanup readiness, and intake pause remain enforced.
 
 Capacity responses represent inapplicable limits and remaining counts as `null`.
 Superadmin rolling/open usage counts are also `null`, avoiding an unbounded
-history scan. Byte and processing usage remain recorded. Temporary capacity
+history scan. Byte and processing usage remain recorded. The `deployment` object reports
+effective shared byte/concurrency ceilings, aggregate usage including published
+bytes, and remaining shared capacity. Lower stored operational limits are honored. Temporary capacity
 request tools and batch allowance enforcement have been removed. Historical
 request rows remain inert audit data. The contribution and media-kit switches
 still apply. Optional collection organization is independent of routine uploads.
@@ -461,3 +463,14 @@ missing dates remain null or unsupported events are omitted.
 
 [Acceptance and synthetic fixture boundaries](../testing/public-media-details-history.md)
 cover the joined website, REST and hosted MCP proof.
+
+Batch review cursors page inherited replacements independently from source
+revisions, with at most one native pagination per query. A continuation may yield
+an empty page while capturing the next source checkpoint. Callers must follow
+`isDone` and continuation cursors rather than treating an empty page as the end.
+Current cursors use `batch_review_v3`; stale earlier cursors require a fresh read.
+
+Previously admitted uploads may still finish into private candidate storage if
+media-kit intake is hidden or disabled after admission, as before. That does not
+publish the candidate. Claim changes or loss of public profile eligibility block
+completion; publication separately rechecks media-kit visibility and restrictions.

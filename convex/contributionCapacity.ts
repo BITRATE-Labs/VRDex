@@ -38,6 +38,13 @@ export const get = internalQuery({
         usage?.processingLimit ?? policy.limits.actorProcessing,
       ),
     };
+    const [deploymentUsage, publishedUsage] = await Promise.all([
+      ctx.db.query("contributionCapacity").withIndex("by_scope", q => q.eq("scope", "deployment")).unique(),
+      ctx.db.query("contributionCapacity").withIndex("by_scope", q => q.eq("scope", "published")).unique(),
+    ]);
+    const deploymentBytes = Math.min(policy.deploymentBytes, deploymentUsage?.byteLimit ?? policy.deploymentBytes);
+    const deploymentConcurrency = Math.min(policy.deploymentProcessing, deploymentUsage?.processingLimit ?? policy.deploymentProcessing);
+    const usedDeploymentBytes = (deploymentUsage?.bytes ?? 0) + (publishedUsage?.bytes ?? 0);
     const manifest = await ctx.db
       .query("contributionManifestUsage")
       .withIndex("by_actor", (q) => q.eq("actorUserId", args.actorUserId))
@@ -64,8 +71,13 @@ export const get = internalQuery({
       reservation: false,
       limits,
       deployment: {
-        bytes: policy.deploymentBytes,
-        concurrency: policy.deploymentProcessing,
+        bytes: deploymentBytes,
+        concurrency: deploymentConcurrency,
+        usage: { bytes: usedDeploymentBytes, concurrency: deploymentUsage?.processing ?? 0 },
+        remaining: {
+          bytes: Math.max(0, deploymentBytes - usedDeploymentBytes),
+          concurrency: Math.max(0, deploymentConcurrency - (deploymentUsage?.processing ?? 0)),
+        },
         hostFetchesPerMinute: policy.hostFetchesPerMinute,
       },
       features: {

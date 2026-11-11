@@ -442,11 +442,11 @@ export const createUploadIntent = mutation({
     const admissionPolicy = await effectiveContributionPolicy(ctx.db, user._id);
     if (admissionPolicy.limits.openActor !== null &&
       (await openSubmissionCountForUser(ctx, user._id, now)) >= admissionPolicy.limits.openActor) {
-      throw new Error("Your pending media contribution limit has been reached.");
+      throw new Error(`You already have ${admissionPolicy.limits.openActor} media contributions awaiting a decision.`);
     }
     if (admissionPolicy.limits.openTarget !== null &&
       (await openSubmissionCountForProfile(ctx, profile._id, now)) >= admissionPolicy.limits.openTarget) {
-      throw new Error("This profile has reached its pending media contribution limit.");
+      throw new Error(`This profile already has ${admissionPolicy.limits.openTarget} media contributions awaiting a decision.`);
     }
 
     await assertSubmissionRateLimits(ctx, user._id, profile._id, now);
@@ -1536,6 +1536,8 @@ type BatchReviewCursor = {
   revisionIds: string[];
   submissionIds: string[] | null;
   sourceIsDone: boolean;
+  replacementCursor: string | null;
+  replacementDone: boolean;
 };
 function readBatchReviewIds(value: unknown, maximum: number): string[] {
   if (!Array.isArray(value) || value.length > maximum) throw new Error();
@@ -1547,23 +1549,25 @@ function readBatchReviewIds(value: unknown, maximum: number): string[] {
   return ids;
 }
 function readBatchReviewCursor(cursor: string | null): BatchReviewCursor {
-  if (cursor === null) return { nativeCursor: null, revisionIds: [], submissionIds: null, sourceIsDone: false };
+  if (cursor === null) return { nativeCursor: null, revisionIds: [], submissionIds: null, sourceIsDone: false, replacementCursor: null, replacementDone: false };
   try {
     const value: unknown = JSON.parse(cursor);
     if (typeof value !== "object" || value === null ||
-      !("kind" in value) || value.kind !== "batch_review_v2" ||
+      !("kind" in value) || value.kind !== "batch_review_v3" ||
       !("nativeCursor" in value) || !(value.nativeCursor === null || typeof value.nativeCursor === "string") ||
       !("revisionIds" in value) || !("submissionIds" in value) ||
       !("sourceIsDone" in value) || typeof value.sourceIsDone !== "boolean" ||
-      Object.keys(value).length !== 5) throw new Error();
+      !("replacementCursor" in value) || !(value.replacementCursor === null || typeof value.replacementCursor === "string") ||
+      !("replacementDone" in value) || typeof value.replacementDone !== "boolean" ||
+      Object.keys(value).length !== 7) throw new Error();
     const revisionIds = readBatchReviewIds(value.revisionIds, 40);
-    const submissionIds = value.submissionIds === null ? null : readBatchReviewIds(value.submissionIds, 11);
+    const submissionIds = value.submissionIds === null ? null : readBatchReviewIds(value.submissionIds, 41);
     if (submissionIds !== null && (!submissionIds.length || !revisionIds.length)) throw new Error();
-    return { nativeCursor: value.nativeCursor, revisionIds, submissionIds, sourceIsDone: value.sourceIsDone };
+    return { nativeCursor: value.nativeCursor, revisionIds, submissionIds, sourceIsDone: value.sourceIsDone, replacementCursor: value.replacementCursor, replacementDone: value.replacementDone };
   } catch { throw new Error("PAGE_CURSOR_INVALID"); }
 }
 function writeBatchReviewCursor(checkpoint: BatchReviewCursor) {
-  return JSON.stringify({ kind: "batch_review_v2", ...checkpoint });
+  return JSON.stringify({ kind: "batch_review_v3", ...checkpoint });
 }
 async function authorizedReviewPage(
   ctx: QueryCtx,
@@ -1630,23 +1634,27 @@ async function authorizedReviewPage(
           ...(end ? { endCursor: end.nativeCursor } : {}) });
     const pendingRevisions = [...revisions.page];
     let pendingRows = checkpoint.submissionIds;
+    let replacementCursor = checkpoint.replacementCursor;
+    let replacementDone = checkpoint.replacementDone;
+    let paginated = checkpoint.revisionIds.length === 0;
     const page = [];
     let reachedEnd = false;
     while (pendingRevisions.length) {
       const rev = pendingRevisions[0];
       if (page.length === args.paginationOpts.numItems) break;
-      if (end?.revisionIds[0] === rev._id && end.submissionIds === null) { reachedEnd = true; break; }
+      if (pendingRows === null && end?.revisionIds[0] === rev._id && end.submissionIds === null &&
+        end.replacementCursor === replacementCursor) { reachedEnd = true; break; }
       const attempt = await ctx.db.query("contributionItemAttempts")
         .withIndex("by_revision", q => q.eq("revisionId", rev._id)).unique();
       const source = attempt?.submissionId ? await ctx.db.get(attempt.submissionId) : null;
       if (!source || rev.actorUserId !== source.submitterUserId) {
-        pendingRevisions.shift(); pendingRows = null; continue;
+        pendingRevisions.shift(); pendingRows = null; replacementCursor = null; replacementDone = false; continue;
       }
       // Assignment provenance must be unique, just as in reviewerContext.
       const sourceAttempts = await ctx.db.query("contributionItemAttempts")
         .withIndex("by_submissionId", q => q.eq("submissionId", source._id)).take(2);
       if (sourceAttempts.length !== 1 || sourceAttempts[0].revisionId !== rev._id) {
-        pendingRevisions.shift(); pendingRows = null; continue;
+        pendingRevisions.shift(); pendingRows = null; replacementCursor = null; replacementDone = false; continue;
       }
       const candidate = source.approvedAssetId ? await ctx.db.get(source.approvedAssetId) : null;
       const inheritedEligible = source.status === "approved" && source.requestKind !== "identity_placement" &&
@@ -1664,15 +1672,23 @@ async function authorizedReviewPage(
       let rows;
       if (pendingRows !== null) rows = await loadRows(pendingRows);
       else {
-        const inherited = inheritedEligible
-          ? await ctx.db.query("profileMediaSubmissions")
+        // Convex permits one native pagination per query. Checkpoint the source
+        // page before starting a replacement page, and resume without truncation.
+        if (inheritedEligible && paginated) break;
+        if (inheritedEligible) {
+          const inherited = await ctx.db.query("profileMediaSubmissions")
             .withIndex("by_candidateAssetId_status_expiresAt", q => q.eq("candidateAssetId", candidate._id).eq("status", status).gt("expiresAt", Date.now()))
-            .take(21) : [];
-        // Open target capacity is ten; refuse unexpected overflow.
-        if (inherited.length > 10) throw new Error("Replacement review queue exceeds target capacity.");
-        rows = [source, ...inherited].filter(linked).sort((a, b) => a._id.localeCompare(b._id));
+            .paginate({ ...revisionOptions, cursor: replacementCursor, numItems: 40, maximumRowsRead });
+          paginated = true;
+          replacementCursor = inherited.continueCursor;
+          replacementDone = inherited.isDone;
+          rows = [source, ...inherited.page].filter(linked).sort((a, b) => a._id.localeCompare(b._id));
+        } else {
+          replacementDone = true;
+          rows = [source];
+        }
       }
-      const endingRows = end?.revisionIds[0] === rev._id ? end.submissionIds : null;
+      const endingRows = end?.revisionIds[0] === rev._id && end.replacementCursor === replacementCursor ? end.submissionIds : null;
       if (endingRows !== null) await loadRows(endingRows);
       let processed = 0;
       for (const submission of rows) {
@@ -1691,12 +1707,15 @@ async function authorizedReviewPage(
       pendingRows = rows.slice(processed).map(row => row._id);
       if (reachedEnd) break;
       if (pendingRows.length) break;
-      pendingRevisions.shift(); pendingRows = null;
+      pendingRows = null;
+      if (inheritedEligible && !replacementDone) break;
+      pendingRevisions.shift(); replacementCursor = null; replacementDone = false;
       if (endingRows !== null) { reachedEnd = true; break; }
     }
     const next: BatchReviewCursor = reachedEnd && end ? end : {
       nativeCursor: revisions.continueCursor, sourceIsDone: revisions.isDone,
       revisionIds: pendingRevisions.map(rev => rev._id), submissionIds: pendingRows,
+      replacementCursor, replacementDone,
     };
     const paused = next.revisionIds.length > 0;
     const reachedNativeEnd = !paused && end?.revisionIds.length === 0 && next.nativeCursor === end.nativeCursor;
@@ -1706,6 +1725,7 @@ async function authorizedReviewPage(
         continueCursor: writeBatchReviewCursor(next),
         splitCursor: paused || !revisions.splitCursor ? null : writeBatchReviewCursor({
           nativeCursor: revisions.splitCursor, revisionIds: [], submissionIds: null, sourceIsDone: false,
+          replacementCursor: null, replacementDone: false,
         }),
         pageStatus: paused ? null : revisions.pageStatus,
       }, scope),
