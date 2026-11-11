@@ -2,6 +2,10 @@
 
 Implementation approval covers code and review. Production recording and provider settings remain unapplied.
 
+Provider withdrawal processing also defaults off through `POSTHOG_WITHDRAWAL_ENABLED`.
+Provisioning the existing management key does not activate deletion. Enable the
+worker only during approved hosted acceptance and production activation.
+
 `NEXT_PUBLIC_POSTHOG_FOUNDATION_ENABLED` defaults false. While disabled, optional browser capture, the proposed panel, footer/account control and draft `/privacy` page are unavailable. Enable it only after the dependencies below are accepted. Existing account preferences alone cannot enable browser collection. Synthetic browser CI explicitly enables it with a fake ingestion key and intercepted transport, then verifies the disabled configuration separately.
 
 ## Current verified settings

@@ -109,6 +109,7 @@ export const finish = internalMutation({
 export const deliverPending = internalAction({
   args: {}, returns: v.null(),
   handler: async (ctx) => {
+    if (process.env.POSTHOG_WITHDRAWAL_ENABLED !== "true") return null;
     const config = posthogManagementConfig(process.env);
     if (!config) return null;
     const row = await ctx.runMutation(internal.analyticsDeletion.claimNext, { now: Date.now() });

@@ -38,6 +38,9 @@ export async function ensureGuestReceipt(): Promise<GuestReceipt> {
     const current = read();
     if (current && !current.withdrawn) return current;
     if (current) await withdrawStored();
+    // Reserve receipt-sized storage before creating a server identity.
+    localStorage.setItem(ANALYTICS_GUEST_KEY, " ".repeat(512));
+    localStorage.removeItem(ANALYTICS_GUEST_KEY);
     const response = await post({ action: "start" });
     const guest = parse(await response.json());
     if (!guest) throw new Error("Invalid guest analytics receipt");

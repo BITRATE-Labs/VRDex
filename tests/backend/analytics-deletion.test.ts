@@ -183,3 +183,22 @@ it("continues completed cleanup beyond a full batch", async () => {
   const scheduled = await t.run(async (ctx) => ctx.db.system.query("_scheduled_functions").collect());
   assert.equal(scheduled.length, 1);
 });
+
+it("does not run provider deletion merely because a management key is provisioned", async () => {
+  const previous = { key: process.env.POSTHOG_API_KEY, project: process.env.POSTHOG_PROJECT_ID, enabled: process.env.POSTHOG_WITHDRAWAL_ENABLED };
+  process.env.POSTHOG_API_KEY = config.key;
+  process.env.POSTHOG_PROJECT_ID = config.projectId;
+  delete process.env.POSTHOG_WITHDRAWAL_ENABLED;
+  const t = convexTest({ schema, modules });
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; throw new Error("must not send"); };
+  try {
+    await t.run(async (ctx) => ctx.db.insert("analyticsDeletionRequests", { analyticsId: "held", requestedAt: 0, state: "pending" }));
+    await t.action(makeFunctionReference<"action">("analyticsDeletion:deliverPending"), {});
+    assert.equal(calls, 0);
+  } finally {
+    for (const [name, value] of Object.entries({ POSTHOG_API_KEY: previous.key, POSTHOG_PROJECT_ID: previous.project, POSTHOG_WITHDRAWAL_ENABLED: previous.enabled })) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+  }
+});

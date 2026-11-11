@@ -97,6 +97,12 @@ This configuration prepares withdrawal handling. It does not enable browser
 collection or project recording. See [activation](posthog-foundation-activation.md)
 for the remaining hosted evidence and policy acceptance.
 
+`POSTHOG_WITHDRAWAL_ENABLED` defaults unset, which disables provider requests even
+when the key is provisioned. Owner: BASIC. Enable with `true` only for the approved
+synthetic hosted acceptance and subsequent production activation. Set `false` to
+stop new provider requests. Recreate this non-secret setting through Convex env
+configuration; routine deployment does not enable it. Queued targets remain intact.
+
 No hosted write, deployment, migration, model call, or production storage test
 is implied by the local adapter tests.
 
