@@ -29,7 +29,7 @@ const pairedSamples: Sample[] = [
   { minute: 20, population: 72, queueSize: 14, userCount: 72, platforms: { standalonewindows: 50, android: 22 } },
   { minute: 30, population: null },
   { minute: 40, population: 80, queueSize: 24, userCount: 80, platforms: { standalonewindows: 60, android: 20 } },
-  { minute: 50, population: 76, userCount: 76 },
+  { minute: 50, population: 76, userCount: 76, platforms: {} },
   { minute: 60, population: 64, queueSize: 0, userCount: 64, platforms: { standalonewindows: 45, android: 19 } },
   { minute: 70, population: 36, queueSize: 0, userCount: 36, platforms: { standalonewindows: 26, android: 10 } },
   { minute: 80, population: 12, queueSize: 0, userCount: 12, platforms: { standalonewindows: 9, android: 3 } },
@@ -47,7 +47,7 @@ const samples: Record<PopulationPreviewScenario, Sample[]> = {
 export function InstancePopulationChartPreview({ initialScenario = "paired" }: { initialScenario?: PopulationPreviewScenario }) {
   const [scenario, setScenario] = useState(initialScenario);
   const start = Date.UTC(2026, 10, 7, 20);
-  const points = samples[scenario].map((point) => ({ at: start + point.minute * 18000, label: "", population: point.population,
+  const points = samples[scenario].map((point) => ({ at: start + point.minute * 60000, label: "", population: point.population,
     windows: point.platforms?.standalonewindows ?? null, android: point.platforms?.android ?? null,
     queueSize: point.queueSize ?? null, userCount: point.userCount ?? null, platforms: point.platforms ?? null }));
   return <main className="mx-auto grid w-full max-w-5xl gap-6 px-4 py-8 sm:px-8 sm:py-12">

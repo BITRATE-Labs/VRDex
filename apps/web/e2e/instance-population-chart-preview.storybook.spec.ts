@@ -13,7 +13,9 @@ test("shared instance chart retains counters and gaps @storybook-visual", async 
   expect((await rows.nth(1).getByRole("cell").allTextContents())).toEqual(["18", "14", "4", "0"]);
   expect((await rows.nth(4).getByRole("cell").allTextContents())).toEqual(["Unknown", "Unknown", "Unknown", "Unknown"]);
   await page.getByText("Diagnostics", { exact: true }).click();
-  await expect(page.getByRole("table", { name: "Instance diagnostic counts", exact: true })).toContainText("standalonewindows: 14");
+  const diagnostics = page.getByRole("table", { name: "Instance diagnostic counts", exact: true });
+  await expect(diagnostics).toContainText("standalonewindows: 14");
+  expect(await diagnostics.getByRole("row").nth(6).getByRole("cell").allTextContents()).toEqual(["76", "Unknown", ""]);
   await page.getByText("Diagnostics", { exact: true }).click();
   await expect(page.getByRole("table", { name: "Instance diagnostic counts", exact: true, includeHidden: true })).toHaveCount(0);
 });
