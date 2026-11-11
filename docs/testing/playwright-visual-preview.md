@@ -357,8 +357,7 @@ Installation keeps its five-minute bound. The native transport gate still uses i
 Playwright browser installs in baseline, deployed-health, and staging workflows, plus
 synthetic-media installation, prepare the same independent mirror through
 `.github/scripts/prepare-browser-apt.sh` before installing dependencies. These install
-steps have a five-minute timeout, except the combined FFmpeg, PulseAudio and Firefox
-installation, which has ten minutes. The helper logs the effective mirror list and
+steps have a ten-minute timeout for system dependencies and browser downloads. The helper logs the effective mirror list and
 retains Ubuntu package signature verification and the existing HTTPS fallbacks.
 Runners without a mirror-list file explicitly report that their configured sources
 remain in use.

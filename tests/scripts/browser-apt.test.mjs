@@ -11,7 +11,7 @@ test('every browser dependency install prepares mirrors within a bounded step', 
       for (const step of job.steps ?? []) {
         if (!step.run?.includes('playwright install --with-deps')) continue;
         installs++;
-        assert.equal(step['timeout-minutes'], step.name === 'Install synthetic media tools' ? 10 : 5, `${file}: ${step.name}`);
+        assert.equal(step['timeout-minutes'], 10, `${file}: ${step.name}`);
         assert.ok(step.run.indexOf('prepare-browser-apt.sh') >= 0);
         assert.ok(step.run.indexOf('prepare-browser-apt.sh') < step.run.indexOf('playwright install'));
       }

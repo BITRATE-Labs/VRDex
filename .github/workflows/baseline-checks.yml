@@ -551,7 +551,7 @@ jobs:
 
       - name: Install Playwright Chromium
         working-directory: apps/web
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
           bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
           pnpm exec playwright install --with-deps chromium
@@ -618,7 +618,7 @@ jobs:
 
       - name: Install Playwright Chromium
         working-directory: apps/web
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
           bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
           pnpm exec playwright install --with-deps chromium
@@ -789,7 +789,7 @@ jobs:
       - name: Install Playwright Chromium
         if: steps.gate.outputs.enabled == 'true'
         working-directory: apps/web
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
           bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
           pnpm exec playwright install --with-deps chromium
@@ -964,7 +964,7 @@ jobs:
 
       - name: Install Playwright Chromium
         working-directory: apps/web
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
           bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
           pnpm exec playwright install --with-deps chromium
@@ -1089,7 +1089,7 @@ jobs:
 
       - name: Install Playwright Chromium
         working-directory: apps/web
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
           bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
           pnpm exec playwright install --with-deps chromium
@@ -1173,7 +1173,7 @@ jobs:
 
       - name: Install Playwright Chromium
         working-directory: apps/web
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
           bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
           pnpm exec playwright install --with-deps chromium
@@ -1245,7 +1245,7 @@ jobs:
 
       - name: Install Playwright Chromium
         working-directory: apps/web
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
           bash "${{ github.workspace }}/.github/scripts/prepare-browser-apt.sh"
           pnpm exec playwright install --with-deps chromium

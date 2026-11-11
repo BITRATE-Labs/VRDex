@@ -1210,6 +1210,17 @@ it('Stop supersedes an in-flight progress report without fencing the owner befor
   assert.equal((await f.t.run(({db})=>db.get(f.args.sessionId)))?.status,'ended');
 });
 
+for (const change of ['cancelled','disabled'] as const) it(`pending Stop still fences ${change} authority during a progress report`, async () => {
+  const f = await admittedBeforeAcquisition();
+  const lease = await f.t.mutation(worker('acquireSession'), f.args);
+  await f.owner.mutation(api.events.stopEventMediaWorker, {currentSlug:f.event.slug,sessionId:f.args.sessionId});
+  await f.t.run(async ({db})=>{
+    if(change==='cancelled')await db.patch(f.event.eventId,{eventStatus:'cancelled'});
+    else await db.patch(f.output.outputId,{state:'disabled'});
+  });
+  assert.deepEqual(await f.t.mutation(worker('observeProgram'), {...f.args,epoch:lease.epoch,intentSequence:0,outputId:f.output.outputId,state:'hold',outputMs:1000,publishing:true}), {kind:'fenced',reason:change==='cancelled'?'stopped':'destination'});
+});
+
 for (const optionalActive of [false, true]) it(`R6F1 abrupt exact-task STOPPED permits replacement without resaving (optional active=${optionalActive})`, async () => {
   const f = await admittedBeforeAcquisition();
   const lease = await f.t.mutation(worker('acquireSession'), f.args);
