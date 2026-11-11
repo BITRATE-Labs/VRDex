@@ -366,7 +366,9 @@ Default PR CI runs lint, types, unit tests, docs, API/MCP checks, the existing b
 
 Agents select `ci:browsers` for UI, authentication, and navigation changes. Select `ci:visuals` when screenshots or baseline comparisons are needed for review. Labels apply regardless of changed file paths.
 
-Browser selection includes public-route smoke on desktop and mobile, local mutation-backed journeys, hosted journeys when configured, signed-in account assertions, and public/Storybook previews. The Storybook build runs only for selected browser consumers. Main pushes skip these PR-only jobs; production deployment controls remain unchanged.
+Same-repository browser selection requires candidate preview deployment and nonempty passing browser/backend evidence, including full commit and both Convex URLs. It never uses shared staging as PR evidence. Forks do not receive private browser credentials and cannot claim this acceptance. See [candidate preview acceptance](../deployment/vercel-preview.md).
+
+Browser selection includes public-route smoke on desktop and mobile, local mutation-backed journeys, exact-head candidate preview journeys and development-instance signed-in account assertions, and public/Storybook previews. The Storybook build runs only for selected browser consumers. Main pushes skip these PR-only jobs; production deployment controls remain unchanged.
 
 The local data-flow job has a 45-minute limit for its serial flow suite, composed-media acceptance and artifact upload. Its previous 30-minute limit canceled a run after 257 flow tests and 12 media tests had passed. Individual test timeouts and all selected coverage remain unchanged.
 

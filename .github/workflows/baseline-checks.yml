@@ -27,7 +27,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
       - name: Test selection and verification contracts
-        run: node --test .github/scripts/visual-ci.test.cjs
+        run: node --test scripts/candidate-preview-acceptance.test.mjs .github/scripts/visual-ci.test.cjs
       - name: Select visual evidence
         id: selection
         run: node .github/scripts/visual-ci.cjs
@@ -729,197 +729,20 @@ jobs:
             apps/web/test-results-claim-auth
 
   playwright-hosted-data-flow:
-    name: Playwright Hosted Data Flow
+    name: Candidate Preview Acceptance
     if: github.event_name == 'pull_request' && needs.visual-selection.outputs.browsers == 'true' && github.event.pull_request.head.repo.fork == false
     needs: [build-web, visual-selection]
-    # Pinned: ubuntu-latest moved to 26.04, where this Playwright version cannot install chromium.
-    # Revert to ubuntu-latest once Playwright is upgraded to a release that supports 26.04.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
     permissions:
       contents: read
-
-    outputs:
-      configured: ${{ steps.gate.outputs.enabled }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Check hosted E2E configuration
-        id: gate
-        env:
-          HOSTED_BASE_URL: ${{ vars.VRDEX_HOSTED_E2E_BASE_URL }}
-          HOSTED_BROWSER_TOKEN: ${{ secrets.VRDEX_HOSTED_E2E_BROWSER_TOKEN }}
-        run: |
-          if [ -z "$HOSTED_BASE_URL" ] || [ -z "$HOSTED_BROWSER_TOKEN" ]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            {
-              echo "## Playwright hosted data-flow"
-              echo "Skipped because VRDEX_HOSTED_E2E_BASE_URL or VRDEX_HOSTED_E2E_BROWSER_TOKEN is not configured."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          echo "enabled=true" >> "$GITHUB_OUTPUT"
-
-      - name: Setup pnpm
-        if: steps.gate.outputs.enabled == 'true'
-        uses: pnpm/action-setup@v6
-
-      - name: Setup Node.js
-        if: steps.gate.outputs.enabled == 'true'
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - name: Install dependencies
-        if: steps.gate.outputs.enabled == 'true'
-        run: pnpm install --frozen-lockfile
-
-      - name: Install Playwright Chromium
-        if: steps.gate.outputs.enabled == 'true'
-        working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Run hosted mutation-backed profile submission flow
-        if: steps.gate.outputs.enabled == 'true'
-        id: hosted
-        env:
-          PLAYWRIGHT_BASE_URL: ${{ vars.VRDEX_HOSTED_E2E_BASE_URL }}
-          PLAYWRIGHT_RECORD_VIDEO: "true"
-          PLAYWRIGHT_SKIP_WEBSERVERS: "true"
-          VRDEX_ENABLE_E2E_EXTENDED_PROFILE_FLOW: ${{ vars.VRDEX_HOSTED_E2E_EXTENDED_PROFILE_FLOW }}
-          VRDEX_ENABLE_E2E_AUTH_HELPERS: ${{ vars.VRDEX_HOSTED_E2E_AUTH_HELPERS }}
-          VRDEX_ENABLE_E2E_ADAPTER_HELPERS: ${{ vars.VRDEX_HOSTED_E2E_ADAPTER_HELPERS }}
-          VRDEX_ENABLE_E2E_DEVELOPER_CREDENTIALS: ${{ vars.VRDEX_HOSTED_E2E_DEVELOPER_CREDENTIALS }}
-          VRDEX_E2E_BROWSER_TOKEN: ${{ secrets.VRDEX_HOSTED_E2E_BROWSER_TOKEN }}
-          # Staging Clerk *development* instance. `clerkSetup()` refuses a
-          # production secret key outright, and `check-vercel-env.mjs` already
-          # requires the test tier on every non-production Vercel build, so these
-          # are the same instance the target itself runs on.
-          #
-          # The switch is separate from the keys on purpose: with it unset the
-          # auth specs skip, so merging this cannot turn the lane red before the
-          # secrets exist. With it set to true, missing keys fail the run.
-          VRDEX_ENABLE_E2E_CLERK_AUTH: ${{ vars.VRDEX_HOSTED_E2E_CLERK_AUTH }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.VRDEX_HOSTED_E2E_CLERK_PUBLISHABLE_KEY }}
-          CLERK_SECRET_KEY: ${{ secrets.VRDEX_HOSTED_E2E_CLERK_SECRET_KEY }}
-          VRDEX_E2E_RUN_ID: pr-${{ github.event.pull_request.number }}-${{ github.run_id }}-${{ github.run_attempt }}
-        run: pnpm test:e2e:hosted
-
-      # Separate from the step above because it is the only suite that needs both
-      # projects. The account surfaces have a distinct mobile layout, and
-      # `test:e2e:hosted` pins desktop, so folding these in there would capture
-      # desktop only. `always()` so a failure above still produces the signed-in
-      # screenshots — they are most useful on the run that broke something.
-      #
-      # The three PLAYWRIGHT_* overrides are not optional. Playwright clears the
-      # output directory and both reports when a run starts, so without them this
-      # second run in the job would delete the first one's traces, videos, HTML
-      # report and results.json before the upload step collects them — the exact
-      # failure #213 fixed for the staging deploy, arriving here by the same route.
-      # The uploaded artifact would show only this step, under a name that says
-      # hosted data-flow.
-      # Gated on the Clerk flag like the auth-session contract step, and for the
-      # same reason. With the flag unset — the documented rollout default — every
-      # test in the suite skips, Playwright exits 0, and the step outcome is
-      # `success`: a summary line reading "Signed-in account captures: success"
-      # over zero screenshots, which is the green-over-no-coverage ambiguity this
-      # summary exists to remove. Gated, the outcome is `skipped` and says so.
-      #
-      # Only the flag needs this. Enabled-but-unusable already fails loudly —
-      # `clerkTestAuthAvailability` throws on missing keys and on auth helpers
-      # being off for a hosted target, rather than skipping.
-      - name: Run signed-in account assertions and selected captures
-        if: always() && steps.gate.outputs.enabled == 'true' && vars.VRDEX_HOSTED_E2E_CLERK_AUTH == 'true'
-        id: account-visual
-        env:
-          PLAYWRIGHT_CAPTURE_SCREENSHOTS: ${{ needs.visual-selection.outputs.visuals }}
-          PLAYWRIGHT_OUTPUT_DIR: test-results-account-visual
-          PLAYWRIGHT_HTML_REPORT_DIR: playwright-report-account-visual
-          PLAYWRIGHT_JSON_REPORT_FILE: playwright-artifacts/results-account-visual.json
-          PLAYWRIGHT_BASE_URL: ${{ vars.VRDEX_HOSTED_E2E_BASE_URL }}
-          PLAYWRIGHT_SKIP_WEBSERVERS: "true"
-          VRDEX_ENABLE_E2E_AUTH_HELPERS: ${{ vars.VRDEX_HOSTED_E2E_AUTH_HELPERS }}
-          VRDEX_E2E_BROWSER_TOKEN: ${{ secrets.VRDEX_HOSTED_E2E_BROWSER_TOKEN }}
-          VRDEX_ENABLE_E2E_CLERK_AUTH: ${{ vars.VRDEX_HOSTED_E2E_CLERK_AUTH }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.VRDEX_HOSTED_E2E_CLERK_PUBLISHABLE_KEY }}
-          CLERK_SECRET_KEY: ${{ secrets.VRDEX_HOSTED_E2E_CLERK_SECRET_KEY }}
-          VRDEX_E2E_RUN_ID: pr-${{ github.event.pull_request.number }}-${{ github.run_id }}-${{ github.run_attempt }}
-        run: pnpm test:e2e:hosted:account-visual
-
-      - name: Write hosted data-flow summary
-        if: always() && steps.gate.outputs.enabled == 'true'
-        env:
-          HOSTED_OUTCOME: ${{ steps.hosted.outcome }}
-          # Reported separately rather than folded into HOSTED_OUTCOME. They are
-          # two Playwright runs against two different suites, and a summary that
-          # said `success` while the account captures failed would contradict the
-          # job it is attached to — which is the failure mode this whole summary
-          # was added to prevent.
-          CAPTURE_SELECTED: ${{ needs.visual-selection.outputs.visuals }}
-          ACCOUNT_VISUAL_OUTCOME: ${{ steps.account-visual.outcome }}
-          HOSTED_BASE_URL: ${{ vars.VRDEX_HOSTED_E2E_BASE_URL }}
-          HOSTED_EXTENDED_PROFILE_FLOW: ${{ vars.VRDEX_HOSTED_E2E_EXTENDED_PROFILE_FLOW }}
-          HOSTED_AUTH_HELPERS: ${{ vars.VRDEX_HOSTED_E2E_AUTH_HELPERS }}
-          HOSTED_ADAPTER_HELPERS: ${{ vars.VRDEX_HOSTED_E2E_ADAPTER_HELPERS }}
-          HOSTED_DEVELOPER_CREDENTIALS: ${{ vars.VRDEX_HOSTED_E2E_DEVELOPER_CREDENTIALS }}
-          HOSTED_CLERK_AUTH: ${{ vars.VRDEX_HOSTED_E2E_CLERK_AUTH }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          mkdir -p apps/web/playwright-artifacts
-          cat > apps/web/playwright-artifacts/hosted-data-flow-summary.md <<EOF
-          ## Playwright hosted data-flow
-
-          Outcome: ${HOSTED_OUTCOME}
-
-          Signed-in account assertions: ${ACCOUNT_VISUAL_OUTCOME:-not run}
-          Review screenshot collection selected: ${CAPTURE_SELECTED}
-
-          Target: ${HOSTED_BASE_URL}
-
-          Hosted extended profile flow: ${HOSTED_EXTENDED_PROFILE_FLOW:-skipped}
-
-          Hosted auth helpers: ${HOSTED_AUTH_HELPERS:-skipped}
-
-          Hosted adapter helpers: ${HOSTED_ADAPTER_HELPERS:-skipped}
-
-          Hosted developer credentials: ${HOSTED_DEVELOPER_CREDENTIALS:-skipped}
-
-          Clerk test auth: ${HOSTED_CLERK_AUTH:-skipped}
-
-          The flags above report configuration, not coverage. The auth-backed
-          specs need every one of their flags *and* Clerk test auth: with
-          \`VRDEX_HOSTED_E2E_CLERK_AUTH\` unset they skip, and only the captured
-          flow below ran. With it set, they fail rather than skip when the Clerk
-          keys are missing.
-
-          Captured flow:
-          - hosted test-gated profile submission form
-          - hosted Convex profile creation
-          - hosted public profile page readback
-          - hosted discovery search readback
-          - hosted E2E cleanup
-
-          Run: ${RUN_URL}
-          EOF
-
-      - name: Upload hosted data-flow artifacts
-        id: upload
-        if: always() && steps.gate.outputs.enabled == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-hosted-data-flow
-          if-no-files-found: warn
-          retention-days: 7
-          path: |
-            apps/web/playwright-report
-            apps/web/test-results
-            apps/web/playwright-report-account-visual
-            apps/web/test-results-account-visual
-            apps/web/playwright-artifacts
+      issues: write
+      pull-requests: read
+    uses: ./.github/workflows/vercel-preview-deploy.yml
+    with:
+      pull_number: ${{ format('{0}', github.event.pull_request.number) }}
+      head_sha: ${{ github.event.pull_request.head.sha }}
+      browser_acceptance: true
+      capture_screenshots: ${{ needs.visual-selection.outputs.visuals == 'true' }}
+    secrets: inherit
 
   playwright-public-preview:
     name: Playwright Public Preview

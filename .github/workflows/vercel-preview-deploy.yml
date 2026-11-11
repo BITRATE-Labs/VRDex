@@ -15,6 +15,16 @@ on:
         description: Head commit the maintainer reviewed when they requested the preview. Required for fork heads.
         required: false
         type: string
+      browser_acceptance:
+        description: Require exact-candidate browser/backend acceptance.
+        required: false
+        default: false
+        type: boolean
+      capture_screenshots:
+        description: Capture review screenshots during browser acceptance.
+        required: false
+        default: false
+        type: boolean
   workflow_call:
     inputs:
       pull_number:
@@ -29,6 +39,16 @@ on:
         description: Head commit the maintainer reviewed when they requested the preview. Required for fork heads.
         required: false
         type: string
+      browser_acceptance:
+        description: Require exact-candidate browser/backend acceptance.
+        required: false
+        default: false
+        type: boolean
+      capture_screenshots:
+        description: Capture review screenshots during browser acceptance.
+        required: false
+        default: false
+        type: boolean
     outputs:
       deployment_url:
         description: Preview deployment URL.
@@ -51,9 +71,10 @@ concurrency:
 jobs:
   deploy-preview:
     name: Deploy On-Demand Preview
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
+      e2e_auth_enabled: ${{ steps.deploy.outputs.e2e_auth_enabled }}
       convex_preview_enabled: ${{ steps.convex-preview-gate.outputs.enabled }}
       convex_preview_url: ${{ steps.convex-preview.outputs.convex_url }}
       deployment_url: ${{ steps.deploy.outputs.url }}
@@ -210,14 +231,16 @@ jobs:
           printf '%s' "$bridge_secret" | pnpm exec convex env set --preview-name "$PREVIEW_NAME" VRDEX_PREVIEW_PERSISTENCE_SECRET
 
           preview_e2e_auth_enabled=false
-          if [ "$HOSTED_E2E_AUTH_HELPERS" = "true" ] && [ "$HOSTED_E2E_DEVELOPER_CREDENTIALS" = "true" ] && [ -n "$HOSTED_E2E_BROWSER_TOKEN" ]; then
+          if [ "$HOSTED_E2E_AUTH_HELPERS" = "true" ] && [ -n "$HOSTED_E2E_BROWSER_TOKEN" ]; then
             e2e_convex_secret=$(openssl rand -hex 32)
             node scripts/generate-preview-developer-runtime-secrets.mjs
             echo "::add-mask::$e2e_convex_secret"
             echo "VRDEX_PREVIEW_E2E_CONVEX_SECRET=$e2e_convex_secret" >> "$GITHUB_ENV"
             printf '%s' true | pnpm exec convex env set --preview-name "$PREVIEW_NAME" VRDEX_ENABLE_E2E_HELPERS
             printf '%s' true | pnpm exec convex env set --preview-name "$PREVIEW_NAME" VRDEX_ENABLE_E2E_AUTH_HELPERS
-            printf '%s' true | pnpm exec convex env set --preview-name "$PREVIEW_NAME" VRDEX_ENABLE_PREVIEW_OAUTH_TOKEN_BRIDGE
+            developer_bridge=false
+            if [ "$HOSTED_E2E_DEVELOPER_CREDENTIALS" = "true" ]; then developer_bridge=true; fi
+            printf '%s' "$developer_bridge" | pnpm exec convex env set --preview-name "$PREVIEW_NAME" VRDEX_ENABLE_PREVIEW_OAUTH_TOKEN_BRIDGE
             printf '%s' "$e2e_convex_secret" | pnpm exec convex env set --preview-name "$PREVIEW_NAME" VRDEX_E2E_CONVEX_SECRET
             # Clerk signs the tokens Convex trusts, so the preview no longer mints
             # its own RS256 pair. Authenticated preview flows need a Clerk instance
@@ -310,6 +333,7 @@ jobs:
             fi
           fi
 
+          echo "e2e_auth_enabled=${VRDEX_PREVIEW_E2E_AUTH_ENABLED:-false}" >> "$GITHUB_OUTPUT"
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
           {
             echo "## On-demand Vercel preview"
@@ -440,6 +464,84 @@ jobs:
                 core.warning(`Unable to add failure reaction: ${error}`);
               }
             }
+
+  candidate-browser-acceptance:
+    name: Candidate Browser and Backend Acceptance
+    needs: [deploy-preview]
+    if: inputs.browser_acceptance && needs.deploy-preview.outputs.is_fork == 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CANDIDATE_HEAD_SHA: ${{ needs.deploy-preview.outputs.head_sha }}
+      CANDIDATE_CONVEX_URL: ${{ needs.deploy-preview.outputs.convex_preview_url }}
+      GITHUB_SHA: ${{ needs.deploy-preview.outputs.head_sha }}
+      PLAYWRIGHT_BASE_URL: ${{ needs.deploy-preview.outputs.deployment_url }}
+      PLAYWRIGHT_SKIP_WEBSERVERS: "true"
+      PLAYWRIGHT_CAPTURE_SCREENSHOTS: ${{ inputs.capture_screenshots }}
+      PLAYWRIGHT_RECORD_VIDEO: "true"
+      VRDEX_ENABLE_E2E_AUTH_HELPERS: ${{ needs.deploy-preview.outputs.e2e_auth_enabled }}
+      VRDEX_ENABLE_E2E_CLERK_AUTH: ${{ vars.VRDEX_HOSTED_E2E_CLERK_AUTH }}
+      VRDEX_E2E_BROWSER_TOKEN: ${{ secrets.VRDEX_HOSTED_E2E_BROWSER_TOKEN }}
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.VRDEX_HOSTED_E2E_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.VRDEX_HOSTED_E2E_CLERK_SECRET_KEY }}
+      VRDEX_E2E_RUN_ID: candidate-${{ needs.deploy-preview.outputs.pr_number }}-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ needs.deploy-preview.outputs.head_sha }}
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify candidate identity before mutations
+        run: node scripts/candidate-preview-acceptance.mjs preflight
+      - name: Install Chromium
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Profile mutation, public readback and owned cleanup
+        working-directory: apps/web
+        env:
+          PLAYWRIGHT_OUTPUT_DIR: test-results-candidate-mutation
+          PLAYWRIGHT_HTML_REPORT_DIR: playwright-report-candidate-mutation
+          PLAYWRIGHT_JSON_REPORT_FILE: playwright-artifacts/candidate-mutation.json
+        run: pnpm exec playwright test profile-submission.flow.spec.ts --grep "^profile submission writes through" --project=desktop-chromium
+      - name: Development-instance auth on desktop and mobile
+        working-directory: apps/web
+        env:
+          PLAYWRIGHT_OUTPUT_DIR: test-results-candidate-auth
+          PLAYWRIGHT_HTML_REPORT_DIR: playwright-report-candidate-auth
+          PLAYWRIGHT_JSON_REPORT_FILE: playwright-artifacts/candidate-auth.json
+        run: pnpm exec playwright test auth-session.flow.spec.ts --project=desktop-chromium --project=mobile-chromium
+      - name: Account assertions and selected captures on desktop and mobile
+        working-directory: apps/web
+        env:
+          PLAYWRIGHT_OUTPUT_DIR: test-results-candidate-account
+          PLAYWRIGHT_HTML_REPORT_DIR: playwright-report-candidate-account
+          PLAYWRIGHT_JSON_REPORT_FILE: playwright-artifacts/candidate-account.json
+        run: pnpm test:e2e:hosted:account-visual
+      - name: Verify executed coverage and recheck deployment identity
+        run: node scripts/candidate-preview-acceptance.mjs report
+      - name: Reject evidence for a superseded PR head
+        uses: actions/github-script@v9
+        env:
+          PR_NUMBER: ${{ needs.deploy-preview.outputs.pr_number }}
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: Number(process.env.PR_NUMBER) });
+            if (pr.head.sha !== process.env.CANDIDATE_HEAD_SHA) core.setFailed("Candidate head changed during acceptance; run again for the new head.");
+      - name: Upload candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-hosted-data-flow
+          if-no-files-found: error
+          path: |
+            apps/web/playwright-artifacts/
+            apps/web/test-results-candidate-*/
+            apps/web/playwright-report-candidate-*/
 
   hosted-mcp-preview-smoke:
     name: Hosted MCP Preview Smoke

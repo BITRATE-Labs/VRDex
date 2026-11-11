@@ -53,7 +53,8 @@ function sessionRunSuffix(testInfo: { workerIndex: number; repeatEachIndex: numb
 }
 
 test("a Clerk session resolves to a verified Convex identity and clears on sign-out @auth-session-staging", async ({
-  browser,
+  page,
+  context,
   request,
 }, testInfo) => {
   test.setTimeout(90_000);
@@ -64,8 +65,6 @@ test("a Clerk session resolves to a verified Convex identity and clears on sign-
   );
 
   const e2eToken = e2eBrowserToken();
-  const context = await browser.newContext();
-  const page = await context.newPage();
   let account: ClerkTestAccount | undefined;
 
   try {
@@ -111,11 +110,13 @@ test("a Clerk session resolves to a verified Convex identity and clears on sign-
     await expect(page).toHaveURL(/\/sign-in\?returnTo=/, hostedExpectOptions);
   } finally {
     if (account !== undefined) {
-      await request.delete("/api/e2e/auth", {
+      const cleanup = await request.delete("/api/e2e/auth", {
         headers: { "x-vrdex-e2e-token": e2eToken },
         data: { email: account.email },
       });
-      await deleteClerkTestAccount(account);
+      await expect(cleanup).toBeOK();
+      const deleted = await deleteClerkTestAccount(account);
+      expect(deleted?.ok || deleted?.status === 404, "Clerk disposable account must be deleted").toBe(true);
     }
 
     await context.close();
