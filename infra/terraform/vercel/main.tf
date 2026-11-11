@@ -101,6 +101,7 @@ resource "vercel_project_environment_variable" "posthog_category" {
   key        = "NEXT_PUBLIC_POSTHOG_DEPLOYMENT_CATEGORY"
   value      = each.key
   target     = each.value
+  sensitive  = false
   comment    = local.posthog_comment
 }
 
@@ -111,6 +112,7 @@ resource "vercel_project_environment_variable" "posthog_category_staging" {
   key                    = "NEXT_PUBLIC_POSTHOG_DEPLOYMENT_CATEGORY"
   value                  = "staging"
   custom_environment_ids = [each.value]
+  sensitive              = false
   comment                = local.posthog_comment
 }
 
