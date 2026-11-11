@@ -33,6 +33,8 @@ Recovery is "I lost access to the account that holds my profile", so requiring a
 session would exclude the case that needs it most. A session is attached to the
 request when one exists.
 
+The local support UI starts with a request type and no assumed profile. General reports and feedback use the existing feedback topic and require no profile or reply contact. Related profile context is optional. Listing-specific topics offer live public person/community lookup with explicit selection, plus a link/name fallback for missing listings. Profile type remains explicit for name-only suppression requests. Message precedes reply contact; dispute, transfer and recovery still require a reply contact.
+
 One selector, two destinations, because the two halves have different
 consequences:
 

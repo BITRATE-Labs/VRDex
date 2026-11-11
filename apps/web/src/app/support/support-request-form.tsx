@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useRef, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation } from "convex/react";
 import { api } from "@convex-generated-api";
+import { SupportProfileField } from "./support-profile-field";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
@@ -28,37 +29,37 @@ const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
 const TOPICS = [
   {
     value: "ownership_dispute",
-    label: "Someone else claimed a profile that represents me",
+    label: "Ownership dispute",
     kind: "support",
     noteLimit: 4_000,
   },
   {
     value: "transfer",
-    label: "I need to transfer a profile to someone else",
+    label: "Transfer a profile",
     kind: "support",
     noteLimit: 4_000,
   },
   {
     value: "recovery",
-    label: "I lost access to the account that holds my profile",
+    label: "Recover account access",
     kind: "support",
     noteLimit: 4_000,
   },
   {
     value: "owner_opt_out",
-    label: "I own this listing and want it opted out",
+    label: "Remove my listing",
     kind: "suppression",
     noteLimit: 1_000,
   },
   {
     value: "pre_claim_safety",
-    label: "This unclaimed listing needs safety review",
+    label: "Listing safety concern",
     kind: "suppression",
     noteLimit: 1_000,
   },
   {
     value: "feedback",
-    label: "Feedback or something else",
+    label: "Report a problem or send feedback",
     kind: "support",
     noteLimit: 4_000,
   },
@@ -68,7 +69,6 @@ type Topic = (typeof TOPICS)[number]["value"];
 
 const TOPIC_VALUES: readonly string[] = TOPICS.map((topic) => topic.value);
 const CONTACT_MAX_LENGTH = 160;
-const DISPLAY_NAME_MAX_LENGTH = 120;
 
 // Feedback is the one topic that can be answered by nobody, so it is the one
 // that does not ask for a way to answer, or for a profile. Demanding either
@@ -187,6 +187,7 @@ function ConnectedSupportRequestForm() {
   const [topic, setTopic] = useState<Topic | "">(
     isTopic(requestedTopic) ? requestedTopic : "",
   );
+  const [profileKey, setProfileKey] = useState(0);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
@@ -195,6 +196,7 @@ function ConnectedSupportRequestForm() {
   // by then the visitor is filling in a different request: without it the old
   // promise cleared their draft and reported success for the topic they left.
   const submissionGeneration = useRef(0);
+  const previousRequestedTopic = useRef(requestedTopic);
 
   // The initializer above runs once. Navigating between `?topic=` links while
   // the form is already mounted -- the footer's two entries do exactly that --
@@ -212,11 +214,14 @@ function ConnectedSupportRequestForm() {
   // mutation come back and clear the draft that replaced it.
   function startFreshRequest(nextTopic: Topic | "") {
     setTopic(nextTopic);
+    setProfileKey(key => key + 1);
     setStatus({ kind: "idle" });
     submissionGeneration.current += 1;
   }
 
   useEffect(() => {
+    if (previousRequestedTopic.current === requestedTopic) return;
+    previousRequestedTopic.current = requestedTopic;
     setTopic(isTopic(requestedTopic) ? requestedTopic : "");
 
     // The fields and the notice too, not only the selector. Following the
@@ -225,6 +230,7 @@ function ConnectedSupportRequestForm() {
     // have carried over into the new category, and a success notice from the
     // last one would have sat above an untouched form claiming it was sent.
     formRef.current?.reset();
+    setProfileKey(key => key + 1);
     setStatus({ kind: "idle" });
     submissionGeneration.current += 1;
   }, [requestedTopic]);
@@ -284,6 +290,7 @@ function ConnectedSupportRequestForm() {
       }
 
       form.reset();
+      setProfileKey(key => key + 1);
       setTopic("");
       startTransition(() =>
         setStatus({ kind: "success", repliable: Boolean(requesterContact) }),
@@ -299,10 +306,7 @@ function ConnectedSupportRequestForm() {
 
   const selectedTopic = TOPICS.find((entry) => entry.value === topic);
   const contactRequired = TOPICS_REQUIRING_CONTACT.includes(topic);
-  // Shown before a topic is picked, because five of the six want it and an
-  // empty-looking page is a worse first impression than one field that turns
-  // out not to apply. Only feedback takes it away.
-  const aboutAProfile = topic === "" || TOPICS_ABOUT_A_PROFILE.includes(topic);
+  const aboutAProfile = TOPICS_ABOUT_A_PROFILE.includes(topic);
 
   return (
     <form className="grid gap-5" onSubmit={onSubmit} ref={formRef}>
@@ -330,38 +334,22 @@ function ConnectedSupportRequestForm() {
         </Select>
       </Field>
 
-      {aboutAProfile ? (
-        <>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field>
-              Profile
-              <Input name="profileSlug" placeholder="Paste the profile link" />
-            </Field>
+      {aboutAProfile ? <SupportProfileField key={profileKey} required disabled={status.kind === "submitting"} /> : topic === "feedback" ? <details className="rounded-control border border-border p-4">
+        <summary className="cursor-pointer text-sm font-medium">Related profile (optional)</summary>
+        <div className="mt-4"><SupportProfileField key={profileKey} required={false} disabled={status.kind === "submitting"} /></div>
+      </details> : null}
 
-            <Field>
-              Name, if you do not have the link
-              <Input maxLength={DISPLAY_NAME_MAX_LENGTH} name="displayName" placeholder="DJ Aurora" />
-            </Field>
-          </div>
-
-          <Field className="sm:max-w-xs">
-            {/* Unchosen, not defaulted. A resolved profile corrects a wrong
-                guess, but a name-only or unresolved request has no record to
-                correct it: the type is persisted as given, the acceptance
-                resolver scans only that kind, and the publication guard checks
-                type too. Defaulting to person meant a community opt-out could be
-                accepted while the community stayed public and publishable. */}
-            Is this a person or a community?
-            <Select defaultValue="" name="profileType" required>
-              <option disabled value="">
-                Choose one
-              </option>
-              <option value="person">Person</option>
-              <option value="community">Community</option>
-            </Select>
-          </Field>
-        </>
-      ) : null}
+      <Field>
+        Message
+        <Textarea
+          className="min-h-40"
+          maxLength={selectedTopic?.noteLimit ?? 4_000}
+          minLength={10}
+          name="message"
+          placeholder="Tell us what happened. Paste links to anything that backs it up."
+          required
+        />
+      </Field>
 
       <Field>
         {contactRequired ? "Contact for follow-up" : "Contact for follow-up, if you want a reply"}
@@ -373,16 +361,6 @@ function ConnectedSupportRequestForm() {
         />
       </Field>
 
-      <Field>
-        Message
-        <Textarea
-          className="min-h-40"
-          maxLength={selectedTopic?.noteLimit ?? 4_000}
-          name="message"
-          placeholder="Tell us what happened. Paste links to anything that backs it up."
-          required
-        />
-      </Field>
 
       <Button
         className="w-fit"

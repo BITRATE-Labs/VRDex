@@ -4,6 +4,7 @@ import { ConvexProviderWithAuth, type ConvexReactClient } from "convex/react";
 import { getFunctionName, type FunctionReference } from "convex/server";
 import { ConvexError } from "convex/values";
 import { EventIntakeForm } from "../../events/event-intake-form";
+import { SupportRequestForm } from "../../support/support-request-form";
 import { EventContributionControls } from "../../events/event-contribution-controls";
 import type { EventIntakePatch } from "../../../../../../packages/api-contracts/src/event-intake";
 
@@ -113,6 +114,12 @@ function revisionFixture(correction: boolean, sourceMode?: string, staff = false
     },
     async mutation(mutation: FunctionReference<"mutation">, args: Record<string, unknown>) {
       const name = getFunctionName(mutation);
+      if (name === "supportRequests:submitSupportRequest" || name === "suppressions:requestProfileSuppression") {
+        sessionStorage.setItem("fixture-support-submission", JSON.stringify({ name, args }));
+        if (sessionStorage.getItem("fixture-support-defer") === "true") await new Promise<void>(resolve => window.addEventListener("fixture-support-release", () => resolve(), { once: true }));
+        if (sessionStorage.getItem("fixture-support-fail") === "true") throw new ConvexError({ code: "SUPPORT_INPUT_INVALID", message: "Tell us a little more about what you need." });
+        return null;
+      }
       sessionStorage.setItem("event-intake-review-command", name);
       sessionStorage.setItem("event-intake-review-count", String(Number(sessionStorage.getItem("event-intake-review-count") ?? "0") + 1));
       if (sessionStorage.getItem("event-intake-review-defer") === "true") await new Promise<void>(resolve => window.addEventListener("event-intake-review-release", () => resolve(), { once: true }));
@@ -206,7 +213,7 @@ export function EventIntakeRevisionPreview({ correction, sourceMode, staff = fal
 
       {!sourceMode ? <button onClick={() => { fixture.refresh({ venueLabel: "New venue" }); setRefreshed(true); }}>Update elsewhere</button> : null}
       {refreshed ? <output>Query refreshed</output> : null}
-      {correction ? <EventContributionControls eventId="fixture-event" /> : <EventIntakeForm heading={sourceMode ? <h1 className="text-3xl font-semibold">Add event</h1> : undefined} draftId={initialCommunitySlug ? undefined : "fixture-draft"} initialCommunitySlug={initialCommunitySlug} />}
+      {sourceMode === "support" ? <SupportRequestForm /> : correction ? <EventContributionControls eventId="fixture-event" /> : <EventIntakeForm heading={sourceMode ? <h1 className="text-3xl font-semibold">Add event</h1> : undefined} draftId={initialCommunitySlug ? undefined : "fixture-draft"} initialCommunitySlug={initialCommunitySlug} />}
     </main>
   </ConvexProviderWithAuth>;
 }

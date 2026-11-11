@@ -1,10 +1,8 @@
-import Link from "next/link";
 import { Suspense } from "react";
 
 import { SupportRequestForm } from "./support-request-form";
-import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { PageContainer, PageActions, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 
 export const dynamic = "force-dynamic";
 
@@ -16,21 +14,8 @@ export const metadata = {
 export default function SupportPage() {
   return (
     <PageShell>
-      <PageContainer max="4xl">
-        <PageActions>
-
-          <Link className={buttonVariants({ variant: "secondary" })} href="/">
-            Back to discovery
-          </Link>
-        </PageActions>
-
-        <Card className="shadow-hero" padding="lg">
-          {/* No eyebrow. "Contact and requests" above "Tell us what you need."
-              is the heading said twice, which the UI rules call out by name. */}
-          <h1 className="text-4xl leading-none font-semibold tracking-[-0.04em] sm:text-6xl">
-            Tell us what you need.
-          </h1>
-        </Card>
+      <PageContainer max="3xl">
+        <h1 className="text-3xl font-semibold tracking-tight">Contact VRDex</h1>
 
         <Card>
           {/* `useSearchParams` reads the `?topic=` deep link the claim page and

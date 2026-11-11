@@ -281,7 +281,7 @@ test("staff controls confirm takeover and removal through connected fixture @flo
   await page.getByRole("button", { name: "Take over", exact: true }).click();
   await expect(page.getByRole("status")).toHaveText("Submitted");
   await expect(page.getByRole("button", { name: "Take over", exact: true })).toHaveCount(0);
-  await page.locator("summary", { hasText: "Report event" }).click();
+  await page.getByRole("button", { name: "Report event", exact: true }).click();
   await page.getByLabel("Reason", { exact: true }).fill("Duplicate fixture event");
   await page.getByRole("button", { name: "Remove event", exact: true }).click();
   await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem("event-intake-revision-submission")!))).toEqual({ eventId: "fixture-event", reason: "Duplicate fixture event" });
@@ -515,4 +515,21 @@ test("plain intake fixture hydrates known community without backend and retains 
   await expect(page.getByRole("status").filter({ hasText: "Draft saved" })).toBeVisible();
   expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("event-intake-fixture")!).communitySlug)).toBe("unavailable-community");
   expect(backendMessages).toEqual([]);
+});
+
+test('standalone report dialog validates reason and returns focus @flow @fixture', async ({page}) => {
+ await page.goto('/playwright/event-intake?revision=staff',{waitUntil:'networkidle'});
+ const trigger=page.getByRole('button',{name:'Report event',exact:true});
+ await trigger.click();
+ const dialog=page.getByRole('dialog',{name:'Report event',exact:true});
+ await expect(dialog).toBeVisible();
+ await expect(dialog.getByRole('button',{name:'Submit report',exact:true})).toBeDisabled();
+ await dialog.getByLabel('Reason',{exact:true}).fill('Incorrect event details');
+ await expect(dialog.getByRole('button',{name:'Submit report',exact:true})).toBeEnabled();
+ await page.keyboard.press('Escape');
+ await expect(dialog).not.toBeVisible();
+ await expect(trigger).toBeFocused();
+ await trigger.click();
+ await dialog.getByRole('button',{name:'Close',exact:true}).click();
+ await expect(trigger).toBeFocused();
 });
