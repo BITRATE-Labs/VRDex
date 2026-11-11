@@ -11,6 +11,11 @@ import { EventHostView } from "../../_components/event-host-view";
 export function PublicEventFixture({ event, host = false }: { event: PublicEvent; host?: boolean }) {
   const client = useMemo(() => ({
     watchQuery(query: FunctionReference<"query">, args: { slug: string; communitySlug?: string }) {
+      if (getFunctionName(query) === "events:getHostAccess") return {
+        localQueryResult: () => true,
+        onUpdate: () => () => {},
+        journal: () => undefined,
+      };
       if (getFunctionName(query) !== (host ? "events:getHostBySlug" : "events:getPublicBySlug") || args.slug !== event.slug || (host && args.communitySlug !== event.communitySlug)) {
         throw new Error("Unexpected public event fixture query");
       }

@@ -2,34 +2,24 @@
 import { inferLineupEnds } from "@vrdex/api-contracts";
 import { useQuery } from "convex/react";
 import Link from "next/link";
+import { useState } from "react";
+import { CalendarDays, Flag, ListMusic } from "lucide-react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@convex-generated-api";
-import { EventDjLinks, eventDjTarget } from "./event-dj-links";
 import { EventContributionControls } from "../events/event-contribution-controls";
 
-import {
-  actionCardVariants,
-  actionLabelClassName,
-  actionMetaClassName,
-  inlineActionClassName,
-} from "@/components/ui/action-card";
+import { actionCardVariants, actionLabelClassName, actionMetaClassName, inlineActionClassName } from "@/components/ui/action-card";
 import { buttonVariants } from "@/components/ui/button";
+import { CopyValueRow } from "@/components/ui/copy-value-row";
 import { Card, Eyebrow } from "@/components/ui/card";
 import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { cn } from "@/lib/cn";
 import { safeImageBackground } from "@/lib/safe-image";
 import { publicEventPath } from "@/lib/event-path";
-import {
-  avatarFrameStyle,
-  type AvatarAppearance,
-} from "@/lib/avatar-appearance";
+import { avatarFrameStyle, type AvatarAppearance } from "@/lib/avatar-appearance";
 import { EventWatchForEvent } from "./event-live-watch";
-import { vrcdnPlaybackHref } from "../../../../../convex/_vrcdnLinks";
-import {
-  ViewerLocalEventDateTime,
-  ViewerLocalEventTime,
-  ViewerLocalEventTimeRange,
-} from "./viewer-local-event-times";
+import { parseVrcdnStreamLinks } from "../../../../../convex/_vrcdnLinks";
+import { ViewerLocalEventDateTime, ViewerLocalEventTime, ViewerLocalEventTimeRange } from "./viewer-local-event-times";
 
 type EventSourceType = "manual" | "community" | "partner" | "import" | "ai_suggested" | "contributor";
 type EventMediaLinkType =
@@ -226,17 +216,6 @@ function EntityImage({
   );
 }
 
-function EventTimeDefinition({ label, timestamp }: { label: string; timestamp: number }) {
-  return (
-    <div className="grid gap-1 border-b border-border pb-4 sm:grid-cols-[7rem_1fr] sm:gap-4">
-      <dt className="text-muted">{label}</dt>
-      <dd className="font-medium">
-        <ViewerLocalEventDateTime timestamp={timestamp} />
-      </dd>
-    </div>
-  );
-}
-
 export function EventPreviewCard({ event }: { event: PublicEventPreview }) {
   const sourceUrl = safeHttpsUrl(event.source.url);
   const thumbnailStyle = safeImageBackground(event.thumbnailImageUrl, eventPosterOverlay);
@@ -339,6 +318,8 @@ export function EventPublicPage({ event: initialEvent }: { event: PublicEvent })
 }
 
 function EventPublicPageContent({ event }: { event: PublicEvent }) {
+  const [reportOpen, setReportOpen] = useState(false);
+  const canHost = useQuery(api.events.getHostAccess, event.communitySlug ? { slug: event.slug, communitySlug: event.communitySlug } : "skip");
   const lineup = eventLineupForDisplay(event);
   const bannerStyle = safeImageBackground(event.bannerImageUrl, eventPosterOverlay);
   const sourceUrl = safeHttpsUrl(event.source.url);
@@ -354,12 +335,32 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
             className="relative min-h-56 bg-[linear-gradient(135deg,var(--media),var(--surface-raised))] bg-cover bg-center p-5 text-white sm:p-6 lg:p-8"
             style={bannerStyle}
           >
+            <nav aria-label="Event actions" className="absolute right-4 top-4 flex gap-2">
+              {eventPath && canHost ? <span className="group relative inline-flex">
+                <Link aria-label="Host view" className={cn(buttonVariants({ variant: "secondary" }), "size-9 p-0")} href={`${eventPath}/host`}>
+                  <ListMusic aria-hidden="true" className="size-4" />
+                </Link>
+                <span role="tooltip" className="pointer-events-none absolute right-0 top-full z-20 mt-2 hidden whitespace-nowrap rounded-control border border-border bg-surface px-2 py-1 text-xs text-foreground shadow-lg group-hover:block group-focus-within:block">Host view</span>
+              </span> : null}
+              {eventPath ? <span className="group relative inline-flex">
+                <a aria-label="Add to calendar" className={cn(buttonVariants({ variant: "secondary" }), "size-9 p-0")} href={`${eventPath}/calendar.ics`}>
+                  <CalendarDays aria-hidden="true" className="size-4" />
+                </a>
+                <span role="tooltip" className="pointer-events-none absolute right-0 top-full z-20 mt-2 hidden whitespace-nowrap rounded-control border border-border bg-surface px-2 py-1 text-xs text-foreground shadow-lg group-hover:block group-focus-within:block">Add to calendar</span>
+              </span> : null}
+              <span className="group relative inline-flex">
+                <button type="button" aria-label="Report event" aria-haspopup="dialog" className={cn(buttonVariants({ variant: "secondary" }), "size-9 p-0")} onClick={() => setReportOpen(true)}>
+                  <Flag aria-hidden="true" className="size-4" />
+                </button>
+                <span role="tooltip" className="pointer-events-none absolute right-0 top-full z-20 mt-2 hidden whitespace-nowrap rounded-control border border-border bg-surface px-2 py-1 text-xs text-foreground shadow-lg group-hover:block group-focus-within:block">Report event</span>
+              </span>
+            </nav>
             <div className="flex min-h-44 flex-col justify-end">
               <div className="max-w-4xl">
                 {event.status === "cancelled" ? (
                   <p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-white">Cancelled</p>
                 ) : null}
-                <ViewerLocalEventDateTime className="text-sm uppercase tracking-[0.24em] text-white/70" timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />
+                <ViewerLocalEventDateTime className={cn("block text-sm uppercase tracking-[0.24em] text-white/70", canHost ? "pr-36" : "pr-24")} timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />
                 <h1 className="mt-4 text-5xl leading-none font-semibold tracking-[-0.05em] sm:text-7xl">
                   {event.title}
                 </h1>
@@ -371,30 +372,22 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
         </section>
 
         {event.source.sourceType === "contributor" ? <p className="text-sm text-muted">{event.source.label}</p> : null}
-        <EventContributionControls eventId={event.id} />
+        <EventContributionControls eventId={event.id} reportOpen={reportOpen} onReportClose={() => setReportOpen(false)} />
         <section className="grid items-start gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-          <div>
-            <Card className="h-fit" surface="white">
-              <Eyebrow>When</Eyebrow>
-              <dl className="mt-5 space-y-4 text-sm">
-                {event.doorsOpenAt === undefined ? null : <EventTimeDefinition label="Doors open" timestamp={event.doorsOpenAt} />}
-                {event.startAt === undefined ? <div className="grid gap-1"><dt className="text-muted">Date</dt><dd><ViewerLocalEventDateTime eventDate={event.eventDate} scheduleKind={event.scheduleKind} /></dd></div> : <EventTimeDefinition label="Start" timestamp={event.startAt} />}
-                {event.scheduleKind === "date_only" ? null : <div className="grid gap-1 border-b border-border pb-4 sm:grid-cols-[7rem_1fr] sm:gap-4">
-                  <dt className="text-muted">End</dt>
-                  <dd className="font-medium">
-                    {event.endAt ? <ViewerLocalEventDateTime timestamp={event.endAt} /> : "Not listed"}
-                  </dd>
-                </div>}
-              </dl>
-            </Card>
+          <div className="lg:sticky lg:top-6">
+            {event.posterImageUrl ? (
+              <a href={event.posterImageUrl} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-card border border-border bg-surface">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={event.posterImageUrl} alt={event.title + " poster"} className="h-auto w-full object-contain" />
+              </a>
+            ) : null}
           </div>
 
           <div className="grid gap-4">
             <EventWatchForEvent event={event} />
 
             <Card surface="white">
-              <Eyebrow>Place</Eyebrow>
-              <div className="mt-5 grid gap-3 text-sm">
+              <div className="grid gap-3 text-sm">
                 {event.communitySlug ? (
                   <Link className={cn(actionCardVariants({ variant: "accent" }), "flex items-center gap-3")} href={`/${event.communitySlug}`}>
                     <EntityImage appearance={event.communityAvatarAppearance} imageUrl={event.communityImageUrl} label={event.communityName ?? "Community profile"} />
@@ -452,10 +445,6 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
         <Card surface="white">
           <Eyebrow>Links</Eyebrow>
           <div className="mt-4 grid gap-3">
-              {eventPath ? <a className={actionCardVariants({ variant: "accent" })} href={`${eventPath}/calendar.ics`}>
-                <span className={actionLabelClassName}>Add to calendar</span>
-                <span className={actionMetaClassName}>Download .ics</span>
-              </a> : null}
               {event.seriesId && event.communitySlug ? <Link className={actionCardVariants({ variant: "accent" })} href={`/${event.communitySlug}/series/${event.seriesId}`}>
                 <span className={actionLabelClassName}>Upcoming nights</span>
               </Link> : null}
@@ -467,20 +456,20 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
                   <span className={actionMetaClassName}>Reference link</span>
                 </a>
               ) : null}
-              {event.mediaLinks.filter(link => eventDjTarget(link.url) === undefined).map((link) => (
-                <a className={actionCardVariants({ variant: "accent" })} href={vrcdnPlaybackHref(link.url) ?? link.url} key={`${link.type}-${link.url}`} rel="noreferrer" target="_blank">
+              {event.mediaLinks.filter(link => parseVrcdnStreamLinks(link.url) === null).map((link) => link.presentation === "copy" ? (
+                <CopyValueRow compact key={`${link.type}-${link.url}`} label={link.label} value={link.url} />
+              ) : (
+                <a className={actionCardVariants({ variant: "accent" })} href={link.url} key={`${link.type}-${link.url}`} rel="noreferrer" target="_blank">
                   <span className={actionLabelClassName}>
                     {link.label}
                   </span>
                   <span className="mt-1 block text-xs text-muted">
-                    {link.presentation === "copy" ? "Copy link" : "Open link"}
+                    Open link
                   </span>
                 </a>
               ))}
           </div>
         </Card>
-        {eventPath ? <Link className="text-sm text-accent hover:underline" href={`${eventPath}/host`}>Host view</Link> : null}
-        <EventDjLinks lineup={lineup} eventLinks={event.mediaLinks} eventTitle={event.title} />
       </PageContainer>
     </PageShell>
   );

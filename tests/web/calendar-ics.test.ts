@@ -199,7 +199,7 @@ describe("series calendar feed", () => {
       "@/lib/calendar/ics": { createPublicEventFeedIcs, publicEventIcsFilename },
       "@/components/ui/button": { buttonVariants: () => "" },
       "@/components/ui/card": { Card: () => null },
-      "@/components/ui/page-shell": { BrandLink: () => null, PageContainer: () => null, PageNav: () => null, PageShell: () => null },
+      "@/components/ui/page-shell": { PageContainer: () => null, PageActions: () => null, PageShell: () => null },
       "next/navigation": { notFound: () => { throw new Error("NOT_FOUND"); } },
       "../../../_components/event-public-page": { EventBackendNotice: () => null, EventPreviewCard: () => null },
     };

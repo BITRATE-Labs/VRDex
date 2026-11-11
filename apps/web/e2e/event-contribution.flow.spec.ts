@@ -533,3 +533,36 @@ test('standalone report dialog validates reason and returns focus @flow @fixture
  await dialog.getByRole('button',{name:'Close',exact:true}).click();
  await expect(trigger).toBeFocused();
 });
+
+test("banner calendar and report icons have tooltips and an accessible report dialog @flow @fixture", async({page},info)=>{
+ await page.goto('/playwright-afterglow-social/events/playwright-event-host-view');
+ const calendar=page.getByRole('link',{name:'Add to calendar',exact:true});
+ const report=page.getByRole('button',{name:'Report event',exact:true});
+ if (!info.project.use.isMobile) {
+  await calendar.hover();
+  await expect(page.getByRole('tooltip',{name:'Add to calendar',exact:true})).toBeVisible();
+ }
+ await calendar.focus();
+ await expect(page.getByRole('tooltip',{name:'Add to calendar',exact:true})).toBeVisible();
+ if (!info.project.use.isMobile) {
+  await report.hover();
+  await expect(page.getByRole('tooltip',{name:'Report event',exact:true})).toBeVisible();
+ }
+ await report.focus();
+ await expect(page.getByRole('tooltip',{name:'Report event',exact:true})).toBeVisible();
+ await page.screenshot({path:info.outputPath('banner-icon-tooltip.png')});
+ await report.click();
+ const dialog=page.getByRole('dialog',{name:'Report event',exact:true});
+ await expect(dialog).toBeVisible();
+ await expect(dialog.getByRole('button',{name:'Submit report',exact:true})).toBeDisabled();
+ await dialog.getByLabel('Reason',{exact:true}).fill('Wrong event details');
+ await expect(dialog.getByRole('button',{name:'Submit report',exact:true})).toBeEnabled();
+ await page.keyboard.press('Escape');
+ await expect(dialog).not.toBeVisible();
+ await expect(report).toBeFocused();
+ await report.click();
+ await dialog.getByRole('button',{name:'Close',exact:true}).click();
+ await expect(dialog).not.toBeVisible();
+ await expect(page.locator('summary',{hasText:'Report event'})).toHaveCount(0);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});

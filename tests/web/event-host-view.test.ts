@@ -26,7 +26,7 @@ it('renders authored repeated/freeform/missing-link rows, selected source and al
  const lineup=[{key:'first',displayLabel:'Aurora',position:0,performer:person},{key:'second',displayLabel:'Aurora',position:1,performer:person},{key:'guest',displayLabel:'Freeform guest',position:2}];
  const event={slug:'show',communitySlug:'club',title:'Show',lineup,slots:[{playbackKey:'first',stream:{streamId:'aurora'}}]};
  const html=renderToStaticMarkup(createElement(EventHostContent,{event}));
- assert.equal(html.split('>Aurora</h2>').length-1,2);
+ assert.equal(html.split('>Aurora</a></h2>').length-1,2);
  assert.match(html,/Freeform guest/);assert.match(html,/No links/);
  assert.equal(html.split('Selected source').length-1,1);
  assert.match(html,/alternate/);assert.match(html,/Twitch/);assert.equal(html.split('>Unknown</span>').length-1,6);
@@ -86,4 +86,14 @@ it('R8 large partial reader preserves stale provider evidence beside fresh failu
  assert.equal(reportedSourceState(result[sources[0].key],100000),'unknown');
  assert.equal(reportedSourceState(result[sources[1].key],100000),'unavailable');
  assert.equal(reportedSourceState(result[sources[79].key],100000),'unknown');
+});
+
+it('host source parsing retains canonical playback URLs and rejects unrelated destinations', async()=>{
+ const {eventDjTarget}=await import('../../apps/web/src/lib/event-dj-target');
+ for(const value of ['https://example.com/tickets','https://soundcloud.com/aurora','https://twitch.tv.evil.example/aurora','javascript:alert(1)','https://user:pass@twitch.tv/aurora'])assert.equal(eventDjTarget(value),undefined);
+ assert.equal(eventDjTarget('https://twitch.tv/Aurora?ref=event')?.url,'https://www.twitch.tv/aurora');
+ for(const value of ['vrcdn:aurora','rtspt://stream.vrcdn.live/live/aurora','https://stream.vrcdn.live/live/aurora.live.ts']){
+  const target=eventDjTarget(value);assert.equal(target?.key,'vrcdn:aurora');assert.equal(target?.pcUrl,'rtspt://stream.vrcdn.live/live/aurora');assert.equal(target?.questUrl,'https://stream.vrcdn.live/live/aurora.live.ts');
+ }
+ assert.equal(eventDjTarget('https://media.example/set.mp4')?.url,'https://media.example/set.mp4');
 });

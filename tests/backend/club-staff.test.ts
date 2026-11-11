@@ -9,6 +9,7 @@ const schema =
   (schemaModule as unknown as { default?: typeof schemaModule }).default ??
   schemaModule;
 const modules = {
+  "../../convex/events.ts": () => import("../../convex/events"),
   "../../convex/clubStaff.ts": () => import("../../convex/clubStaff"),
   "../../convex/communityTelemetry.ts": () =>
     import("../../convex/communityTelemetry"),
@@ -618,4 +619,39 @@ describe("club staff and visibility", () => {
       "none",
     );
   });
+});
+
+it("assigns host-only authority through invitations and withdraws it on role or assignment revocation", async () => {
+  const { t, ownerClient, recipient, delegate, communityProfileId } = await setup();
+  const now = Date.now();
+  await t.run(({db}) => db.insert("events", { slug: "host-role-event", title: "Host event", sortTitle: "host event", communityProfileId,
+    startAt: now + 60_000, timezone: "UTC", sourceType: "community", sourceLabel: "Test", eventStatus: "scheduled", publicationState: "published", createdAt: now, updatedAt: now }));
+  const roleId = await ownerClient.mutation(api.clubStaff.saveRole, { communitySlug: "test-club", label: "Host", permissions: ["host_events"], assignableRoleIds: [] });
+  const client = t.withIdentity(verifiedIdentity(recipient));
+  const args = {slug:"host-role-event",communitySlug:"test-club"};
+  assert.equal(await client.query(api.events.getHostAccess,args),false);
+  await assert.rejects(t.withIdentity(verifiedIdentity(delegate)).mutation(api.clubStaff.createStaffInvitation,{communitySlug:"test-club",roleIds:[roleId]}));
+  const invitation = await ownerClient.mutation(api.clubStaff.createStaffInvitation,{communitySlug:"test-club",roleIds:[roleId]});
+  await client.action(api.clubStaff.acceptStaffInvitation,{communitySlug:"test-club",token:invitation.token});
+  assert.equal(await client.query(api.events.getHostAccess,args),true);
+  assert.ok(await client.query(api.events.getHostBySlug,args));
+  assert.equal(await client.query(api.events.getEditableBySlug,{slug:args.slug}),null);
+  await assert.rejects(client.mutation(api.events.updateCommunityEvent,{currentSlug:args.slug,title:"Forbidden edit"}));
+  await assert.rejects(client.query(api.events.getEventMediaControlStatus,{currentSlug:args.slug}));
+  await assert.rejects(client.mutation(api.clubStaff.createStaffInvitation,{communitySlug:"test-club",roleIds:[roleId]}));
+  const workspace = await ownerClient.query(api.clubStaff.getWorkspace,{communitySlug:"test-club"});
+  const role = workspace!.roles.find(row=>row._id===roleId)!;
+  for (const permission of ["view_event_operations", "manage_event_media"] as const) {
+    const current = (await t.run(({db})=>db.get(roleId)))!;
+    await ownerClient.mutation(api.clubStaff.saveRole,{communitySlug:"test-club",roleId,label:role.label,expectedUpdatedAt:current.updatedAt,permissions:[permission],assignableRoleIds:[]});
+    assert.equal(await client.query(api.events.getHostAccess,args),false);
+    assert.equal(await client.query(api.events.getHostBySlug,args),null);
+  }
+  const current = (await t.run(({db})=>db.get(roleId)))!;
+  await ownerClient.mutation(api.clubStaff.saveRole,{communitySlug:"test-club",roleId,label:role.label,expectedUpdatedAt:current.updatedAt,permissions:["host_events"],assignableRoleIds:[]});
+  assert.equal(await client.query(api.events.getHostAccess,args),true);
+  const assignment = workspace!.assignments.find(row=>row.roleId===roleId)!;
+  await ownerClient.mutation(api.clubStaff.revokeAssignment,{communitySlug:"test-club",assignmentId:assignment._id});
+  assert.equal(await client.query(api.events.getHostAccess,args),false);
+  assert.equal(await client.query(api.events.getHostBySlug,args),null);
 });

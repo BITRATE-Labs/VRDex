@@ -197,24 +197,14 @@ test("staff editor sends explicit clears for optional event details", async ({ p
   expect(payload.venueLabel).toBe("");
 });
 
-test("lineup keeps provider links collapsed without stream requests", async ({ page }) => {
-  const streams: string[] = [];
-  page.on("request", request => { if (/vrcdn|\.live\.ts/.test(request.url())) streams.push(request.url()); });
+test("event roster offers host view without performer stream controls", async ({ page }) => {
   await page.goto("/playwright/event-lineup");
   await expect(page.getByRole("heading", { name: "Lineup", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "SoundCloud", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Copy PC", exact: true }).first()).not.toBeVisible();
+  await expect(page.locator("summary", { hasText: "DJ links" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Copy PC", exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Tickets", exact: false })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Repeated Twitch", exact: false })).toHaveCount(0);
-  await expect(page.locator("summary", { hasText: /event-only$/ })).not.toBeVisible();
-  await page.locator("summary").filter({ hasText: "DJ links" }).click();
-  await expect(page.locator("summary", { hasText: /event-only$/ })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Twitch", exact: true })).toHaveCount(1);
-  await page.locator("summary").filter({ hasText: "VRCDN · aurora" }).click();
-  await expect(page.getByRole("button", { name: "Copy PC", exact: true }).first()).toBeVisible();
   await expect(page.getByRole("link", { name: "Private fixture link" })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Echo", exact: false })).toHaveCount(1);
-  expect(streams).toEqual([]);
+  await expect(page.getByRole("link", { name: "Host view", exact: true })).toHaveAttribute("href", "/afterglow/events/harbor-sessions-7k2m4q/host");
 });
 
 test("editor submits and reloads selected mode and source", async ({ page }) => {
@@ -222,7 +212,7 @@ test("editor submits and reloads selected mode and source", async ({ page }) => 
   await page.getByRole("navigation", { name: "Event editor" }).getByRole("button", { name: "Details" }).click();
   await page.getByRole("navigation", { name: "Event editor" }).getByRole("button", { name: "Review" }).click();
   await page.locator("summary").filter({ hasText: /^Advanced/ }).click();
-  await expect(page.getByLabel("Watch mode", { exact: true })).toHaveValue("performer_sequence");
+  await expect(page.getByLabel("Watch mode", { exact: true })).toHaveValue("automatic");
   await page.getByRole("navigation", { name: "Event editor" }).getByRole("button", { name: "Lineup" }).click();
   const sources = page.getByLabel("Stream", { exact: true });
   await expect(sources.nth(2)).toHaveValue("removed-source");
@@ -286,20 +276,18 @@ test("unavailable choices survive unrelated saves and clear on performer changes
 
 test("roster copy controls work with keyboard without navigating", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-  await page.goto("/playwright/event-lineup");
-  await page.locator("summary").filter({ hasText: "DJ links" }).click();
-  await page.locator("summary").filter({ hasText: "VRCDN · aurora" }).click();
+  await page.goto("/playwright-afterglow-social/events/playwright-event-host-view/host");
   const copy = page.getByRole("button", { name: "Copy PC", exact: true }).first();
   await copy.focus();
   await expect(copy).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("rtspt://stream.vrcdn.live/live/aurora");
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("rtspt://stream.vrcdn.live/live/dj-aurora");
   const quest = page.getByRole("button", { name: "Copy Quest", exact: true }).first();
   await quest.focus();
   await page.keyboard.press("Space");
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("https://stream.vrcdn.live/live/aurora.live.ts");
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("https://stream.vrcdn.live/live/dj-aurora.live.ts");
   await expect(page.getByRole("button", { name: "Copy Discord", exact: true })).toHaveCount(0);
-  await expect(page).toHaveURL(/playwright\/event-lineup$/);
+  await expect(page).toHaveURL(/playwright-event-host-view\/host$/);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 

@@ -143,6 +143,7 @@ Starter capabilities:
 - `edit_community_profile`: edit public community profile fields and presentation.
 - `manage_roster`: add, remove, and annotate community roster members.
 - `manage_events`: create and edit community events, slots, lineup links, event-world links, and public event metadata.
+- `host_events`: access the community event host rundown, source readiness and link-copy controls without editing events or controlling broadcasts. Owners and `manage_events` staff also have host access.
 - `manage_event_media`: configure event media programs, sources, outputs, worker lifecycle, fallback publication, and media-control commands.
 - `view_event_operations`: read private current/next slot, readiness, source status, and command history without editing.
 - `manage_staff`: invite, assign, revoke, and audit non-owner staff roles.
@@ -228,9 +229,11 @@ flowchart LR
 ```
 
 The public page shows one Lineup with optional local set times and portraits or
-initials. Performer names lead to their profiles. A collapsed DJ links section at
-the bottom groups unique VRCDN and Twitch targets; other socials remain on the
-person's profile. Event reference/calendar links and contextual watch stay separate.
+initials. Performer names lead to their profiles. A Host view icon in the event banner opens the separate lineup and stream-link rundown.
+The Host view action appears only for authorized hosts. Direct host and status routes enforce the same access, including for published events. The grant uses the existing community staff-role editor.
+Add to calendar and Report event are small bordered icon controls at the banner top right, with hover and focus tooltips. Calendar downloads the existing ICS file. Report opens the existing reason form in a native dialog; correction, takeover and removal permissions are unchanged.
+Performer stream copy controls live there; other socials remain on the person's
+profile. Event-authored links other than raw VRCDN sources remain in Links. Contextual watch stays separate.
 
 ```mermaid
 flowchart LR
@@ -239,8 +242,9 @@ flowchart LR
   Event --> Lineup[Lineup]
   Lineup --> Person[Person profile]
   Person --> Event
-  Event --> Links[Expand DJ links]
-  Links --> Provider[Twitch or VRCDN copy targets]
+  Event --> Host[Host view]
+  Host --> Provider[Twitch or VRCDN copy targets]
+  Host --> Event
   Event --> Watch[Contextual live watch]
 ```
 
@@ -749,7 +753,7 @@ Selection order is deterministic:
 2. first `stream` link in saved media-link order
 3. first `vrcdn` link in saved media-link order
 
-Event-authored VRCDN/Twitch stream targets join performer links in the collapsed DJ links accordion, deduplicated by normalized target. Other event links remain in ordinary Links. This classification does not change the contextual watch player.
+Raw VRCDN stream links are omitted from the public event Links section. Other event-authored links, including Twitch, remain in ordinary Links. Performer stream links and copy controls live in Host view. The event page has no DJ links accordion. This does not change the contextual watch player.
 
 Embeds are limited to explicitly supported providers:
 

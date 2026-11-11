@@ -3,6 +3,7 @@ import { v, type Infer } from "convex/values";
 export const clubPermission = v.union(
   v.literal("edit_community_profile"),
   v.literal("manage_events"),
+  v.literal("host_events"),
   v.literal("manage_event_media"),
   v.literal("view_event_operations"),
   v.literal("manage_staff"),
@@ -22,6 +23,7 @@ export type ClubPermission = Infer<typeof clubPermission>;
 export const CLUB_PERMISSIONS: ClubPermission[] = [
   "edit_community_profile",
   "manage_events",
+  "host_events",
   "manage_event_media",
   "view_event_operations",
   "manage_staff",
