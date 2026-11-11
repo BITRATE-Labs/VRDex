@@ -42,6 +42,13 @@ native Stop case covers that sender's queue and fence; accepted capacity runs
 provide their own integrated sender, capture and decoder evidence. These scopes
 do not substitute for one another.
 
+Each capacity run must independently satisfy complete-tail acceptance. A prior
+accepted receipt does not guarantee that the next Stop yields a complete capture.
+An incomplete tail fails that run and remains failed. A later run cannot turn
+that receipt into accepted evidence. Guaranteed capture finalization would
+require separate proof lifecycle work without weakening the immediate
+publication fence.
+
 Every **Restream Local Checks** job builds the current production worker image
 and runs the full deterministic transport gate with network isolation. The
 46-case timing suite lives at `tests/native/event-media-timing.test.mjs`; its
