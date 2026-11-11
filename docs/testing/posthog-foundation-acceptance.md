@@ -58,6 +58,8 @@ The coarse auth-outcome tracker also lives outside the provider component so pro
 
 ## Original implementation verification
 
+Selected Linux CI exposed five existing dense-fixture setup failures across data flow and both visual lanes: the loader honestly reported partial after its bounded initial page budget, while tests assumed immediate completeness. Their shared setup now uses the visible More action and still requires ready. All three failed data-flow cases pass against an isolated anonymous local backend, preserving query limits, retry counts, roster contents and focus assertions. The two dense visual cases reached all final content assertions locally but differ at native screenshot rendering; committed baselines remain unchanged and Linux comparison remains required. The existing 17 pagination unit cases also pass.
+
 - Web focused checks: 43 passed. Backend focused checks: 101 passed.
 - Desktop/mobile analytics browser spec: 16 passed. Screenshots received direct visual inspection after the opaque-panel fix.
 - Web broad suite: 1,119 passed with the unchanged `vrdex-mcp.test.ts` synchronous child-probe hang excluded.
