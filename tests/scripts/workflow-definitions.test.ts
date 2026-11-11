@@ -212,7 +212,9 @@ describe("optional browser and visual evidence contract", () => {
     assert.deepEqual(Object.keys(candidate.secrets).sort(), Object.keys(preview.on.workflow_call.secrets).sort());
     assert.ok(preview.concurrency.group.includes("inputs.browser_acceptance"));
     const resolve = preview.jobs["deploy-preview"].steps.find((step: { id?: string }) => step.id === "pr");
-    assert.ok(resolve.with.script.includes("ci-pr-${pull.number}-${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}"));
+    assert.ok(preview.concurrency.group.includes("github.event_name"));
+    assert.ok(resolve.with.script.includes('context.eventName === "pull_request" ? "ci" : "manual-accept"'));
+    assert.ok(resolve.with.script.includes("${purpose}-pr-${pull.number}-${pull.head.sha}"));
     assert.ok(preview.jobs["hosted-mcp-preview-smoke"].if.includes("!inputs.browser_acceptance"));
     const browser = preview.jobs["candidate-browser-acceptance"];
     assert.ok(browser.if.includes("is_fork == 'false'"));
@@ -221,6 +223,8 @@ describe("optional browser and visual evidence contract", () => {
     assert.equal(browser.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS, "${{ inputs.capture_screenshots }}");
     assert.equal(browser.env.PLAYWRIGHT_BASE_URL, "${{ needs.deploy-preview.outputs.deployment_url }}");
     const steps = browser.steps;
+    const evidenceUpload = steps.find((step: { name?: string }) => step.name === "Upload candidate evidence");
+    assert.equal(evidenceUpload.with["retention-days"], 7);
     const preflight = steps.findIndex((step: { run?: string }) => step.run?.includes("candidate-preview-acceptance.mjs preflight"));
     const mutation = steps.findIndex((step: { run?: string }) => step.run?.includes("profile-submission.flow.spec.ts"));
     const report = steps.findIndex((step: { run?: string }) => step.run?.includes("candidate-preview-acceptance.mjs report"));

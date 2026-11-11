@@ -82,7 +82,7 @@ permissions:
 # discarding the most recent human request. At workflow scope a newer request
 # cancels the entire older run, which is the intended behaviour.
 concurrency:
-  group: on-demand-vercel-preview-${{ inputs.pull_number }}-${{ inputs.browser_acceptance && 'acceptance' || 'manual' }}
+  group: on-demand-vercel-preview-${{ inputs.pull_number }}-${{ inputs.browser_acceptance && 'acceptance' || 'manual' }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
@@ -152,8 +152,9 @@ jobs:
               return;
             }
 
+            const purpose = context.eventName === "pull_request" ? "ci" : "manual-accept";
             core.setOutput("preview_name", process.env.BROWSER_ACCEPTANCE === "true"
-              ? `ci-pr-${pull.number}-${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}`
+              ? `${purpose}-pr-${pull.number}-${pull.head.sha}`
               : `pr-${pull.number}`);
             core.setOutput("head_sha", requestedSha || pull.head.sha);
             core.setOutput("head_ref", pull.head.ref);
@@ -560,6 +561,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: playwright-hosted-data-flow
+          retention-days: 7
           if-no-files-found: error
           path: |
             apps/web/playwright-artifacts/
