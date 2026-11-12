@@ -35,6 +35,8 @@ Do not introduce a management runtime key or automatic deletion worker.
   retention period. Only that synthetic recording's metadata was read.
 - This is synthetic guest browser proof. It does not repeat the hosted
   signed-in account acceptance in PR 460 or measure real mobile performance.
+- The follow-up Vercel Terraform plan passed with one import, one in-place
+  update to the environment variable comment, no additions and no destruction.
 
 The sections below describe the pre-activation evidence and superseded staged
 recommendation. The approval above supersedes their event-only/replay-off
