@@ -1342,6 +1342,7 @@ export default defineSchema({
     sortAt: v.optional(v.number()),
     doorsOpenAt: v.optional(v.number()),
     endAt: v.optional(v.number()),
+    recapEndAt: v.optional(v.number()),
     timezone: v.optional(v.string()),
     communityProfileId: v.optional(v.id("profiles")),
     communityName: v.optional(v.string()),
@@ -2109,6 +2110,7 @@ export default defineSchema({
     ])
     .index("by_communityProfileId_openedAt", ["communityProfileId", "openedAt"])
     .index("by_worldId_openedAt", ["worldId", "openedAt"])
+    .index("by_mergedIntoSessionId", ["mergedIntoSessionId"])
     .index("by_integration_canonical_openedAt", ["integrationId", "mergedIntoSessionId", "openedAt"])
     .index("by_integration_canonical_state_openedAt", ["integrationId", "mergedIntoSessionId", "state", "openedAt"])
     .index("by_integration_canonical_state_lastObservedAt", ["integrationId", "mergedIntoSessionId", "state", "lastObservedAt"])
@@ -2202,6 +2204,8 @@ export default defineSchema({
     error: v.optional(v.string()), updatedAt: v.number(),
   }).index("by_runId_key", ["runId", "key"]).index("by_runId_state", ["runId", "state"]),
   communityTelemetryEventRecapJobs: defineTable({
+    windowSignature: v.optional(v.string()),
+    refreshRequested: v.optional(v.boolean()),
     failure: v.optional(v.string()),
     calculationVersion: v.optional(v.string()),
     eventId: v.id("events"),

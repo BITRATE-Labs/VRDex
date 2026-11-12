@@ -294,6 +294,47 @@ for (const reactive of [false, true]) {
   });
 }
 
+
+test("recap cutoff saves, clears and preserves errors @storybook-visual", async ({ page, isMobile }) => {
+  await page.goto("/iframe.html?id=clubs-analytics--analytics&viewMode=story");
+  await expect(page.getByText("Updating", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Recap end", exact: true }).click();
+  const input = page.getByLabel("Recap end", { exact: true });
+  await input.fill("2026-01-01T00:00");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveText("Unable to save.");
+  await expect(input).toHaveValue("2026-01-01T00:00");
+  await input.fill("2026-11-08T23:00");
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") await page.getByRole("heading", { name: "Event recaps", exact: true }).locator("..").screenshot({ path: `../../.cache/artifacts/recap-end-editor-${isMobile ? "mobile" : "desktop"}.png` });
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(input).toHaveCount(0);
+  await page.getByRole("button", { name: "Recap end", exact: true }).click();
+  await expect(input).toHaveValue("2026-11-08T23:00");
+  await page.getByRole("button", { name: "Automatic", exact: true }).click();
+  await page.getByRole("button", { name: "Recap end", exact: true }).click();
+  await expect(input).not.toHaveValue("2026-11-08T23:00");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.goto("/iframe.html?id=clubs-analytics--analytics-without-event-management&viewMode=story");
+  await expect(page.getByRole("heading", { name: "Event recaps", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Recap end", exact: true })).toHaveCount(0);
+});
+
+
+test("invalid recap ranges retain a usable correction editor @storybook-visual", async ({ page, isMobile }) => {
+  await page.goto("/iframe.html?id=clubs-analytics--invalid-recap-range&viewMode=story");
+  await expect(page.getByText("Invalid range", { exact: true })).toBeVisible();
+  await expect(page.getByText("602", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Recap end", exact: true }).click();
+  const input = page.getByLabel("Recap end", { exact: true });
+  await expect(input).not.toHaveValue("");
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") await page.getByRole("heading", { name: "Event recaps", exact: true }).locator("..").screenshot({ path: `../../.cache/artifacts/recap-invalid-range-${isMobile ? "mobile" : "desktop"}.png` });
+  await page.getByRole("button", { name: "Automatic", exact: true }).click();
+  await expect(page.getByText("Invalid range", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Recap end", exact: true }).click();
+  await expect(input).not.toHaveValue("");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
 for (const scenario of ["paired", "paged", "legacy", "no-queue", "partial", "multi-day"]) {
   test(`real instance detail chart ${scenario} @storybook-visual`, async ({ page, isMobile }) => {
     await page.goto(`/iframe.html?id=clubs-analytics--instance-chart-${scenario}&viewMode=story`);

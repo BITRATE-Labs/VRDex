@@ -45,12 +45,14 @@ class AnalyticsFixtureClient extends ConvexReactClient {
   private clubDefaults = this.preferences;
   private personal = false;
   private associatedEvent = false;
+  private recapEndAt: number | null = null;
   private suggestions = [
     { id: "fixture-suggestion-1", eventTitle: "Afterhours 043", sessionId: "fixture-session-2", worldName: "Afterhours Lounge", openedAt: this.now - 3 * 86400_000, confidence: 0.75, canConfirm: true },
     { id: "fixture-suggestion-2", eventTitle: "Afterhours 043", sessionId: null, worldName: null, openedAt: null, confidence: 0.75, canConfirm: false },
   ];
-  constructor(private readonly repaired = false, private readonly chartScenario?: ChartScenario) {
+  constructor(private readonly repaired = false, private readonly canManageEvents = true, invalidRecapRange = false, private readonly chartScenario?: ChartScenario) {
     super("https://fixture.invalid");
+    if (invalidRecapRange) this.recapEndAt = Infinity;
   }
   private chartRows() {
     const start = Date.UTC(2026, 10, 7, 20);
@@ -199,6 +201,11 @@ class AnalyticsFixtureClient extends ConvexReactClient {
           endAt: this.now - 3 * 86400_000 + 4 * 3600_000,
           peak: 154,
           playerHours: 602,
+          scheduledStartAt: this.now - 3 * 86400_000,
+          scheduledEndAt: this.now - 3 * 86400_000 + 4 * 3600_000,
+          effectiveEndAt: this.recapEndAt !== null && (!Number.isFinite(this.recapEndAt) || this.recapEndAt <= this.now - 3 * 86400_000) ? null : this.recapEndAt ?? this.now - 3 * 86400_000 + 6 * 3600_000,
+          recapEndAt: this.recapEndAt,
+          canEdit: this.canManageEvents,
           coverageRatio: 0.97,
         },
       ]);
@@ -260,6 +267,10 @@ class AnalyticsFixtureClient extends ConvexReactClient {
     if (getFunctionName(mutation) === "clubProviderReads:request")
       return "fixture-read" as FunctionReturnType<Mutation>;
     const value = args[0] as Record<string, unknown> | undefined;
+    if (getFunctionName(mutation) === "communityTelemetry:setEventRecapEnd") {
+      if (value?.endAt === Date.parse("2026-01-01T00:00:00Z")) throw new Error("Fixture failure");
+      this.recapEndAt = value?.endAt as number | null;
+    }
     if (getFunctionName(mutation) === "clubOperations:enqueue" &&
       (value?.schedule as {kind: string})?.kind !== "immediate")
       throw new Error("Expected immediate schedule");
@@ -326,6 +337,7 @@ function AnalyticsFixture({
   canManageEvents = true,
   canReadInstances = true,
   repaired = false,
+  invalidRecapRange = false,
   chartScenario,
 }: {
   mode?: "home" | "analytics" | "instances";
@@ -333,9 +345,10 @@ function AnalyticsFixture({
   canManageEvents?: boolean;
   canReadInstances?: boolean;
   repaired?: boolean;
+  invalidRecapRange?: boolean;
   chartScenario?: ChartScenario;
 }) {
-  const [client] = useState(() => new AnalyticsFixtureClient(repaired, chartScenario));
+  const [client] = useState(() => new AnalyticsFixtureClient(repaired, canManageEvents, invalidRecapRange, chartScenario));
   const [href, setHref] = useState(
     `/account/communities/afterhours${mode === "home" ? "" : `/${mode}`}${initialInstance ? `?instance=${initialInstance}` : ""}`,
   );
@@ -764,6 +777,10 @@ function MembershipClockFixture() {
 }
 export const MembershipClock: Story = {
   render: () => <MembershipClockFixture />,
+};
+
+export const InvalidRecapRange: Story = {
+  render: () => <AnalyticsFixture mode="analytics" invalidRecapRange />,
 };
 
 export const InstanceChartPaired: Story = { render: () => <AnalyticsFixture mode="instances" initialInstance="fixture-session-2" chartScenario="paired" /> };

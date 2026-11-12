@@ -1,3 +1,4 @@
+import { resolveEventRecapWindow } from "./_eventRecapWindow";
 import { resolveManagedIntegrationSession, isManagedIntegrationSession, readIntegrationRollups, readManagedIntegration } from "./_groupObservationPolicy";
 import { membershipCoverage, readPopulationGaps } from "./_collectionCoverage";
 import { paginationOptsValidator } from "convex/server";
@@ -929,6 +930,11 @@ export const listEventRecaps = query({
         endAt: v.number(),
         peak: v.number(),
         playerHours: v.number(),
+        scheduledStartAt: v.number(),
+        scheduledEndAt: v.union(v.number(), v.null()),
+        effectiveEndAt: v.union(v.number(), v.null()),
+        recapEndAt: v.union(v.number(), v.null()),
+        canEdit: v.boolean(),
         coverageRatio: v.number(),
         groupMemberCount: v.optional(v.number()),
         netChange: v.optional(v.number()),
@@ -964,6 +970,7 @@ export const listEventRecaps = query({
     }
     const page = [];
     let scanned = 0;
+    let remainingAssociations = 2500;
     let isDone = false;
     // Convex permits one .paginate() per query. Walk a bounded indexed range
     // with a row cursor so hidden event rollups cannot consume visible slots.
@@ -982,7 +989,15 @@ export const listEventRecaps = query({
         const event = await ctx.db.get(row.eventId);
         if (!event || event.communityProfileId !== state.community._id ||
           (!managesEvents && event.publicationState !== "published")) continue;
+        const window = await resolveEventRecapWindow(ctx.db, event, state.integration, Math.min(1000, remainingAssociations));
+        remainingAssociations -= window?.associationCount ?? 0;
+        if (!window) continue;
         page.push({
+          scheduledStartAt: window.startAt,
+          scheduledEndAt: event.endAt ?? null,
+          effectiveEndAt: window.rangeValid ? window.endAt : null,
+          recapEndAt: event.recapEndAt ?? null,
+          canEdit: managesEvents,
           id: row._id,
           eventId: event._id,
           title: event.title,

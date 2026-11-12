@@ -1,3 +1,4 @@
+import { resolveEventRecapWindow, validateRecapRange } from "./_eventRecapWindow";
 import { integratePopulationPair, markPopulationBreaks } from "./_clubAnalyticsMath";
 import { admissionMatches, type StatisticsAdmission } from "./_groupAdmission";
 import { isManagedIntegrationSession, automaticAdmissionEnabled, readCollectionSubject, readIntegrationRollups, readLegacyRollupMapping, readManagedIntegration, saveManagedPublicationChoice } from "./_groupObservationPolicy";
@@ -1638,6 +1639,7 @@ export const ingestAggregatePoll = internalMutation({
     const aggregateOnly = !!integration.statisticsAdmission && readCollectionSubject(integration).kind === "automatic";
     const detailedInstances = aggregateOnly ? [] : args.instances;
     const worlds = new Map<string, { population: number; instanceCount: number }>();
+    const observedSessionIds: Id<"instanceSessions">[] = [];
     for (const item of detailedInstances) {
       const current = worlds.get(item.vrchatWorldId) ?? { population: 0, instanceCount: 0 };
       current.population += Math.max(0, Math.floor(item.population));
@@ -1737,6 +1739,7 @@ export const ingestAggregatePoll = internalMutation({
         });
       }
       if (!session) continue;
+      observedSessionIds.push(session._id);
       await ctx.db.insert("instancePopulationObservations", {
         integrationId: integration._id,
         sessionId: session._id,
@@ -1756,6 +1759,28 @@ export const ingestAggregatePoll = internalMutation({
       });
     }
     // List absence is not closure evidence; session freshness expires independently.
+    if (subject.kind === "managed") {
+      const events = new Set<Id<"events">>();
+      for (const sessionId of observedSessionIds) {
+        const aliases = await ctx.db.query("instanceSessions").withIndex("by_mergedIntoSessionId", q => q.eq("mergedIntoSessionId", sessionId)).take(1001);
+        if (aliases.length > 1000) {
+          await audit(ctx, { integrationId: integration._id, communityProfileId: subject.communityProfileId,
+            action: "recap.refresh", result: "alias_limit", now });
+          continue;
+        }
+        for (const id of [sessionId, ...aliases.map(alias => alias._id)]) {
+          const associations = await ctx.db.query("eventInstanceAssociations")
+            .withIndex("by_sessionId_state", q => q.eq("sessionId", id).eq("state", "confirmed")).take(2);
+          for (const association of associations) events.add(association.eventId);
+        }
+      }
+      for (const eventId of events) {
+        const event = await ctx.db.get(eventId);
+        if (!event || event.communityProfileId !== subject.communityProfileId || event.startAt === undefined || event.scheduleKind === "date_only") continue;
+        if (event.recapEndAt !== undefined && (args.observedAt < event.startAt - MAX_INTERPOLATION_GAP_MS || args.observedAt > event.recapEndAt + MAX_INTERPOLATION_GAP_MS)) continue;
+        await ctx.scheduler.runAfter(0, internal.communityTelemetry.recomputeRollup, { integrationId: integration._id, eventId, grain: "event", bucketStartAt: event.startAt, bucketEndAt: event.endAt ?? event.startAt + 6 * 3600_000 });
+      }
+    }
     readCollectionSubject(integration);
     await ctx.db.patch(integration._id, {
       state: "active",
@@ -2057,7 +2082,6 @@ async function advanceEventRecapJob(
   if (
     !event || event.communityProfileId !== job.communityProfileId ||
     event.startAt !== job.bucketStartAt ||
-    (event.endAt ?? event.startAt + 6 * 60 * 60_000) !== job.bucketEndAt ||
     !integration || readCollectionSubject(integration).kind !== "managed" ||
     currentIntegration?._id !== job.integrationId
   ) {
@@ -2065,9 +2089,17 @@ async function advanceEventRecapJob(
     return null;
   }
 
-  if (job.calculationVersion !== TELEMETRY_ROLLUP_VERSION) {
+  const window = await resolveEventRecapWindow(ctx.db, event, integration);
+  if (window) validateRecapRange(window.startAt, window.endAt);
+  if (!window || (event.recapEndAt !== undefined ? window.endAt !== job.bucketEndAt : window.endAt < job.bucketEndAt) ||
+    (job.windowSignature !== undefined && window.signature !== job.windowSignature)) {
+    await ctx.db.delete(job._id);
+    return null;
+  }
+  const associatedSessions = new Set(window.sessionIds);
+  if (job.calculationVersion !== TELEMETRY_ROLLUP_VERSION || job.windowSignature === undefined) {
     await ctx.db.patch(job._id, {
-      calculationVersion: TELEMETRY_ROLLUP_VERSION, cursor: undefined, pendingAt: undefined,
+      calculationVersion: TELEMETRY_ROLLUP_VERSION, windowSignature: window.signature, cursor: undefined, pendingAt: undefined,
       pendingTotal: 0, pendingHasValid: false, pendingSessions: [], previousAt: undefined, previousTotal: undefined,
       currentPopulation: undefined, peakConcurrency: 0, playerMinutes: 0, measuredMs: 0,
       activeInstanceCount: 0, worldDistribution: [], computedAt: Date.now(),
@@ -2079,7 +2111,6 @@ async function advanceEventRecapJob(
     .withIndex("by_integrationId_observedAt", q => q.eq("integrationId", job.integrationId)
       .gte("observedAt", Math.max(integration.telemetryEpochStartedAt ?? integration.createdAt, job.bucketStartAt - MAX_INTERPOLATION_GAP_MS)).lte("observedAt", job.bucketEndAt + MAX_INTERPOLATION_GAP_MS))
     .paginate({ cursor: job.cursor ?? null, numItems: EVENT_RECAP_PAGE_SIZE });
-  const associationBySession = new Map<Id<"instanceSessions">, boolean>();
   const worldDistribution = new Map(job.worldDistribution.map(row => [row.vrchatWorldId, row.samples]));
   let pendingAt = job.pendingAt;
   let pendingTotal = job.pendingTotal;
@@ -2127,17 +2158,8 @@ async function advanceEventRecapJob(
 
   for (const point of page.page) {
     if (pendingAt !== undefined && point.observedAt !== pendingAt) await finishTimestamp();
-    let associated = associationBySession.get(point.sessionId);
-    if (associated === undefined) {
-      const confirmed = await ctx.db.query("eventInstanceAssociations")
-        .withIndex("by_sessionId_state", q => q.eq("sessionId", point.sessionId).eq("state", "confirmed"))
-        .first();
-      const session = await ctx.db.get(point.sessionId);
-      associated = confirmed?.eventId === job.eventId && confirmed.communityProfileId === job.communityProfileId &&
-        session?.integrationId === integration._id && session.openedAt >= (integration.telemetryEpochStartedAt ?? integration.createdAt);
-      associationBySession.set(point.sessionId, associated);
-    }
-    if (!associated) continue;
+    // Index order keeps the earliest retained row when a session repeats a timestamp.
+    if (!associatedSessions.has(point.sessionId) || pendingSessions.has(point.sessionId)) continue;
     pendingAt = point.observedAt;
     pendingSessions.add(point.sessionId);
     if (point.coverageState === "observed" || point.coverageState === "estimated") {
@@ -2162,11 +2184,8 @@ async function advanceEventRecapJob(
   }
 
   await finishTimestamp();
-  const confirmed = await ctx.db.query("eventInstanceAssociations")
-    .withIndex("by_eventId_state", q => q.eq("eventId", job.eventId).eq("state", "confirmed"))
-    .first();
   const existing = await rollupForIntegration(ctx, integration, { eventId: job.eventId, grain: "event", bucketStartAt: job.bucketStartAt });
-  if (!confirmed || confirmed.communityProfileId !== job.communityProfileId) {
+  if (!window.sessionIds.length) {
     if (existing?.communityProfileId === job.communityProfileId) await ctx.db.delete(existing._id);
     await ctx.db.delete(job._id);
     return null;
@@ -2204,6 +2223,12 @@ async function advanceEventRecapJob(
     : await ctx.db.insert("communityTelemetryRollups", values);
   if (existing) await ctx.db.patch(existing._id, values);
   await ctx.db.delete(job._id);
+  if (job.refreshRequested || window.endAt > job.bucketEndAt) {
+    await ctx.scheduler.runAfter(0, internal.communityTelemetry.recomputeRollup, {
+      integrationId: job.integrationId, communityProfileId: job.communityProfileId, eventId: job.eventId,
+      grain: "event", bucketStartAt: window.startAt, bucketEndAt: window.endAt,
+    });
+  }
   return rollupId;
 }
 
@@ -2241,6 +2266,7 @@ export const continueEventRecapJob = internalMutation({
 });
 
 export const recomputeRollup = internalMutation({
+  returns: v.union(v.null(), v.id("communityTelemetryRollups")),
   args: {
     communityProfileId: v.optional(v.id("profiles")),
     integrationId: v.optional(v.id("communityVrchatIntegrations")),
@@ -2263,10 +2289,10 @@ export const recomputeRollup = internalMutation({
     const event = args.eventId ? await ctx.db.get(args.eventId) : null;
     const currentEvent = event && event.communityProfileId === communityProfileId &&
       event.startAt !== undefined && event.scheduleKind !== "date_only" ? event : null;
-    const bucketStartAt = currentEvent?.startAt ?? args.bucketStartAt;
-    const bucketEndAt = currentEvent
-      ? currentEvent.endAt ?? currentEvent.startAt! + 6 * 60 * 60_000
-      : args.bucketEndAt;
+    const window = currentEvent ? await resolveEventRecapWindow(ctx.db, currentEvent, integration) : null;
+    if (window) validateRecapRange(window.startAt, window.endAt);
+    const bucketStartAt = window?.startAt ?? args.bucketStartAt;
+    const bucketEndAt = window?.endAt ?? args.bucketEndAt;
     if (bucketEndAt <= bucketStartAt) throw new Error("Rollup window is invalid.");
     let existing = args.eventId
       ? await ctx.db.query("communityTelemetryRollups").withIndex("by_eventId_rollupVersion", (q) => q.eq("eventId", args.eventId!)).first()
@@ -2279,12 +2305,17 @@ export const recomputeRollup = internalMutation({
     existing = await rollupForIntegration(ctx, integration, { eventId: args.eventId, grain: args.grain, bucketStartAt });
     if (args.eventId) {
       if (!communityProfileId) throw new Error("Event rollups require a managed event.");
+      const active = await ctx.db.query("communityTelemetryEventRecapJobs")
+        .withIndex("by_eventId", q => q.eq("eventId", args.eventId!)).first();
+      if (active && !active.failure && window?.sessionIds.length && active.integrationId === integration._id &&
+        active.bucketStartAt === window.startAt && active.windowSignature === window.signature &&
+        (currentEvent?.recapEndAt === undefined ? active.bucketEndAt <= window.endAt : active.bucketEndAt === window.endAt)) {
+        // Finish this bounded generation, then catch up even for late in-window samples.
+        await ctx.db.patch(active._id, { refreshRequested: true });
+        return null;
+      }
       await invalidateEventRecapJob(ctx, args.eventId);
-      const confirmed = await ctx.db
-        .query("eventInstanceAssociations")
-        .withIndex("by_eventId_state", (q) => q.eq("eventId", args.eventId!).eq("state", "confirmed"))
-        .first();
-      if (!confirmed) {
+      if (!window?.sessionIds.length) {
         if (existing) await ctx.db.delete(existing._id);
         return null;
       }
@@ -2292,7 +2323,7 @@ export const recomputeRollup = internalMutation({
         eventId: args.eventId,
         communityProfileId,
         integrationId: integration._id,
-        bucketStartAt, bucketEndAt,
+        bucketStartAt, bucketEndAt, windowSignature: window.signature,
         pendingTotal: 0, pendingHasValid: false, pendingSessions: [],
         peakConcurrency: 0, playerMinutes: 0, measuredMs: 0, activeInstanceCount: 0,
         worldDistribution: [],
@@ -2308,6 +2339,35 @@ export const recomputeRollup = internalMutation({
       return existing._id;
     }
     return ctx.db.insert("communityTelemetryRollups", values);
+  },
+});
+
+export const setEventRecapEnd = mutation({
+  args: { communitySlug: v.string(), eventId: v.id("events"), endAt: v.union(v.number(), v.null()) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const profile = await ctx.db.query("profiles").withIndex("by_slug", q => q.eq("slug", args.communitySlug.trim().toLowerCase())).unique();
+    if (!profile || profile.profileType !== "community") throw new Error("You do not have access to this action.");
+    const actor = await resolveClubActor(ctx, profile._id);
+    requireClubPermission(actor, "manage_events");
+    const visibility = await readClubVisibility(ctx.db, profile._id);
+    if (!canReadCategory(actor, visibility, "event_recaps")) throw new Error("You do not have access to this category.");
+    const event = await ctx.db.get(args.eventId);
+    const integration = await readManagedIntegration(ctx.db, profile._id);
+    if (!event || event.communityProfileId !== profile._id || event.startAt === undefined || event.scheduleKind === "date_only" || !integration)
+      throw new Error("Event recap was not found.");
+    const next = { ...event, recapEndAt: args.endAt ?? undefined };
+    if (args.endAt !== null) validateRecapRange(event.startAt, args.endAt);
+    const window = await resolveEventRecapWindow(ctx.db, next, integration);
+    if (!window?.sessionIds.length) throw new Error("Event recap was not found.");
+    validateRecapRange(window.startAt, window.endAt);
+    await ctx.db.patch(event._id, { recapEndAt: next.recapEndAt });
+    await invalidateEventRecapJob(ctx, event._id);
+    await ctx.scheduler.runAfter(0, internal.communityTelemetry.recomputeRollup, {
+      communityProfileId: profile._id, eventId: event._id, grain: "event",
+      bucketStartAt: window.startAt, bucketEndAt: window.endAt,
+    });
+    return null;
   },
 });
 

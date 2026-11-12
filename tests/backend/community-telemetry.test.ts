@@ -17,6 +17,7 @@ const modules = {
   "../../convex/clubConnection.ts": () => import("../../convex/clubConnection"),
   "../../convex/clubAnalytics.ts": () => import("../../convex/clubAnalytics"),
   "../../convex/profiles.ts": () => import("../../convex/profiles"),
+  "../../convex/events.ts": () => import("../../convex/events"),
 };
 const schema = (schemaModule as unknown as { default?: typeof schemaModule }).default ?? schemaModule;
 const NOW = Date.parse("2026-07-21T12:00:00.000Z");
@@ -207,6 +208,15 @@ describe("community telemetry control plane", () => {
     const afterDuplicate = await t.run(ctx => ctx.db.get(integrationId));
     assert.equal(afterDuplicate!.nextPollAt, now + 90_000);
     assert.equal(afterDuplicate!.lastSuccessfulObservationAt, now + 2000);
+    const oldEvent = await t.run(async ctx => {
+      const eventId = await ctx.db.insert("events", { title: "Old lobby", sortTitle: "old lobby", startAt: now - 20 * 86400_000, endAt: now - 19 * 86400_000,
+        communityProfileId: sessions[0]!.communityProfileId, sourceType: "manual", sourceLabel: "test", eventStatus: "scheduled", publicationState: "published", updatedAt: now });
+      await ctx.db.insert("eventInstanceAssociations", { eventId, sessionId: sessions[0]!._id, communityProfileId: sessions[0]!.communityProfileId!, source: "manual", confidence: 1, state: "confirmed", createdAt: now, updatedAt: now });
+      return eventId;
+    });
+    await t.mutation(internal.communityTelemetry.ingestAggregatePoll, { ...poll, pollId: "old-event-tail", observedAt: now + 2500, instances: [{ ...instance, population: 8, closedAt: now + 500 }] });
+    const scheduled = await t.run(ctx => ctx.db.system.query("_scheduled_functions").collect());
+    assert.ok(scheduled.some(job => job.name.includes("recomputeRollup") && job.args.some(arg => arg.eventId === oldEvent)), "closed-session tails refresh even when the event is outside the recent picker");
     await t.mutation(internal.communityTelemetry.ingestAggregatePoll, { ...poll, pollId: "older-open", observedAt: now + 1000, instances: [instance] });
     assert.equal((await t.run(ctx => ctx.db.query("instanceSessions").collect())).length, 1);
     const alreadyClosed = { ...instance, providerInstanceId: "two", providerLocation: "wrld_example:two", population: 6, closedAt: now - 1000 };
@@ -1401,7 +1411,7 @@ describe("community telemetry control plane", () => {
         await ctx.db.insert("instancePopulationObservations", {
           integrationId, sessionId: sessionIds[index % 200]!, idempotencyKey: `paged-recap-${index}`,
           providerInstanceId: `paged-session-${index % 200}`, vrchatWorldId: "wrld_paged",
-          population: 1, observedAt: startAt + 60_000,
+          population: index < 200 ? 1 : 1000, observedAt: startAt + 60_000,
           source: "first_party", collectorVersion: "test-v1", coverageState: "observed", fencingToken: 1,
         });
       }
@@ -1426,15 +1436,19 @@ describe("community telemetry control plane", () => {
       communityProfileId, eventId, grain: "event", bucketStartAt: startAt, bucketEndAt: startAt + 3 * 60_000,
     });
     assert.equal(replacement, null);
+    await t.run(ctx => ctx.db.patch(eventId, { recapEndAt: startAt + 5 * 60_000 }));
+    await finishImmediateSchedules(t);
+    assert.equal(await t.run(ctx => ctx.db.query("communityTelemetryRollups").withIndex("by_eventId_rollupVersion", q => q.eq("eventId", eventId)).first()), null, "an old continuation cannot publish after an override edit");
+    await t.mutation(internal.communityTelemetry.recomputeRollup, { communityProfileId, eventId, grain: "event", bucketStartAt: startAt, bucketEndAt: startAt + 3 * 60_000 });
     await finishImmediateSchedules(t);
     const rollup = await t.run(ctx => ctx.db.query("communityTelemetryRollups")
       .withIndex("by_eventId_rollupVersion", q => q.eq("eventId", eventId).eq("rollupVersion", "community-telemetry-v2"))
       .first());
-    assert.equal(rollup?.peakConcurrency, 205);
+    assert.equal(rollup?.peakConcurrency, 200);
     assert.equal(rollup?.currentPopulation, 5);
-    assert.equal(rollup?.playerMinutes, 105);
+    assert.equal(rollup?.playerMinutes, 102.5);
     assert.equal(rollup?.activeInstanceCount, 200);
-    assert.equal(rollup?.worldDistribution[0]?.samples, 206);
+    assert.equal(rollup?.worldDistribution[0]?.samples, 201);
 
     const additionalSessionId = await t.run(async ctx => {
       const sessionId = await ctx.db.insert("instanceSessions", {
@@ -1467,9 +1481,9 @@ describe("community telemetry control plane", () => {
       .withIndex("by_eventId_rollupVersion", q => q.eq("eventId", eventId).eq("rollupVersion", "community-telemetry-v2"))
       .first());
     assert.equal(afterAssociation?.currentPopulation, 12);
-    assert.equal(afterAssociation?.playerMinutes, 108.5);
+    assert.equal(afterAssociation?.playerMinutes, 106);
     assert.equal(afterAssociation?.activeInstanceCount, 200);
-    assert.equal(afterAssociation?.worldDistribution[0]?.samples, 207);
+    assert.equal(afterAssociation?.worldDistribution[0]?.samples, 202);
   });
 
   it("pages recent event work to refresh confirmed rollups and create suggestions", async () => {
@@ -2151,4 +2165,245 @@ it("preserves canonical group identity and history when a disconnected community
   await assert.rejects(connect(oldGroup), /stopped.*Resume/);
   assert.deepEqual(await snapshot(), before);
   assert.equal((await t.withIdentity(identity).query(api.clubConnection.get, { communityProfileId }))?.integrationId, newId);
+});
+
+
+it("automatic recap tails, canonical overrides and current-session deduplication", async () => {
+  const t = convexTest({ schema, modules });
+  const communityProfileId = await seedCommunity(t);
+  await grantVisibilityOwner(t);
+  await registerAccount(t);
+  const integrationId = await t.withIdentity(identity).mutation(api.communityTelemetry.connectGroup, {
+    communitySlug: "faceless", vrchatGroupId: "grp_00000000-0000-4000-8000-000000000001", groupVisibility: "public", joinPolicy: "free",
+  });
+  const startAt = Date.now() + 60_000;
+  const { eventId, sessionId } = await t.run(async ctx => {
+    const eventId = await ctx.db.insert("events", { slug: "tail-event", title: "Tail", sortTitle: "tail", startAt, endAt: startAt + 60_000,
+      communityProfileId, sourceType: "manual", sourceLabel: "test", eventStatus: "scheduled", publicationState: "published", updatedAt: startAt });
+    const sessionId = await ctx.db.insert("instanceSessions", { integrationId, communityProfileId, providerInstanceId: "tail", providerLocation: "wrld_tail:tail", vrchatWorldId: "wrld_tail", source: "first_party", state: "closed", openedAt: startAt, lastObservedAt: startAt + 180_000, closedAt: startAt + 60_000, consecutiveMisses: 0, updatedAt: startAt });
+    await ctx.db.insert("eventInstanceAssociations", { eventId, sessionId, communityProfileId, source: "manual", confidence: 1, state: "confirmed", createdAt: startAt, updatedAt: startAt });
+    for (const offset of [0, 60_000, 120_000, 180_000]) await ctx.db.insert("instancePopulationObservations", { integrationId, sessionId, idempotencyKey: `tail-${offset}`, providerInstanceId: "tail", vrchatWorldId: "wrld_tail", population: offset === 180_000 ? 20 : 10, observedAt: startAt + offset, source: "first_party", collectorVersion: "test", coverageState: "observed", fencingToken: 1 });
+    return { eventId, sessionId };
+  });
+  const args = { communityProfileId, eventId, grain: "event" as const, bucketStartAt: startAt, bucketEndAt: startAt + 60_000 };
+  const id = await t.mutation(internal.communityTelemetry.recomputeRollup, args);
+  assert.ok(id);
+  assert.equal((await t.run(ctx => ctx.db.get(id)))?.bucketEndAt, startAt + 180_001);
+  assert.equal((await t.run(ctx => ctx.db.get(id)))?.peakConcurrency, 20);
+  await t.withIdentity(identity).mutation(api.communityTelemetry.setPublicMetric, { communitySlug: "faceless", metric: "eventRecaps", enabled: true });
+  const publicRecap = await t.query(api.communityTelemetry.getPublicForCommunity, { communitySlug: "faceless", now: startAt + 240000 });
+  assert.equal(publicRecap?.eventRecaps?.[0]?.endAt, startAt + 180001);
+  assert.equal(publicRecap?.eventRecaps?.[0]?.peakConcurrency, 20);
+  assert.equal("instanceHistory" in publicRecap!, false);
+  assert.equal((await t.query(api.events.getPublicBySlug, { slug: "tail-event" }))?.endAt, startAt + 60000);
+  await t.withIdentity(identity).mutation(api.communityTelemetry.setPublicMetric, { communitySlug: "faceless", metric: "eventRecaps", enabled: false });
+  assert.equal((await t.query(api.communityTelemetry.getPublicForCommunity, { communitySlug: "faceless", now: startAt + 240000 }))?.eventRecaps, undefined);
+  await assert.rejects(t.mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId, endAt: startAt + 120_000 }), /access|signed/i);
+  for (const endAt of [startAt, startAt - 1, startAt + 94 * 86400_000, Infinity])
+    await assert.rejects(t.withIdentity(identity).mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId, endAt }), /range|window|finite/i);
+  await t.withIdentity(identity).mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId, endAt: startAt + 120_000 });
+  await t.mutation(internal.communityTelemetry.recomputeRollup, args);
+  assert.equal((await t.run(ctx => ctx.db.get(id)))?.bucketEndAt, startAt + 120_000);
+  assert.equal((await t.run(ctx => ctx.db.get(eventId)))?.endAt, startAt + 60_000);
+  await t.withIdentity(identity).mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId, endAt: null });
+  assert.equal(await t.mutation(internal.communityTelemetry.recomputeRollup, args), id);
+  assert.equal((await t.run(ctx => ctx.db.get(id)))?.bucketEndAt, startAt + 180_001);
+  // Alias confirmations refer to the same canonical session and never duplicate its samples.
+  await t.run(async ctx => {
+    const { _id, _creationTime, ...session } = (await ctx.db.get(sessionId))!;
+    const alias = await ctx.db.insert("instanceSessions", { ...session, mergedIntoSessionId: sessionId });
+    await ctx.db.insert("eventInstanceAssociations", { eventId, sessionId: alias, communityProfileId, source: "manual", confidence: 1, state: "confirmed", createdAt: startAt, updatedAt: startAt });
+  });
+  await t.mutation(internal.communityTelemetry.recomputeRollup, args);
+  assert.equal((await t.run(ctx => ctx.db.get(id)))?.peakConcurrency, 20);
+  await t.withIdentity(identity).mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId, endAt: startAt + 300_000 });
+  await t.mutation(internal.communityTelemetry.recomputeRollup, args);
+  const extended = await t.run(ctx => ctx.db.get(id));
+  assert.equal(extended?.playerMinutes, 35);
+  assert.equal(extended?.coverageRatio, 0.6, "the unobserved manual extension remains unknown");
+  await t.withIdentity(identity).mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId, endAt: null });
+  await t.run(ctx => ctx.db.patch(eventId, { endAt: undefined }));
+  await t.mutation(internal.communityTelemetry.recomputeRollup, args);
+  assert.equal((await t.run(ctx => ctx.db.get(id)))?.bucketEndAt, startAt + 6 * 3600_000);
+  const owner = t.withIdentity(identity);
+  const recaps = await owner.query(api.clubAnalytics.listEventRecaps, { communitySlug: "faceless", startAt: startAt - 1000, endAt: startAt + 86400_000, paginationOpts: { numItems: 5, cursor: null } });
+  assert.equal(recaps.page[0]?.canEdit, true);
+  assert.equal(recaps.page[0]?.recapEndAt, null);
+  assert.equal(recaps.page[0]?.scheduledEndAt, null);
+  assert.equal(recaps.page[0]?.effectiveEndAt, startAt + 6 * 3600_000);
+  await t.run(async ctx => {
+    const owners = await ctx.db.query("profileOwners").withIndex("by_profileId_state", q => q.eq("profileId", communityProfileId).eq("state", "active")).collect();
+    for (const row of owners) await ctx.db.delete(row._id);
+  });
+  const viewer = await owner.query(api.clubAnalytics.listEventRecaps, { communitySlug: "faceless", startAt: startAt - 1000, endAt: startAt + 86400_000, paginationOpts: { numItems: 5, cursor: null } });
+  assert.equal(viewer.page[0]?.canEdit, false);
+  await assert.rejects(owner.mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId, endAt: null }), /access/i);
+  await t.run(ctx => ctx.db.patch(sessionId, { openedAt: 0 }));
+  await t.mutation(internal.communityTelemetry.recomputeRollup, args);
+  assert.equal(await t.run(ctx => ctx.db.get(id)), null);
+});
+
+
+it("paged recaps publish pinned prefixes under incoming polls and coalesced scheduler refreshes", async test => {
+  let now = Date.now();
+  test.mock.method(Date, "now", () => now);
+  test.mock.timers.enable({ apis: ["setTimeout"] });
+  const t = convexTest({ schema, modules });
+  const communityProfileId = await seedCommunity(t);
+  const collectorAccountId = await registerAccount(t);
+  const integrationId = await t.withIdentity(identity).mutation(api.communityTelemetry.connectGroup, {
+    communitySlug: "faceless", vrchatGroupId: "grp_00000000-0000-4000-8000-000000000001", groupVisibility: "public", joinPolicy: "free",
+  });
+  const startAt = now + 1000;
+  const { eventId, sessionId } = await t.run(async ctx => {
+    const eventId = await ctx.db.insert("events", { title: "Continuous tail", sortTitle: "continuous tail", startAt, endAt: startAt + 60_000, communityProfileId, sourceType: "manual", sourceLabel: "test", eventStatus: "scheduled", publicationState: "published", updatedAt: now });
+    const sessionId = await ctx.db.insert("instanceSessions", { integrationId, communityProfileId, providerInstanceId: "continuous", providerLocation: "wrld_continuous:continuous", vrchatWorldId: "wrld_continuous", source: "first_party", state: "open", openedAt: startAt, lastObservedAt: startAt + 249_000, consecutiveMisses: 0, updatedAt: now });
+    await ctx.db.insert("eventInstanceAssociations", { eventId, sessionId, communityProfileId, source: "manual", confidence: 1, state: "confirmed", createdAt: now, updatedAt: now });
+    for (let index = 0; index < 250; index++) await ctx.db.insert("instancePopulationObservations", { integrationId, sessionId, idempotencyKey: `continuous-${index}`, providerInstanceId: "continuous", vrchatWorldId: "wrld_continuous", population: 10, observedAt: startAt + index * 1000, source: "first_party", collectorVersion: "test", coverageState: "observed", fencingToken: 1 });
+    return { eventId, sessionId };
+  });
+  now = startAt + 300_000;
+  const [claim] = (await t.mutation(internal.communityTelemetry.claimDueAssignments, { collectorAccountId, workerId: "continuous", now, leaseMs: 2_000_000 })).assignments;
+  assert.ok(claim);
+  const args = { integrationId, communityProfileId, eventId, grain: "event" as const, bucketStartAt: startAt, bucketEndAt: startAt + 60_000 };
+  await t.mutation(internal.communityTelemetry.recomputeRollup, args);
+  const job = await t.run(ctx => ctx.db.query("communityTelemetryEventRecapJobs").first());
+  assert.ok(job?.cursor);
+  for (let round = 0; round < 2; round++) {
+    now += 1000;
+    await t.mutation(internal.communityTelemetry.ingestAggregatePoll, { integrationId, collectorAccountId, workerId: "continuous", fencingToken: claim.fencingToken, collectorVersion: "test", source: "first_party", groupMemberCount: 50, nextPollAt: now + 60_000, now, pollId: `continuous-poll-${round}`, observedAt: now, instances: [{ providerInstanceId: "continuous", providerLocation: "wrld_continuous:continuous", vrchatWorldId: "wrld_continuous", population: 20 }] });
+    assert.ok(await t.run(ctx => ctx.db.get(job._id)), "ingest must not delete active progress");
+    const before = await t.run(ctx => ctx.db.get(job._id));
+    await t.mutation(internal.communityTelemetry.recomputeRollup, args);
+    assert.equal((await t.run(ctx => ctx.db.get(job._id)))?.cursor, before?.cursor, "periodic refresh must preserve the cursor");
+    await t.mutation(internal.communityTelemetry.advanceEventRecapPage, { jobId: job._id });
+  }
+  const published = await t.run(ctx => ctx.db.query("communityTelemetryRollups").first());
+  assert.equal(published?.bucketEndAt, startAt + 249_001);
+  assert.equal(published?.peakConcurrency, 10);
+  const catchup = await t.run(async ctx => (await ctx.db.system.query("_scheduled_functions").collect()).filter(fn => fn.name.includes("recomputeRollup")));
+  assert.ok(catchup.length >= 3, "completion queues catch-up after refreshes arrived");
+  await t.mutation(internal.communityTelemetry.recomputeRollup, args);
+  let latest = await t.run(ctx => ctx.db.query("communityTelemetryEventRecapJobs").first());
+  assert.ok(latest);
+  for (let page = 0; latest && page < 5; page++) {
+    await t.mutation(internal.communityTelemetry.advanceEventRecapPage, { jobId: latest._id });
+    latest = await t.run(ctx => ctx.db.query("communityTelemetryEventRecapJobs").first());
+  }
+  assert.equal((await t.run(ctx => ctx.db.get(published!._id)))?.bucketEndAt, now + 1);
+  // A genuinely late in-window row needs a complete catch-up even when the end stays fixed.
+  await t.run(ctx => ctx.db.patch(eventId, { recapEndAt: startAt + 249_000 }));
+  await t.mutation(internal.communityTelemetry.recomputeRollup, args);
+  const fixed = await t.run(ctx => ctx.db.query("communityTelemetryEventRecapJobs").first());
+  assert.ok(fixed);
+  const beforeOutside = await t.run(async ctx => (await ctx.db.system.query("_scheduled_functions").collect()).filter(fn => fn.name.includes("recomputeRollup")).length);
+  now = startAt + 700_000;
+  await t.mutation(internal.communityTelemetry.ingestAggregatePoll, { integrationId, collectorAccountId, workerId: "continuous", fencingToken: claim.fencingToken, collectorVersion: "test", source: "first_party", groupMemberCount: 50, nextPollAt: now + 60_000, now, pollId: "outside-fixed", observedAt: startAt + 700_000, instances: [{ providerInstanceId: "continuous", providerLocation: "wrld_continuous:continuous", vrchatWorldId: "wrld_continuous", population: 25 }] });
+  assert.equal((await t.run(ctx => ctx.db.get(fixed._id)))?.cursor, fixed.cursor);
+  const beforeLate = await t.run(async ctx => (await ctx.db.system.query("_scheduled_functions").collect()).filter(fn => fn.name.includes("recomputeRollup")).length);
+  assert.equal(beforeLate, beforeOutside, "out-of-range fixed-cutoff observations do not schedule recalculation");
+  // An explicit historical insertion/recompute models a late retained row; live ingest keeps its existing out-of-order policy.
+  await t.run(ctx => ctx.db.insert("instancePopulationObservations", { integrationId, sessionId, idempotencyKey: "late-in-window", providerInstanceId: "continuous", vrchatWorldId: "wrld_continuous", population: 50, observedAt: startAt + 500, source: "first_party", collectorVersion: "test", coverageState: "observed", fencingToken: 1 }));
+  await t.mutation(internal.communityTelemetry.recomputeRollup, args);
+  assert.equal((await t.run(ctx => ctx.db.get(fixed._id)))?.refreshRequested, true, "same-window requests retain a catch-up for late source rows");
+  await t.mutation(internal.communityTelemetry.advanceEventRecapPage, { jobId: fixed._id });
+  await t.mutation(internal.communityTelemetry.advanceEventRecapPage, { jobId: fixed._id });
+  await t.mutation(internal.communityTelemetry.recomputeRollup, args);
+  const catchupFixed = await t.run(ctx => ctx.db.query("communityTelemetryEventRecapJobs").first());
+  assert.ok(catchupFixed);
+  await t.mutation(internal.communityTelemetry.advanceEventRecapPage, { jobId: catchupFixed._id });
+  await t.mutation(internal.communityTelemetry.advanceEventRecapPage, { jobId: catchupFixed._id });
+  assert.equal((await t.run(ctx => ctx.db.get(published!._id)))?.peakConcurrency, 50);
+  await t.mutation(internal.communityTelemetry.recomputeRollup, args);
+  const edited = await t.run(ctx => ctx.db.query("communityTelemetryEventRecapJobs").first());
+  assert.ok(edited);
+  await t.mutation(internal.communityTelemetry.recomputeRollup, args);
+  await t.run(ctx => ctx.db.patch(eventId, { recapEndAt: startAt + 200_000 }));
+  await t.mutation(internal.communityTelemetry.advanceEventRecapPage, { jobId: edited._id });
+  assert.equal(await t.run(ctx => ctx.db.get(edited._id)), null, "cutoff edits still reject coalesced obsolete jobs");
+  assert.equal((await t.run(ctx => ctx.db.get(published!._id)))?.bucketEndAt, startAt + 249_000);
+});
+
+
+it("invalid desired recap windows preserve independent schedule edits and explicit cutoff recovery", async test => {
+  test.mock.timers.enable({ apis: ["setTimeout"] });
+  const t = convexTest({ schema, modules });
+  const communityProfileId = await seedCommunity(t);
+  await grantVisibilityOwner(t);
+  await registerAccount(t);
+  const integrationId = await t.withIdentity(identity).mutation(api.communityTelemetry.connectGroup, { communitySlug: "faceless", vrchatGroupId: "grp_00000000-0000-4000-8000-000000000001", groupVisibility: "public", joinPolicy: "free" });
+  const startAt = Date.now() + 1000;
+  const ids = await t.run(async ctx => {
+    const ids: Id<"events">[] = [];
+    for (const slug of ["cutoff-recovery", "healthy-recap"]) {
+      const eventId = await ctx.db.insert("events", { slug, title: slug, sortTitle: slug, startAt, endAt: startAt + 180_000, communityProfileId, sourceType: "community", sourceLabel: "test", eventStatus: "scheduled", publicationState: "published", updatedAt: startAt });
+      const sessionId = await ctx.db.insert("instanceSessions", { integrationId, communityProfileId, providerInstanceId: slug, providerLocation: `wrld_recovery:${slug}`, vrchatWorldId: "wrld_recovery", source: "first_party", state: "open", openedAt: startAt, lastObservedAt: startAt + 120_000, consecutiveMisses: 0, updatedAt: startAt });
+      await ctx.db.insert("eventInstanceAssociations", { eventId, sessionId, communityProfileId, source: "manual", confidence: 1, state: "confirmed", createdAt: startAt, updatedAt: startAt });
+      for (const offset of [0, 60_000, 120_000]) await ctx.db.insert("instancePopulationObservations", { integrationId, sessionId, idempotencyKey: `${slug}-${offset}`, providerInstanceId: slug, vrchatWorldId: "wrld_recovery", population: 10, observedAt: startAt + offset, source: "first_party", collectorVersion: "test", coverageState: "observed", fencingToken: 1 });
+      ids.push(eventId);
+    }
+    return ids;
+  });
+  const owner = t.withIdentity(identity);
+  const recapArgs = (eventId: Id<"events">) => ({ integrationId, eventId, grain: "event" as const, bucketStartAt: startAt, bucketEndAt: startAt + 180_000 });
+  await owner.mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId: ids[0]!, endAt: startAt + 60_000 });
+  for (const eventId of ids) await t.mutation(internal.communityTelemetry.recomputeRollup, recapArgs(eventId));
+  await owner.mutation(api.events.updateCommunityEvent, { currentSlug: "cutoff-recovery", communitySlug: "faceless", startAt: startAt + 120_000, endAt: startAt + 180_000, timezone: "UTC" });
+  assert.equal((await t.run(ctx => ctx.db.get(ids[0]!)))?.recapEndAt, startAt + 60_000, "schedule edits preserve the explicit cutoff");
+  const read = () => owner.query(api.clubAnalytics.listEventRecaps, { communitySlug: "faceless", startAt: startAt - 1000, endAt: startAt + 86400_000, paginationOpts: { numItems: 10, cursor: null } });
+  let page = await read();
+  assert.equal(page.page.length, 2);
+  const invalid = page.page.find(row => row.eventId === ids[0]);
+  assert.equal(invalid?.canEdit, true);
+  assert.equal(invalid?.effectiveEndAt, null);
+  assert.equal(invalid?.endAt, startAt + 60_000, "persisted metrics retain their original range");
+  await assert.rejects(t.mutation(internal.communityTelemetry.recomputeRollup, recapArgs(ids[0]!)), /supported range/);
+  await owner.mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId: ids[0]!, endAt: null });
+  assert.equal((await read()).page.find(row => row.eventId === ids[0])?.effectiveEndAt, startAt + 180_000);
+  await t.run(ctx => ctx.db.patch(ids[0]!, { recapEndAt: Infinity }));
+  page = await read();
+  assert.equal(page.page.length, 2, "an invalid imported cutoff cannot hide the healthy row or recovery editor");
+  assert.equal(page.page.find(row => row.eventId === ids[0])?.effectiveEndAt, null);
+  await owner.mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId: ids[0]!, endAt: startAt + 150_000 });
+  assert.equal((await read()).page.find(row => row.eventId === ids[0])?.effectiveEndAt, startAt + 150_000);
+  await owner.mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId: ids[0]!, endAt: null });
+  await owner.mutation(api.events.updateCommunityEvent, { currentSlug: "cutoff-recovery", communitySlug: "faceless", startAt, endAt: startAt + 94 * 86400_000, timezone: "UTC" });
+  assert.equal((await read()).page.find(row => row.eventId === ids[0])?.effectiveEndAt, null, "oversized automatic ranges preserve correction access");
+  await assert.rejects(t.mutation(internal.communityTelemetry.recomputeRollup, recapArgs(ids[0]!)), /supported range/);
+  await owner.mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId: ids[0]!, endAt: startAt + 180_000 });
+  assert.equal((await read()).page.find(row => row.eventId === ids[0])?.effectiveEndAt, startAt + 180_000);
+  await assert.rejects(owner.mutation(api.communityTelemetry.setEventRecapEnd, { communitySlug: "faceless", eventId: ids[0]!, endAt: null }), /supported range/);
+  assert.equal((await t.run(ctx => ctx.db.get(ids[0]!)))?.recapEndAt, startAt + 180_000, "failed Automatic restoration preserves the explicit cutoff");
+});
+
+
+it("recap alias overflow preserves raw ingestion and records the skipped refresh", async test => {
+  let now = Date.now();
+  test.mock.method(Date, "now", () => now);
+  test.mock.timers.enable({ apis: ["setTimeout"] });
+  const t = convexTest({ schema, modules });
+  await seedCommunity(t);
+  const collectorAccountId = await registerAccount(t);
+  const integrationId = await t.withIdentity(identity).mutation(api.communityTelemetry.connectGroup, {
+    communitySlug: "faceless", vrchatGroupId: "grp_00000000-0000-4000-8000-000000000001", groupVisibility: "public", joinPolicy: "free",
+  });
+  const claim = (await t.mutation(internal.communityTelemetry.claimDueAssignments, { collectorAccountId, workerId: "alias-overflow", limit: 1, now })).assignments[0]!;
+  const poll = () => ({ integrationId, collectorAccountId, workerId: "alias-overflow", fencingToken: claim.fencingToken, collectorVersion: "test", source: "first_party" as const,
+    groupMemberCount: 50, now, observedAt: now, nextPollAt: now + 60000, pollId: String(now),
+    instances: [{ providerInstanceId: "overflow", providerLocation: "wrld_overflow:overflow", vrchatWorldId: "wrld_overflow", population: 11, userCount: 11, queueSize: 0, platforms: { standalonewindows: 11 } }] });
+  await t.mutation(internal.communityTelemetry.ingestAggregatePoll, poll());
+  const sessionId = await t.run(async ctx => {
+    const session = (await ctx.db.query("instanceSessions").first())!;
+    const { _id, _creationTime, ...fields } = session;
+    for (let index = 0; index < 1001; index++) await ctx.db.insert("instanceSessions", { ...fields, state: "closed", mergedIntoSessionId: _id });
+    return _id;
+  });
+  now += 60000;
+  await assert.doesNotReject(t.mutation(internal.communityTelemetry.ingestAggregatePoll, poll()));
+  const rows = await t.run(ctx => ctx.db.query("instancePopulationObservations").withIndex("by_sessionId_observedAt", q => q.eq("sessionId", sessionId)).collect());
+  assert.equal(rows.length, 2);
+  assert.equal(rows[1]?.userCount, 11);
+  assert.equal(rows[1]?.queueSize, 0);
+  assert.equal((await t.run(ctx => ctx.db.get(integrationId)))?.lastSuccessfulObservationAt, now);
+  assert.ok((await t.run(ctx => ctx.db.query("communityTelemetryAuditEvents").collect())).some(row => row.action === "recap.refresh" && row.result === "alias_limit"));
 });
