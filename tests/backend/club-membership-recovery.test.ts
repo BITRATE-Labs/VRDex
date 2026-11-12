@@ -7,6 +7,7 @@ import { recoverMembershipPage } from "../../workers/group-telemetry/membership-
 import { RequestBudget } from "../../workers/group-telemetry/runtime.mjs";
 import { VrchatProviderError } from "../../workers/group-telemetry/vrchat-client.mjs";
 import { ClubProvider } from "../../workers/group-telemetry/club-provider.mjs";
+import { normalizeMembershipAuditPage } from "../../workers/group-telemetry/membership-audit.mjs";
 const schema = (schemaModule as unknown as { default?: typeof schemaModule }).default ?? schemaModule;
 const modules = {
   "../../convex/clubMembershipRecovery.ts": () => import("../../convex/clubMembershipRecovery"),
@@ -18,6 +19,7 @@ const modules = {
 const mutation = (name: string) => makeFunctionReference<"mutation">(`clubMembershipRecovery:${name}`);
 const status = makeFunctionReference<"query">("clubMembershipRecovery:getRecoveryStatus");
 const activity = makeFunctionReference<"query">("clubMembership:listActivity");
+const backfill = makeFunctionReference<"mutation">("clubMembership:backfillTargetIdentities");
 const authority = makeFunctionReference<"mutation">("clubConnection:recordAuthority");
 const A = "usr_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", B = "usr_bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 const R = "grol_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
@@ -131,6 +133,12 @@ test("activity filters apply before pagination to legacy rows in the exact autho
   });
   await s.insertEvent({ auditId: "foreign", epochStartedAt: s.epochStartedAt - 1, targetUserId: A, eventType: "group.member.leave" });
   const args = { communitySlug: "recovery-club", startAt: s.now - 2000, endAt: s.now, targetUserId: A, eventType: "group.member.leave" };
+  const scope = { integrationId: s.integrationId, epochStartedAt: s.epochStartedAt, groupId: "grp_test" };
+  await assert.rejects(s.owner.query(activity, { ...args, paginationOpts: { numItems: 7, cursor: null } }), /MEMBERSHIP_ACTIVITY_INDEX_PENDING/);
+  assert.deepEqual(await s.t.mutation(backfill, scope), { updated: 100, complete: false });
+  await assert.rejects(s.owner.query(activity, { ...args, paginationOpts: { numItems: 7, cursor: null } }), /MEMBERSHIP_ACTIVITY_INDEX_PENDING/);
+  assert.deepEqual(await s.t.mutation(backfill, scope), { updated: 60, complete: true });
+  assert.deepEqual(await s.t.mutation(backfill, scope), { updated: 0, complete: true });
   await assert.rejects(s.t.query(activity, { ...args, paginationOpts: { numItems: 7, cursor: null } }));
   let cursor: string | null = null; const ids = [];
   for (;;) {
@@ -141,6 +149,51 @@ test("activity filters apply before pagination to legacy rows in the exact autho
     cursor = result.continueCursor;
   }
   assert.equal(ids.length, 27); assert.equal(new Set(ids).size, 27); assert.equal(ids.includes("foreign"), false);
+});
+
+test("canonical filters include every parser-accepted legacy spelling before combined pagination", async () => {
+  const s = await setup();
+  const spellings = [A, A.toUpperCase(), A.replaceAll("a", "A")];
+  for (let i = 0; i < 42; i++) {
+    const [parsed] = normalizeMembershipAuditPage([{ id: `mixed${i}`, groupId: "grp_test", eventType: i % 2 ? "group.member.join" : "group.member.leave", targetId: spellings[i % 3], created_at: new Date(s.now - 1000 - i).toISOString() }], { groupId: "grp_test", startAt: s.now - 2000, endAt: s.now });
+    assert.equal(parsed.targetUserId, spellings[i % 3]);
+    await s.insertEvent(parsed);
+  }
+  const args = { communitySlug: "recovery-club", startAt: s.now - 2000, endAt: s.now, targetUserId: A, eventType: "group.member.leave" };
+  const unfiltered = await s.owner.query(activity, { communitySlug: args.communitySlug, startAt: args.startAt, endAt: args.endAt, paginationOpts: { numItems: 100, cursor: null } });
+  assert.equal(unfiltered.page.length, 42);
+  await assert.rejects(s.owner.query(activity, { ...args, paginationOpts: { numItems: 4, cursor: null } }), /MEMBERSHIP_ACTIVITY_INDEX_PENDING/);
+  await s.t.mutation(backfill, { integrationId: s.integrationId, epochStartedAt: s.epochStartedAt, groupId: "grp_test" });
+  let cursor: string | null = null; const ids: string[] = [];
+  do {
+    const result = await s.owner.query(activity, { ...args, paginationOpts: { numItems: 4, cursor } });
+    assert.ok(result.page.every(row => row.targetUserId.toLowerCase() === A && row.eventType === args.eventType));
+    ids.push(...result.page.map(row => row.auditId));
+    cursor = result.isDone ? null : result.continueCursor;
+  } while (cursor);
+  assert.equal(ids.length, 21); assert.equal(new Set(ids).size, 21);
+  const personOnly = await s.owner.query(activity, { ...args, targetUserId: A.toUpperCase(), eventType: undefined, paginationOpts: { numItems: 100, cursor: null } });
+  assert.equal(personOnly.page.length, 42);
+  assert.deepEqual((await s.t.run(ctx => ctx.db.query("communityMembershipEvents").collect())).map(row => row.targetUserId), Array.from({ length: 42 }, (_, i) => spellings[i % 3]));
+});
+
+test("target projection backfill is scope fenced and does not alter immutable evidence", async () => {
+  const s = await setup();
+  const scope = { integrationId: s.integrationId, epochStartedAt: s.epochStartedAt, groupId: "grp_test" };
+  const id = await s.insertEvent({ targetUserId: A.toUpperCase(), verified: false });
+  const absent = await s.insertEvent({ auditId: "no-person", targetUserId: undefined });
+  const invalid = await s.insertEvent({ auditId: "non-person", targetUserId: "grp_test" });
+  const old = await s.insertEvent({ auditId: "old-epoch", epochStartedAt: s.epochStartedAt - 1 });
+  const original = await s.t.run(ctx => ctx.db.get(id));
+  await assert.rejects(s.t.mutation(backfill, { ...scope, epochStartedAt: s.epochStartedAt - 1 }), /Inactive/);
+  await assert.rejects(s.t.mutation(backfill, { ...scope, groupId: "grp_foreign" }), /Inactive/);
+  assert.deepEqual(await s.t.mutation(backfill, scope), { updated: 3, complete: true });
+  const { canonicalTargetUserId, ...unchanged } = (await s.t.run(ctx => ctx.db.get(id)))!;
+  assert.equal(canonicalTargetUserId, A); assert.deepEqual(unchanged, original);
+  for (const id of [absent, invalid]) assert.equal((await s.t.run(ctx => ctx.db.get(id)))?.canonicalTargetUserId, "");
+  assert.equal((await s.t.run(ctx => ctx.db.get(old)))?.canonicalTargetUserId, undefined);
+  await s.t.run(ctx => ctx.db.patch(s.integrationId, { telemetryEpochStartedAt: s.now }));
+  await assert.rejects(s.t.mutation(backfill, scope), /Inactive/);
 });
 test("role observations update changed names immediately, throttle unchanged labels and retain deleted roles", async () => {
   const s = await setup(); await s.insertEvent({ roleId: R });

@@ -13,6 +13,20 @@ const modules = {
 const A = "usr_11111111-1111-1111-1111-111111111111";
 const B = "usr_22222222-2222-2222-2222-222222222222";
 const review = (targetUserIds = [A]) => ({ kind: "invitation_review" as const, targetUserIds, destination: { kind: "group" as const } });
+it("people claims bind dispatch to the exact shared budget minute", async (test) => {
+  const start = 1800000059999;
+  test.mock.timers.enable({ apis: ["Date", "setTimeout"], now: start });
+  const s = await setup(), worker = await ready(s);
+  await s.owner.mutation(api.clubPeople.requestView, { communityProfileId: s.communityProfileId, source: review([A, B]) });
+  const first = (await s.t.mutation(internal.clubPeople.claim, worker)).jobs[0];
+  assert.equal(first.reservationWindowStartedAt, Math.floor(start / 60_000) * 60_000);
+  const counters = await s.t.run(ctx => ctx.db.query("collectorRequestBudgetCounters").collect());
+  assert.ok(counters.every(row => row.windowStartedAt === first.reservationWindowStartedAt));
+  test.mock.timers.tick(2);
+  await s.t.mutation(internal.clubPeople.release, { ...worker, personId: first.personId, leaseToken: first.leaseToken });
+  const second = (await s.t.mutation(internal.clubPeople.claim, worker)).jobs[0];
+  assert.equal(second.reservationWindowStartedAt, first.reservationWindowStartedAt + 60_000);
+});
 it("review admission is private, bounded, replaces the old grant and expires", async (test) => {
   test.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1800000000000 });
   const s = await setup();

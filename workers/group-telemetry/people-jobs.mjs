@@ -19,15 +19,19 @@ export async function checkPeople({ control, provider, accountBudget, heartbeat,
   if (isStopping() || accountBudget.retryAfterMs(1, clock()) > 0) return 0;
   await heartbeat();
   if (isStopping()) return 0;
+  const claimStartedAt = clock();
   const { jobs = [] } = await control.send("people_claim", { limit: 1 }, { requirePayload: true });
   const job = jobs[0];
   if (!job) return 0;
   const lease = { personId: job.personId, leaseToken: job.leaseToken };
-  if (isStopping()) {
+  const sentAt = clock();
+  if (isStopping() || sentAt < claimStartedAt ||
+      !Number.isSafeInteger(job.reservationWindowStartedAt) ||
+      job.reservationWindowStartedAt !== Math.floor(sentAt / 60_000) * 60_000 ||
+      !accountBudget.tryConsume(1, sentAt)) {
     await control.send("people_release", lease, { requirePayload: true });
     return 0;
   }
-  accountBudget.tryConsume(1, clock());
   let result;
   try {
     result = await resolvePersonName(job.userId, provider);

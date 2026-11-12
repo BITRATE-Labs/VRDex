@@ -292,6 +292,7 @@ export const ingestBatch = internalMutation({
       }
       await ctx.db.insert("communityMembershipEvents", {
         ...cleanItem,
+        canonicalTargetUserId: item.targetUserId && validUserId(item.targetUserId) ? item.targetUserId.toLowerCase() : "",
         integrationId: scan.integrationId,
         epochStartedAt: scan.epochStartedAt,
         groupId: scan.groupId,
@@ -549,11 +550,17 @@ export const listActivity = query({
     const state = await readContext(ctx, args.communitySlug, true);
     if (!state) return { page: [], isDone: true, continueCursor: "", scopeUnavailable: true as const };
     try {
+      const targetUserId = args.targetUserId?.toLowerCase();
+      // Missing projections must not turn retained history into an apparently empty result.
+      if (targetUserId !== undefined && await ctx.db.query("communityMembershipEvents")
+        .withIndex("by_canonical_target_time", q => q.eq("integrationId", state.integrationId).eq("epochStartedAt", state.epochStartedAt).eq("canonicalTargetUserId", undefined).eq("verified", true).gte("occurredAt", args.startAt).lt("occurredAt", args.endAt)).first()) {
+        throw new ConvexError({ code: "MEMBERSHIP_ACTIVITY_INDEX_PENDING" });
+      }
       const events = ctx.db.query("communityMembershipEvents");
       const filtered = args.targetUserId !== undefined && args.eventType !== undefined
-        ? events.withIndex("by_verified_target_type_time", q => q.eq("integrationId", state.integrationId).eq("epochStartedAt", state.epochStartedAt).eq("verified", true).eq("targetUserId", args.targetUserId).eq("eventType", args.eventType!).gte("occurredAt", args.startAt).lt("occurredAt", args.endAt))
+        ? events.withIndex("by_canonical_target_type_time", q => q.eq("integrationId", state.integrationId).eq("epochStartedAt", state.epochStartedAt).eq("canonicalTargetUserId", targetUserId!).eq("verified", true).eq("eventType", args.eventType!).gte("occurredAt", args.startAt).lt("occurredAt", args.endAt))
         : args.targetUserId !== undefined
-          ? events.withIndex("by_verified_target_time", q => q.eq("integrationId", state.integrationId).eq("epochStartedAt", state.epochStartedAt).eq("verified", true).eq("targetUserId", args.targetUserId).gte("occurredAt", args.startAt).lt("occurredAt", args.endAt))
+          ? events.withIndex("by_canonical_target_time", q => q.eq("integrationId", state.integrationId).eq("epochStartedAt", state.epochStartedAt).eq("canonicalTargetUserId", targetUserId!).eq("verified", true).gte("occurredAt", args.startAt).lt("occurredAt", args.endAt))
           : args.eventType !== undefined
             ? events.withIndex("by_verified_type_time", q => q.eq("integrationId", state.integrationId).eq("epochStartedAt", state.epochStartedAt).eq("verified", true).eq("eventType", args.eventType!).gte("occurredAt", args.startAt).lt("occurredAt", args.endAt))
             : events.withIndex("by_verified_time", q => q.eq("integrationId", state.integrationId).eq("epochStartedAt", state.epochStartedAt).eq("verified", true).gte("occurredAt", args.startAt).lt("occurredAt", args.endAt));
@@ -591,8 +598,29 @@ export const listActivity = query({
           (error instanceof ConvexError && typeof error.data === "object" && error.data?.paginationError === "InvalidCursor")) {
         throw new ConvexError({ code: "MEMBERSHIP_ACTIVITY_CURSOR_INVALID" });
       }
+      if (error instanceof ConvexError && typeof error.data === "object" && error.data?.code === "MEMBERSHIP_ACTIVITY_INDEX_PENDING") throw error;
       console.error("Membership activity page failed", error);
       throw new ConvexError({ code: "MEMBERSHIP_ACTIVITY_PAGE_FAILED" });
     }
+  },
+});
+
+/** Local derived projection only; each invocation is bounded to one exact current scope. */
+export const backfillTargetIdentities = internalMutation({
+  args: scope,
+  returns: v.object({ updated: v.number(), complete: v.boolean() }),
+  handler: async (ctx, args) => {
+    const integration = await ctx.db.get(args.integrationId);
+    if (!integration || integration.vrchatGroupId !== args.groupId ||
+        (integration.telemetryEpochStartedAt ?? integration.createdAt) !== args.epochStartedAt) {
+      throw new Error("Inactive membership projection scope.");
+    }
+    const rows = await ctx.db.query("communityMembershipEvents")
+      .withIndex("by_canonical_target_time", q => q.eq("integrationId", args.integrationId).eq("epochStartedAt", args.epochStartedAt).eq("canonicalTargetUserId", undefined)).take(101);
+    for (const row of rows.slice(0, 100)) {
+      if (row.groupId !== args.groupId) throw new Error("Membership projection scope mismatch.");
+      await ctx.db.patch(row._id, { canonicalTargetUserId: row.targetUserId && validUserId(row.targetUserId) ? row.targetUserId.toLowerCase() : "" });
+    }
+    return { updated: Math.min(rows.length, 100), complete: rows.length <= 100 };
   },
 });

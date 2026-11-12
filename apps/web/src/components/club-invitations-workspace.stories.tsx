@@ -25,6 +25,8 @@ const alice = "usr_11111111-1111-1111-1111-111111111111";
 const bob = "usr_22222222-2222-2222-2222-222222222222";
 class InvitationFixtureClient extends ConvexReactClient {
   private readonly peopleFixture = new ClubPeopleFixture();
+  private previewCount = 0;
+  private peopleCount = 0;
   private reads = new Map<string, Record<string, unknown>>();
   private cache = new Map<string, unknown>();
   private fixtureListeners = new Set<() => void>();
@@ -194,6 +196,7 @@ class InvitationFixtureClient extends ConvexReactClient {
     query: Query,
     ...args: ArgsAndOptions<Query, object>
   ): Promise<FunctionReturnType<Query>> {
+    if (getFunctionName(query) === "clubInvitations:preview") document.documentElement.dataset.invitationPreviews = String(++this.previewCount);
     return this.result(
       getFunctionName(query),
       args[0] ?? {},
@@ -207,6 +210,7 @@ class InvitationFixtureClient extends ConvexReactClient {
       value = args[0] as Record<string, unknown>;
     let result: unknown = null;
     if (name === "clubPeople:requestView") {
+      document.documentElement.dataset.invitationPeopleRequests = String(++this.peopleCount);
       const source = value.source as FunctionArgs<typeof import("@convex-generated-api").api.clubPeople.requestView>["source"];
       result = this.peopleFixture.request(source, source.kind === "invitation_review" ? source.targetUserIds : source.kind === "invitation_batch" ? (this.outcomes.get(source.batchId) ?? []).flatMap(item => [item.userId, item.reviewedUserId]) : []);
     } else if (name === "clubProviderReads:request") {

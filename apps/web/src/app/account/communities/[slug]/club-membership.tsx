@@ -237,17 +237,17 @@ export function MembershipActivityView({
   onLoadMore?: () => void;
 }) {
   const visibleIds = events.flatMap(event => [event.targetUserId, event.actorUserId, event.targetIdentity?.vrchatUrl.split("/").at(-1), event.actorIdentity?.vrchatUrl.split("/").at(-1)]).filter(isVrchatUserId);
-  const memberIds = [...new Set([...events.map(event => event.targetUserId).filter(isVrchatUserId), ...(targetUserId ? [targetUserId] : [])])];
-  const memberLabel = (id: string) => personName(id, people.find(person => person.userId === id)?.displayName || events.find(event => event.targetUserId === id)?.targetIdentity?.displayName || events.find(event => event.targetUserId === id)?.targetDisplayName, memberIds);
+  const memberIds = [...new Set([...events.map(event => event.targetUserId).filter(isVrchatUserId).map(id => id.toLowerCase()), ...(targetUserId ? [targetUserId.toLowerCase()] : [])])];
+  const memberLabel = (id: string) => personName(id, people.find(person => person.userId?.toLowerCase() === id)?.displayName || events.find(event => event.targetUserId?.toLowerCase() === id)?.targetIdentity?.displayName || events.find(event => event.targetUserId?.toLowerCase() === id)?.targetDisplayName, memberIds);
   return (
     <Card padding="lg" className="min-w-0">
       <SectionTitle>Membership activity</SectionTitle>
-      {onFilterChange ? <div className="mt-4 flex flex-wrap items-end gap-3"><Field className="min-w-0 basis-full sm:flex-1 sm:basis-0">Member<Select aria-label="Member" value={targetUserId ?? ""} onChange={event => onFilterChange({ targetUserId: event.target.value || undefined, eventType })}><option value="">All members</option>{memberIds.map(id => <option key={id} value={id}>{accessiblePersonName(memberLabel(id))}</option>)}</Select></Field><Field className="min-w-0 basis-full sm:flex-1 sm:basis-0">Activity<Select aria-label="Activity" value={eventType ?? ""} onChange={event => onFilterChange({ targetUserId, eventType: event.target.value || undefined })}><option value="">All activity</option>{Object.entries(activityOptions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}{eventType && !(eventType in activityOptions) ? <option value={eventType}>{eventType}</option> : null}</Select></Field>{targetUserId || eventType ? <Button onClick={() => onFilterChange({})}>Clear filters</Button> : null}</div> : null}
+      {onFilterChange ? <div className="mt-4 flex flex-wrap items-end gap-3"><Field className="min-w-0 basis-full sm:flex-1 sm:basis-0">Member<Select aria-label="Member" value={targetUserId?.toLowerCase() ?? ""} onChange={event => onFilterChange({ targetUserId: event.target.value || undefined, eventType })}><option value="">All members</option>{memberIds.map(id => <option key={id} value={id}>{accessiblePersonName(memberLabel(id))}</option>)}</Select></Field><Field className="min-w-0 basis-full sm:flex-1 sm:basis-0">Activity<Select aria-label="Activity" value={eventType ?? ""} onChange={event => onFilterChange({ targetUserId, eventType: event.target.value || undefined })}><option value="">All activity</option>{Object.entries(activityOptions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}{eventType && !(eventType in activityOptions) ? <option value={eventType}>{eventType}</option> : null}</Select></Field>{targetUserId || eventType ? <Button onClick={() => onFilterChange({})}>Clear filters</Button> : null}</div> : null}
       <PeoplePending count={pendingCount} />
       <div className="mt-4 divide-y divide-border">
         {events.map((event) => {
-          const target: PersonIdentity | undefined = people.find(person => person.userId === event.targetUserId) ?? event.targetIdentity;
-          const actor: PersonIdentity | undefined = people.find(person => person.userId === event.actorUserId) ?? event.actorIdentity;
+          const target: PersonIdentity | undefined = people.find(person => person.userId?.toLowerCase() === event.targetUserId?.toLowerCase()) ?? event.targetIdentity;
+          const actor: PersonIdentity | undefined = people.find(person => person.userId?.toLowerCase() === event.actorUserId?.toLowerCase()) ?? event.actorIdentity;
           const targetId = event.targetUserId ?? target?.vrchatUrl?.split("/").at(-1);
           const userId = isVrchatUserId(targetId) ? targetId : undefined;
           const personSubject = userId !== undefined || event.eventType.startsWith("group.member.");
@@ -284,7 +284,7 @@ export function MembershipActivityView({
                   ["Role", event.eventType.startsWith("group.member.role.") && !event.roleName ? "Role not recorded" : undefined],
                 ].map(([label, value]) => value ? <div key={label}><dt>{label}</dt><dd className="break-all text-foreground">{value}</dd></div> : null)}
               </dl>
-              {userId && onFilterChange ? <Button size="sm" variant="ghost" className="mt-3" onClick={() => onFilterChange({ targetUserId: userId, eventType })}>Filter member</Button> : null}
+              {userId && onFilterChange ? <Button size="sm" variant="ghost" className="mt-3" onClick={() => onFilterChange({ targetUserId: userId.toLowerCase(), eventType })}>Filter member</Button> : null}
             </details>
           </div>;
         })}
@@ -405,7 +405,7 @@ function MembershipActivityQuery({
       setRequests(current => current.map((request, index) => pages[index] instanceof Error ? {
       ...request, id: request.id + 1,
     } : request));
-    }}>Retry</Button></Notice> : null}
+    }}>Retry</Button>{onFilterChange && (targetUserId || eventType) ? <Button className="ml-3" size="sm" variant="secondary" onClick={() => onFilterChange({})}>Clear filters</Button> : null}</Notice> : null}
     {!clearHistory && (events.length > 0 || errors.length === 0) ? <AdmittedActivity
       events={events}
       targetUserId={targetUserId}

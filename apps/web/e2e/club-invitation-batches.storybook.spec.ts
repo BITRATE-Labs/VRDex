@@ -448,7 +448,9 @@ test("recipient selection survives name updates and freezes only selected IDs @s
   await expect(review.getByRole("listitem")).toHaveCount(1);
   await expect(review).toContainText(alice);
   await expect(review).not.toContainText(bob);
-  await page.screenshot({ path: `../../.cache/artifacts/invitation-identity-selection-${test.info().project.name}.png`, fullPage: true });
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/invitation-identity-selection-${test.info().project.name}.png`, fullPage: true });
+  }
   await page.getByRole("button", { name: "Confirm invitations" }).click();
   const payload = await page.evaluate(() => JSON.parse(document.documentElement.dataset.invitationPayload!));
   expect(payload.reviewedRecipients).toEqual([alice]);
@@ -487,4 +489,32 @@ test("batch cancellation distinguishes colliding missing-name references @storyb
   expect(new Set(names).size).toBe(2);
   await expect(confirmation).toContainText(first);
   await expect(confirmation).toContainText(second);
+});
+
+
+test("recipient previews settle once and review cannot freeze stale selection @storybook-visual", async ({ page }) => {
+  await page.clock.install();
+  await page.goto("/iframe.html?id=clubs-invitations-workspace--late-names&viewMode=story");
+  const input = page.getByLabel("VRChat user IDs");
+  await input.fill(alice);
+  const review = page.getByRole("button", { name: "Review invitations", exact: true });
+  await expect(review).toBeDisabled();
+  await input.fill(`${alice}\n`);
+  await input.fill(`${alice}\n${bob}`);
+  expect(await page.evaluate(() => Number(document.documentElement.dataset.invitationPreviews ?? 0))).toBe(0);
+  await page.clock.runFor(350);
+  await expect(page.getByRole("list", { name: "Select recipients", exact: true }).getByRole("checkbox")).toHaveCount(2);
+  expect(await page.evaluate(() => Number(document.documentElement.dataset.invitationPreviews))).toBe(1);
+  await expect.poll(() => page.evaluate(() => Number(document.documentElement.dataset.invitationPeopleRequests))).toBe(1);
+  await page.getByRole("checkbox", { name: `Select recipient ${bob}`, exact: true }).uncheck();
+  await page.getByRole("checkbox", { name: `Select recipient ${alice}`, exact: true }).uncheck();
+  await expect(review).toBeDisabled();
+  await input.fill(bob);
+  await expect(review).toBeDisabled();
+  await page.clock.runFor(350);
+  await expect(review).toBeEnabled();
+  await review.click();
+  const confirmation = page.getByRole("region", { name: "Review invitations", exact: true });
+  await expect(confirmation).toContainText(bob);
+  await expect(confirmation).not.toContainText(alice);
 });

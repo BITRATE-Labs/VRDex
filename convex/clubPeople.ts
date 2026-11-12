@@ -291,7 +291,7 @@ async function workerScope(ctx: Ctx, person: Doc<"clubPeople">, account: Doc<"co
 }
 export const claim = internalMutation({
   args: { ...worker, limit: v.optional(v.number()) },
-  returns: v.object({ jobs: v.array(v.object({ personId: v.id("clubPeople"), userId: v.string(), leaseToken: v.string() })) }),
+  returns: v.object({ jobs: v.array(v.object({ personId: v.id("clubPeople"), userId: v.string(), leaseToken: v.string(), reservationWindowStartedAt: v.number() })) }),
   handler: async (ctx, args) => {
     if (args.limit !== undefined && (!Number.isInteger(args.limit) || args.limit < 1 || args.limit > 10)) throw new Error("Invalid people claim limit.");
     // Live provider acceptance is a release gate, independent of queue admission.
@@ -338,7 +338,7 @@ export const claim = internalMutation({
       const leaseToken = crypto.randomUUID();
       const integration = (await ctx.db.get(person.integrationId))!;
       await ctx.db.patch(person._id, { dueAt: now + 60_000, lease: { token: leaseToken, workerId: args.workerId, workerKeyHash: args.workerKeyHash, credentialGeneration: authorized.account.credentialGeneration, integrationGeneration: integration.leaseGeneration, expiresAt: now + 60_000 } });
-      return { jobs: [{ personId: person._id, userId: person.userId, leaseToken }] };
+      return { jobs: [{ personId: person._id, userId: person.userId, leaseToken, reservationWindowStartedAt: windowStartedAt }] };
     }
     return { jobs: [] };
   },

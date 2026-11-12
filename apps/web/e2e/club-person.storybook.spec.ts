@@ -30,7 +30,9 @@ test("people drop unauthorized names and distinguish colliding fallbacks @storyb
   await expect(people.getByText("Nova", { exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => Number(document.documentElement.dataset.peopleRequests))).toBe(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
-  await page.screenshot({ path: `../../.cache/artifacts/people-lifecycle-${test.info().project.name}.png`, fullPage: true });
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/people-lifecycle-${test.info().project.name}.png`, fullPage: true });
+  }
 });
 
 
@@ -93,4 +95,45 @@ test("shared Details identify a VRDex profile name fallback @storybook-visual", 
   await expect(people.getByText("VRDex profile name", { exact: true }).first()).toBeVisible();
   await expect(people.getByText("Name last checked", { exact: true })).toHaveCount(0);
   await expect(people.getByText("vrdex_profile", { exact: true })).toHaveCount(0);
+});
+
+
+test("unchanged source chunks retain grants while removed chunks and scopes require new admission @storybook-visual", async ({ page }) => {
+  await page.clock.install();
+  await page.goto("/iframe.html?id=clubs-people-controls--chunked-sources&viewMode=story");
+  const count = () => page.evaluate(() => Number(document.documentElement.dataset.peopleRequests));
+  await expect.poll(count).toBe(1);
+  await page.getByRole("region", { name: "People", exact: true }).getByRole("link", { name: "Riley", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Add chunk", exact: true }).click();
+  await expect.poll(count).toBe(2);
+  await page.getByRole("button", { name: "Remove last chunk", exact: true }).click();
+  expect(await count()).toBe(2);
+  await page.getByRole("button", { name: "Add chunk", exact: true }).click();
+  await expect.poll(count).toBe(3);
+  await page.getByRole("button", { name: "Remove last chunk", exact: true }).click();
+  await page.clock.fastForward(15 * 60_000 + 10);
+  await expect.poll(count).toBe(4);
+  await page.getByRole("button", { name: "Change viewer", exact: true }).click();
+  await expect.poll(count).toBe(5);
+  await page.getByRole("button", { name: "Close source", exact: true }).click();
+  await page.clock.fastForward(16 * 60_000);
+  expect(await count()).toBe(5);
+});
+
+
+test("older activity chunks cannot replace a better or newer authorized name @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-people-controls--name-precedence&viewMode=story");
+  const people = page.getByRole("region", { name: "People", exact: true });
+  await expect(people.getByText("New recorded", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Add chunk", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => Number(document.documentElement.dataset.peopleRequests))).toBe(2);
+  await expect(people.getByText("New recorded", { exact: true })).toBeVisible();
+  await expect(people.getByText("Old recorded", { exact: true })).toHaveCount(0);
+  for (const [mode, expected] of [["public", "Public observation"], ["private", "New public observation"], ["profile", "New recorded"]]) {
+    await page.getByRole("button", { name: `Use ${mode} observations`, exact: true }).click();
+    await expect(people.getByText(expected, { exact: true })).toBeVisible();
+  }
+  await page.getByRole("button", { name: "Revoke access", exact: true }).click();
+  await expect(people.getByText("New recorded", { exact: true })).toHaveCount(0);
+  await expect(people.getByText("Profile fallback", { exact: true })).toHaveCount(0);
 });

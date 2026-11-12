@@ -11,6 +11,7 @@ import type { Id } from "../../../../../../../convex/_generated/dataModel";
 export type PeopleSource = FunctionArgs<typeof api.clubPeople.requestView>["source"];
 type PeopleView = FunctionReturnType<typeof api.clubPeople.readView>;
 export type PersonIdentity = Partial<PeopleView["people"][number]>;
+const nameSourcePriority = { vrchat_public_cache: 3, vrchat_private: 3, recorded: 2, vrdex_profile: 1 };
 
 export function accessiblePersonName(name: string) {
   return name.replace(/[\u0000-\u001f\u007f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, "").trim() || "Unknown member";
@@ -33,28 +34,33 @@ export function useClubPeople(source: PeopleSource | PeopleSource[] | null) {
   const communityProfileId = workspace?.community._id;
   const integration = workspace?.integration;
   const accessKey = JSON.stringify([workspace?.actor, workspace?.readableCategories, workspace?.visibility, workspace?.connectionState, integration && [integration._id, integration.telemetryEpochStartedAt, integration.createdAt, integration.state, integration.killSwitchEnabled, integration.assignedCollectorAccountId, integration.enabledFeatures, integration.namedMembershipCollectionEnabled]]);
-  const key = JSON.stringify([communityProfileId, source, accessKey]);
+  const scopeKey = JSON.stringify([communityProfileId, accessKey]);
+  const sources = source === null ? [] : Array.isArray(source) ? source : [source];
+  const sourceKeys = sources.map(item => JSON.stringify(item));
+  const key = JSON.stringify([scopeKey, sourceKeys]);
   const request = useMutation(api.clubPeople.requestView);
-  const [ticket, setTicket] = useState<{ key: string; views: { viewId: Id<"clubPeopleViews">; expiresAt: number }[]; expiresAt: number } | null>(null);
+  const [ticket, setTicket] = useState<{ key: string; scopeKey: string; views: { sourceKey: string; viewId: Id<"clubPeopleViews">; expiresAt: number }[] } | null>(null);
   const [previousKey, setPreviousKey] = useState(key);
   if (previousKey !== key) {
     setPreviousKey(key);
-    setTicket(null);
+    // Retain only continuously active sources within the same authority scope.
+    setTicket(previous => previous?.scopeKey === scopeKey ? { ...previous, key, views: previous.views.filter(view => sourceKeys.includes(view.sourceKey) && view.expiresAt > Date.now()) } : null);
   }
+  const current = ticket?.key === key && source !== null ? ticket : null;
   const [renewal, setRenewal] = useState(0);
   useEffect(() => {
-    if (!communityProfileId || !source || workspace?.actor.kind === "none") return;
+    if (!communityProfileId || !sources.length || workspace?.actor.kind === "none") return;
+    const missing = sources.filter((_, index) => !current?.views.some(view => view.sourceKey === sourceKeys[index] && view.expiresAt > Date.now()));
+    if (!missing.length) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const admit = async (attempt: number) => {
       try {
-        const sources = Array.isArray(source) ? source : [source];
-        const views = await Promise.all(sources.map(item => request({ communityProfileId, source: item })));
+        const views = await Promise.all(missing.map(async item => ({ sourceKey: JSON.stringify(item), ...await request({ communityProfileId, source: item }) })));
         if (views.some(view => view.expiresAt <= Date.now())) throw new Error("Expired people view");
-        if (active && views.length) setTicket({ key, views, expiresAt: Math.min(...views.map(view => view.expiresAt)) });
+        if (active && views.length) setTicket(previous => ({ key, scopeKey, views: [...(previous?.key === key ? previous.views.filter(view => view.expiresAt > Date.now()) : []), ...views] }));
       } catch {
         if (!active) return;
-        setTicket(null);
         if (attempt < 2) timer = setTimeout(() => void admit(attempt + 1), 1000 * (attempt + 1));
       }
     };
@@ -63,20 +69,27 @@ export function useClubPeople(source: PeopleSource | PeopleSource[] | null) {
     // The serialized key includes the complete source and current access scope.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, request, renewal]);
-  const current = ticket?.key === key && source !== null ? ticket : null;
   const queries = useMemo(() => Object.fromEntries(current?.views.map(view => [view.viewId, { query: api.clubPeople.readView, args: { viewId: view.viewId } }]) ?? []), [current]);
   const results: Record<string, PeopleView | Error | undefined> = useQueries(queries);
   useEffect(() => {
-    if (!current) return;
-    const timer = setTimeout(() => { setTicket(null); setRenewal(value => value + 1); }, Math.max(0, current.expiresAt - Date.now()));
+    if (!current?.views.length) return;
+    const expiresAt = Math.min(...current.views.map(view => view.expiresAt));
+    const timer = setTimeout(() => {
+      setTicket(previous => previous ? { ...previous, views: previous.views.filter(view => view.expiresAt > Date.now()) } : null);
+      setRenewal(value => value + 1);
+    }, Math.max(0, expiresAt - Date.now()));
     return () => clearTimeout(timer);
   }, [current]);
   const people = new Map<string, PeopleView["people"][number]>();
   const pending = new Set<string>();
-  if (current && current.expiresAt > Date.now() && !Object.values(results).some(result => result instanceof Error)) {
-    for (const result of Object.values(results)) if (result && !(result instanceof Error)) {
+  if (current && !Object.values(results).some(result => result instanceof Error)) {
+    for (const [viewId, result] of Object.entries(results)) if (result && !(result instanceof Error) && current.views.some(view => view.viewId === viewId && view.expiresAt > Date.now())) {
       for (const person of result.people) {
-        people.set(person.userId, person);
+        const previous = people.get(person.userId);
+        const priority = person.displayName && person.source ? nameSourcePriority[person.source] : 0;
+        const previousPriority = previous?.displayName && previous.source ? nameSourcePriority[previous.source] : 0;
+        if (!previous || priority > previousPriority ||
+            (priority === previousPriority && (person.observedAt ?? 0) > (previous.observedAt ?? 0))) people.set(person.userId, person);
         if (result.pendingCount > 0 && person.status === "pending") pending.add(person.userId);
       }
     }

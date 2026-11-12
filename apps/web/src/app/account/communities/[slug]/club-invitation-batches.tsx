@@ -109,10 +109,10 @@ export function InvitationComposer({
   useEffect(() => {
     if (!text.trim()) return;
     let active = true;
-    void onPreview(text.split(/[\s,;]+/).filter(Boolean)).then(result => {
+    const timer = setTimeout(() => void onPreview(text.split(/[\s,;]+/).filter(Boolean)).then(result => {
       if (active) setSelection({ text, ids: result.recipients, selected: result.recipients });
-    }).catch(() => { if (active) setSelection(null); });
-    return () => { active = false; };
+    }).catch(() => { if (active) setSelection(null); }), 300);
+    return () => { active = false; clearTimeout(timer); };
     // Preview depends on the entered IDs. Identity updates must not reset selection.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text]);
@@ -142,9 +142,10 @@ export function InvitationComposer({
     }
   };
   const prepare = async () => {
+    if (!currentSelection?.selected.length) throw new Error("Enter valid VRChat user IDs.");
     const normalized = await onPreview(recipients());
-    const reviewedRecipients = currentSelection ? normalized.recipients.filter(id => currentSelection.selected.includes(id)) : normalized.recipients;
-    if (!reviewedRecipients.length) throw new Error("Use 1 to 100 VRChat user IDs.");
+    const reviewedRecipients = normalized.recipients.filter(id => currentSelection.selected.includes(id));
+    if (!reviewedRecipients.length) throw new Error("Enter valid VRChat user IDs.");
     let target: Enqueue["destination"];
     let destinationLabel: string;
     if (destination === "group" && canGroup) {
@@ -614,7 +615,7 @@ export function InvitationComposer({
               <Button
                 className="w-fit"
                 variant="primary"
-                disabled={busy || !text.trim() || (!canGroup && !canInstance)}
+                disabled={busy || !currentSelection?.selected.length || (!canGroup && !canInstance)}
                 onClick={() => void run(prepare)}
               >
                 Review invitations

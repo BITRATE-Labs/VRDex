@@ -1991,6 +1991,7 @@ export default defineSchema({
     eventType: v.string(),
     occurredAt: v.number(),
     targetUserId: v.optional(v.string()),
+    canonicalTargetUserId: v.optional(v.string()),
     targetDisplayName: v.optional(v.string()),
     actorUserId: v.optional(v.string()),
     actorDisplayName: v.optional(v.string()),
@@ -2003,7 +2004,9 @@ export default defineSchema({
     .index("by_verified_time", ["integrationId", "epochStartedAt", "verified", "occurredAt"])
     .index("by_verified_target_time", ["integrationId", "epochStartedAt", "verified", "targetUserId", "occurredAt"])
     .index("by_verified_type_time", ["integrationId", "epochStartedAt", "verified", "eventType", "occurredAt"])
-    .index("by_verified_target_type_time", ["integrationId", "epochStartedAt", "verified", "targetUserId", "eventType", "occurredAt"]),
+    .index("by_verified_target_type_time", ["integrationId", "epochStartedAt", "verified", "targetUserId", "eventType", "occurredAt"])
+    .index("by_canonical_target_time", ["integrationId", "epochStartedAt", "canonicalTargetUserId", "verified", "occurredAt"])
+    .index("by_canonical_target_type_time", ["integrationId", "epochStartedAt", "canonicalTargetUserId", "verified", "eventType", "occurredAt"]),
   communityMembershipCoverage: defineTable({
     integrationId: v.id("communityVrchatIntegrations"),
     epochStartedAt: v.number(),

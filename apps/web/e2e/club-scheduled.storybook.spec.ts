@@ -257,7 +257,9 @@ test("scheduled cancellation shows identity and preserves exact target revision 
   await expect(confirmation).toContainText("grol_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
   await expect(confirmation).toContainText("Afterhours");
   await expect(confirmation.getByRole("link", { name: "Riley", exact: true })).toBeVisible();
-  await page.screenshot({ path: `../../.cache/artifacts/scheduled-identity-cancel-${test.info().project.name}.png`, fullPage: true });
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/scheduled-identity-cancel-${test.info().project.name}.png`, fullPage: true });
+  }
   await page.getByRole("button", { name: "Confirm cancellation", exact: true }).click();
   expect(await page.evaluate(() => JSON.parse(document.documentElement.dataset.scheduledCancel!))).toEqual({ operationId: "fixture-operation-0", expectedRevision: 1 });
   await expect(page.getByText("Cancelled", { exact: true })).toBeVisible();

@@ -313,6 +313,14 @@ for (const skew of [-3600000, 3600000]) {
 test("member confirmation distinguishes missing names with colliding short IDs @storybook-visual", async ({ page }) => {
   await page.goto("/iframe.html?id=clubs-members--colliding-ids&viewMode=story");
   const selected = page.getByRole("checkbox");
+  await expect(selected).toHaveCount(3);
+  const visibleNames = await page.locator("div.py-4 bdi").allTextContents();
+  expect(visibleNames).toHaveLength(3);
+  expect(new Set(await selected.evaluateAll(elements => elements.map(element => element.getAttribute("aria-label")))).size).toBe(visibleNames.length);
+  for (const name of visibleNames) {
+    await expect(page.getByRole("checkbox", { name: `Select ${name}`, exact: true })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: `Manage member ${name}`, exact: true })).toHaveCount(1);
+  }
   await selected.nth(0).check();
   await selected.nth(1).check();
   await page.getByLabel("VRChat role", { exact: true }).selectOption({ label: "DJ" });

@@ -213,3 +213,13 @@ export const EvidenceProvenance: Story = {
     { auditId: "observed-role", eventType: "group.member.role.assign", occurredAt: start, targetDisplayName: "Mira", roleName: "Current DJ", roleNameSource: "role_observation", roleNameObservedAt: start + 3000 },
   ]} />,
 };
+
+export const MixedCasePrivateNames: Story = {
+  render: () => <MembershipActivityView events={[
+    { auditId: "mixed-case", eventType: "group.member.role.assign", occurredAt: start, targetUserId: "USR_AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA", actorUserId: "USR_BbBbBbBb-BbBb-BbBb-BbBb-BbBbBbBbBbBb" },
+    { auditId: "canonical-case", eventType: "group.member.join", occurredAt: start - 1000, targetUserId: "usr_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" },
+  ]} people={[
+    { userId: "usr_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", displayName: "Private Mira", source: "vrchat_private", status: "resolved" },
+    { userId: "usr_bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", displayName: "Private Sol", source: "vrchat_private", status: "resolved" },
+  ]} onFilterChange={() => {}} />,
+};

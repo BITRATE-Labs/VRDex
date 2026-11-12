@@ -174,6 +174,7 @@ function MembersContent({
   const selectedRole = allowedRoles.find((role) => role.id === roleId);
   const currentMember = member.data?.items[0] ?? detail;
   const rows = read.data?.items ?? [];
+  const visibleIds = rows.map(targetId);
   const people = useClubPeople(read.requestId && read.data && !read.error ? { kind: "provider_read", requestId: read.requestId } : null);
   const memberPeople = useClubPeople(member.requestId && member.data && !member.error ? { kind: "provider_read", requestId: member.requestId } : null);
   const directTarget = actionTargetId.trim().toLowerCase();
@@ -581,7 +582,7 @@ function MembersContent({
                   (tab === "members" && can("assign_vrchat_roles"))) &&
                 !protectedIds.includes(targetId(item)) ? (
                   <CheckboxField
-                    aria-label={`Select ${accessiblePersonName(personName(targetId(item), item.displayName))}`}
+                    aria-label={`Select ${accessiblePersonName(personName(targetId(item), people.people.find(person => person.userId === targetId(item))?.displayName || item.displayName, visibleIds))}`}
                     checked={selected.some(
                       (row) => targetId(row) === targetId(item),
                     )}
@@ -599,11 +600,11 @@ function MembersContent({
                   </CheckboxField>
                 ) : null}
                 <div className="min-w-0">
-                  <ClubPerson userId={targetId(item)} identity={people.people.find(person => person.userId === targetId(item))} recordedName={item.displayName} visibleIds={rows.map(targetId)} />
+                  <ClubPerson userId={targetId(item)} identity={people.people.find(person => person.userId === targetId(item))} recordedName={item.displayName} visibleIds={visibleIds} />
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                {can("view_members") ? <Button size="sm" onClick={() => setDetail(item)}>Manage member<span className="sr-only"> {accessiblePersonName(personName(targetId(item), item.displayName))}</span></Button> : null}
+                {can("view_members") ? <Button size="sm" onClick={() => setDetail(item)}>Manage member<span className="sr-only"> {accessiblePersonName(personName(targetId(item), people.people.find(person => person.userId === targetId(item))?.displayName || item.displayName, visibleIds))}</span></Button> : null}
                 {tab === "requests" ? (
                   <>
                     {action("approve_request", "approve_join_requests", item)}

@@ -84,7 +84,7 @@ function Fixture({ instanceOnly = false, mutableCreation = false, expiringInstan
             recipients.length > 100 ||
             recipients.some((id) => !/^usr_[0-9a-f-]{36}$/i.test(id))
           )
-            throw new Error("Use 1 to 100 VRChat user IDs.");
+            throw new Error("Enter valid VRChat user IDs.");
           const distinct = [...new Set(recipients.map((recipient) => recipient.toLowerCase()))];
           return {
             recipients: distinct,

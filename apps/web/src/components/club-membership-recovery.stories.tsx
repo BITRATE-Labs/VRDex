@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ConvexError } from "convex/values";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { getRouter, usePathname, useSearchParams } from "@storybook/nextjs-vite/navigation.mock";
 import { ConvexProvider, ConvexReactClient, type Watch, type WatchQueryOptions, type MutationOptions } from "convex/react";
@@ -23,6 +24,8 @@ class RecoveryClient extends ConvexReactClient {
   private job: Recovery["job"] = null;
   reads = 0;
   private hideMira = false;
+  private indexPending = false;
+  setIndexPending(value: boolean) { this.indexPending = value; this.notify(); }
   private rejectNext = false;
   failNext() { this.rejectNext = true; }
   hideSelected() { this.hideMira = true; this.notify(); }
@@ -36,7 +39,7 @@ class RecoveryClient extends ConvexReactClient {
   }
   private notify() { this.cache.clear(); this.fixtureListeners.forEach(listener => listener()); }
   private events() {
-    return Array.from({ length: 300 }, (_, index) => ({ auditId: `filtered-${index}`, eventType: ["group.member.join", "group.member.leave", "group.member.remove", "group.member.role.assign", "group.member.role.unassign"][index % 5]!, occurredAt: startAt + index * 1000, targetUserId: index % 2 === 0 ? mira : sol, targetDisplayName: index % 2 === 0 ? "Mira" : "Sol" })).filter(event => !this.hideMira || event.targetUserId !== mira);
+    return Array.from({ length: 300 }, (_, index) => ({ auditId: `filtered-${index}`, eventType: ["group.member.join", "group.member.leave", "group.member.remove", "group.member.role.assign", "group.member.role.unassign"][index % 5]!, occurredAt: startAt + index * 1000, targetUserId: index % 2 === 0 ? (index % 3 === 0 ? mira.toUpperCase() : mira) : sol, targetDisplayName: index % 2 === 0 ? "Mira" : "Sol" })).filter(event => !this.hideMira || event.targetUserId.toLowerCase() !== mira);
   }
   private result(name: string, value: Record<string, unknown>) {
     const key = JSON.stringify([name, value]);
@@ -49,7 +52,8 @@ class RecoveryClient extends ConvexReactClient {
     } else if (name === "clubMembership:listActivity") {
       document.documentElement.dataset.activityFilter = JSON.stringify(value);
       const args = value as FunctionArgs<typeof api.clubMembership.listActivity>;
-      const matching = this.events().filter(event => (!args.targetUserId || args.targetUserId === event.targetUserId) && (!args.eventType || args.eventType === event.eventType));
+      if (args.targetUserId && this.indexPending) throw new ConvexError({ code: "MEMBERSHIP_ACTIVITY_INDEX_PENDING" });
+      const matching = this.events().filter(event => (!args.targetUserId || args.targetUserId.toLowerCase() === event.targetUserId.toLowerCase()) && (!args.eventType || args.eventType === event.eventType));
       const offset = Number(args.paginationOpts.cursor ?? 0);
       const end = args.paginationOpts.endCursor ? Number(args.paginationOpts.endCursor) : offset + args.paginationOpts.numItems;
       result = { page: matching.slice(offset, end), isDone: end >= matching.length, continueCursor: String(Math.min(end, matching.length)) };
@@ -66,7 +70,7 @@ class RecoveryClient extends ConvexReactClient {
     let result: unknown = null;
     if (name === "clubPeople:requestView") {
       const source = value.source as FunctionArgs<typeof api.clubPeople.requestView>["source"];
-      const ids = source.kind === "activity" ? this.events().filter(event => source.auditIds.includes(event.auditId)).map(event => event.targetUserId) : [];
+      const ids = source.kind === "activity" ? this.events().filter(event => source.auditIds.includes(event.auditId)).map(event => event.targetUserId.toLowerCase()) : [];
       result = this.people.request(source, ids, new Map([[mira, "Mira"], [sol, "Sol"]]));
     } else {
       if (!this.enabled || this.staff) throw new Error("Recovery is not authorized");
@@ -102,7 +106,7 @@ function Fixture({ enabled = true, staff = false, initial, filters = false }: { 
   useSearchParams.mockReturnValue(url.searchParams as ReturnType<typeof useSearchParams>);
   getRouter().push.mockImplementation(next => setHref(next));
   const workspace: WorkspaceData = { community: { _id: "fixture-club" as Id<"profiles">, slug: "afterhours", displayName: "Afterhours" }, actor: { kind: staff ? "staff" : "owner", roleIds: [], permissions: [] }, roles: [], assignments: [], hasMoreAssignments: false, actionLog: [], visibility: null, integration: null, connectionState: "active", readableCategories: ["individual_membership_history"], eventConnectorsEnabled: false };
-  return <ConvexProvider client={client}><main className="mx-auto max-w-5xl p-5"><button onClick={() => client.progress()}>Advance recovery</button><button onClick={() => client.hideSelected()}>Hide selected member</button><button onClick={() => client.failNext()}>Fail next recovery action</button><output aria-label="Fixture location">{href}</output><ClubWorkspaceView data={workspace} pathname={url.pathname}>{filters ? <FilteredActivity /> : <ClubMembershipRecovery />}</ClubWorkspaceView></main></ConvexProvider>;
+  return <ConvexProvider client={client}><main className="mx-auto max-w-5xl p-5"><button onClick={() => client.setIndexPending(true)}>Pause fixture index</button><button onClick={() => client.setIndexPending(false)}>Complete fixture index</button><button onClick={() => client.progress()}>Advance recovery</button><button onClick={() => client.hideSelected()}>Hide selected member</button><button onClick={() => client.failNext()}>Fail next recovery action</button><output aria-label="Fixture location">{href}</output><ClubWorkspaceView data={workspace} pathname={url.pathname}>{filters ? <FilteredActivity /> : <ClubMembershipRecovery />}</ClubWorkspaceView></main></ConvexProvider>;
 }
 const meta = { title: "Clubs/Membership recovery", component: Fixture, parameters: { layout: "fullscreen", nextjs: { appDirectory: true } } } satisfies Meta<typeof Fixture>;
 export default meta;

@@ -14,12 +14,14 @@ class PeopleClient extends ConvexReactClient {
   readonly people = new ClubPeopleFixture();
   private readonly fixtureListeners = new Set<() => void>();
   private cache = new Map<string, unknown>();
+  nameMode: "recorded" | "public" | "private" | "profile" = "recorded";
+  private readonly viewSources = new Map<string, string>();
   requestCount = 0;
   delay = 0;
   expiredResponses = false;
   returnExpired() { this.expiredResponses = true; }
   delayRequests() { this.delay = 500; }
-  constructor() { super("https://fixture.invalid"); }
+  constructor(private readonly namePrecedence = false) { super("https://fixture.invalid"); }
   change(change: () => void) { change(); this.cache.clear(); this.fixtureListeners.forEach(listener => listener()); }
   override watchQuery<Query extends FunctionReference<"query">>(query: Query, ...args: ArgsAndOptions<Query, WatchQueryOptions>): Watch<FunctionReturnType<Query>> {
     const key = JSON.stringify(args[0]);
@@ -27,7 +29,22 @@ class PeopleClient extends ConvexReactClient {
       onUpdate: callback => { this.fixtureListeners.add(callback); return () => this.fixtureListeners.delete(callback); },
       localQueryResult: () => {
         if (getFunctionName(query) !== "clubPeople:readView") throw new Error("Unexpected people query");
-        if (!this.cache.has(key)) this.cache.set(key, this.people.read(String((args[0] as {viewId: string}).viewId)));
+        if (!this.cache.has(key)) {
+          const viewId = String((args[0] as { viewId: string }).viewId);
+          let view = this.people.read(viewId);
+          if (this.namePrecedence) {
+            const newerChunk = this.viewSources.get(viewId) === "first";
+            const observation = this.nameMode === "recorded"
+              ? { source: "recorded" as const, displayName: newerChunk ? "New recorded" : "Old recorded", observedAt: newerChunk ? 200 : 100 }
+              : this.nameMode === "public"
+                ? { source: newerChunk ? "recorded" as const : "vrchat_public_cache" as const, displayName: newerChunk ? "New recorded" : "Public observation", observedAt: newerChunk ? 200 : 50 }
+                : this.nameMode === "private"
+                  ? { source: newerChunk ? "vrchat_private" as const : "vrchat_public_cache" as const, displayName: newerChunk ? "Private observation" : "New public observation", observedAt: newerChunk ? 200 : 300 }
+                  : { source: newerChunk ? "recorded" as const : "vrdex_profile" as const, displayName: newerChunk ? "New recorded" : "Profile fallback", observedAt: newerChunk ? 200 : 300 };
+            view = { ...view, people: view.people.map(person => ({ ...person, userId: first, ...observation })) };
+          }
+          this.cache.set(key, view);
+        }
         return this.cache.get(key) as FunctionReturnType<Query>;
       },
       journal: () => undefined,
@@ -39,17 +56,19 @@ class PeopleClient extends ConvexReactClient {
     const input = args[0] as FunctionArgs<typeof api.clubPeople.requestView>;
     if (this.delay) await new Promise(resolve => setTimeout(resolve, this.delay));
     if (this.people.denied) throw new Error("Access revoked");
-    const view = this.people.request(input.source, input.source.kind === "invitation_review" ? input.source.targetUserIds : []);
+    const view = this.people.request(input.source, input.source.kind === "invitation_review" ? input.source.targetUserIds : input.source.kind === "activity" ? [input.source.auditIds[0] === "first" ? first : second] : []);
+    if (input.source.kind === "activity") this.viewSources.set(view.viewId, input.source.auditIds[0]);
     return { ...view, ...(this.expiredResponses ? { expiresAt: Date.now() - 1 } : {}) } as FunctionReturnType<Mutation>;
   }
 }
-function PeopleList({ alternate, active }: { alternate: boolean; active: boolean }) {
+function PeopleList({ alternate, active, chunks }: { alternate: boolean; active: boolean; chunks?: number }) {
   const ids = alternate ? [second] : [first, second];
-  const people = useClubPeople(active ? { kind: "invitation_review", targetUserIds: ids, destination: { kind: "group" } } : null);
+  const people = useClubPeople(active ? chunks ? ["first", "second"].slice(0, chunks).map(auditId => ({ kind: "activity" as const, auditIds: [auditId] })) : { kind: "invitation_review", targetUserIds: ids, destination: { kind: "group" } } : null);
   return <section aria-label="People"><PeoplePending count={people.pendingCount} /><ul className="grid gap-5">{ids.map(userId => <li key={userId}><ClubPerson userId={userId} identity={people.people.find(person => person.userId === userId)} visibleIds={ids} /></li>)}</ul></section>;
 }
-function Fixture() {
-  const [client] = useState(() => new PeopleClient());
+function Fixture({ chunked = false, namePrecedence = false }: { chunked?: boolean; namePrecedence?: boolean }) {
+  const [chunks, setChunks] = useState(1);
+  const [client] = useState(() => new PeopleClient(namePrecedence));
   const [alternate, setAlternate] = useState(false);
   const [viewer, setViewer] = useState(0);
   const [epoch, setEpoch] = useState(0);
@@ -75,14 +94,21 @@ function Fixture() {
     <button onClick={() => setAuthorized(false)}>Remove workspace access</button>
     <button onClick={() => { client.delayRequests(); setAuthorized(true); }}>Restore workspace access</button>
     <button onClick={() => setActive(false)}>Close source</button>
+    <button onClick={() => setChunks(2)}>Add chunk</button>
+    {namePrecedence ? (["recorded", "public", "private", "profile"] as const).map(mode => <button key={mode} onClick={() => client.change(() => { client.nameMode = mode; })}>Use {mode} observations</button>) : null}
+    <button onClick={() => setChunks(1)}>Remove last chunk</button>
     <button onClick={() => { client.returnExpired(); setViewer(value => value + 1); }}>Return expired grants</button>
     <button onClick={() => { client.delayRequests(); setAlternate(value => !value); }}>Change source</button>
     <button onClick={() => { client.delayRequests(); setCommunity(value => value + 1); }}>Change community</button>
     <button onClick={() => { client.delayRequests(); setViewer(value => value + 1); }}>Change viewer</button>
     <button onClick={() => { client.delayRequests(); setEpoch(value => value + 1); }}>Replace integration scope</button>
-  </div><ClubWorkspaceView data={data} pathname="/account/communities/people"><PeopleList alternate={alternate} active={active} /></ClubWorkspaceView></main></ConvexProvider>;
+  </div><ClubWorkspaceView data={data} pathname="/account/communities/people"><PeopleList alternate={alternate} active={active} chunks={chunked ? chunks : undefined} /></ClubWorkspaceView></main></ConvexProvider>;
 }
 const meta = { title: "Clubs/People controls", component: Fixture, parameters: { layout: "fullscreen", nextjs: { appDirectory: true } } } satisfies Meta<typeof Fixture>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Lifecycle: Story = {};
+
+export const ChunkedSources: Story = { args: { chunked: true } };
+
+export const NamePrecedence: Story = { args: { chunked: true, namePrecedence: true } };

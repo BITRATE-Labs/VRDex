@@ -39,7 +39,9 @@ test("activity filters reach indexed pagination and restore their own loaded pag
   await expect(page.getByLabel("Fixture location")).toContainText("eventType=group.member.leave");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
   await page.getByRole("heading", { name: "Membership activity", exact: true }).evaluate(element => element.scrollIntoView({ block: "start" }));
-  await page.screenshot({ path: `../../.cache/artifacts/membership-filter-${test.info().project.name}.png` });
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/membership-filter-${test.info().project.name}.png` });
+  }
 });
 
 test("a known person can be filtered from their Details @storybook-visual", async ({ page }) => {
@@ -75,7 +77,9 @@ test("owner recovery uses fixed bounds and exact stop and resume revisions @stor
   expect(await page.evaluate(() => JSON.parse(document.documentElement.dataset.recoveryRequest!))).toEqual({ communityProfileId: "fixture-club", resume: true, expectedRevision: 2 });
   await expect(recovery.getByLabel("Recovery window")).toHaveText(bounds!);
   await expect(recovery.getByText("Pending", { exact: true })).toBeVisible();
-  await recovery.screenshot({ path: `../../.cache/artifacts/membership-history-repair-${test.info().project.name}.png` });
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await recovery.screenshot({ path: `../../.cache/artifacts/membership-history-repair-${test.info().project.name}.png` });
+  }
 });
 
 for (const story of ["entry-cap", "page-cap"]) {
@@ -113,7 +117,9 @@ test("Details distinguish recorded recovered and last-observed role evidence @st
   await expect(rows.nth(2).getByText("Role last observed", { exact: true })).toBeVisible();
   await expect(rows.nth(2).getByText("Role recorded with event", { exact: true })).toHaveCount(0);
   await expect(page.getByText("role_observation", { exact: true })).toHaveCount(0);
-  await page.screenshot({ path: `../../.cache/artifacts/membership-provenance-${test.info().project.name}.png`, fullPage: true });
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/membership-provenance-${test.info().project.name}.png`, fullPage: true });
+  }
 });
 
 
@@ -128,4 +134,39 @@ test("recovery failures retain truthful state and approved error copy @storybook
   await page.getByRole("button", { name: "Resume recovery", exact: true }).click();
   await expect(recovery.getByText("Pending", { exact: true })).toBeVisible();
   await expect(recovery.getByRole("alert")).toHaveCount(0);
+});
+
+
+test("unprepared person index preserves the filtered URL and offers retry or clear @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership-recovery--filters&viewMode=story");
+  await page.getByRole("button", { name: "Pause fixture index", exact: true }).click();
+  await page.getByLabel("Member", { exact: true }).selectOption(member);
+  await expect(page.getByRole("alert")).toContainText("Unable to load activity.");
+  await expect(page.getByText("No recorded membership events.", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Fixture location")).toContainText(`member=${member}`);
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page.getByRole("button", { name: "Clear filters", exact: true }).click();
+  await expect(page.locator("div.py-4")).toHaveCount(25);
+  await expect(page.getByLabel("Fixture location")).not.toContainText("member=");
+  await page.getByLabel("Member", { exact: true }).selectOption(member);
+  await page.getByRole("button", { name: "Complete fixture index", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByLabel("Member", { exact: true })).toHaveValue(member);
+  await expect(page.locator("div.py-4")).toHaveCount(25);
+});
+
+test("private names join mixed-case raw identities without changing Details evidence @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership--mixed-case-private-names&viewMode=story");
+  const rows = page.locator("div.py-4");
+  await expect(rows.first().getByText("Private Mira", { exact: true })).toBeVisible();
+  await expect(rows.first().getByText("Private Sol", { exact: true })).toBeVisible();
+  await expect(rows.nth(1).getByText("Private Mira", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Member", { exact: true }).locator("option")).toHaveCount(2);
+  await rows.first().locator("summary").click();
+  await expect(rows.first().getByText("USR_AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA", { exact: true })).toBeVisible();
+  await expect(rows.first().getByText("USR_BbBbBbBb-BbBb-BbBb-BbBb-BbBbBbBbBbBb", { exact: true })).toBeVisible();
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/membership-canonical-private-${test.info().project.name}.png`, fullPage: true });
+  }
 });
