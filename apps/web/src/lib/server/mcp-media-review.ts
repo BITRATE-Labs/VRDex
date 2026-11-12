@@ -13,6 +13,7 @@ import {
   z,
 } from "@vrdex/api-contracts";
 import { createHash } from "node:crypto";
+import sharp from "sharp";
 import { validatedProfileAssetRaster } from "./profile-asset-validation";
 
 const MAX_STORED_CANDIDATE_BYTES = 12 * 1024 * 1024;
@@ -146,8 +147,10 @@ async function attestation<TActor extends string>(
   };
 }
 
-async function rasterPreview(body: Uint8Array) {
-  const pipeline = await validatedProfileAssetRaster(body);
+async function rasterPreview(body: Uint8Array, remote: boolean) {
+  const pipeline = remote
+    ? sharp(body, { limitInputPixels: 16_777_216, sequentialRead: true })
+    : await validatedProfileAssetRaster(body);
   // Eight halvings bound CPU while keeping aspect ratio and lossless PNG output.
   for (let edge = MAX_PREVIEW_EDGE; edge >= 16; edge = Math.floor(edge / 2)) {
     const preview = await pipeline.clone()
@@ -300,7 +303,7 @@ export function createMcpMediaReviewHandlers<TActor extends string>(
       }
       let preview: Buffer;
       try {
-        preview = await rasterPreview(stored.body);
+        preview = await rasterPreview(stored.body, remote);
       } catch {
         return refusal("The stored candidate could not be rendered safely.");
       }

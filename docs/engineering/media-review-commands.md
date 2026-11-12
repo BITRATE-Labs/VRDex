@@ -253,9 +253,12 @@ the server-selected URL/provider snapshot through bounded safe-fetch/cache
 helpers. It never uses contributor provenance or a client-provided URL. Blocked
 redirects and unavailable images return a safe unavailable result. Remote
 URL/provider identity does not prove immutable bytes if upstream changes at the
-same URL. The renderer reuses upload raster validation: a single still image,
+same URL. Stored-asset previews reuse upload raster validation: a single still image,
 8,192 pixels maximum on each source side and 67,108,864 total input pixels.
-It retains the 12 MiB input, 2,048 maximum output edge and 4 MiB PNG output bounds. High-entropy images are resized through
+Remote current artwork retains its 16,777,216-pixel budget and first-frame
+rendering without the upload-only per-side/still-image restrictions. Both paths
+use sequential decoding and retain the 12 MiB input, 2,048 maximum output edge
+and 4 MiB PNG output bounds. High-entropy images are resized through
 bounded halvings until the raster output fits. Native SVG and donor source-URL
 bytes are never returned. Image delivery records no claim of human examination.
 

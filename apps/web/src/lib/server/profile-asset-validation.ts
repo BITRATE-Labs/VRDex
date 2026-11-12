@@ -239,6 +239,7 @@ function rasterPipeline(body: Uint8Array) {
   return sharp(body, {
     animated: false,
     failOn: "warning",
+    sequentialRead: true,
     limitInputPixels: PROFILE_ASSET_MAX_SOURCE_DIMENSION ** 2,
   });
 }
