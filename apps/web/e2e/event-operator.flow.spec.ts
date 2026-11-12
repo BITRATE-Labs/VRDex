@@ -1,5 +1,6 @@
 import { devices, expect, test, type Page } from "@playwright/test";
 import { fixtureNow } from "../src/app/playwright/event-operator/fixture-state";
+import path from "node:path";
 // These routes use production components with explicit transport/authority fixtures.
 test.beforeEach(async ({page})=>{await page.route("**/operate/status?*",route=>route.fulfill({json:{}}));});
 async function confirm(page:Page,label:string){await expect(page.getByRole("dialog")).toBeVisible();await page.getByRole("dialog").getByRole("button",{name:label,exact:true}).click();}
@@ -36,11 +37,23 @@ test("stopped broadcast starts a chosen destination without claiming observed li
 });
 
 test("direct video status follows fresh worker evidence and clears after Stop @flow @fixture",async({page},info)=>{
+ const statusRequests:string[][]=[];
+ await page.route("**/operate/status?*",route=>{
+  statusRequests.push((new URL(route.request().url()).searchParams.get("ids") ?? "").split(",").filter(Boolean));
+  return route.fulfill({json:{}});
+ });
+ const videoUrl="https://media.example.com/fixture.ts";
+ await page.route(videoUrl,route=>route.fulfill({contentType:"video/mp2t",path:path.resolve("e2e/fixtures/persistent-synthetic.mpegts"),headers:{"access-control-allow-origin":"*"}}));
  await page.goto("/playwright/event-operator");
- await page.getByRole("textbox",{name:"Or paste a link",exact:true}).fill("https://media.w3.org/2010/05/sintel/trailer.mp4");
+ await expect.poll(()=>statusRequests.length).toBeGreaterThan(0);
+ const providerIds=new Set(statusRequests.flat());
+ await page.getByRole("textbox",{name:"Or paste a link",exact:true}).fill(videoUrl);
  await page.getByRole("button",{name:"Check source",exact:true}).click();
  const preview=page.getByRole("region",{name:"Quick switch preview",exact:true});
  await expect(preview.getByRole("status")).toHaveText("Direct video");
+ await preview.scrollIntoViewIfNeeded();
+ await expect.poll(()=>preview.locator("video").evaluate(node=>node instanceof HTMLVideoElement ? node.currentTime : 0)).toBeGreaterThan(0);
+ expect(statusRequests.flat().every(id=>providerIds.has(id))).toBe(true);
  const take=preview.getByRole("button",{name:/^Put .* on air$/});
  const label=await take.innerText();
  await take.click();await confirm(page,label);

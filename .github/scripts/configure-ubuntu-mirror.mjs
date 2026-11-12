@@ -9,7 +9,7 @@ async function readOptional(file) {
 export async function configureUbuntuMirror(root) {
   await mkdir(path.join(root,"apt.conf.d"),{recursive:true});
   // Bound a stalled mirror request so APT can reach the configured fallbacks.
-  await writeFile(path.join(root,"apt.conf.d/80vrdex-ci-timeouts"),
+  await writeFile(path.join(root,"apt.conf.d/99-vrdex-ci-timeouts"),
     'Acquire::http::Timeout "15";\nAcquire::https::Timeout "15";\nAcquire::Retries "1";\n');
   const mirrorFile=path.join(root,"apt-mirrors.txt");
   const current=await readOptional(mirrorFile);

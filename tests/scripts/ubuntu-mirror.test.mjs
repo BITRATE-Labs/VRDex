@@ -15,7 +15,7 @@ test("Ubuntu mirror prep handles direct and mirror-list sources without changing
     await writeFile(path.join(root,"apt-mirrors.txt"),"http://azure.archive.ubuntu.com/ubuntu/\nhttps://archive.ubuntu.com/ubuntu/\nhttps://azure.archive.ubuntu.com.example.invalid/ubuntu/\n");
     await configureUbuntuMirror(root);
     await configureUbuntuMirror(root);
-    assert.equal(await readFile(path.join(root,"apt.conf.d/80vrdex-ci-timeouts"),"utf8"),
+    assert.equal(await readFile(path.join(root,"apt.conf.d/99-vrdex-ci-timeouts"),"utf8"),
       'Acquire::http::Timeout "15";\nAcquire::https::Timeout "15";\nAcquire::Retries "1";\n');
     assert.equal(await readFile(path.join(root,"sources.list"),"utf8"),"deb https://mirrors.edge.kernel.org/ubuntu/ noble main universe\n");
     assert.equal(await readFile(path.join(root,"sources.list.d/ubuntu.sources"),"utf8"),original.replace("https://security.ubuntu.com/ubuntu/","https://mirrors.edge.kernel.org/ubuntu/"));
