@@ -8,8 +8,8 @@ enabled the production Vercel build flag and project 447783 recording with a
 collection and preserves history. Limited collection remains disabled.
 
 The production rebuild uses the already-merged application source. The Vercel
-Terraform stack adopts the bootstrapped production flag through an import
-block. PostHog recording settings were applied through Executor using this
+Terraform stack adopted the bootstrapped production flag through a one-time
+import, which was removed after the successful apply. PostHog recording settings were applied through Executor using this
 PATCH, which also documents the recreation path for the VRDex operator:
 
 ```json
@@ -18,6 +18,10 @@ PATCH, which also documents the recreation path for the VRDex operator:
 
 Keep the existing SDK masking and console/network-body/canvas exclusions.
 Do not introduce a management runtime key or automatic deletion worker.
+
+The policy date is November 12. The stored choice policy version remains
+`2026-11-10`: this corrects the description of disabled Limited collection
+without expanding the agreed On collection, so it does not require a new choice.
 
 ### Activation evidence
 
@@ -35,8 +39,13 @@ Do not introduce a management runtime key or automatic deletion worker.
   retention period. Only that synthetic recording's metadata was read.
 - This is synthetic guest browser proof. It does not repeat the hosted
   signed-in account acceptance in PR 460 or measure real mobile performance.
+  A live private/form replay masking check and real mobile/player performance
+  remain unverified. Existing masking protections were retained; this activation
+  is not evidence that those separate checks passed.
 - The follow-up Vercel Terraform plan passed with one import, one in-place
   update to the environment variable comment, no additions and no destruction.
+- The Vercel-only [adoption apply](https://github.com/BITRATE-Labs/VRDex/actions/runs/43167224220)
+  passed both Plan and Apply. The production flag is now managed in remote state.
 
 The sections below describe the pre-activation evidence and superseded staged
 recommendation. The approval above supersedes their event-only/replay-off
@@ -120,9 +129,12 @@ approval. Do not redesign masking without a demonstrated failure.
 
 ## Rollback
 
-For initial event tracking, set the foundation flag false and rebuild the web
-app. Leave account preferences and historical events intact. If replay is later
-enabled, disable project recording first on masking or performance failure.
+Disable PostHog project recording first on masking or performance failure.
+For browser analytics rollback, change `posthog_production_enabled.value` to
+`"false"` in `infra/terraform/vercel/main.tf`, apply the Vercel stack, and rebuild
+the web app. A dashboard-only override is temporary because the next Terraform
+apply restores the checked-in value. Keep the source change until reactivation
+is approved. Leave account preferences and historical events intact.
 Do not erase consent history or revive terminally suppressed telemetry during
 rollback.
 

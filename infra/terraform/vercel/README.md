@@ -18,7 +18,8 @@ It manages shared application variables for the existing Vercel project:
 
 Interim Limited collection remains disabled. BASIC approved production analytics
 and replay on November 12, 2026. The production flag was bootstrapped through
-Executor and is adopted by the checked-in import block. Rebuild the web app
+Executor and adopted into Terraform state by the Vercel-only workflow apply.
+The one-time import block was then removed. Rebuild the web app
 after changing this public flag. Replay is a separate PostHog project setting,
 documented in the [activation record](../../../docs/deployment/posthog-foundation-activation.md).
 

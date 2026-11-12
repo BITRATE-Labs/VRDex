@@ -116,13 +116,6 @@ resource "vercel_project_environment_variable" "posthog_production_enabled" {
   comment    = local.posthog_comment
 }
 
-# Adopt the owner-approved production bootstrap without creating a duplicate.
-import {
-  for_each = var.manage_production_environment ? toset(["production"]) : toset([])
-  to       = vercel_project_environment_variable.posthog_production_enabled[0]
-  id       = "${var.vercel_team_id}/${data.vercel_project.web.id}/ddsJQQmqsGKI2tsj"
-}
-
 resource "vercel_project_environment_variable" "posthog_category_staging" {
   for_each               = toset(var.staging_custom_environment_ids)
   project_id             = data.vercel_project.web.id
