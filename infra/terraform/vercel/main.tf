@@ -105,6 +105,24 @@ resource "vercel_project_environment_variable" "posthog_category" {
   comment    = local.posthog_comment
 }
 
+resource "vercel_project_environment_variable" "posthog_production_enabled" {
+  count      = var.manage_production_environment ? 1 : 0
+  project_id = data.vercel_project.web.id
+  team_id    = var.vercel_team_id
+  key        = "NEXT_PUBLIC_POSTHOG_FOUNDATION_ENABLED"
+  value      = "true"
+  target     = ["production"]
+  sensitive  = false
+  comment    = local.posthog_comment
+}
+
+# Adopt the owner-approved production bootstrap without creating a duplicate.
+import {
+  for_each = var.manage_production_environment ? toset(["production"]) : toset([])
+  to       = vercel_project_environment_variable.posthog_production_enabled[0]
+  id       = "${var.vercel_team_id}/${data.vercel_project.web.id}/ddsJQQmqsGKI2tsj"
+}
+
 resource "vercel_project_environment_variable" "posthog_category_staging" {
   for_each               = toset(var.staging_custom_environment_ids)
   project_id             = data.vercel_project.web.id

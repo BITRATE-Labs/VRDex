@@ -1,12 +1,49 @@
 # PostHog foundation activation
 
-Current recommendation: activate normal event tracking first, after signed-in
-acceptance and exact public-copy review. Keep Limited collection and replay
-disabled for that step. This gets usable analytics without making replay
-acceptance or no-consent collection a prerequisite. Production settings remain
-unapplied and require BASIC's separate approval.
+## Production activation, November 12, 2026
 
-`NEXT_PUBLIC_POSTHOG_FOUNDATION_ENABLED` defaults false. While disabled, optional browser capture, the proposed panel, footer/account control and draft `/privacy` page are unavailable. Enable it only after the dependencies below are accepted. Existing account preferences alone cannot enable browser collection. Synthetic browser CI explicitly enables it with a fake ingestion key and intercepted transport, then verifies the disabled configuration separately.
+BASIC explicitly approved enabling production analytics and replay. Executor
+enabled the production Vercel build flag and project 447783 recording with a
+10% session sample. Recording retention remains 30 days. Off stops future
+collection and preserves history. Limited collection remains disabled.
+
+The production rebuild uses the already-merged application source. The Vercel
+Terraform stack adopts the bootstrapped production flag through an import
+block. PostHog recording settings were applied through Executor using this
+PATCH, which also documents the recreation path for the VRDex operator:
+
+```json
+{"id":447783,"session_recording_opt_in":true,"session_recording_sample_rate":"0.10"}
+```
+
+Keep the existing SDK masking and console/network-body/canvas exclusions.
+Do not introduce a management runtime key or automatic deletion worker.
+
+### Activation evidence
+
+- Production deployment `dpl_23MqGsb2KLyqzZnhbwWFpbqjDiAK` is READY, built
+  from main commit `83ff387d25a8e48625227675c2aa25a065ee1bf3`.
+- An isolated synthetic browser generated a production Full pageview and
+  `auth_session_restore_completed`. Executor confirmed both stored events for
+  that exact synthetic distinct ID at 05:59:33 UTC on November 12.
+- The probe observed no ingest requests before choosing On or after choosing
+  Off. Its automated-browser signals were suppressed in the isolated probe
+  only, leaving production's bot filter enabled.
+- The selected synthetic session sent a replay snapshot to `/ingest/s/` with
+  HTTP 200. Executor then confirmed recording
+  `01a1ce5c-0e87-7c76-b9da-62c69e5f663b` in project 447783, with a 30-day
+  retention period. Only that synthetic recording's metadata was read.
+- This is synthetic guest browser proof. It does not repeat the hosted
+  signed-in account acceptance in PR 460 or measure real mobile performance.
+
+The sections below describe the pre-activation evidence and superseded staged
+recommendation. The approval above supersedes their event-only/replay-off
+sequencing and separate activation approval requirement. It does not establish
+blanket legal compliance or verify a real user's analytics session.
+
+## Pre-activation record
+
+`NEXT_PUBLIC_POSTHOG_FOUNDATION_ENABLED` defaults false outside the configured production build. While disabled, optional browser capture, the panel, footer/account control and `/privacy` page are unavailable. Existing account preferences alone cannot enable browser collection. Synthetic browser CI explicitly enables it with a fake ingestion key and intercepted transport, then verifies the disabled configuration separately.
 
 ## Current verified settings
 
