@@ -85,6 +85,9 @@ class MembershipFixtureClient extends ConvexReactClient {
   failAll = false;
   newest = false;
   invalidCursor = false;
+  persistentCursorFailure = false;
+  queryCount = 0;
+  rejectCursors() { this.invalidCursor = true; this.persistentCursorFailure = true; this.queryCount = 0; document.documentElement.dataset.membershipFixtureQueries = "0"; this.fixtureListeners.forEach(listener => listener()); }
   failLoaded() { this.failAll = true; this.fixtureListeners.forEach(listener => listener()); }
   insertNewest() { this.newest = true; this.fixtureListeners.forEach(listener => listener()); }
   invalidateCursor() { this.invalidCursor = true; this.fixtureListeners.forEach(listener => listener()); }
@@ -96,6 +99,7 @@ class MembershipFixtureClient extends ConvexReactClient {
   constructor() { super("https://fixture.invalid"); }
   setDenied(value: boolean) { this.denied = value; this.fixtureListeners.forEach(listener => listener()); }
   override watchQuery<Query extends FunctionReference<"query">>(query: Query, ...args: ArgsAndOptions<Query, WatchQueryOptions>): Watch<FunctionReturnType<Query>> {
+    document.documentElement.dataset.membershipFixtureQueries = String(++this.queryCount);
     if (getFunctionName(query) !== "clubMembership:listActivity") throw new Error("Unexpected query");
     const input: unknown = args[0];
     if (!input || typeof input !== "object" || !("paginationOpts" in input)) throw new Error("Missing pagination");
@@ -111,7 +115,7 @@ class MembershipFixtureClient extends ConvexReactClient {
       localQueryResult: () => {
         if (this.denied) throw new Error("You do not have access to this category.");
         if ((this.failAll || (this.failed && offset >= 25)) && (!("id" in pagination) || pagination.id === 0)) throw new ConvexError({ code: "MEMBERSHIP_ACTIVITY_PAGE_FAILED" });
-        if (this.invalidCursor && offset >= 25 && (!("id" in pagination) || pagination.id === 0)) throw new ConvexError({ code: "MEMBERSHIP_ACTIVITY_CURSOR_INVALID" });
+        if (this.invalidCursor && offset >= 25 && (this.persistentCursorFailure || !("id" in pagination) || pagination.id === 0)) throw new ConvexError({ code: "MEMBERSHIP_ACTIVITY_CURSOR_INVALID" });
         if (this.paused && offset >= 75) return undefined;
         if (observedNewest !== this.newest) {
           observedNewest = this.newest;
@@ -140,6 +144,7 @@ function PaginationPreview({ initialFailure = false }: { initialFailure?: boolea
       <button onClick={() => client.failLoaded()}>Fail loaded fixture pages</button>
       <button onClick={() => client.insertNewest()}>Insert newest fixture event</button>
       <button onClick={() => client.invalidateCursor()}>Invalidate fixture cursors</button>
+      <button onClick={() => client.rejectCursors()}>Reject fixture cursors persistently</button>
     </div>
     {mounted ? <ClubMembershipActivity communitySlug="membership-fixture" startAt={start} endAt={start + 86400000} /> : null}
   </ConvexProvider>;

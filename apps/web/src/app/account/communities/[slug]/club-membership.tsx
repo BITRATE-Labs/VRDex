@@ -297,6 +297,7 @@ function MembershipActivityQuery({
   type Page = FunctionReturnType<typeof api.clubMembership.listActivity>;
   const [requests, setRequests] = useState<{ cursor: string | null; id: number; endCursor?: string }[]>([{ cursor: null, id: 0 }]);
   const [cached, setCached] = useState<Record<string, Page>>({});
+  const [cursorResets, setCursorResets] = useState(0);
   const queries = useMemo(() => Object.fromEntries(requests.map((pagination, index) => [index, {
     query: api.clubMembership.listActivity,
     args: { communitySlug, startAt, endAt, paginationOpts: { ...pagination, numItems: 25 } },
@@ -309,12 +310,13 @@ function MembershipActivityQuery({
   const clearHistory = errors.some(error => !(error instanceof ConvexError && typeof error.data === "object" && error.data?.code === "MEMBERSHIP_ACTIVITY_PAGE_FAILED"));
   if (pages !== previousPages) {
     setPreviousPages(pages);
-    if (invalidCursor) {
+    if (invalidCursor && cursorResets === 0) {
+      setCursorResets(1);
       setRequests([{ cursor: null, id: requests[0].id + 1 }]);
       setCached({});
     } else if (clearHistory) {
       if (Object.keys(cached).length) setCached({});
-      if (requests.length > 1 || requests[0].endCursor !== undefined) setRequests([{ cursor: null, id: requests[0].id + 1 }]);
+      if (!invalidCursor && (requests.length > 1 || requests[0].endCursor !== undefined)) setRequests([{ cursor: null, id: requests[0].id + 1 }]);
     } else setCached(current => {
       const next = { ...current };
       let changed = false;
@@ -357,10 +359,17 @@ function MembershipActivityQuery({
     }
   }, [storageKey, events.length, restoreCount]);
   return <>
-    {errors.length > 0 ? <Notice variant="error" role="alert">Unable to load activity.<Button className="ml-3" size="sm" variant="secondary" onClick={() => setRequests(current => current.map((request, index) => pages[index] instanceof Error ? {
+    {errors.length > 0 ? <Notice variant="error" role="alert">Unable to load activity.<Button className="ml-3" size="sm" variant="secondary" onClick={() => {
+      if (invalidCursor) {
+        setCached({});
+        setRequests([{ cursor: null, id: requests[0].id + 1 }]);
+        return;
+      }
+      setRequests(current => current.map((request, index) => pages[index] instanceof Error ? {
       ...request, id: request.id + 1,
       ...(cached[index]?.continueCursor ? { endCursor: cached[index].continueCursor } : {}),
-    } : request))}>Retry</Button></Notice> : null}
+    } : request));
+    }}>Retry</Button></Notice> : null}
     {!clearHistory && (events.length > 0 || errors.length === 0) ? <MembershipActivityView
       events={events}
       loading={loading}

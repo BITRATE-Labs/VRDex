@@ -545,7 +545,12 @@ export const listActivity = query({
         )
         .order("desc")
         .paginate(args.paginationOpts);
-      const identities = await membershipActivityIdentities(ctx, result.page.flatMap(row => [row.targetUserId, row.actorUserId].filter((id): id is string => !!id)));
+      let identities: Awaited<ReturnType<typeof membershipActivityIdentities>> = new Map();
+      try {
+        identities = await membershipActivityIdentities(ctx, result.page.flatMap(row => [row.targetUserId, row.actorUserId].filter((id): id is string => !!id)));
+      } catch (error) {
+        console.error("Membership activity identity enrichment failed", error);
+      }
       return {
         isDone: result.isDone,
         continueCursor: result.continueCursor,

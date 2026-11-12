@@ -229,3 +229,24 @@ test("membership names cannot reorder surrounding actions or links @storybook-vi
     await page.screenshot({ path: path.resolve(process.cwd(), "../../.cache/artifacts", `membership-bidi-${test.info().project.name}.png`), fullPage: true });
   }
 });
+
+test("persistent membership cursor failures stop automatic restoration @storybook-visual", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.goto("/iframe.html?id=clubs-membership--pagination-and-access&viewMode=story");
+  await expect(page.getByText("Fixture member 24", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Load more activity" }).click();
+  await expect(page.getByText("Fixture member 49", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Leave fixture" }).click();
+  await page.getByRole("button", { name: "Return to fixture" }).click();
+  await expect(page.getByText("Fixture member 49", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Reject fixture cursors persistently" }).click();
+  await expect(page.getByRole("alert")).toContainText("Unable to load activity.");
+  await expect(page.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
+  const automaticQueries = Number(await page.locator("html").getAttribute("data-membership-fixture-queries"));
+  expect(automaticQueries).toBeLessThanOrEqual(16);
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Unable to load activity.");
+  expect(Number(await page.locator("html").getAttribute("data-membership-fixture-queries")) - automaticQueries).toBeLessThanOrEqual(16);
+  expect(errors).toEqual([]);
+});

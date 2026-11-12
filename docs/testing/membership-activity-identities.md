@@ -22,11 +22,13 @@ The recovery review corrected transient errors clearing history and interrupted 
 
 Provider-controlled member, actor and role names render inside native bidirectional isolation elements. Directional formatting in a name cannot reorder surrounding action labels or links; recorded Unicode evidence remains unchanged. A directional-override fixture verifies browser isolation and receives desktop/mobile screenshot review.
 
+Automatic invalid-cursor recovery restarts once per mount. A repeated rejection stops restoration and shows Retry, rather than issuing an unbounded query loop. Catchable identity-enrichment failures are logged and return authorized core audit rows without identity decorations. Platform-enforced query limits can still abort the request. Collector rollback order and additive-schema compatibility are documented in the deployment guide.
+
 ## Local evidence
 
 - Worker suite: 270 passed after the replay-casing and independent role-name regressions.
-- Focused membership, identity, proof-verification and automatic-statistics backend suite: 70 passed after PR review fixes, including post-authorization error classification, malformed optional evidence, empty legacy names and an exact public response shape.
-- Storybook desktop/mobile assertions: 24 passed, including role labels, actor/target links, accessible details, bounded restoration, transient recovery, first-page errors, reactive boundary changes, bidirectional-name isolation and access-loss/retry using real hooks with synthetic transport. The local run used four workers.
+- Focused membership, identity, proof-verification and automatic-statistics backend suite: 70 passed after PR review fixes, including failure-tolerant identity enrichment, malformed optional evidence, empty legacy names and an exact public response shape.
+- Storybook desktop/mobile assertions: 26 passed, including role labels, actor/target links, accessible details, bounded restoration, persistent cursor rejection, transient recovery, first-page errors, reactive boundary changes, bidirectional-name isolation and access-loss/retry using real hooks with synthetic transport. The local run used four workers.
 - Repository backend and web type-check scripts passed with the isolated checkout's frozen-lockfile dependencies.
 - Focused frontend lint and whitespace checks passed.
 
