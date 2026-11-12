@@ -430,6 +430,7 @@ test.describe("account surfaces @visual @flow @account-visual", () => {
     test("signed-in analytics preserves identity, retries offline and separates accounts", async ({ page, context }, testInfo) => {
       test.setTimeout(180_000);
       const identities: string[] = [];
+      const identifiedIds: unknown[] = [];
       const protectedIdentities: string[] = [];
       const ingestionTokens = new Set<unknown>();
       let off = false;
@@ -448,6 +449,7 @@ test.describe("account surfaces @visual @flow @account-visual", () => {
               if ("analytics_mode" in props && props.analytics_mode === "full" && "deployment_category" in props
                 && props.deployment_category === "preview" && "distinct_id" in props && typeof props.distinct_id === "string") {
                 identities.push(props.distinct_id);
+                identifiedIds.push("$user_id" in props ? props.$user_id : undefined);
                 if ("route_class" in props && props.route_class === "protected") protectedIdentities.push(props.distinct_id);
               }
             }
@@ -471,11 +473,13 @@ test.describe("account surfaces @visual @flow @account-visual", () => {
       const first = identities.at(-1);
       if (!first) throw new Error("Consented account emitted no analytics identity");
       expect(first).toMatch(/^[a-f0-9-]{36}$/);
+      expect(identifiedIds.at(-1)).toBe(first);
       expect(protectedIdentities).toContain(first);
       const beforeReload = identities.length;
       await page.reload();
       await expect.poll(() => identities.length, hostedExpectOptions).toBeGreaterThan(beforeReload);
       expect(identities.at(-1)).toBe(first);
+      expect(identifiedIds.at(-1)).toBe(first);
       await openChoices();
       await context.setOffline(true);
       await panel.getByRole("button", { name: "Off", exact: true }).click();
@@ -498,6 +502,7 @@ test.describe("account surfaces @visual @flow @account-visual", () => {
       await expect(panel).toHaveCount(0, hostedExpectOptions);
       await expect.poll(() => identities.length, hostedExpectOptions).toBeGreaterThan(beforeOn);
       expect(identities.at(-1)).toBe(first);
+      expect(identifiedIds.at(-1)).toBe(first);
 
       await page.goto("/account");
       await page.getByRole("button", { name: "Sign out", exact: true }).click();
@@ -516,10 +521,12 @@ test.describe("account surfaces @visual @flow @account-visual", () => {
       await expect.poll(() => identities.length, hostedExpectOptions).toBeGreaterThan(beforeOther);
       const second = identities.at(-1);
       expect(second).not.toBe(first);
+      expect(identifiedIds.at(-1)).toBe(second);
       const beforeOtherReload = identities.length;
       await page.reload();
       await expect.poll(() => identities.length, hostedExpectOptions).toBeGreaterThan(beforeOtherReload);
       expect(identities.at(-1)).toBe(second);
+      expect(identifiedIds.at(-1)).toBe(second);
       expect([...ingestionTokens]).toEqual(["phc_synthetic_analytics_acceptance"]);
       await openChoices();
       await captureRouteScreenshot(page, testInfo, "account-analytics", { mask: unstableSignedInRegions(page, other.email) });
