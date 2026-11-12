@@ -521,6 +521,7 @@ export const listActivity = query({
     page: v.array(v.object({ ...event.fields, targetIdentity: v.optional(membershipIdentity), actorIdentity: v.optional(membershipIdentity) })),
     isDone: v.boolean(),
     continueCursor: v.string(),
+    scopeUnavailable: v.optional(v.literal(true)),
   }),
   handler: async (ctx, args) => {
     checkedMembershipRange(args.startAt, args.endAt, 366 * DAY_MS);
@@ -531,7 +532,7 @@ export const listActivity = query({
     )
       throw new Error("Invalid membership page size.");
     const state = await readContext(ctx, args.communitySlug, true);
-    if (!state) return { page: [], isDone: true, continueCursor: "" };
+    if (!state) return { page: [], isDone: true, continueCursor: "", scopeUnavailable: true as const };
     try {
       const result = await ctx.db
         .query("communityMembershipEvents")

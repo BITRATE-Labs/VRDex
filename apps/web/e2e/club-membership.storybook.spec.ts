@@ -299,3 +299,30 @@ for (const scopePage of ["first", "later"]) {
     await expect(page.getByText("No recorded membership events.")).toBeVisible();
   });
 }
+
+test("membership cursor recovery re-arms after a complete successful restoration @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership--pagination-and-access&viewMode=story");
+  await expect(page.getByText("Fixture member 24", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Load more activity" }).click();
+  await expect(page.getByText("Fixture member 49", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Leave fixture" }).click();
+  await page.getByRole("button", { name: "Return to fixture" }).click();
+  await expect(page.getByText("Fixture member 49", { exact: true }).first()).toBeVisible();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await page.getByRole("button", { name: "Invalidate fixture cursors", exact: true }).click();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(page.getByText("Fixture member 49", { exact: true }).first()).toBeVisible();
+  }
+});
+
+test("an exhausted empty membership window is not an unavailable scope @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership--pagination-and-access&viewMode=story");
+  await expect(page.getByText("Fixture member 24", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Load more activity" }).click();
+  await expect(page.getByText("Fixture member 49", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Empty first fixture window" }).click();
+  await expect(page.getByText("Fixture member 0", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Fixture member 49", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Load more activity" }).click();
+  await expect(page.getByText("Fixture member 74", { exact: true }).first()).toBeVisible();
+});

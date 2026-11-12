@@ -669,3 +669,10 @@ it("keeps authorized audit evidence when optional identity enrichment fails", as
   assert.deepEqual(result.page, [{ auditId: "projection-error", eventType: "group.member.join", occurredAt: start + 1, targetUserId }]);
   await assert.rejects(t.query(activity, args), /access/);
 });
+
+it("explicitly marks unavailable activity scopes independently of cursor encoding", async () => {
+  const { t, owner, integrationId } = await setup();
+  await t.run(ctx => ctx.db.delete(integrationId));
+  const result = await owner.query(activity, { communitySlug: "club", startAt: start, endAt: end, paginationOpts: { numItems: 25, cursor: null } });
+  assert.deepEqual(result, { page: [], isDone: true, continueCursor: "", scopeUnavailable: true });
+});

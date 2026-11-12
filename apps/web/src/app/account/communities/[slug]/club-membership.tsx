@@ -304,7 +304,7 @@ function MembershipActivityQuery({
   }])), [communitySlug, startAt, endAt, requests]);
   const pages: Record<string, Page | Error | undefined> = useQueries(queries);
   const [previousPages, setPreviousPages] = useState(pages);
-  const scopeUnavailable = Object.values(pages).some(page => page && !(page instanceof Error) && page.page.length === 0 && page.isDone && page.continueCursor === "");
+  const scopeUnavailable = Object.values(pages).some(page => page && !(page instanceof Error) && page.scopeUnavailable === true);
   const errors = Object.values(pages).filter((page): page is Error => page instanceof Error);
   const invalidCursor = errors.some(error => error.message.includes("InvalidCursor") ||
     (error instanceof ConvexError && typeof error.data === "object" &&
@@ -341,6 +341,9 @@ function MembershipActivityQuery({
   }
   const loading = !scopeUnavailable && errors.length === 0 && Object.values(pages).some(page => page === undefined);
   const canLoadMore = !loading && errors.length === 0 && lastPage !== undefined && !lastPage.isDone;
+  if (cursorResets > 0 && errors.length === 0 && !loading && lastPage && (events.length >= restoreCount || lastPage.isDone)) {
+    setCursorResets(0);
+  }
   const continueCursor = lastPage?.continueCursor;
   const loadMore = () => {
     if (continueCursor === undefined) return;
