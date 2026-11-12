@@ -1562,3 +1562,26 @@ it("does not credit singleton retirement when the old asset still has a gallery 
     "uploaded",
   );
 });
+
+for (const change of ["claimed_verified", "suppressed"] as const) {
+  it(`browser completion refuses a fresh ${change} target change without changing submission state`, async () => {
+    const t = convexTest({ schema, modules });
+    const s = await seed(t);
+    const intent = await t.withIdentity(s.contributorIdentity).mutation(api.profileMediaSubmissions.createUploadIntent, {
+      profileId: s.profileId, requestedPlacement: "profile_image", originalFileName: "artist.webp",
+      mimeType: "image/webp", byteSize: 512, sourceUrl: "https://artist.example/press", credit: "Artist",
+      expectedProfileUpdatedAt: NOW,
+    });
+    await t.mutation(internal.profileAssets.claimUploadIntentForStorage, {
+      intentId: intent.intentId, uploadToken: intent.uploadToken, processingToken: "worker",
+    });
+    await t.run(ctx => ctx.db.patch(s.profileId, change === "claimed_verified" ? { claimState: change } :
+      { publicSurfacingState: change }));
+    await assert.rejects(t.mutation(internal.profileAssets.markUploadIntentUploaded, {
+      intentId: intent.intentId, uploadToken: intent.uploadToken, processingToken: "worker",
+      mimeType: "image/webp", byteSize: 512, contentSha256: "candidate", width: 32, height: 32,
+    }));
+    assert.equal((await t.run(ctx => ctx.db.get(intent.submissionId)))?.status, "upload_pending");
+    assert.equal((await t.run(ctx => ctx.db.get(intent.intentId)))?.state, "pending");
+  });
+}

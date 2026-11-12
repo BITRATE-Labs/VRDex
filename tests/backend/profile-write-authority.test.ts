@@ -674,3 +674,27 @@ describe("profile write authority", () => {
     assert.equal(profiles[0]?.outboundLinks?.[0]?.source, "community_submitted");
   });
 });
+
+for (const claimState of ["unclaimed", "claimed_verified"] as const) {
+  it(`superadmin routine enrichment respects claim state ${claimState}`, async () => {
+    const t = convexTest(schema, modules);
+    const ownerUserId = await seedUser(t, "superadmin");
+    const profileId = await seedProfile(t, "superadmin", claimState);
+    await t.run(ctx => ctx.db.insert("accountFeatureGrants", {
+      userId: ownerUserId, feature: "super_admin", state: "active",
+      grantedBy: { tokenIdentifier: "test:operator", issuer: "test", subject: "operator" },
+      grantedAt: Date.now(), updatedAt: Date.now(),
+    }));
+    const result = t.mutation(internal.profiles.updateProfileForApiOwner, {
+      actorKind: "personal_api_token", ownerUserId, contributeGranted: true,
+      currentSlug: "dj-superadmin", expectedUpdatedAt: NOW, bio: "Public artist biography",
+    });
+    if (claimState === "unclaimed") {
+      await result;
+      assert.equal((await t.run(ctx => ctx.db.get(profileId)))?.bio, "Public artist biography");
+    } else {
+      await assert.rejects(result, error => errorCode(error) === "PROFILE_CLAIMED");
+      assert.equal((await t.run(ctx => ctx.db.get(profileId)))?.bio, undefined);
+    }
+  });
+}

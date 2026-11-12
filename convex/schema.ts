@@ -904,6 +904,7 @@ export default defineSchema({
     .index("by_requestedBy", ["requestedBy.tokenIdentifier"]),
   contributionCapacity: defineTable({
     scope: v.string(), bytes: v.number(), processing: v.number(),
+    submissionTimes: v.optional(v.array(v.number())),
     byteLimit: v.optional(v.number()), processingLimit: v.optional(v.number()),
   }).index("by_scope", ["scope"]),
   contributionUploadReservations: defineTable({

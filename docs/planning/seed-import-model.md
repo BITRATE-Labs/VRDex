@@ -278,10 +278,10 @@ clients. Every operation checks current delegated authority and verified email.
 Read tools expose bounded status and mapping data, without private source references.
 
 Append accepts 1 to 50 items. Item listing uses indexed cursors with a maximum page
-size of 40. The ordinary ceiling is 1,000 active rows and 10,000 retained revisions
-per actor. Trusted ceiling constants are 10,000 rows and 100,000 revisions, reserved
-for the later grant and measured-policy rollout. Each normalized revision is at
-most 8 KiB, and each item retains at most five revisions. Transactional actor
+size of 40. The standing role policy permits 1,000 active rows and 10,000 retained
+revisions for ordinary contributors, and 10,000 rows and 100,000 revisions for
+trusted contributors, approvers, publishers, and superadmins. Each normalized
+revision is at most 8 KiB, and each item retains at most five revisions. Actor
 counters charge terminal and deferred rows while their batch remains active.
 Archiving releases active row capacity, while receipts, revisions, held evidence,
 and existing media submissions remain. Payload retention and purge integration
@@ -314,3 +314,12 @@ complete collection checkpoint; recreation uses the checked deployment environme
 configuration with this exact variable. It is not a secret and needs no rotation.
 Keep it false alongside disabled upload intake until the remaining workflow,
 cleanup, grant, and capacity tasks have passed staging verification.
+
+### Standing contribution capacity
+
+The [approved simple contribution design](../superpowers/specs/2026-11-11-simple-contribution-policy-design.md)
+separates editing, publication, and capacity. Optional collections organize work;
+they do not unlock uploads or publication. There are no temporary batch allowances
+or environment-specific test policies. Routine profile and media editing remains
+available independently of the collection-intake switch. Claimed profiles remain
+owner-managed; a separate approved admin override is deferred.

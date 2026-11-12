@@ -2,18 +2,16 @@
 
 ## Local evidence, 2026-09-14
 
-The synthetic policy is a sizing proposal, not an enabled hosted policy. The
-default remains `baseline-v1`: three open proposals per actor, two per target,
-six creations per actor per rolling day, twenty per target, and one admission
-per thirty seconds. Local bridge bytes remain 144 MiB per actor and 96 MiB per
-target. Current normal intake does not acquire trusted limits merely from a grant.
+Current policy: [simple contribution permissions](../superpowers/specs/2026-11-11-simple-contribution-policy-design.md).
+The `roles-v1` ordinary/trusted/superadmin limits apply in every environment.
+Temporary allowance and capacity-request workflows are removed. Tests use the
+same policy with role fixtures and controlled time, without a synthetic identity
+allowlist. Ordinary contributors retain six creations per rolling day and three
+open proposals; trusted roles receive 1,000 of each. Superadmins retain shared
+operational safeguards while contributor quotas are inapplicable.
 
-`convex/_contributionPolicy.ts` contains the single proposed ordinary/trusted
-table and a checked-in dedicated identity allowlist. Only
-`local:contributor-capacity-proof` can select `synthetic-v1`. Unknown policies,
-production identities, ordinary dev identities and malformed bounds fail closed.
-Adding a real dedicated staging identity requires an owner-reviewed code change.
-No env variable can add an identity to the allowlist.
+The measurements below are historical local evidence from September 14, 2026,
+not hosted throughput guarantees. The reproduction script now uses standing roles.
 
 Run the local workflow with PowerShell:
 
@@ -48,14 +46,12 @@ feature availability, limits, usage, remaining capacity and rolling retry time.
 It explicitly reports `reservation: false`. Backlog/byte saturation has no invented
 retry time. `vrdex_contribution_status` supports cursor, state, batch and exact
 operation receipt lookup. A filtered page can be empty with more pages available.
-`vrdex_contribution_capacity_request` accepts private evidence and a restricted
-reason (`collection`, `reconsideration`, `temporary_batch`); own request status is
-available through `vrdex_contribution_capacity_requests`. These are ordinary MCP
-operations, not admin-only scripts. They remain available during intake pause.
+Temporary capacity requests and per-batch allowance decisions are no longer
+part of the workflow. Existing history is retained without granting capacity.
 
 Retained batch envelopes have a separate quota, including empty, archived and
-legacy batches. The bound is 1,000 for baseline/ordinary actors and 10,000 for
-synthetic trusted actors, matching the active-row policy scale. Current trust
+legacy batches. The bound is 1,000 for ordinary actors and 10,000 for
+trusted and superadmin actors, matching the active-row policy scale. Current trust
 determines admission. Archiving does not release this quota, and an existing
 caller key still replays at or above the bound. `BATCH_ENVELOPE_LIMIT` refuses
 new keys without deleting audit or receipt rows. No counter backfill is needed.
@@ -71,14 +67,12 @@ reconciliation alone does not override admission or delete retained records.
 Batch reconciliation counts active rows only in non-archived batches. Revision
 reconciliation excludes rows whose private payload has expired.
 
-The separately granted `trusted_contributor` feature conveys capacity only.
-`accountFeatureGrants.grant` can link a request ID; revoke and expiry use the
-existing internal grant operations. No migration creates grants. Temporary batch
-allowances require internal super-admin review, bind the actor, batch, maximum
-rows, cumulative reserved bytes and expiry, and apply only under `synthetic-v1`.
-They do not change target limits, reviewer/publisher authority or source policy.
-Expiry/downgrade permits an admitted unexpired reservation to finish; revocation
-and intake pause block completion. Read/status/review/withdrawal remain available.
+The active trusted-contributor, media-reviewer, and trusted-publisher roles select
+the same contribution capacity. Editing and publication checks remain separate.
+Superadmins may explicitly publish validated media on public unclaimed targets.
+Admission follows current roles; expiry permits admitted work to finish, while
+revocation without another qualifying role blocks finalization. Intake pause,
+source policy, target processing, and deployment budgets remain enforced.
 
 New local and legacy URL intake share creation limits and the reservation ledger.
 Admission quota refusals are terminal receipts; an in-progress attempt remains
@@ -94,9 +88,8 @@ available at the limit. A further fresh refusal returns
 not a status-queryable command outcome. The indexed count reads at most 256
 rows and 8 MiB; an incomplete read fails closed. Historical receipts remain
 retained. Expired source-host minute counters are removed in bounded scheduled
-pages, with continuation for a full page. Pending-request limits count only
-unexpired batch allowances, and approval permits one active allowance per
-batch. Expired historical approvals remain available for audit.
+pages, with continuation for a full page. Historical requests remain available as inert audit records; they no longer
+change admission or capacity.
 
 `contributionOperations.inventory` is an internal super-admin paginated query
 (at most 40 reservations) returning object-key inventory, page totals, pending
@@ -115,14 +108,13 @@ table and `convex/_contributionPolicy.ts`; never put secret values in git.
 
 | Name | Default | Meaning |
 | --- | --- | --- |
-| `VRDEX_CONTRIBUTION_POLICY` | `baseline-v1` | Explicit policy selection; synthetic identity guard applies |
 | `VRDEX_CONTRIBUTION_BATCHES_ENABLED` | false | Bulk collection intake switch |
 | `VRDEX_CONTRIBUTION_INTAKE_PAUSED` | false | Stops new intake and finalization, preserves reads and decisions |
 | `VRDEX_CONTRIBUTION_DEPLOYMENT_BYTES` | 100 GiB | Proposed unmeasured deployment storage bound |
 | `VRDEX_CONTRIBUTION_DEPLOYMENT_CONCURRENCY` | 16 | Proposed unmeasured import bound |
 | `VRDEX_CONTRIBUTION_HOST_FETCHES_PER_MINUTE` | 30 | Proposed unmeasured initial source-host fetch bound |
 
-These global bounds apply to both baseline and synthetic policies. Global values
+These shared bounds apply in every environment and to every role. Global values
 are conservative operator choices requiring measurement, not
 universal safe production values. Existing upload, cleanup-readiness, storage,
 OAuth and publication switches remain required. Source-host admission counts
@@ -192,3 +184,173 @@ Each target and mutation needs direct owner approval before these steps:
 
 Actual S3 transfer, Clerk sessions, Codex/Claude rendering, hosted multi-user load,
 costs, cleanup-lag measurements and reviewer staffing remain unverified gates.
+
+## Implementation validation, November 11, 2026
+
+The approved role policy and review fixes are implemented on the isolated local
+branch `codex/simple-contribution-policy`. No push, merge, account-role change,
+production deployment, or logo publication was performed for this change.
+
+Validation on the implementation:
+
+| Check | Result |
+| --- | --- |
+| Backend regression set | 3,278 passed across 180 test modules |
+| Excluded backend modules | Four unchanged Windows/FFmpeg or stalled-teardown modules, listed below |
+| Targeted web/MCP adapters | 27 passed |
+| API contracts | 85 passed |
+| MCP package | 13 passed |
+| Desktop/mobile contribution form | Four Storybook browser checks passed |
+| Backend, web, contracts, MCP types | Passed |
+| Local Convex compile and health | Passed on isolated local ports 34910/34911 |
+| Markdown and changed web-module lint | Passed |
+
+The unrestricted backend run was not green. Excluded modules are
+`event-broadcast-output.test.ts`, `event-broadcast-renderer.test.ts`,
+`event-twitch-input.test.ts`, and `now-playing-artwork.test.ts`. Observed failures
+were an FFmpeg encoder pipe closure, renderer timing, Windows descendant-process
+teardown, and Windows absolute-path ESM loading. Their source was unchanged.
+Test children belonging to the stalled runs were stopped after identity checks.
+This exclusion is a verification limit, not proof those modules are healthy.
+
+A fresh independent branch review found three Important issues. All three have
+regressions observed failing before their fixes and passing afterward:
+
+- Replacement review now uses bounded resumable source/replacement pagination.
+  Tests traverse 20 and 55 proposals, page size one, split windows, authority
+  revocation, malformed/foreign cursors, and source changes without duplication.
+- Browser completion rechecks current claim/public-profile eligibility before
+  writes, matching the existing authenticated MCP paths.
+- Capacity discovery reports effective shared ceilings, aggregate deployment and
+  published-byte usage, and shared remaining bytes/concurrency, including lower
+  stored operational limits.
+
+Implementation decisions and limits:
+
+- Native worktree creation returned no result twice. Git fallback provided an
+  isolated checkout, which is not app-managed. The shared checkout was untouched.
+- The existing shared profile editor already supports the approved public fields.
+  Reusing it avoids a redundant admin editor, without adding new field privileges.
+- Nullable quota enforcement and allowance removal were committed together to keep
+  callers consistent. They should be reviewed as one change.
+- Already admitted uploads may finish privately after media-kit intake is hidden
+  or disabled. Claims and loss of public profile eligibility still block
+  completion, and a private candidate cannot bypass publication checks.
+- The latest operator PR-readiness instructions supersede the plan's old fixed
+  waiting-window wording. No pushed-head or merge-ready claim is made here.
+- The approved numerical budgets have not been proven against hosted workloads.
+- Hosted deployment, current account grants, installed Executor tool-definition
+  refresh, and signed-in browser/account acceptance remain unverified. They must
+  be checked after separately authorized deployment. Fixture authentication and
+  local compilation do not establish live-account proof.
+
+Source evidence: implementation commits `514eb77c2`, `5863577cd`, `5f79b8471`,
+and `d9d2cc5af`, based on `440f37c80aecb3d2b867592ef0470b3f7200df90`.
+
+### PR review follow-up
+
+- Capacity discovery reads at most 101 retained envelopes or 512 KiB and labels
+  incomplete totals as lower bounds. Open-status counting stops at the actor's
+  quota rather than reading that quota for every status.
+- A regression reproduced the discovery read-budget failure with 1,000 open
+  proposals carrying 4 KiB source URLs, 1 KiB source descriptions and 1 KiB
+  private reasons, plus 10,000 retained envelopes. The fixed query and clean
+  over-ceiling admission refusal pass with Convex's default transaction limits.
+  This fixture proves that workload, not every possible metadata combination
+  or hosted throughput. The existing 1,100-admission/completion load test also
+  passes with its explicit 2,000,000-byte transaction read budget.
+- Explicit stored operational byte and processing limits apply even when a
+  superadmin has no contributor quota. Shared deployment usage and remaining
+  figures are visible only to superadmins.
+- Browser and MCP review clients now follow empty source checkpoints. MCP
+  traversal is bounded to 40 continuations per call and remains resumable.
+- Ordinary-tier refusal sentences retain their previously approved wording.
+  Trusted-tier numerical substitutions follow the approved capacity pattern.
+
+### Second PR review follow-up
+
+Capacity discovery reads at most 101 recent creation records for the rolling-day
+sample, with `creations24hIsLowerBound` marking an incomplete total. Remaining
+daily capacity is null when the sample cannot determine it. The large-source
+regression now passes with a stricter 8 MiB transaction read budget, including
+the exact 1,000-open count and clean admission refusal.
+
+Retained envelope totals now use an optional counter on the existing manifest
+ledger. First creation bootstraps an exact bounded legacy count, then every new
+idempotency key increments it atomically with the envelope insert. Replay and
+archive leave it unchanged. No deployment migration is required for the prior
+1,000-envelope policy. Incomplete unusually large legacy records remain
+fail-closed rather than guessing a count. A regression reaches 10,000 envelopes
+with 9 MB of retained cleanup metadata and a 32 KB read budget, including a
+concurrent last-slot race, replay, and archive.
+
+The browser now follows an empty page after manual pagination even if earlier
+rows are visible or the page is already cached. Consecutive empty continuations
+stop after 40 requests. Four production-component browser assertions pass across
+desktop and mobile for initial/later checkpoints and bounded subscriptions.
+
+### Admission journal and replay boundary follow-up
+
+Actor and target capacity ledgers now retain the latest 1,000 and 100 admission
+timestamps, respectively. Every production submission creation updates these
+bounded arrays in the same transaction. Replay does not create another timestamp.
+First creation reads the bounded legacy rolling history when the field is absent.
+Existing byte/processing updates preserve it. No new table or background job is
+needed.
+
+Admission reads the compact histories for rolling-day and burst checks, avoiding
+a second scan of full submission metadata. Tracked capacity discovery uses those
+timestamps for daily remaining capacity and retry time. The bounded lower-bound
+sample remains only for legacy ledgers without recorded timestamps.
+
+A regression reproduces refusal below both quotas with 999 older pending proposals
+and 999 recently decided submissions containing large source and credit URLs and
+notes. Admission now succeeds within Convex's default transaction limits. Discovery
+then reports 1,000 daily creations, zero remaining, and the correct daily retry time.
+The broad portable backend suite passes 3,289 tests with the same four documented
+Windows exclusions, and all 59 hosted MCP module tests pass. Backend/web typechecks
+and isolated local Convex compilation/health also pass.
+
+Saved assigned-review windows now pass their captured replacement end cursor into
+native pagination and return the original ending cursor. A 55-item regression
+changes a proposal's status between reads and verifies that replay does not pull
+a later item across the saved boundary.
+
+### Maximum metadata budget verification
+
+Convex documents a 16 MiB transaction read limit and 32,000 scanned documents in
+its [transaction limits](https://docs.convex.dev/production/state/limits#transactions).
+The pinned convex-test defaults use the same limits. The review's 8 MiB platform
+limit was incorrect, but extending the regression found a real crossing when a
+crowded target's status groups were scanned after a near-full actor queue.
+
+Both actor and target open counts now stop at their aggregate quota across all
+open statuses. The stress test uses policy-derived queue sizes, maximum-length
+UTF-8 metadata, and a crowded mixed-status target. It verifies a clean target-limit
+refusal, successful admission after that queue is decided, and correct daily
+remaining capacity and retry time under the full transaction budget.
+
+Credit URLs now obey the existing 2,048-character contract after URL encoding.
+Copying a legacy asset into a new placement proposal also reuses metadata and URL
+validators. Oversized legacy metadata cannot expand the new open queue, and the
+capability reports that refusal before a new proposal is attempted.
+
+Journal caps derive from the largest applicable standing policy quota. An invariant
+test covers every role, preventing later policy tuning from making the quota
+comparison unreachable. All 3,291 portable backend tests pass with the same four
+Windows exclusions. Both typechecks and isolated local Convex compile/health pass.
+
+### Continuation freshness and heavier admission coverage
+
+The policy-sized UTF-8 stress fixture now exercises both direct upload admission
+and the placement-proposal command, including its existing asset, placement,
+restriction, and review-snapshot reads. Both succeed within the same transaction
+budget and report correct daily capacity and retry time.
+
+MCP continuation queries now renew email verification and attestation on every
+step. Tests cover a traversal lasting longer than two minutes, a non-advancing
+cursor with an explicit error and retained position, and bounded exhaustion with
+a resumable cursor. A caller audit found only the browser panel and registered
+MCP adapter in production. The exported review request schema has no additional
+live consumer. Direct-publication audit semantics, including superadmins, are
+recorded in `docs/engineering/media-review-commands.md`.

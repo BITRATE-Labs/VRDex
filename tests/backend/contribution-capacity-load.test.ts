@@ -19,8 +19,6 @@ it("measures 1000 open proposals plus another actor using transactional admissio
   let clock = Date.now();
   context.mock.method(Date, "now", () => clock);
   Object.assign(process.env, {
-    CONVEX_DEPLOYMENT: "local:contributor-capacity-proof",
-    VRDEX_CONTRIBUTION_POLICY: "synthetic-v1",
     VRDEX_CONTRIBUTION_UPLOADS_ENABLED: "true",
     VRDEX_PROFILE_MEDIA_SUBMISSIONS_ENABLED: "true",
     VRDEX_MEDIA_UPLOAD_CLEANUP_READY: "true",
