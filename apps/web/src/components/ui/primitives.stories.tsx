@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from "@storybook/nextjs-vite";
+import type { Meta,StoryObj } from "@storybook/nextjs-vite";
 import type { ReactNode } from "react";
 
 import { ActionCard, ActionCardLabel, ActionCardLink, ActionCardMeta } from "./action-card";
@@ -10,7 +10,7 @@ import { EventSchedule, EventScheduleRow } from "./event-schedule";
 import { Field, FieldText, Input, Select, Textarea } from "./field";
 import { MetadataItem, MetadataList } from "./metadata-list";
 import { Notice } from "./notice";
-import { BrandLink, PageContainer, PageNav, PageShell } from "./page-shell";
+import { PageContainer, PageActions, PageShell } from "./page-shell";
 import { Table, TableCell, TableFrame, TableHead, TableHeaderCell } from "./table";
 import { cn } from "@/lib/cn";
 
@@ -356,12 +356,12 @@ export const ShellAndActions: Story = {
   render: () => (
     <PageShell>
       <PageContainer max="5xl">
-        <PageNav accountMode="signed-out">
-          <BrandLink />
+        <PageActions>
+
           <a className={buttonVariants({ variant: "secondary" })} href="#">
             Secondary action
           </a>
-        </PageNav>
+        </PageActions>
         <Card padding="lg" surface="white">
           <Eyebrow>Page shell</Eyebrow>
           <SectionTitle className="mt-4">Reusable Shell And Action Cards</SectionTitle>

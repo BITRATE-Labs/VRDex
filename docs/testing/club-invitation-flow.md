@@ -31,6 +31,15 @@ Cleanup resolves the exact seeded profile even if its creation response was lost
 
 ## Local verification without Clerk credentials
 
+The current-branch signed-in CI lane also sets `VRDEX_E2E_HOST_ACCESS=true`.
+After the invitation checks, the owner creates a host-only role, invites the
+same signed-in recipient through the staff controls, and revokes that assignment.
+The test checks the public entry button, live host page, direct page and status
+route, plus event-edit and broadcast-control denial. The host event fixture is
+local-only and run-owned. Its cleanup rejects foreign markers and added lineup
+rows; ordinary club cleanup still refuses events. This opt-in does not enable
+the fixture on hosted previews or staging.
+
 ```powershell
 node --conditions=import --import tsx --test tests/backend/e2e-club-staff.test.ts tests/backend/club-staff-review.test.ts tests/web/club-workspace-model.test.ts
 ```

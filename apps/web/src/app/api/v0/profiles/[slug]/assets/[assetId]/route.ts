@@ -1,6 +1,7 @@
 import { PublicProfileMediaDetailsSchema } from "@vrdex/api-contracts";
 import { api } from "@convex-generated-api";
 import { apiJson, publicNotFoundResponse, publicDataUnavailableResponse, rejectBearerTokenQuery, rejectInvalidOrRateLimitedPublicApiRequest } from "@/lib/server/api-v0";
+import { getPlaywrightPublicMediaDetailsFixture } from "@/convex/playwright-fixtures";
 import { convexHttpClient } from "@/lib/server/convex-http";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +15,7 @@ export async function GET(request: Request, context: RouteContext) {
   if (rejectedBearerToken !== null) return rejectedBearerToken;
   const { slug, assetId } = await context.params;
   try {
-    const result = await convexHttpClient().query(api.profileAssets.getPublicAssetDetails, { slug, assetId });
+    const result = getPlaywrightPublicMediaDetailsFixture(slug, assetId) ?? await convexHttpClient().query(api.profileAssets.getPublicAssetDetails, { slug, assetId });
     if (result === null) return publicNotFoundResponse("Profile");
     const response = apiJson(PublicProfileMediaDetailsSchema, result);
     response.headers.set("Cache-Control", "no-store");

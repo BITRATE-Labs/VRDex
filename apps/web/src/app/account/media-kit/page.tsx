@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { MediaKitPanel } from "./media-kit-panel";
 import { DEMO_MEDIA_KIT_WORKSPACE_PROFILES, ProfileWorkspace } from "../profile-workspace";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { buttonVariants } from "@/components/ui/button";
 import { profileClaimSlugFromInput } from "@/lib/profile-claim";
 
@@ -24,9 +24,6 @@ export default async function MediaKitPage({
   return (
     <PageShell className="py-10">
       <PageContainer max="6xl">
-        <PageNav>
-          <BrandLink />
-        </PageNav>
 
         <ProfileWorkspace
           activeSlug={initialProfileSlug}

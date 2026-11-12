@@ -8,6 +8,9 @@ test("approved wordmark is exact and visible on Home and both search shells @flo
   const asset = await request.get("/brand/vrdex-wordmark.svg");
   await expect(asset).toBeOK();
   expect(await asset.body()).toEqual(canonical);
+  const lightAsset = await request.get("/brand/vrdex-wordmark-light.svg");
+  await expect(lightAsset).toBeOK();
+  expect(await lightAsset.text()).toContain('fill="#547EAE"');
   const license = await request.get("/brand/LICENSE-OpenSans.txt");
   await expect(license).toBeOK();
   expect(await license.body()).toEqual(await readFile("../../docs/brand/wordmark/LICENSE-OpenSans.txt"));
@@ -15,22 +18,25 @@ test("approved wordmark is exact and visible on Home and both search shells @flo
     await page.goto(route);
     const wordmark = page.getByRole("navigation").first().getByRole("img", { name: "VRDex", exact: true });
     await expect(wordmark).toBeVisible();
-    await expect(wordmark).toHaveAttribute("src", "/brand/vrdex-wordmark.svg");
+    const dark = await page.locator("html").getAttribute("data-theme") === "dark";
+    await expect(wordmark).toHaveAttribute("src", dark ? "/brand/vrdex-wordmark.svg" : "/brand/vrdex-wordmark-light.svg");
     const box = await wordmark.boundingBox();
     expect(box).not.toBeNull();
+    expect(box!.width).toBe(128);
     expect(box!.width / box!.height).toBeCloseTo(469.002 / 132, 2);
     const explanation = page.getByText("Search across public people, communities, worlds, and events.", { exact: true });
     await expect(explanation).toHaveCount(route.includes("view=dj") ? 1 : 0);
     await page.getByRole("button", { name: "Toggle color theme", exact: true }).click();
     await expect(wordmark).toBeVisible();
-    await expect(wordmark.locator("..")).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(wordmark).toHaveAttribute("src", dark ? "/brand/vrdex-wordmark-light.svg" : "/brand/vrdex-wordmark.svg");
+    await expect(wordmark.locator("..")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await wordmark.locator("..").click();
     await expect(page).toHaveURL((url) => url.pathname === "/" && !url.search);
   }
   await page.goto("/discovery");
   const discoveryBrand = page.getByRole("navigation").first().getByRole("link", { name: "VRDex", exact: true });
-  await expect(discoveryBrand).toHaveText("VRDex");
-  await expect(discoveryBrand.locator("img")).toHaveCount(0);
+  await expect(discoveryBrand).toHaveAttribute("href", "/");
+  await expect(discoveryBrand.getByRole("img", { name: "VRDex", exact: true })).toBeVisible();
 });
 
 test("new Home submissions and old root bookmarks retain distinct destinations @flow @fixture", async ({ page }) => {

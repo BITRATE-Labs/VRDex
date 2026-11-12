@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { ClaimFlow } from "./claim-flow";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { Notice } from "@/components/ui/notice";
 import { fetchClaimProfileBySlug } from "@/convex/server";
 import { validClaimJourneyId } from "@/lib/claim-analytics";
@@ -41,9 +41,6 @@ export default async function ClaimProfilePage({
   return (
     <PageShell className="py-6 sm:py-8">
       <PageContainer max="4xl">
-        <PageNav>
-          <BrandLink />
-        </PageNav>
 
         {result.kind === "live" && result.profile ? (
           <ClaimFlow

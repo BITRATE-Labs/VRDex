@@ -14,6 +14,7 @@ import {
 import { ProfileSuggestion } from "../_components/profile-suggestion";
 
 export type EventIdentityPickerProps = {
+  label?: string;
   kind: EventIdentityOption["kind"];
   selectedSlug?: string | null;
   selectedOption?: EventIdentityOption | null;
@@ -35,6 +36,7 @@ type SearchState = {
 };
 
 export function EventIdentityPicker({
+  label: labelOverride,
   kind,
   selectedSlug,
   selectedOption,
@@ -62,12 +64,12 @@ export function EventIdentityPicker({
   const listId = useId();
   const inputValue = freeform && !selectedSlug ? freeform.value : query;
   const text = inputValue.trim();
-  const label =
+  const label = labelOverride ?? (
     kind === "person"
       ? "Performer"
       : kind === "community"
         ? "Community"
-        : "Where";
+        : "Where");
   const matching = (option: EventIdentityOption | null | undefined) =>
     option?.kind === kind && option.slug === selectedSlug;
   const selected = matching(selectedOption)
@@ -309,7 +311,7 @@ export function EventIdentityPicker({
                 : undefined
             }
             placeholder={
-              freeform ? "" : kind === "person"
+              freeform ? "" : labelOverride ? "Search profiles" : kind === "person"
                 ? "Search performers"
                 : kind === "world"
                   ? "Search worlds"

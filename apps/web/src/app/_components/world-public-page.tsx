@@ -1,9 +1,10 @@
 import Link from "next/link";
 
+import { EntityImage } from "@/components/ui/entity-image";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, Eyebrow, SectionHeading, SectionTitle } from "@/components/ui/card";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { cn } from "@/lib/cn";
 import { publicEventPath } from "@/lib/event-path";
 import { safeImageBackground } from "@/lib/safe-image";
@@ -90,6 +91,7 @@ export type PublicWorld = {
     profileSlug?: string;
     profileType?: "person" | "community";
     sourceLabel?: string;
+    imageUrl?: string;
   }>;
   outboundLinks: Array<{
     type: WorldLinkType;
@@ -172,17 +174,6 @@ function linkSourceLabel(source: WorldLinkSource): string {
   }
 
   return "Reviewed";
-}
-
-function initialsFor(name: string): string {
-  const initials = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-
-  return initials || "W";
 }
 
 function PillList({ items }: { items: string[] }) {
@@ -295,7 +286,6 @@ export function WorldBackendNotice({ kind }: { kind: "missing-url" | "error" }) 
 }
 
 export function WorldPublicPage({ world }: { world: PublicWorld }) {
-  const heroStyle = safeImageBackground(world.heroImageUrl, worldHeroOverlay);
   const canonicalWorldUrl = world.canonicalVrchatWorldUrl
     ? safeHttpsUrl(world.canonicalVrchatWorldUrl)
     : null;
@@ -304,45 +294,19 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
   return (
     <PageShell tone="world">
       <PageContainer>
-        <PageNav>
-          <BrandLink />
-          <Link className={buttonVariants({ variant: "surface" })} href="/submit">
-            Add a missing profile
-          </Link>
-        </PageNav>
-
         <section className="overflow-hidden rounded-hero border border-border bg-media shadow-hero">
-          <div
-            className="min-h-72 bg-[linear-gradient(135deg,var(--media),var(--surface-raised))] bg-cover bg-center p-6 text-white sm:p-8 lg:p-10"
-            style={heroStyle}
-          >
-            <div className="flex min-h-60 flex-col justify-end">
-              <div className="grid gap-6 lg:items-end">
-                <div className="flex flex-col gap-4">
-                  <div className="flex size-24 items-center justify-center rounded-panel border border-white/30 bg-white/15 text-3xl font-semibold shadow-panel">
-                    {initialsFor(world.displayName)}
-                  </div>
-
-                  <div className="max-w-3xl">
-                    <h1 className="text-5xl leading-none font-semibold tracking-[-0.05em] sm:text-7xl">
-                      {world.displayName}
-                    </h1>
-                    {world.summary ? (
-                      <p className="mt-4 max-w-2xl text-base leading-7 text-white/82 sm:text-lg">
-                        {world.summary}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
+          <div className="grid items-center gap-6 p-6 text-white sm:p-8 lg:grid-cols-[1.1fr_1fr] lg:p-10">
+            <div>
+              <h1 className="text-5xl leading-none font-semibold tracking-[-0.05em] sm:text-7xl">{world.displayName}</h1>
+              {world.summary ? <p className="mt-4 max-w-2xl text-base leading-7 text-white/82 sm:text-lg">{world.summary}</p> : null}
             </div>
+            <EntityImage label={world.displayName} src={world.heroImageUrl} className="aspect-video w-full rounded-card border border-white/20 text-4xl" sizes="(min-width: 1024px) 45vw, 100vw" priority />
           </div>
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
           <Card surface="white">
-            <Eyebrow>About this world</Eyebrow>
-            <SectionTitle className="mt-4">Place, vibe, context</SectionTitle>
+            <SectionTitle>About this world</SectionTitle>
             <div className="mt-4 space-y-4 text-sm leading-7 text-muted sm:text-base">
               {world.description ? (
                 <p>{world.description}</p>
@@ -414,14 +378,17 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
                     : null;
                   const content = (
                     <>
-                      <span className="font-medium">{attribution.displayName}</span>
-                      <span className="text-muted">{roleLabel(attribution.role)}</span>
+                      <EntityImage label={attribution.displayName} src={attribution.imageUrl} className="size-12 rounded-control" sizes="48px" />
+                      <span className="min-w-0">
+                        <span className="block break-words font-medium">{attribution.displayName}</span>
+                        <span className="block text-muted">{roleLabel(attribution.role)}</span>
+                      </span>
                     </>
                   );
 
                   return href ? (
                     <Link
-                      className="flex items-center justify-between gap-4 rounded-card border border-border bg-surface px-4 py-3 text-sm"
+                      className="flex items-center gap-3 rounded-card border border-border bg-surface px-4 py-3 text-sm"
                       href={href}
                       key={`${attribution.role}-${attribution.displayName}`}
                     >
@@ -429,7 +396,7 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
                     </Link>
                   ) : (
                     <div
-                      className="flex items-center justify-between gap-4 rounded-card border border-border bg-surface px-4 py-3 text-sm"
+                      className="flex items-center gap-3 rounded-card border border-border bg-surface px-4 py-3 text-sm"
                       key={`${attribution.role}-${attribution.displayName}`}
                     >
                       {content}

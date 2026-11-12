@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useEffectEvent } from "react";
+import { useEffect, useEffectEvent, useRef, useSyncExternalStore } from "react";
 import { ExternalLink } from "lucide-react";
 import { publicEventPath } from "@/lib/event-path";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -11,6 +11,14 @@ import {
   type DetailPreferenceProps,
 } from "./event-detail-content";
 import styles from "./event-detail.module.css";
+const narrowQuery = "(max-width: 999px)";
+function subscribeNarrow(onChange: () => void) {
+  const query = window.matchMedia(narrowQuery);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+const isNarrow = () => window.matchMedia(narrowQuery).matches;
+const serverNarrow = () => false;
 export function EventDetailPanel({
   selection,
   timeZone,
@@ -26,13 +34,25 @@ export function EventDetailPanel({
   const detail = useEventDetail({ slug: selection?.slug ?? null });
   const event = detail.kind === "available" ? detail.event : null;
   const roster = useEventRoster(event, selection?.slotId);
-  const dismiss = onClose;
+  const narrow = useSyncExternalStore(subscribeNarrow, isNarrow, serverNarrow);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const dismiss = () => {
+    dialog.current?.close();
+    onClose();
+  };
   const href = event ? publicEventPath(event) : null;
   const close = useEffectEvent(dismiss);
   const unavailable =
     detail.kind === "unavailable" ||
     roster.state.kind === "unavailable" ||
     (event !== null && event.id !== selection?.eventId);
+  const visible = selection !== null && !unavailable;
+  useEffect(() => {
+    const element = dialog.current;
+    if (!narrow || !visible || !element) return;
+    element.showModal();
+    return () => element.close();
+  }, [narrow, visible]);
   useEffect(() => {
     if (unavailable) close();
   }, [unavailable]);
@@ -56,8 +76,8 @@ export function EventDetailPanel({
     !rows.some((row) => row.key === roster.selected?.key)
       ? roster.selected
       : undefined;
-  return (
-    <section className={styles.panel} aria-label="Event details">
+  const content = (
+    <>
       <div className={styles.header}>
         {href ? (
           <a
@@ -69,7 +89,7 @@ export function EventDetailPanel({
             <ExternalLink size={18} aria-hidden="true" />
           </a>
         ) : null}
-        <Button size="sm" variant="ghost" onClick={dismiss}>
+        <Button autoFocus={narrow} size="sm" variant="ghost" onClick={dismiss}>
           Close
         </Button>
       </div>
@@ -153,6 +173,11 @@ export function EventDetailPanel({
           </div>
         ) : null}
       </div>
-    </section>
+    </>
   );
+  return narrow ? (
+    <dialog ref={dialog} className={styles.panel} aria-label="Event details" onCancel={event => { event.preventDefault(); dismiss(); }}>
+      {content}
+    </dialog>
+  ) : <section className={styles.panel} aria-label="Event details">{content}</section>;
 }

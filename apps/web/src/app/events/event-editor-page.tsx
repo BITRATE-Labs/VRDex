@@ -5,7 +5,7 @@ import { EventEditorForm, type EditableEvent } from "./event-editor-form";
 import { EventSeriesEditor } from "./event-series-controls";
 import { seriesEditable } from "@/lib/event-series-editor";
 import { buttonVariants } from "@/components/ui/button";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageActions, PageShell } from "@/components/ui/page-shell";
 
 export function EventEditorPage({
   communityName,
@@ -45,8 +45,8 @@ export function EventEditorPage({
     <div className="ph-no-capture" data-ph-no-capture>
       <PageShell className="py-10">
         <PageContainer max="6xl">
-          <PageNav showMyEvents={false}>
-            <BrandLink />
+          <PageActions>
+
             <Link className={buttonVariants({ variant: "secondary" })} href="/account/events">My events</Link>
             {routePath ? <Link className={buttonVariants({ variant: "secondary" })} href={`${routePath}/operate`}>Broadcast controls</Link> : null}
             {event?.publicationState === "published" && routePath !== undefined ? (
@@ -54,7 +54,7 @@ export function EventEditorPage({
                 View event
               </Link>
             ) : null}
-          </PageNav>
+          </PageActions>
 
           {series && event?.slug ? <EventSeriesEditor communitySlug={communitySlug} eventSlug={event.slug} heading={heading} series={series} />
             : <EventEditorForm key={event?.overrides?.join()} heading={heading} communitySlug={communitySlug} communityName={communityName} demoMode={demoMode} event={event} savedTimezonePreference={savedTimezonePreference} />}

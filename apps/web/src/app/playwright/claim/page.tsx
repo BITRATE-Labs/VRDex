@@ -1,4 +1,4 @@
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { notFound } from "next/navigation";
 import { ClaimFlowPreview } from "./preview";
 
@@ -29,9 +29,7 @@ export default async function PlaywrightClaimPage({
   return (
     <PageShell className="py-6 sm:py-8">
       <PageContainer max="4xl">
-        <PageNav accountMode="signed-out">
-          <BrandLink />
-        </PageNav>
+
         <ClaimFlowPreview
           discordLinked={discordLinked}
           privateProfile={privateProfile}

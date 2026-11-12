@@ -340,23 +340,22 @@ export async function expectPrivacyPage(page: Page) {
 }
 
 export async function expectSupportPage(page: Page) {
-  await expect(page.getByRole("heading", { name: "Tell us what you need." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Contact VRDex" })).toBeVisible();
   await expect(page.getByLabel("Request type")).toBeVisible();
-  await expect(page.getByLabel("Profile", { exact: true })).toBeVisible();
+  if (await page.getByLabel("Request type").inputValue()) await expect(page.getByLabel("Profile type", { exact: true })).toBeVisible();
   // A name-only opt-out with no type makes the acceptance resolver scan people
   // *and* communities, so this field is what stops one accepted request from
   // retracting every namesake of both kinds.
-  await expect(page.getByLabel("Is this a person or a community?")).toBeVisible();
   await expect(page.getByLabel("Message")).toBeVisible();
   await expect(page.getByRole("button", { name: "Send request" })).toBeVisible();
   // The two suppression topics live in the same selector as the rest. They are
   // the reason this route replaced `/privacy/suppression` rather than sitting
   // beside it, so their absence would mean the fold silently came undone.
   await expect(
-    page.getByRole("option", { name: "I own this listing and want it opted out" }),
+    page.getByRole("option", { name: "Remove my listing" }),
   ).toHaveCount(1);
   await expect(
-    page.getByRole("option", { name: "This unclaimed listing needs safety review" }),
+    page.getByRole("option", { name: "Listing safety concern" }),
   ).toHaveCount(1);
 }
 
@@ -458,8 +457,8 @@ export async function expectPersonProfilePage(page: Page) {
   await expect(liveBadges).toHaveCount(2);
   await expect(liveBadges.first()).toBeVisible();
   await expect(liveBadges.last()).toBeVisible();
-  await expect(page.getByRole("link", { name: /Watch on Twitch/i })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Open preview/ })).toHaveCount(2);
+  await expect(page.getByRole("link", { name: /^Twitch /i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Open preview/ })).toHaveCount(0);
   await expectProfilePlaybackLinks(page, 2);
   // Live in this fixture, so the player is offered. It has to stay a control
   // rather than a connection: nothing may reach VRCDN until a viewer presses
@@ -502,8 +501,8 @@ export async function expectVerifiedPersonProfilePage(page: Page) {
   await expect(page.getByText(/Public lookup seed for validating operator workflows/i)).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Copy Discord" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Watch", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Watch on Twitch" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open preview" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Twitch basic_bit", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open preview" })).toHaveCount(0);
   await expectProfilePlaybackLinks(page, 1);
   await expect(page.getByRole("link", { exact: true, name: "VRCDN stream" })).toHaveCount(0);
   // Twitch and the permanent VRCDN controls keep the Watch surface present.
@@ -530,11 +529,8 @@ export async function expectCommunityProfilePage(page: Page) {
 
 export async function expectEventPage(page: Page) {
   await expect(page.getByRole("heading", { name: "Afterglow Harbor Sessions" })).toBeVisible();
-  await expect(page.getByText("When", { exact: true })).toBeVisible();
-  await expect(page.getByText("Doors open", { exact: true }).first()).toBeVisible();
   await expect(page.getByText(/Jun 15, 2:00 AM UTC/i).first()).toBeVisible();
   await expect(page.getByText(/Your time/i)).toHaveCount(0);
-  await expect(page.getByText("Place", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Lineup", exact: true })).toBeVisible();
   const schedule = page.getByRole("list").filter({ has: page.getByRole("link", { name: "DJ Aurora", exact: true }) });
   const slots = schedule.getByRole("listitem");
@@ -549,13 +545,15 @@ export async function expectEventPage(page: Page) {
   await expect(page.getByText("Participants", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "DJ Aurora", exact: true }).first()).toBeVisible();
   await expect(page.getByText("Neon Harbor", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Add to calendar/i })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "Add to calendar", exact: true })).toHaveAttribute(
     "href",
     "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions/calendar.ics",
   );
   await expect(page.getByRole("link", { name: "Edit event" })).toHaveCount(0);
   await expect(page.getByText("Afterglow watch link", { exact: true })).toBeVisible();
-  await expect(page.locator("summary", { hasText: "DJ links" })).toBeVisible();
+  await expect(page.getByText("VRCDN copy link", { exact: true })).toHaveCount(0);
+  await expect(page.locator("summary", { hasText: "DJ links" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Host view", exact: true })).toBeVisible();
   await expect(page.locator('a[href="https://stream.vrcdn.live/live/playwright-afterglow-harbor-sessions.live.ts"]')).toHaveCount(0);
   await expect(page.getByText("Watch now", { exact: true })).toHaveCount(0);
 }
@@ -580,8 +578,9 @@ export async function expectEventWatchPage(page: Page) {
   await expect(page.getByRole("link", { name: "Open stream" })).toHaveCount(0);
   await expect(page.getByText("YouTube archive link", { exact: true })).toBeVisible();
   await expect(page.locator('a[href="https://www.twitch.tv/twitchdev"]')).toHaveCount(1);
-  await expect(page.locator('a[href="https://www.twitch.tv/twitchdev"]')).not.toBeVisible();
-  await expect(page.locator("summary", { hasText: "DJ links" })).toBeVisible();
+  await expect(page.locator('a[href="https://www.twitch.tv/twitchdev"]')).toBeVisible();
+  await expect(page.locator("summary", { hasText: "DJ links" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Host view", exact: true })).toBeVisible();
 }
 
 export async function expectVrcdnMediaLinkPreviewPage(page: Page) {

@@ -1,7 +1,7 @@
 import { AppearancePanel } from "./appearance-panel";
 import { ProfileWorkspace } from "../profile-workspace";
 import { Card } from "@/components/ui/card";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 
 export default async function AppearancePage({
   searchParams,
@@ -19,9 +19,6 @@ export default async function AppearancePage({
   return (
     <PageShell className="py-10">
       <PageContainer max="6xl">
-        <PageNav>
-          <BrandLink />
-        </PageNav>
 
         <ProfileWorkspace
           activeProfileId={initialProfileId}

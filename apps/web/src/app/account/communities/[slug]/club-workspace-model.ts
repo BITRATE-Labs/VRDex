@@ -129,6 +129,7 @@ export const categoryLabels = {
 export const permissionLabels = {
   edit_community_profile: "Edit community profile",
   manage_events: "Manage events",
+  host_events: "Host events",
   manage_event_media: "Manage event media",
   view_event_operations: "View event operations",
   manage_staff: "Invite VRDex staff",

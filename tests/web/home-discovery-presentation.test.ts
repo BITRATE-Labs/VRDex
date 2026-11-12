@@ -33,7 +33,7 @@ test("static discovery cards preserve attribution, sparse evidence and canonical
     assert.match(markup, /2026-12-05/);
     for (let i = 0; i < 12; i++) assert.ok(markup.includes('>Favorite ' + i + '<'));
     assert.ok(!/First|Third|Fourth|Deep liquid|Liquid DnB|Manual/.test(markup));
-    assert.match(markup, /Full lineup/);
+    assert.doesNotMatch(markup, /Full lineup/);
     const absent = renderToStaticMarkup(React.createElement(DiscoveryEventCard, { ...props, matchingPeople: undefined }));
     assert.ok(!absent.includes('Favorite 0'));
     const club = { id: 'club', slug: 'club', displayName: 'Prism', profileType: 'community', genres: [], logoImageUrl: 'https://example.invalid/logo.png' };

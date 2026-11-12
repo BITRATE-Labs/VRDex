@@ -763,12 +763,20 @@ test("public profile media kit @visual @fixture", async ({ page }, testInfo) => 
     mediaKit.getByRole("img", { name: "DJ Aurora framed by violet light and a warm orange glow." }),
   ).toHaveCount(1);
   await expect(mediaKit.getByRole("img", { name: "Aurora wordmark" })).toHaveCount(1);
+  const portrait = mediaKit.getByRole("heading", { name: "Aurora press portrait" }).locator("xpath=ancestor::article");
+  const logo = mediaKit.getByRole("heading", { name: "Primary logo" }).locator("xpath=ancestor::article");
+  await expect(portrait.getByRole("link", { name: "View source" })).toHaveCount(0);
+  await portrait.locator("summary").click();
+  await logo.locator("summary").click();
   await expect(
     mediaKit.locator('a[href="https://example.invalid/afterglow-studio"]'),
   ).toHaveAttribute("href", "https://example.invalid/afterglow-studio");
   await expect(
     mediaKit.locator('a[href="https://example.invalid/aurora-source"]'),
   ).toHaveAttribute("href", "https://example.invalid/aurora-source");
+  await expect(portrait.getByText("PNG / 180 KB", { exact: true })).toBeVisible();
+  await portrait.locator("summary").click();
+  await logo.locator("summary").click();
   for (const title of [
     "Aurora press portrait",
     "Primary logo",
@@ -786,7 +794,7 @@ test("public profile media kit @visual @fixture", async ({ page }, testInfo) => 
     .locator("xpath=ancestor::article");
   await expect(noCredit.getByRole("link")).toHaveCount(1);
   await expect(mediaKit.getByRole("link", { name: "Download" }).first()).toBeVisible();
-  await expect(mediaKit.getByText("PNG / 180 KB", { exact: true })).toBeVisible();
+  await expect(mediaKit.getByText("PNG / 180 KB", { exact: true })).toHaveCount(0);
   await expect(mediaKit.locator("article")).toHaveCount(4);
   await mediaKit.locator("img").evaluateAll(async images => {
     await Promise.all(images.map(async image => {

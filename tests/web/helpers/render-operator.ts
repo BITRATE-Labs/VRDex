@@ -22,8 +22,7 @@ export function renderOperator(status: unknown) {
         React.createElement("button", props),
     },
     "@/components/ui/page-shell": {
-      PageNav: (props: object) => React.createElement("nav", props),
-      BrandLink: () => React.createElement("a", {href:"/"}, "VRDex"),
+      PageActions: (props: object) => React.createElement("nav", props),
       PageContainer: ({ max: _m, ...props }: Record<string, unknown>) =>
         React.createElement("div", props),
       PageShell: (props: object) => React.createElement("div", props),

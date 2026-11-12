@@ -465,7 +465,7 @@ test.describe("fixture lookup smoke", () => {
     await expect(page.getByRole("heading", { name: "BASICBIT" })).toBeVisible();
     await expect.poll(() => attempts).toBe(1);
     await expect(page.getByRole("heading", { name: "Watch", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Open preview" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open preview" })).toHaveCount(0);
     await expectProfilePlaybackLinks(page, 1);
     await expect(page.getByText("Live now", { exact: true })).toHaveCount(0);
 
@@ -484,7 +484,7 @@ test.describe("fixture lookup smoke", () => {
     expect(attempts).toBe(2);
   });
 
-  test("VRCDN-only profile keeps its preview and copy controls while offline", async ({ page }) => {
+  test("VRCDN-only profile keeps its compact copy controls while offline", async ({ page }) => {
     let attempts = 0;
 
     await page.route("**/api/profile-live/playwright-dj-night-market/vrcdn*", async (route) => {
@@ -496,9 +496,9 @@ test.describe("fixture lookup smoke", () => {
     await expect(page.getByRole("heading", { name: "DJ Night Market" })).toBeVisible();
     await expect.poll(() => attempts).toBe(1);
     await expect(page.getByRole("heading", { name: "Watch", exact: true })).toHaveCount(0);
-    const watch = page.getByRole("link", { name: /Open preview/ }).locator("xpath=ancestor::aside");
+    const watch = page.locator("aside").filter({ has: page.getByText("VRCDN stream", { exact: true }) });
     await expect(watch).toBeVisible();
-    await expect(watch.getByRole("link", { name: "Open preview" })).toBeVisible();
+    await expect(watch.getByRole("link", { name: "Open preview" })).toHaveCount(0);
     await expectProfilePlaybackLinks(page, 1);
     let copiedPlayback = "";
     await page.exposeFunction("capturePlaybackCopy", (value: string) => { copiedPlayback = value; });
@@ -543,21 +543,21 @@ test.describe("fixture lookup smoke", () => {
     await page.goto("/playwright-dj-aurora");
     const vrcdnBlock = page
       .getByText("VRCDN", { exact: true })
-      .locator("xpath=ancestor::div[contains(@class, 'pt-5')][1]");
+      .locator("xpath=ancestor::section[1]");
     const player = page.getByRole("button", { name: "Play VRCDN" });
     const preview = page.getByRole("link", { name: "Open preview" });
     await expect(player).toBeVisible();
     await expect(page.getByText("Suggested VRCDN", { exact: true })).toBeVisible();
-    await expect(preview).toHaveCount(2);
+    await expect(preview).toHaveCount(0);
     await waitForVisualReady(page);
-    const previewPosition = () => vrcdnBlock.evaluate((block) => {
-      const link = block.querySelector("a")!;
+    const copyPosition = () => vrcdnBlock.evaluate((block) => {
+      const link = block.querySelector('button[aria-label="Copy Quest"]')!;
       const linkRect = link.getBoundingClientRect();
       const blockRect = block.getBoundingClientRect();
       return { x: linkRect.x - blockRect.x, y: linkRect.y - blockRect.y,
         width: linkRect.width, height: linkRect.height };
     });
-    const previewBefore = await previewPosition();
+    const copyBefore = await copyPosition();
     await player.evaluate((element) => {
       element.setAttribute("data-lifecycle-marker", "original");
     });
@@ -578,8 +578,8 @@ test.describe("fixture lookup smoke", () => {
     await expect.poll(() => attempts).toBe(2);
     await expect(player).toHaveCount(0);
     await expect(vrcdnBlock.getByText("Live now", { exact: true })).toHaveCount(0);
-    await expect(preview.first()).toBeVisible();
-    expect(await previewPosition()).toEqual(previewBefore);
+    await expect(vrcdnBlock.getByRole("button", { name: "Copy Quest", exact: true })).toBeVisible();
+    expect(await copyPosition()).toEqual(copyBefore);
   });
 
   // Public-page fixtures have synthetic IDs; retained authorization must read the
@@ -634,7 +634,7 @@ test.describe("fixture lookup smoke", () => {
     await page.goto("/playwright-dj-aurora");
     const vrcdnBlock = page
       .getByText("VRCDN", { exact: true })
-      .locator("xpath=ancestor::div[contains(@class, 'pt-5')][1]");
+      .locator("xpath=ancestor::section[1]");
     const player = page.getByRole("button", { name: "Play VRCDN" });
     await expect(player).toBeVisible();
     await player.click();
@@ -660,7 +660,7 @@ test.describe("fixture lookup smoke", () => {
     await expect(video).toHaveAttribute("data-lifecycle-marker", "playing");
     await expect(video).toBeVisible();
     await expect(vrcdnBlock.getByText("Live now", { exact: true })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Open preview" }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open preview" })).toHaveCount(0);
 
     releaseMedia();
   });
@@ -685,7 +685,7 @@ test.describe("fixture lookup smoke", () => {
     await page.goto("/playwright-dj-aurora");
     const vrcdnBlock = page
       .getByText("VRCDN", { exact: true })
-      .locator("xpath=ancestor::div[contains(@class, 'pt-5')][1]");
+      .locator("xpath=ancestor::section[1]");
     await expect.poll(() => attempts).toBe(1);
     const player = page.getByRole("button", { name: "Play VRCDN" });
     await player.click();

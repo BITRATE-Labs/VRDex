@@ -3,7 +3,7 @@ import { AnalyticsSettingsButton } from "../../_components/analytics-preferences
 import { DEMO_WORKSPACE_PROFILES, ProfileWorkspace } from "../profile-workspace";
 import { Card } from "@/components/ui/card";
 import { ANALYTICS_FOUNDATION_ENABLED } from "@/lib/analytics-preference";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 
 export default async function PrivacyPage({
   searchParams,
@@ -21,9 +21,6 @@ export default async function PrivacyPage({
   return (
     <PageShell className="py-10">
       <PageContainer max="6xl">
-        <PageNav>
-          <BrandLink />
-        </PageNav>
 
         {ANALYTICS_FOUNDATION_ENABLED && <Card className="mb-6" padding="lg"><h1 className="mb-3 text-xl font-semibold">Analytics</h1><AnalyticsSettingsButton /></Card>}
         <ProfileWorkspace

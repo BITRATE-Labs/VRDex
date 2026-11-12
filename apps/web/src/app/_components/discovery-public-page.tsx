@@ -1,40 +1,25 @@
 import Link from "next/link";
 import { publicScheduleStatus } from "../../../../../convex/_eventRuntime";
-import {
-  CalendarDays,
-  Globe2,
-  UserRound,
-  UsersRound,
-} from "lucide-react";
+import { CalendarDays, Globe2, UserRound, UsersRound } from "lucide-react";
 
-import {
-  DiscoveryFeatureGate,
-  DiscoverySearchForm,
-  TrackedDiscoveryLink,
-} from "./discovery-analytics";
+import { DiscoveryFeatureGate, DiscoverySearchForm, TrackedDiscoveryLink } from "./discovery-analytics";
 import { HomeActiveWorldsSection, type PublicActiveWorld } from "./home-active-worlds";
 import { searchHref, type SearchResultFilter } from "./search-view-state";
 import { SearchViewShell } from "./search-view-shell";
 import { PublicSearchResultDetails } from "./public-search-result-details";
 import type { PublicEventPreview } from "./event-public-page";
-import {
-  ViewerLocalEventDateTime,
-  ViewerLocalEventTime,
-} from "./viewer-local-event-times";
+import { ViewerLocalEventDateTime, ViewerLocalEventTime } from "./viewer-local-event-times";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, SectionTitle } from "@/components/ui/card";
 import { EntityImage } from "@/components/ui/entity-image";
 import { EventSchedule, EventScheduleRow } from "@/components/ui/event-schedule";
 import { ProfileAvatarImage } from "@/components/ui/profile-avatar-image";
 import type { PublicSearchResult } from "@/lib/public-search";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { VerifiedTrustMark } from "@/components/ui/verified-trust-mark";
 import { cn } from "@/lib/cn";
 import { publicEventPath } from "@/lib/event-path";
-import {
-  FEATURED_DISCOVERY_UI_FLAG,
-  type DiscoveryAnalyticsSurface,
-} from "@/lib/posthog";
+import { FEATURED_DISCOVERY_UI_FLAG, type DiscoveryAnalyticsSurface } from "@/lib/posthog";
 
 export type { SearchResultFilter } from "./search-view-state";
 export type { PublicSearchResult } from "@/lib/public-search";
@@ -183,14 +168,6 @@ function ResultImage({ result }: { result: PublicSearchResult }) {
         title="Logo"
       />
     </span>
-  );
-}
-
-function TopNav() {
-  return (
-    <PageNav>
-      <BrandLink />
-    </PageNav>
   );
 }
 
@@ -445,7 +422,6 @@ export function DiscoveryLandingPage({
   return (
     <PageShell>
       <PageContainer className="gap-8" max="7xl">
-        <TopNav />
 
         <section className="grid gap-6 border-b border-border py-8 lg:grid-cols-[0.7fr_1.3fr] lg:items-end lg:py-12">
           <div>

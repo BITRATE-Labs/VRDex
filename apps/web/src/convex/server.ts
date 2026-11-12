@@ -278,19 +278,17 @@ export async function fetchPublicEventSeries(seriesId: string) {
 
 /** Request-scoped auth; private host content must never enter a shared cache. */
 export async function fetchHostEventBySlug(slug: string, communitySlug: string) {
+  const fixture = getPlaywrightPublicEventFixture(slug);
+  if (fixture) return { kind: "live" as const, event: fixture.communitySlug === communitySlug ? fixture : null };
   const token = await convexAuthToken();
-  if (token && process.env.NEXT_PUBLIC_CONVEX_URL) {
-    try {
-      const event = await fetchQuery(api.events.getHostBySlug, { slug, communitySlug }, { token });
-      if (event) return { kind: "live" as const, event };
-    } catch {
-      return { kind: "error" as const };
-    }
+  if (!token) return { kind: "live" as const, event: null };
+  if (!process.env.NEXT_PUBLIC_CONVEX_URL) return { kind: "missing-url" as const };
+  try {
+    const event = await fetchQuery(api.events.getHostBySlug, { slug, communitySlug }, { token });
+    return { kind: "live" as const, event };
+  } catch {
+    return { kind: "error" as const };
   }
-  const result = await fetchPublicEventBySlug(slug);
-  if (result.kind === "live" && result.event?.communitySlug !== communitySlug)
-    return { kind: "live" as const, event: null };
-  return result;
 }
 
 function fixtureEventShareCard(

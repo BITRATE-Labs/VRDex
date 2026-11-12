@@ -21,7 +21,7 @@ test.describe("recent event timestamps @flow @fixture", () => {
     await softFocus.scrollIntoViewIfNeeded();
     await page.screenshot({ path: info.outputPath("recent-event-timestamps.png"), fullPage: true });
     await softFocus.click();
-    const detail = page.getByRole("region", { name: "Event details", exact: true });
+    const detail = page.getByLabel("Event details", { exact: true });
     await expect(detail.locator("p").filter({ hasText: "Time TBA" }).first()).toBeVisible();
 
     await page.goto(`/?at=${TIMELINE_NOW - 72 * hour}&tz=UTC`);
@@ -110,10 +110,7 @@ test.describe("timeline time regressions @flow @fixture", () => {
         exact: true,
       })
       .click();
-    const panel = page.getByRole("region", {
-      name: "Event details",
-      exact: true,
-    });
+    const panel = page.getByLabel("Event details", { exact: true });
     await expect(
       panel.locator('time[datetime="2026-10-26T21:00:00.000Z"]').first(),
     ).toHaveText("Oct 26, 5:00 PM");
@@ -149,9 +146,9 @@ test.describe("timeline time regressions @flow @fixture", () => {
             return rect.width > 0 && rect.right > bounds.left + 1 && rect.left < bounds.right - 1 && rect.bottom > bounds.top && rect.top < bounds.bottom;
           });
           const text = status.textContent ?? "";
-          const empty = /No (events|favorites) in this range/.test(text);
+          const empty = /No favorites in this range/.test(text);
           audit.sawVisibleContent ||= Boolean(visible);
-          audit.sawEmpty ||= empty;
+          audit.sawEmpty ||= status.getAttribute("data-state") === "ready" && !visible;
           if (empty && visible && audit.contradictions.length < 40) audit.contradictions.push({ text, date: document.querySelector<HTMLInputElement>('[aria-label="Schedule date"]')?.value ?? null, anchor: new URL(location.href).searchParams.get("at"), content: visible.getAttribute("data-testid") });
         };
         new MutationObserver(sample).observe(document, { subtree: true, childList: true, characterData: true, attributes: true });
@@ -168,11 +165,13 @@ test.describe("timeline time regressions @flow @fixture", () => {
       await chart.press("ArrowRight");
       await page.getByRole("button", { name: "Later", exact: true }).click();
       await page.getByRole("button", { name: "Later", exact: true }).click();
-      await expect(page.getByText("No events in this range", { exact: true })).toBeVisible();
+      await expect(page.getByLabel("Schedule data state", { exact: true }),
+      ).toHaveAttribute("data-state", "ready");
       await page.getByRole("button", { name: "Now", exact: true }).click();
       await expect(bar).toBeInViewport();
       await page.getByLabel("Schedule date", { exact: true }).fill("2026-10-27");
-      await expect(page.getByText("No events in this range", { exact: true })).toBeVisible();
+      await expect(page.getByLabel("Schedule data state", { exact: true }),
+      ).toHaveAttribute("data-state", "ready");
       await page.getByRole("button", { name: "Now", exact: true }).click();
       await expect(bar).toBeInViewport();
       const audit: { samples: number; sawVisibleContent: boolean; sawEmpty: boolean; contradictions: unknown[] } = await page.evaluate(() => Reflect.get(window, "timelineStatusAudit"));
@@ -230,7 +229,7 @@ test.describe("timeline time regressions @flow @fixture", () => {
       await page.goto(`/?at=${TIMELINE_NOW}&tz=UTC`);
       await expect(page.getByLabel("Hour format", { exact: true }).locator("..")).toHaveText("24h");
       await page.getByRole("button", { name: "Open Aurora at ORBIT: Interstellar Bassline Orchestra", exact: true }).click();
-      const panel = page.getByRole("region", { name: "Event details", exact: true });
+      const panel = page.getByLabel("Event details", { exact: true });
       await expect(panel.getByText(/UTC . 24h/, { exact: true })).toBeVisible();
       await expect(panel.locator('[data-selected="true"]')).toHaveAttribute("data-slot-id", timelineFixture.slotIds[6]);
       const times = await panel.locator("time").evaluateAll(elements => elements.map(element => ({ instant: element.getAttribute("datetime"), label: element.textContent })));
@@ -256,7 +255,7 @@ test.describe("timeline time regressions @flow @fixture", () => {
       await marker.scrollIntoViewIfNeeded();
       await expect(marker).toBeInViewport();
       await marker.getByRole("button", { name: /^Open Day Gathering/ }).click();
-      await expect(page.getByRole("region", { name: "Event details", exact: true })).toBeVisible();
+      await expect(page.getByLabel("Event details", { exact: true })).toBeVisible();
     });
     test("panelTimesCrossDstWithoutRepeatedOffsets", async ({
       page,
@@ -271,10 +270,7 @@ test.describe("timeline time regressions @flow @fixture", () => {
           exact: true,
         })
         .click();
-      const panel = page.getByRole("region", {
-        name: "Event details",
-        exact: true,
-      });
+      const panel = page.getByLabel("Event details", { exact: true });
       await expect(
         panel.getByText(/ (12|24)h$/, { exact: true }),
       ).toHaveText("America/New York · 12h");

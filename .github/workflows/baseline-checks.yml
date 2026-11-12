@@ -611,7 +611,7 @@ jobs:
           sudo "$(command -v node)" "${{ github.workspace }}/.github/scripts/configure-ubuntu-mirror.mjs"
           pnpm exec playwright install --with-deps chromium
 
-      - name: Run current-branch signed-in claim regression
+      - name: Run current-branch signed-in claim and host regressions
         id: claim-auth
         if: github.event.pull_request.head.repo.fork == false
         env:
@@ -623,6 +623,8 @@ jobs:
           VRDEX_ENABLE_E2E_AUTH_HELPERS: "true"
           VRDEX_ENABLE_E2E_ADAPTER_HELPERS: "true"
           VRDEX_ENABLE_E2E_CLERK_AUTH: "true"
+          VRDEX_E2E_CLUB_INVITATIONS: "true"
+          VRDEX_E2E_HOST_ACCESS: "true"
           VRDEX_E2E_BROWSER_TOKEN: local-playwright-token
           VRDEX_E2E_CONVEX_SECRET: local-convex-e2e-secret
           # Reuse the retained development tenant with this runner's isolated
@@ -637,14 +639,14 @@ jobs:
             *) echo "::error::The current-branch claim regression requires the retained Clerk development secret key."; exit 1 ;;
           esac
           node scripts/check-clerk-issuer-match.mjs --issuer "$CLERK_JWT_ISSUER_DOMAIN" --publishable-key "$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"
-          pnpm --filter web exec playwright test auth-claim.flow.spec.ts --grep "reactive query saves a dated VRChat account" --project=desktop-chromium --workers=1
+          pnpm --filter web exec playwright test auth-claim.flow.spec.ts club-invitation.flow.spec.ts --grep "reactive query saves a dated VRChat account|real invitation sign-in, acceptance and denials" --project=desktop-chromium --workers=1
           node --input-type=module <<'NODE'
           import { readFileSync } from "node:fs";
           const { stats } = JSON.parse(readFileSync("apps/web/playwright-artifacts/results-claim-auth.json", "utf8"));
-          if (stats.expected !== 1 || stats.skipped !== 0 || stats.unexpected !== 0) {
-            throw new Error("The current-branch signed-in claim regression did not execute and pass exactly once.");
+          if (stats.expected !== 2 || stats.skipped !== 0 || stats.unexpected !== 0) {
+            throw new Error("The current-branch signed-in claim and host regressions did not both execute and pass.");
           }
-          console.log("Current-branch signed-in claim coverage:", stats);
+          console.log("Current-branch signed-in claim and host coverage:", stats);
           NODE
 
       - name: Run mutation-backed profile submission flow
@@ -695,7 +697,7 @@ jobs:
 
           Outcome: ${FLOW_OUTCOME}
 
-          Current-branch signed-in claim regression: ${CLAIM_AUTH_OUTCOME:-not run}
+          Current-branch signed-in claim and host regressions: ${CLAIM_AUTH_OUTCOME:-not run}
           Forks do not receive development keys. A skipped regression is not acceptance.
 
           Captured flow:

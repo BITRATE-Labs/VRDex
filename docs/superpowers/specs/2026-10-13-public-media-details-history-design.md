@@ -8,7 +8,7 @@ An image's source is different from the person who uploaded it to VRDex.
 The current linked text, such as "Shared by Karly", can imply that the named
 person participated on VRDex. Keep the useful reference link without that claim.
 
-- Public media cards show **View source**, not the uploader's name.
+- Public media cards keep file type, size and **View source** inside **Details & history**. BASIC requested this placement on November 9.
 - **Details & history** is public and does not require sign-in.
 - Uploader attribution appears only in details/history and links to the
   uploader's public VRDex person profile when one can be resolved safely.
@@ -26,7 +26,7 @@ The image, title, file information and download retain their current presentatio
 ```mermaid
 flowchart LR
     Profile["Public profile / media kit"] --> Card["Image card"]
-    Card -->|"View source"| Reference["Existing public reference"]
+    Details -->|"View source"| Reference["Existing public reference"]
     Card -->|"Details & history"| Details["Expand image details, no sign-in"]
     Direct["Profile link with image anchor"] --> Details
     Details -->|"Uploader profile link"| Contributor["Public contributor profile"]

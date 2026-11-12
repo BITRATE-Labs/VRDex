@@ -1,0 +1,3 @@
+.light { display: none; }
+:global(html[data-theme="light"]) .dark { display: none; }
+:global(html[data-theme="light"]) .light { display: block; }

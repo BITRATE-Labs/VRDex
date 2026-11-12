@@ -20,7 +20,7 @@ test("anonymous connected disclosure loads once and keeps attribution collapsed 
   await page.route(`**${endpoint}`, async route => { reads++; await route.fulfill({ json: details }); });
   await page.goto(`/${slug}`);
   const card = page.locator(`article#media-${assetId}`);
-  await expect(card.getByRole("link", { name: "View source" })).toHaveAttribute("href", "https://example.invalid/afterglow-studio");
+  await expect(card.getByRole("link", { name: "View source" })).toHaveCount(0);
   await expect(card.getByText("Shared by Karly")).toHaveCount(0);
   expect(reads).toBe(0);
   await expect(card.locator("img")).toHaveClass(/opacity-100/);
@@ -28,6 +28,8 @@ test("anonymous connected disclosure loads once and keeps attribution collapsed 
   const toggle = card.locator("summary");
   await toggle.focus();
   await page.keyboard.press("Enter");
+  await expect(card.locator("details").getByRole("link", { name: "View source" })).toHaveAttribute("href", "https://example.invalid/afterglow-studio");
+  await expect(card.locator("details").getByText("PNG / 180 KB", { exact: true })).toBeVisible();
   await expect(card.getByRole("link", { name: "BASICBIT" }).first()).toHaveAttribute("href", "/basicbit");
   await expect(card.getByText("Shared by Karly")).toBeVisible();
   await expect(card.getByText("Published", { exact: true })).toBeVisible();

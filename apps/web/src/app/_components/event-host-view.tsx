@@ -5,6 +5,8 @@ import { useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { api } from "@convex-generated-api";
 
+import { Card } from "@/components/ui/card";
+import { EntityImage } from "@/components/ui/entity-image";
 import { buttonVariants } from "@/components/ui/button";
 import { CopyValueRow } from "@/components/ui/copy-value-row";
 import { PageContainer, PageShell } from "@/components/ui/page-shell";
@@ -26,6 +28,13 @@ export function EventHostView({ event: initialEvent }: { event: PublicEvent }) {
   return event ? <EventHostContent event={event} /> : null;
 }
 
+function performerTargets(performer: PublicEvent["slots"][number]["performer"]) {
+  return [...new Map((performer?.outboundLinks ?? []).flatMap(link => {
+    const target = eventDjTarget(link.url);
+    return target ? [[target.key, target] as const] : [];
+  })).values()];
+}
+
 type HostSourceProps = {
   target: DjTarget;
   observation?: SourceObservation;
@@ -43,16 +52,16 @@ function HostSource({ target, observation, now, selected, previewing, onPreview 
 
   return (
     <div className="min-w-0">
-      <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
         <span className="font-medium [overflow-wrap:anywhere]">
           {target.pcUrl ? `VRCDN · ${target.label}` : target.label}
           {selected ? " · Selected source" : ""}
         </span>
-        <span className="text-muted" title={observation ? new Date(observation.observedAt).toISOString() : undefined}>
+        <span className={state === "live" ? "text-success" : state === "unavailable" ? "text-warning" : "text-muted"} title={observation ? new Date(observation.observedAt).toISOString() : undefined}>
           {status}
         </span>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         {target.pcUrl && target.questUrl ? (
           <>
             <CopyValueRow actionOnly label="PC" value={target.pcUrl} />
@@ -66,7 +75,7 @@ function HostSource({ target, observation, now, selected, previewing, onPreview 
         ) : (
           <a className={buttonVariants({ size: "sm", variant: "ghost" })} href={target.url} target="_blank" rel="noreferrer">Open</a>
         )}
-        <details className="min-w-0 basis-full text-sm">
+        <details className="min-w-0 text-sm">
           <summary className="w-fit cursor-pointer text-muted">URLs</summary>
           <div className="mt-2 grid gap-2 [overflow-wrap:anywhere]">
             {target.pcUrl && target.questUrl ? (
@@ -96,6 +105,14 @@ export function EventHostContent({ event }: { event: PublicEvent }) {
   const path = publicEventPath(event);
   const lineup = eventLineupForDisplay(event);
 
+  const next = now > 0 ? lineup.filter(row => row.startAt !== undefined && row.startAt > now)
+    .sort((a, b) => a.startAt! - b.startAt! || a.position - b.position)[0] : undefined;
+  const nextSlot = next ? event.slots.find(slot => slot.playbackKey === next.key) : undefined;
+  const nextTargets = performerTargets(next?.performer);
+  const nextSource = nextTargets.find(target => target.key === (nextSlot?.stream ? `vrcdn:${nextSlot.stream.streamId}` : undefined))
+    ?? nextTargets.find(target => target.pcUrl) ?? nextTargets[0];
+  const nextState = nextSource ? reportedSourceState(observations[nextSource.key], now) : undefined;
+
   const previewKey=preview?.sourceKey;
   useEffect(() => {
     let cancelled = false;
@@ -124,16 +141,41 @@ export function EventHostContent({ event }: { event: PublicEvent }) {
 
   return (
     <PageShell>
-      <PageContainer className="py-6 sm:py-10">
-        <Link className="text-sm text-muted hover:text-foreground" href={path ?? "/events"}>{event.title}</Link>
-        <h1 className="text-3xl font-semibold">Host view</h1>
-        <div className="grid gap-3">
+      <PageContainer className="gap-6">
+        <header className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-semibold">Host view</h1>
+            <p className="mt-2 text-muted">{event.title}</p>
+          </div>
+          <Link className={buttonVariants({ variant: "secondary" })} href={path ?? "/events"}>Event page</Link>
+        </header>
+        {next ? (
+          <Card padding="sm" aria-label="Up next" className="flex flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h2 className="text-sm text-muted">Up next</h2>
+              <p className="mt-1 font-semibold [overflow-wrap:anywhere]">{next.performer ? <Link className="hover:underline focus-visible:underline" href={`/${next.performer.slug}`}>{next.performer.displayName}</Link> : next.displayLabel}</p>
+              <div className="mt-1 text-sm text-muted"><ViewerLocalEventTimeRange startAt={next.startAt!} endAt={next.endAt} /></div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {nextSource ? (
+                <>
+                  <span className={`mr-2 text-sm ${nextState === "live" ? "text-success" : "text-muted"}`}>Source: {nextState}</span>
+                  {nextSource.pcUrl && nextSource.questUrl ? <>
+                    <CopyValueRow actionOnly label="Next PC" value={nextSource.pcUrl} />
+                    <CopyValueRow actionOnly label="Next Quest" value={nextSource.questUrl} />
+                  </> : <CopyValueRow actionOnly label="Next link" value={nextSource.url} />}
+                </>
+              ) : <span className="text-sm text-muted">No links</span>}
+            </div>
+          </Card>
+        ) : null}
+        <Card padding="none" aria-label="Lineup" className="overflow-hidden">
+          <div aria-hidden="true" className="hidden grid-cols-[9rem_14rem_minmax(0,1fr)] gap-5 border-b border-border bg-surface-strong px-5 py-3 text-xs font-medium text-muted lg:grid">
+            <span>Set</span><span>Performer</span><span>Sources</span>
+          </div>
           {lineup.map(row => {
             const slot = event.slots.find(slot => slot.playbackKey === row.key);
-            const targets = [...new Map((row.performer?.outboundLinks ?? []).flatMap(link => {
-              const target = eventDjTarget(link.url);
-              return target ? [[target.key, target] as const] : [];
-            })).values()];
+            const targets = performerTargets(row.performer);
             const selectedKey = slot?.stream ? `vrcdn:${slot.stream.streamId}` : undefined;
             const primary = targets.find(target => target.key === selectedKey) ?? targets.find(target => target.pcUrl) ?? targets[0];
             const alternatives = targets.filter(target => target.key !== primary?.key);
@@ -157,30 +199,33 @@ export function EventHostContent({ event }: { event: PublicEvent }) {
             };
 
             return (
-              <section key={row.key} className="min-w-0 rounded-panel border border-border bg-surface-strong p-4 sm:p-5">
-                <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-                  <h2 className="text-lg font-semibold [overflow-wrap:anywhere]">{row.performer?.displayName ?? row.displayLabel}</h2>
-                  {row.startAt !== undefined ? (
-                    <span className="text-sm text-muted">
-                      <ViewerLocalEventTimeRange startAt={row.startAt} endAt={row.endAt} />
-                      {scheduled ? " · Scheduled now" : ""}
-                    </span>
+              <section key={row.key} aria-label={row.performer?.displayName ?? row.displayLabel} className="grid min-w-0 gap-4 border-b border-border p-4 last:border-b-0 sm:p-5 lg:grid-cols-[9rem_14rem_minmax(0,1fr)] lg:gap-5">
+                <div className="text-sm">
+                  {row.startAt !== undefined ? <ViewerLocalEventTimeRange startAt={row.startAt} endAt={row.endAt} /> : <span className="text-muted">Time TBA</span>}
+                  {scheduled ? <p className="mt-1 text-xs text-accent">Scheduled now</p> : null}
+                </div>
+                <div className="flex min-w-0 items-start gap-3">
+                  <EntityImage label={row.performer?.displayName ?? row.displayLabel} src={row.performer?.imageUrl} className="size-10 rounded-control" sizes="40px" />
+                  <div className="min-w-0">
+                    <h2 className="font-semibold [overflow-wrap:anywhere]">{row.performer ? <Link className="hover:underline focus-visible:underline" href={`/${row.performer.slug}`}>{row.performer.displayName}</Link> : row.displayLabel}</h2>
+                    {row.roleLabel ? <p className="mt-1 text-xs text-muted">{row.roleLabel}</p> : null}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  {primary ? renderSource(primary) : <span className="text-sm text-muted">No links</span>}
+                  {alternatives.length ? (
+                    <details className="mt-3 border-t border-border pt-3" onToggle={event => {
+                      if (!event.currentTarget.open && preview?.slotKey === row.key && alternatives.some(target => target.key === preview.sourceKey)) setPreview(null);
+                    }}>
+                      <summary className="cursor-pointer text-sm text-muted">Other links</summary>
+                      <div className="mt-3 grid gap-4">{alternatives.map(renderSource)}</div>
+                    </details>
                   ) : null}
                 </div>
-                {row.roleLabel ? <p className="mb-3 text-sm text-muted">{row.roleLabel}</p> : null}
-                {primary ? renderSource(primary) : <span className="text-sm text-muted">No links</span>}
-                {alternatives.length ? (
-                  <details className="mt-3 border-t border-border pt-3" onToggle={event => {
-                    if (!event.currentTarget.open && preview?.slotKey === row.key && alternatives.some(target => target.key === preview.sourceKey)) setPreview(null);
-                  }}>
-                    <summary className="cursor-pointer text-sm text-muted">Other links</summary>
-                    <div className="mt-3 grid gap-4">{alternatives.map(renderSource)}</div>
-                  </details>
-                ) : null}
               </section>
             );
           })}
-        </div>
+        </Card>
       </PageContainer>
     </PageShell>
   );

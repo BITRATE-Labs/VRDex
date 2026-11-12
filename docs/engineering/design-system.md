@@ -31,7 +31,10 @@ forms, status displays, and schedule rows.
 - `apps/web/src/components/ui/field.tsx`: labels, inputs, textareas, and field help text.
 - `apps/web/src/components/ui/notice.tsx`: inline user-facing status blocks.
 - `apps/web/src/components/ui/table.tsx`: table containers and cells.
-- `apps/web/src/components/ui/page-shell.tsx`: page background, width containers, nav, and brand link.
+- `apps/web/src/app/layout.tsx`: sole owner of the site header and footer.
+- `apps/web/src/components/ui/site-header.tsx`: common wordmark, navigation, search, theme and account controls.
+- `apps/web/src/components/ui/site-footer.tsx`: common footer links.
+- `apps/web/src/components/ui/page-shell.tsx`: page background, width containers and contextual page actions.
 - `apps/web/src/components/ui/action-card.tsx`: repeated call-to-action cards.
 - `apps/web/src/components/ui/event-schedule.tsx`: compact time-oriented event schedule rows.
 - `apps/web/src/components/ui/entity-card.tsx`: structural cards for people, communities, worlds, and events.

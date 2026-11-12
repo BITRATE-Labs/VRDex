@@ -6,12 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Component, createContext, useContext, type ReactNode } from "react";
 import { api } from "@convex-generated-api";
-import {
-  BrandLink,
-  PageContainer,
-  PageNav,
-  PageShell,
-} from "@/components/ui/page-shell";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { Notice } from "@/components/ui/notice";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
@@ -173,9 +168,7 @@ export function ClubWorkspace({
   return (
     <PageShell>
       <PageContainer max="7xl">
-        <PageNav>
-          <BrandLink />
-        </PageNav>
+
         <ClubErrorBoundary key={communitySlug}>
           <ConnectedWorkspace communitySlug={communitySlug}>
             {children}

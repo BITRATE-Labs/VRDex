@@ -2353,7 +2353,7 @@ describe("public profile world credits", () => {
     const credits = createPublicProfileWorldCredits(
       [
         { credit: worldAuthorCredit, world: draftWorld },
-        { credit: worldAuthorCredit, world: publishedWorld },
+        { credit: worldAuthorCredit, world: { ...publishedWorld, heroImageUrl: "https://example.invalid/world.jpg" } },
         { credit: storefrontCredit, world: publishedWorld },
       ],
     );
@@ -2362,6 +2362,8 @@ describe("public profile world credits", () => {
     assert.equal(credits[0]?.slug, "neon-harbor");
     assert.deepEqual(credits[0]?.roles, ["world_author", "storefront_owner"]);
     assert.equal(credits[0]?.sourceLabel, "Reviewed attribution");
+    assert.equal(credits[0]?.heroImageUrl, "https://example.invalid/world.jpg");
+    assert.equal(createPublicProfileWorldCredits([{ credit: worldAuthorCredit, world: { ...publishedWorld, heroImageUrl: "javascript:alert(1)" } }])[0]?.heroImageUrl, undefined);
   });
 });
 

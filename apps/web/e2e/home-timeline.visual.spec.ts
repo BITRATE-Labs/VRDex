@@ -133,7 +133,7 @@ test.describe("Home schedule images @visual @snapshot @fixture", () => {
       .click();
     await expect(
       page
-        .getByRole("region", { name: "Event details", exact: true })
+        .getByLabel("Event details", { exact: true })
         .getByRole("listitem"),
     ).toHaveCount(2);
     await capture(page, "details");
@@ -170,7 +170,7 @@ test.describe("Home schedule images @visual @snapshot @fixture", () => {
     await page.goto(`/?at=${Date.UTC(2036, 10, 5, 12)}`);
     await expect(
       page.getByLabel("Schedule data state", { exact: true }),
-    ).toContainText("No events in this range");
+    ).toHaveAttribute("data-state", "ready");
     await expect(page.getByRole("button", { name: "Next event", exact: true })).toHaveCount(0);
     await capture(page, "empty");
   });
@@ -246,10 +246,7 @@ test.describe("Home schedule images @visual @snapshot @fixture", () => {
           exact: true,
         })
         .click();
-      const panel = page.getByRole("region", {
-        name: "Event details",
-        exact: true,
-      });
+      const panel = page.getByLabel("Event details", { exact: true });
       await expect(panel.getByRole("listitem")).toHaveCount(83);
       await expect(panel.locator('[data-selected="true"]')).toBeInViewport();
       await capture(page, "dense");

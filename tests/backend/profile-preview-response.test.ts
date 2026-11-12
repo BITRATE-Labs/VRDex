@@ -181,8 +181,9 @@ it("uses authenticated asset routes for hidden owner previews without widening p
       const html = renderToStaticMarkup(React.createElement(ProfilePublicPage, { profile, embedded: true, mediaKitGalleryEnabled: true }));
       assert.equal(html.includes('id="media-'), hasCard, "preview card visibility");
       if (hasCard) assert.ok(html.includes('Download'), "preview retains download");
-      assert.ok(!html.includes('Details &amp; history'), "hidden preview has no public disclosure");
-      assert.ok(!html.includes('<summary'), "hidden preview has no disclosure control");
+      assert.equal(html.includes('Details &amp; history'), hasCard, "preview metadata stays inside disclosure");
+      assert.ok(!html.includes('Uploaded by'), "hidden preview exposes no public provenance");
+      if (hasCard) assert.ok(!html.includes('/api/v0/profiles/preview-assets/assets/'), "hidden preview retains authenticated asset paths");
     }
   `], { cwd: process.cwd(), input: JSON.stringify(renderedPreviews), env: { ...process.env, TSX_TSCONFIG_PATH: "apps/web/tsconfig.json" }, stdio: ["pipe", "pipe", "pipe"] });
   assert.equal(unsavedMetadata.displayName, "Unsaved Preview Assets");

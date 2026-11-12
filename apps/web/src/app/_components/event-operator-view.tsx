@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@convex-generated-api";
 import { EventBroadcastQuickSwitch, type PreparedBroadcastSource } from "./event-broadcast-quick-switch";
 import { Button } from "@/components/ui/button";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageActions, PageShell } from "@/components/ui/page-shell";
 import { CopyValueRow } from "@/components/ui/copy-value-row";
 import { EventOperatorPreview } from "./event-operator-preview";
 import { parseBroadcastInputUrl } from "../../../../../convex/_broadcastInputUrl";
@@ -326,7 +326,7 @@ export function EventOperatorControls({
     <PageShell className="py-5">
       <PageContainer max="6xl">
         <div className="ph-no-capture space-y-8" data-ph-no-capture data-testid="event-operator-controls">
-          <PageNav showMyEvents={false}><BrandLink /><Link href={status.eventPath}>Event</Link><Link href={`${status.eventPath}/host`}>Host view</Link><Link href={`${status.eventPath}/edit`}>Edit event</Link></PageNav>
+          <PageActions><Link href={status.eventPath}>Event</Link><Link href={`${status.eventPath}/host`}>Host view</Link><Link href={`${status.eventPath}/edit`}>Edit event</Link></PageActions>
           <header className="flex flex-wrap items-center justify-between gap-4">
             <div><Link className="text-sm text-muted" href={status.eventPath}>{title ?? status.eventTitle}</Link><h1 className="mt-2 text-4xl font-semibold tracking-tight">Broadcast</h1></div>
             <div className="flex items-center gap-4"><span className="text-sm capitalize" role="status">{workerStatus}</span><Button variant="secondary" disabled={stopBusy || !status.canControl || !active || session?.status === "stopping"} onClick={() => session && setChange({title:"Stop this broadcast?",message:"The output will stop.",label:"Stop broadcast",sessionId:session.sessionId,epoch:session.epoch,run:confirmAndStop})}>Stop</Button></div>

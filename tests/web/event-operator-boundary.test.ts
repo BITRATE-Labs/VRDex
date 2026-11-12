@@ -68,7 +68,7 @@ function operatorFixture({ isAuthenticated = true, isLoading = false } = {}) {
     '@convex-generated-api': { api },
     '@/lib/event-broadcast-observation': { eventBroadcastObservationFresh: () => false },
     '@/components/ui/button': { Button: ({ variant, size, ...props }: any) => React.createElement('button', props) },
-    '@/components/ui/page-shell': { PageNav: (props: any) => React.createElement('nav', props), BrandLink: () => null, PageContainer: ({ max, ...props }: any) => React.createElement('div', props), PageShell: (props: any) => React.createElement('div', props) },
+    '@/components/ui/page-shell': { PageActions: (props: any) => React.createElement('nav', props), PageContainer: ({ max, ...props }: any) => React.createElement('div', props), PageShell: (props: any) => React.createElement('div', props) },
     './viewer-local-event-times': { ViewerLocalEventDateTime: () => null },
     './event-host-view': { EventHostView: () => null },
   });

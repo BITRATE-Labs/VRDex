@@ -113,3 +113,31 @@ test('host Twitch preview stays local and narrow layouts keep an external link @
  await page.screenshot({path:info.outputPath('task8-host-twitch-preview.png')});
  await preview.getByRole('button',{name:'Close preview',exact:true}).click();await expect(page.locator('iframe')).toHaveCount(0);
 });
+
+test('next-link shortcut follows scheduled time and copies even when the source is offline @flow @fixture', async({page})=>{
+ await page.clock.install();
+ await page.addInitScript(()=>{Object.defineProperty(navigator,'clipboard',{value:{writeText:async(value:string)=>{sessionStorage.setItem('copied',value)}}});});
+ await page.route('**/host/status*',route=>route.fulfill({json:{'vrcdn:dj-aurora':{state:'offline',observedAt:Date.now()}}}));
+ await page.goto(path);
+ const next=page.getByRole('region',{name:'Up next',exact:true});
+ await expect(next).toBeVisible();
+ await expect(next.getByText('DJ Aurora',{exact:true})).toBeVisible();
+ await expect(next.getByText('Source: offline',{exact:true})).toBeVisible();
+ await next.getByRole('button',{name:'Copy Next PC',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>sessionStorage.getItem('copied'))).toBe('rtspt://stream.vrcdn.live/live/dj-aurora');
+ await next.getByRole('button',{name:'Copy Next Quest',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>sessionStorage.getItem('copied'))).toBe('https://stream.vrcdn.live/live/dj-aurora.live.ts');
+ await page.clock.fastForward(2*60*60*1000);
+ await expect(next).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Copy PC',exact:true}).first()).toBeVisible();
+ expect(await page.locator('video,audio,iframe').count()).toBe(0);
+});
+
+
+test('event host action is hidden without host access while calendar remains available @flow @fixture', async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('fixture-host-access','denied'));
+ await page.goto('/playwright/event-lineup');
+ await expect(page.getByRole('heading',{name:'Lineup',exact:true})).toBeVisible();
+ await expect(page.getByRole('link',{name:'Host view',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('link',{name:'Add to calendar',exact:true})).toBeVisible();
+});

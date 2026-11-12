@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "@convex-generated-api";
@@ -29,7 +29,16 @@ function CorrectionForm({ eventId, onDone, onGuardChange }: { eventId: Id<"event
   }} />;
 }
 
-export function EventContributionControls({ eventId }: { eventId: string }) {
+export function EventContributionControls({ eventId, reportOpen, onReportClose }: { eventId: string; reportOpen?: boolean; onReportClose?: () => void }) {
+  const [localReportOpen, setLocalReportOpen] = useState(false);
+  const open = reportOpen ?? localReportOpen;
+  const closeReport = onReportClose ?? (() => setLocalReportOpen(false));
+  const dialog = useRef<HTMLDialogElement>(null);
+  const reportTitle = useId();
+  useEffect(() => {
+    if (open && !dialog.current?.open) dialog.current?.showModal();
+    else if (!open && dialog.current?.open) dialog.current.close();
+  }, [open]);
   const { isAuthenticated } = useConvexAuth();
   const id = eventId as Id<"events">;
   const access = useQuery(api.eventCorrections.getEventContributionAccess, isAuthenticated ? { eventId: id } : "skip");
@@ -49,18 +58,23 @@ export function EventContributionControls({ eventId }: { eventId: string }) {
     catch { setMessage("Unable to submit. Try again."); }
     finally { setBusy(false); }
   }
-  return <section className="grid gap-4 border-t border-border pt-5">
+  return <>
+    {access?.canCorrect || access?.canTakeOver || editing ? <section className="grid gap-4">
     <div className="flex flex-wrap gap-2">
       {access?.canCorrect ? <><Button variant="secondary" onClick={() => { if (editing) leaveEditor.current(() => setEditing(false)); else setEditing(true); }}>Correct event</Button><Button variant="secondary" disabled={busy} onClick={() => { if (window.confirm("Retract event?")) void run(() => retract({ eventId: id }), true); }}>Retract event</Button></> : null}
       {access?.canTakeOver ? <Button variant="secondary" disabled={busy} onClick={() => { if (window.confirm("Take over this event and close contributor editing?")) void run(() => takeOver({ eventId: id })); }}>Take over</Button> : null}
     </div>
     {editing && access?.canCorrect ? <CorrectionForm onGuardChange={guard => { leaveEditor.current = guard; }} eventId={id} onDone={() => setEditing(false)} /> : null}
-    <details><summary className="cursor-pointer text-sm font-medium">{access?.canSuggest ? "Suggest correction" : "Report event"}</summary>
+    </section> : null}
+    {reportOpen === undefined ? <Button variant="secondary" onClick={() => setLocalReportOpen(true)}>Report event</Button> : null}
+    <dialog ref={dialog} aria-labelledby={reportTitle} onCancel={event => { event.preventDefault(); closeReport(); }} onClose={closeReport} className="ph-no-capture fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-panel border border-border bg-background p-5 text-foreground backdrop:bg-black/60" data-ph-no-capture>
+      <div className="flex items-center justify-between gap-4"><h2 id={reportTitle} className="text-xl font-semibold">{access?.canSuggest ? "Suggest correction" : "Report event"}</h2><Button variant="ghost" onClick={closeReport}>Close</Button></div>
       <div className="mt-4 grid gap-3"><Field>{access?.canSuggest ? "Proposed correction" : "Reason"}<Textarea value={reason} minLength={5} maxLength={500} onChange={event => setReason(event.target.value)} /></Field>
         <div className="flex flex-wrap gap-2"><Button disabled={busy || reason.trim().length < 5} onClick={() => void run(() => report({ eventId: id, reason }))}>{access?.canSuggest ? "Submit correction" : "Submit report"}</Button>
           {access?.canRemove ? <Button variant="secondary" disabled={busy || reason.trim().length < 5} onClick={() => { if (window.confirm("Remove event?")) void run(() => remove({ eventId: id, reason }), true); }}>Remove event</Button> : null}</div>
       </div>
-    </details>
-    {message ? <Notice><span role="status">{message}</span></Notice> : null}
-  </section>;
+      {message ? <Notice><span role="status">{message}</span></Notice> : null}
+    </dialog>
+    {!open && message ? <Notice><span role="status">{message}</span></Notice> : null}
+  </>;
 }

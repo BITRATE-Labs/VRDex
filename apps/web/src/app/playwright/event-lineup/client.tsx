@@ -83,6 +83,7 @@ function fixtureClient() {
   const viewer = { user: { defaultEventTimezone: "UTC" } };
   const mediaStatus = { outputConfigurationLocked: localStorage.getItem("fixture-output-locked") === "true", program: null, outputs: [], sessions: [], queuedCommandCount: 0 };
   const read = (name: string, args: Record<string, unknown>) => {
+    if (name === "events:getHostAccess") return localStorage.getItem("fixture-host-access") !== "denied";
     if (name === "accounts:viewer") return viewer;
     if (name === "events:listVrcdnOutputAccounts") return accountsPending ? undefined : outputAccounts;
     if (name === "profiles:lookupPeople") return Object.values(people).filter(person => `${person.displayName} ${person.slug}`.toLowerCase().includes(String(args.query).toLowerCase())).map(person => ({ ...person, profilePath: `/${person.slug}`, aliases: [], tags: [], genres: [], roleTags: ["DJ"], avatarImageUrl: "imageUrl" in person ? person.imageUrl : undefined }));

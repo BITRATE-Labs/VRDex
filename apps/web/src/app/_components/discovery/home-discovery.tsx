@@ -224,7 +224,7 @@ function DiscoveryFrames() {
                 data-testid="discovery-placeholder"
                 className={styles.card}
               >
-                <div className={`${styles.artwork} ${styles.skeleton}`} />
+                <div className={`${index === 0 ? styles.artwork : styles.clubArtwork} ${styles.skeleton}`} />
                 <div
                   className={
                     index === 0 ? styles.eventMetadata : styles.clubMetadata

@@ -196,10 +196,7 @@ test.describe("Home discovery @flow @fixture", () => {
       .first()
       .getByRole("link", { name: "Open ORBIT", exact: true })
       .click();
-    const panel = page.getByRole("region", {
-      name: "Event details",
-      exact: true,
-    });
+    const panel = page.getByLabel("Event details", { exact: true });
     await expect(panel).toHaveCount(1);
     await expect(
       panel.getByRole("heading", { name: "ORBIT", exact: true }),
@@ -272,10 +269,7 @@ test.describe("Home discovery @flow @fixture", () => {
     await discover
       .getByRole("link", { name: "Open Low Tide", exact: true })
       .click();
-    const panel = page.getByRole("region", {
-      name: "Event details",
-      exact: true,
-    });
+    const panel = page.getByLabel("Event details", { exact: true });
     await panel
       .getByRole("button", { name: "Interested: Low Tide", exact: true })
       .click();
@@ -396,6 +390,7 @@ test.describe("Home discovery @flow @fixture", () => {
   test("Schedule and discovery replace one inspector and synchronize whole-event saves and favorites", async ({
     page,
     timelineFixture,
+    isMobile,
   }) => {
     await page.goto(
       `/?at=${TIMELINE_NOW + 7 * 86400000 - 3600000}`,
@@ -412,14 +407,12 @@ test.describe("Home discovery @flow @fixture", () => {
       await trigger.focus();
       await trigger.press("Enter");
     };
-    const panel = page.getByRole("region", {
-      name: "Event details",
-      exact: true,
-    });
+    const panel = page.getByLabel("Event details", { exact: true });
     await openSchedule();
     await expect(
       panel.getByRole("heading", { name: "ORBIT", exact: true }),
     ).toBeVisible();
+    if (isMobile) await panel.getByRole("button", { name: "Close", exact: true }).click();
     const discover = await usableDiscovery(page);
     await discover
       .getByRole("link", { name: "Open Low Tide", exact: true })
@@ -428,6 +421,7 @@ test.describe("Home discovery @flow @fixture", () => {
     await expect(
       panel.getByRole("heading", { name: "Low Tide", exact: true }),
     ).toBeVisible();
+    if (isMobile) await panel.getByRole("button", { name: "Close", exact: true }).click();
     await openSchedule();
     await expect(panel).toHaveCount(1);
     await expect(
@@ -515,7 +509,7 @@ test.describe("Home discovery @flow @fixture", () => {
       popup.getByRole("heading", { name: "ORBIT", exact: true }).first(),
     ).toBeVisible();
     await expect(
-      page.getByRole("region", { name: "Event details", exact: true }),
+      page.getByLabel("Event details", { exact: true }),
     ).toHaveCount(0);
     await popup.close();
     await discover
@@ -541,7 +535,7 @@ test.describe("Home discovery @flow @fixture", () => {
     await open.focus();
     await open.press("Enter");
     await expect(
-      page.getByRole("region", { name: "Event details", exact: true }),
+      page.getByLabel("Event details", { exact: true }),
     ).toHaveCount(1);
     await page
       .getByRole("button", { name: "Close", exact: true })
@@ -563,10 +557,7 @@ test.describe("Home discovery @flow @fixture", () => {
     await discover
       .getByRole("link", { name: "Open ORBIT", exact: true })
       .click();
-    const panel = page.getByRole("region", {
-      name: "Event details",
-      exact: true,
-    });
+    const panel = page.getByLabel("Event details", { exact: true });
     await expect(
       panel.getByRole("heading", { name: "ORBIT", exact: true }),
     ).toBeVisible();
@@ -597,7 +588,7 @@ test.describe("Home discovery @flow @fixture", () => {
       .getByRole("link", { name: "Open ORBIT", exact: true })
       .click();
     await expect(
-      page.getByRole("region", { name: "Event details", exact: true }),
+      page.getByLabel("Event details", { exact: true }),
     ).toBeVisible();
     await changeTimelineFixture(request, timelineFixture, 0, "suppress-host");
     await expect(
@@ -607,7 +598,7 @@ test.describe("Home discovery @flow @fixture", () => {
       discover.getByRole("link", { name: "Prism Collective", exact: true }),
     ).toHaveCount(0);
     await expect(
-      page.getByRole("region", { name: "Event details", exact: true }),
+      page.getByLabel("Event details", { exact: true }),
     ).toHaveCount(0);
     await expect(
       page.getByRole("heading", { name: "Discover", exact: true }),
@@ -639,7 +630,7 @@ test.describe("Home discovery @flow @fixture", () => {
     expect(failureBounds).not.toBeNull(); expect(frameBounds).not.toBeNull();
     if (failureBounds && frameBounds) expect(failureBounds.y + failureBounds.height).toBeLessThanOrEqual(frameBounds.y);
     await expect(
-      page.getByRole("region", { name: "Event details", exact: true }),
+      page.getByLabel("Event details", { exact: true }),
     ).toHaveCount(0);
     const search = page.getByRole("combobox", {
       name: "Search VRDex",
@@ -707,7 +698,7 @@ test.describe("Home discovery @flow @fixture", () => {
     await expect(orbit).toContainText("2:45 AM");
     await orbit.getByRole("link", { name: "Open ORBIT", exact: true }).click();
     await expect(
-      page.getByRole("region", { name: "Event details", exact: true }),
+      page.getByLabel("Event details", { exact: true }),
     ).toContainText("2:45 AM");
   });
 });
@@ -800,7 +791,7 @@ test.describe("dense Home discovery @flow @fixture", () => {
     await expect(orbit).toBeVisible();
     await expect(discover.getByRole("link", { name: "Open Distant Horizons", exact: true })).toBeVisible();
     await orbit.click();
-    const panel = page.getByRole("region", { name: "Event details", exact: true });
+    const panel = page.getByLabel("Event details", { exact: true });
     await expect(panel.getByRole("heading", { name: "ORBIT", exact: true })).toBeVisible();
     const before = queries.result();
     expect(before.pending).toBe(0);
@@ -869,10 +860,7 @@ test.describe("dense Home discovery @flow @fixture", () => {
       exact: true,
     });
     await open.click();
-    const panel = page.getByRole("region", {
-      name: "Event details",
-      exact: true,
-    });
+    const panel = page.getByLabel("Event details", { exact: true });
     await expect(
       panel.getByRole("heading", { name: "Distant Horizons", exact: true }),
     ).toBeVisible();
@@ -962,10 +950,7 @@ test.describe("dense Home discovery @flow @fixture", () => {
     await discover
       .getByRole("link", { name: "Open Distant Horizons", exact: true })
       .click();
-    const panel = page.getByRole("region", {
-      name: "Event details",
-      exact: true,
-    });
+    const panel = page.getByLabel("Event details", { exact: true });
     await expect(
       panel.getByRole("heading", { name: "Distant Horizons", exact: true }),
     ).toBeVisible();

@@ -930,7 +930,7 @@ it('R4F2 unready current interval times out without committing automatic mode',a
     await f.worker.stop();
 });
 
-it('R4F3 draft host projection authorizes operations readers and conceals all other viewers and paths',async()=>{
+it('R4F3 draft host projection authorizes delegated hosts and conceals all other viewers and paths',async()=>{
     const f=await fixture();await f.t.run(({db})=>db.patch(f.event.eventId,{publicationState:'draft_private'}));
     const hostQuery=makeFunctionReference<'query'>('events:getHostBySlug');
     const args={slug:f.event.slug,communitySlug:'club'};
@@ -942,17 +942,31 @@ it('R4F3 draft host projection authorizes operations readers and conceals all ot
     await f.t.run(async({db})=>{
         await db.insert('users',{clerkUserId:subject,name:'Reader'});
         const event=await db.get(f.event.eventId);
-        await db.insert('communityAuthorities',{communityProfileId:event!.communityProfileId!,subjectTokenIdentifier:`test|${subject}`,subject:{subject,issuer:'test',tokenIdentifier:`test|${subject}`},capabilities:['view_event_operations'],state:'active',grantedAt:Date.now(),updatedAt:Date.now()});
+        await db.insert('communityAuthorities',{communityProfileId:event!.communityProfileId!,subjectTokenIdentifier:`test|${subject}`,subject:{subject,issuer:'test',tokenIdentifier:`test|${subject}`},capabilities:['host_events'],state:'active',grantedAt:Date.now(),updatedAt:Date.now()});
     });
     const reader=f.t.withIdentity({subject,issuer:'test',tokenIdentifier:`test|${subject}`});
+    assert.equal(await reader.query(api.events.getHostAccess,args),true);
     const projected=await reader.query(hostQuery,args);
     assert.equal(projected.title,'Worker event');
     assert.doesNotMatch(JSON.stringify(projected),/secretRef|credential|claimedByWorker|preserved.*Association/);
     await assert.rejects(reader.mutation(api.events.queueEventMediaCommand,{ idempotencyKey:crypto.randomUUID(),currentSlug:f.event.slug,type:'switch_hold'}));
+    await assert.rejects(reader.query(api.events.getEventMediaControlStatus,{currentSlug:f.event.slug}));
+    await f.t.run(async({db})=>{for(const authority of await db.query('communityAuthorities').collect())await db.patch(authority._id,{capabilities:['view_event_operations']});});
+    assert.equal(await reader.query(hostQuery,args),null);
+    assert.equal(await reader.query(api.events.getHostAccess,args),false);
+    await f.t.run(async({db})=>{for(const authority of await db.query('communityAuthorities').collect())await db.patch(authority._id,{capabilities:['manage_events']});});
+    assert.equal(await reader.query(api.events.getHostAccess,args),true);
+    await f.t.run(async({db})=>{
+      const event=await db.get(f.event.eventId);
+      const roleId=await db.insert('communityRoles',{communityProfileId:event!.communityProfileId!,key:'host',label:'Host',permissions:['host_events'],assignableRoleIds:[],state:'active',createdAt:Date.now(),updatedAt:Date.now()});
+      for(const authority of await db.query('communityAuthorities').collect())await db.patch(authority._id,{roleId,capabilities:[]});
+    });
+    assert.equal(await reader.query(api.events.getHostAccess,args),true);
     await f.t.run(async({db})=>{for(const authority of await db.query('communityAuthorities').collect())await db.patch(authority._id,{state:'revoked'});});
+    assert.equal(await reader.query(api.events.getHostAccess,args),false);
     assert.equal(await reader.query(hostQuery,args),null);
     await f.t.run(({db})=>db.patch(f.event.eventId,{publicationState:'published'}));
-    assert.equal((await f.t.query(hostQuery,args)).title,'Worker event');
+    assert.equal(await f.t.query(hostQuery,args),null);
     assert.equal(await f.t.query(hostQuery,{...args,communitySlug:'other'}),null);
 });
 

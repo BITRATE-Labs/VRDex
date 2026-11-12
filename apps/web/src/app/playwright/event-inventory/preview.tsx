@@ -8,7 +8,7 @@ import type { Id } from "../../../../../../convex/_generated/dataModel";
 
 import { ManagedEventsPanel } from "@/app/account/events/managed-events-panel";
 import type { EventInventoryRow } from "@/app/account/events/event-inventory-list";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 
 type InventoryArgs = FunctionArgs<typeof api.eventInventory.listPage>;
 type InventoryPage = FunctionReturnType<typeof api.eventInventory.listPage>;
@@ -162,6 +162,6 @@ export function EventInventoryPreview({ contributorOnly, held, session }: { cont
   }, [contributorOnly, held, session]);
   const useInventoryFixtureAuth = () => useFixtureAuth(session);
   return fixture ? <ConvexProviderWithAuth client={fixture.client} useAuth={useInventoryFixtureAuth}>
-    <div className="ph-no-capture" data-ph-no-capture><PageShell className="py-10"><PageContainer max="5xl"><PageNav><BrandLink /></PageNav><ManagedEventsPanel /></PageContainer></PageShell></div>
+    <div className="ph-no-capture" data-ph-no-capture><PageShell className="py-10"><PageContainer max="5xl"><ManagedEventsPanel /></PageContainer></PageShell></div>
   </ConvexProviderWithAuth> : null;
 }

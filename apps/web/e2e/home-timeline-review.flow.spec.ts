@@ -177,15 +177,16 @@ test.describe("compact personal planning @flow @fixture", () => {
       path: info.outputPath("compact-overlap.png"),
       fullPage: true,
     });
-    const remove = isMobile
-      ? page.getByRole("region", { name: "My night", exact: true })
-          .getByRole("button", { name: "Remove Glasshouse Sessions from My night", exact: true })
-      : bars.first().getByRole("button", { name: /^Remove interest:/ });
+    const remove = bars.first().getByRole("button", { name: "Remove interest: Glasshouse Sessions", exact: true }).or(
+      page.getByRole("region", { name: "My night", exact: true })
+        .getByRole("button", { name: "Remove Glasshouse Sessions from My night", exact: true }),
+    );
     await remove.focus();
     const removalScrollY = await page.evaluate(() => scrollY);
     await page.keyboard.press("Enter");
     await expect(bars).toHaveCount(1);
-    expect(await page.evaluate(() => scrollY)).toBe(removalScrollY);
+    const maximumScrollY = await page.evaluate(() => Math.max(0, document.documentElement.scrollHeight - innerHeight));
+    expect(await page.evaluate(() => scrollY)).toBe(Math.min(removalScrollY, maximumScrollY));
     await expect(
       page.getByRole("region", { name: "Timeline chart" }),
     ).toBeFocused();
@@ -197,10 +198,7 @@ test.describe("compact personal planning @flow @fixture", () => {
       });
     if (isMobile) {
       await mixedSet.tap({ position: { x: 8, y: 8 } });
-      const panel = page.getByRole("region", {
-        name: "Event details",
-        exact: true,
-      });
+      const panel = page.getByLabel("Event details", { exact: true });
       await panel
         .getByRole("button", {
           name: "Interested: Neon Harbor",
@@ -283,10 +281,7 @@ test.describe("compact personal planning @flow @fixture", () => {
     });
     if (isMobile) {
       await openSet.tap();
-      const panel = page.getByRole("region", {
-        name: "Event details",
-        exact: true,
-      });
+      const panel = page.getByLabel("Event details", { exact: true });
       await panel
         .getByRole("button", { name: "Favorite: Aurora", exact: true })
         .first()
@@ -347,11 +342,11 @@ test.describe("compact personal planning @flow @fixture", () => {
     if (isMobile) {
       await open.tap();
       await expect(
-        page.getByRole("region", { name: "Event details", exact: true }),
+        page.getByLabel("Event details", { exact: true }),
       ).toBeVisible();
       await expect(
         page
-          .getByRole("region", { name: "Event details", exact: true })
+          .getByLabel("Event details", { exact: true })
           .getByRole("button", { name: "Favorite: Aurora", exact: true })
           .first(),
       ).toBeVisible();
@@ -413,10 +408,7 @@ test.describe("compact personal planning @flow @fixture", () => {
       .locator("..");
     if (isMobile) {
       await firstSet.getByRole("button", { name: /^Open Aurora/ }).tap();
-      const panel = page.getByRole("region", {
-        name: "Event details",
-        exact: true,
-      });
+      const panel = page.getByLabel("Event details", { exact: true });
       await panel
         .getByRole("button", { name: "Interested: Aurora", exact: true })
         .tap();
@@ -450,10 +442,7 @@ test.describe("compact personal planning @flow @fixture", () => {
       .click();
     if (isMobile) {
       await event.getByRole("button", { name: /^Open ORBIT:/ }).tap();
-      const panel = page.getByRole("region", {
-        name: "Event details",
-        exact: true,
-      });
+      const panel = page.getByLabel("Event details", { exact: true });
       await expect(
         panel.getByRole("button", {
           name: "Included with event: Aurora",
@@ -766,10 +755,7 @@ test.describe("authored short-set interactions @flow @fixture", () => {
       });
       const cell = open.locator("..");
       expect((await cell.boundingBox())?.width).toBe((minutes / 60) * 100);
-      const panel = page.getByRole("region", {
-        name: "Event details",
-        exact: true,
-      });
+      const panel = page.getByLabel("Event details", { exact: true });
       const reference = {
         kind: "set",
         eventId: timelineFixture.eventIds[3],

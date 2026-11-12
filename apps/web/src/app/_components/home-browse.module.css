@@ -50,7 +50,7 @@
 /* Home owns the gaps between search, schedule and discovery. */
 .home > [data-home-schedule] {
   margin: 0;
-  padding-top: 0;
+  padding-top: 16px;
 }
 
 .home > [aria-labelledby="discover-heading"] {

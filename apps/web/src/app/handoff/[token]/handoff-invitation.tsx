@@ -9,14 +9,14 @@ import { Component, type ReactNode, useState } from "react";
 import { api } from "@convex-generated-api";
 import { buttonVariants, Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageActions, PageShell } from "@/components/ui/page-shell";
 import { cn } from "@/lib/cn";
 import {
-  defaultHandoffSelectionKey,
-  type HandoffField,
-  type HandoffPreview,
-  normalizeHandoffPreview,
-  normalizeOwnerDestination,
+defaultHandoffSelectionKey,
+type HandoffField,
+type HandoffPreview,
+normalizeHandoffPreview,
+normalizeOwnerDestination,
 } from "./handoff-contract";
 import type { HandoffFixture } from "./handoff-fixtures";
 
@@ -403,12 +403,12 @@ export function HandoffInvitation({ fixture, token }: { fixture: HandoffFixture 
   return (
     <PageShell className="handoff-shell ph-no-capture py-6 sm:py-8" data-ph-no-capture>
       <PageContainer max="5xl">
-        <PageNav className="border-b border-[#182f36]/15 pb-5">
-          <BrandLink />
+        <PageActions className="border-b border-[#182f36]/15 pb-5">
+
           <Link className={buttonVariants({ size: "sm", variant: "ghost" })} href="/account">
             Account
           </Link>
-        </PageNav>
+        </PageActions>
         <HandoffErrorBoundary>
           <ConnectedHandoffInvitation fixture={fixture} token={token} />
         </HandoffErrorBoundary>

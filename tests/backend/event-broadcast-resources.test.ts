@@ -536,7 +536,7 @@ test("authorized reader sees actual encoded facts, resource freshness and truste
   assert.ok(stale.computeEstimate);
   for (const value of [
     await f.t.query(api.events.getPublicBySlug, { slug: f.event.slug }),
-    await f.t.query(api.events.getHostBySlug, {
+    await f.owner.query(api.events.getHostBySlug, {
       slug: f.event.slug,
       communitySlug: "club",
     }),

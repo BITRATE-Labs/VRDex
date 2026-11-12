@@ -2426,20 +2426,33 @@ export const listVrcdnOutputAccounts = query({
   },
 });
 
+async function hostableEvent(ctx: QueryCtx, args: { slug: string; communitySlug: string }) {
+  const validation = validateEventSlug(args.slug);
+  if (!validation.ok) return null;
+  const event = await getEventBySlug(ctx.db, validation.slug);
+  if (!event?.communityProfileId) return null;
+  const community = await ctx.db.get(event.communityProfileId);
+  if (community?.slug !== args.communitySlug) return null;
+  const viewer = await activeBrowserSessionSubjectOrNull(ctx);
+  if (!viewer) return null;
+  const allowed = await userOwnsProfile(ctx.db, event.communityProfileId, viewer.userId)
+    || await subjectHasAnyCommunityCapability(ctx.db, event.communityProfileId, viewer.subject, ["host_events", "manage_events"]);
+  return allowed ? { event, community } : null;
+}
+
+export const getHostAccess = query({
+  args: { slug: v.string(), communitySlug: v.string() },
+  returns: v.boolean(),
+  handler: async (ctx, args) => Boolean(await hostableEvent(ctx, args)),
+});
+
 export const getHostBySlug = query({
   args: { slug: v.string(), communitySlug: v.string() },
   handler: async (ctx, args) => {
-    const validation = validateEventSlug(args.slug);
-    if (!validation.ok) return null;
-    const event = await getEventBySlug(ctx.db, validation.slug);
-    if (!event?.communityProfileId) return null;
-    const community = await ctx.db.get(event.communityProfileId);
-    if (community?.slug !== args.communitySlug) return null;
-    const viewer = await activeBrowserSessionSubjectOrNull(ctx);
-    if (!viewer || !await canViewEventOperations(ctx.db, event, viewer.subject, viewer.userId))
-      return getPublicEventBySlug(ctx.db, event);
-    const projection = await getEventForHost(ctx.db, event);
-    return projection ? { ...projection, communitySlug: community.slug } : null;
+    const access = await hostableEvent(ctx, args);
+    if (!access) return null;
+    const projection = await getEventForHost(ctx.db, access.event);
+    return projection ? { ...projection, communitySlug: access.community.slug } : null;
   },
 });
 

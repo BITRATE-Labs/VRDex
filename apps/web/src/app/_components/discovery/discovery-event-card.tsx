@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Star } from "lucide-react";
+import { Star } from "lucide-react";
 import type { MouseEvent } from "react";
 import { EntityImage } from "@/components/ui/entity-image";
 import { InterestButton } from "@/components/ui/interest-button";
@@ -110,9 +110,6 @@ export function DiscoveryEventCard({
             </ul>
           )}
         </div>
-        <a className={styles.lineup} href={event.href} onClick={open}>
-          Full lineup <ArrowRight size={14} aria-hidden="true" />
-        </a>
       </div>
     </article>
   );

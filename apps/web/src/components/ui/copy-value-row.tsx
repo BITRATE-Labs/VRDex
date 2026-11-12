@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Copy } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
@@ -10,12 +10,14 @@ export function CopyValueRow({
   className,
   compact = false,
   actionOnly = false,
+  children,
   label,
   value,
 }: {
   className?: string;
   compact?: boolean;
   actionOnly?: boolean;
+  children?: ReactNode;
   label: string;
   value: string;
 }) {
@@ -32,6 +34,7 @@ export function CopyValueRow({
   }
 
   if (actionOnly) {
+    const statusIcon = copied ? <Check aria-hidden="true" className="size-4 shrink-0" /> : <Copy aria-hidden="true" className="size-4 shrink-0" />;
     return (
       <button
         aria-label={copied ? `${label} copied` : `Copy ${label}`}
@@ -39,8 +42,8 @@ export function CopyValueRow({
         type="button"
         onClick={() => void copyValue()}
       >
-        {copied ? <Check aria-hidden="true" className="size-4" /> : <Copy aria-hidden="true" className="size-4" />}
-        {copied ? `${label} copied` : `Copy ${label}`}
+        {children ?? statusIcon}
+        {children ? statusIcon : <span className="min-w-0 truncate">{copied ? `${label} copied` : `Copy ${label}`}</span>}
       </button>
     );
   }

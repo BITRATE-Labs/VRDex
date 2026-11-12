@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 
 import { ProfileSubmissionForm } from "./profile-submission-form";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 
 async function isE2eSubmissionMode() {
   const expectedToken = process.env.VRDEX_E2E_BROWSER_TOKEN?.trim();
@@ -17,9 +17,6 @@ export default async function SubmitProfilePage() {
   return (
     <PageShell>
       <PageContainer max="3xl">
-        <PageNav>
-          <BrandLink />
-        </PageNav>
 
         <section className="border-t border-border pt-8 sm:pt-10">
           <h1 className="text-3xl leading-tight font-semibold sm:text-4xl">

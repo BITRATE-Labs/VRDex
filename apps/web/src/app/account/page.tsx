@@ -1,5 +1,5 @@
 import { AccountPanel } from "./account-panel";
-import { BrandLink, PageContainer, PageNav, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { redirect } from "next/navigation";
 import { profileClaimPath, profileClaimSlugFromInput } from "@/lib/profile-claim";
 
@@ -21,9 +21,6 @@ export default async function AccountPage({
   return (
     <PageShell className="py-10">
       <PageContainer max="5xl">
-        <PageNav>
-          <BrandLink />
-        </PageNav>
 
         <header className="py-5 sm:py-8">
           <h1 className="text-3xl font-semibold sm:text-4xl">Account</h1>

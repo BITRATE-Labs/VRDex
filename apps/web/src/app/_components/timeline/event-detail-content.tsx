@@ -1,5 +1,6 @@
 "use client";
 import Image from "next/image";
+import { EntityImage } from "@/components/ui/entity-image";
 import { useEffect, useRef } from "react";
 import { FavoriteButton } from "@/components/ui/favorite-button";
 import { InterestButton } from "@/components/ui/interest-button";
@@ -149,7 +150,8 @@ export function EventDetailContent({
         </p>
         {event.venueLabel ? <p>{event.venueLabel}</p> : null}
         {event.worlds.map((world) => (
-          <a key={world.slug} href={`/${world.slug}`}>
+          <a className="flex items-center gap-3" key={world.slug} href={`/${world.slug}`}>
+            <EntityImage label={world.displayName} src={"heroImageUrl" in world && typeof world.heroImageUrl === "string" ? world.heroImageUrl : undefined} className="h-10 w-16 rounded-control" sizes="64px" />
             {world.displayName}
           </a>
         ))}

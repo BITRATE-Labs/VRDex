@@ -20,6 +20,7 @@ export type CommunityCapability =
   | "manage_profile"
   | "manage_roster"
   | "manage_events"
+  | "host_events"
   | "manage_event_media"
   | "view_event_operations"
   | "manage_staff"

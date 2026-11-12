@@ -77,7 +77,7 @@ it('R3F4 actual host effect does not overlap requests and aborts on cleanup',asy
  const React={...webRequire('react'),useEffect:(fn:()=>void)=>{effect=fn;},useState:(value:unknown)=>[value,()=>{}]};
  const component=load('app/_components/event-host-view.tsx',{
   react:React,'next/link':{default:()=>null},'convex/react':{},'@convex-generated-api':{api:{}},
-  '@/components/ui/button':{},'@/components/ui/copy-value-row':{},'@/components/ui/page-shell':{},
+  '@/components/ui/card':{},'@/components/ui/entity-image':{},'@/components/ui/button':{buttonVariants:()=>''},'@/components/ui/copy-value-row':{},'@/components/ui/page-shell':{},
   '@/lib/event-dj-target':{eventDjTarget},'@/lib/event-path':{publicEventPath:()=>'/club/events/show'},
   './event-operator-preview':{},'./event-public-page':{eventLineupForDisplay:()=>[]},'./viewer-local-event-times':{},'./vrcdn-stream-player':{},
  },{fetch:(_url:string,options:{signal:AbortSignal})=>{calls++;signal=options.signal;return new Promise(resolve=>{resolveFetch=resolve;});},setInterval:(callback:()=>void,ms:number)=>{intervals.push({callback,ms});return intervals.length;},clearInterval:()=>{},setTimeout:(callback:()=>void,ms:number)=>{timeouts.push({callback,ms});return timeouts.length;},clearTimeout:()=>{}});
@@ -121,7 +121,7 @@ it('R4F3 server auth and actual routes enforce owner, operations, anonymous, non
   for(const subject of ['owner','reader','nonstaff']) {
    const userId=await db.insert('users',{clerkUserId:subject,name:subject});
    if(subject==='owner')await db.insert('profileOwners',{profileId:community,userId,roleKey:'owner',state:'active',grantedAt:now,updatedAt:now});
-   if(subject==='reader')await db.insert('communityAuthorities',{communityProfileId:community,subjectTokenIdentifier:`test|${subject}`,subject:{subject,issuer:'test',tokenIdentifier:`test|${subject}`},capabilities:['view_event_operations'],state:'active',grantedAt:now,updatedAt:now});
+   if(subject==='reader')await db.insert('communityAuthorities',{communityProfileId:community,subjectTokenIdentifier:`test|${subject}`,subject:{subject,issuer:'test',tokenIdentifier:`test|${subject}`},capabilities:['host_events'],state:'active',grantedAt:now,updatedAt:now});
   }
   await db.insert('events',{slug:'private-show',title:'Private rehearsal',sortTitle:'private rehearsal',communityProfileId:community,startAt:now,timezone:'UTC',sourceType:'community',sourceLabel:'Fixture',eventStatus:'scheduled',publicationState:'draft_private',createdAt:now,updatedAt:now});
  });
@@ -149,19 +149,51 @@ it('R4F3 server auth and actual routes enforce owner, operations, anonymous, non
  await t.run(async({db})=>{const event=(await db.query('events').collect())[0];await db.patch(event._id,{publicationState:'published'});});
  subject=undefined;
  const params=Promise.resolve({slug:'club',eventSlug:'private-show'});
- assert.equal((await route.GET(new Request('https://example.test/host/status'),{params})).status,200);
- assert.equal((await page.default({params})).props.event.title,'Private rehearsal');
+ assert.equal((await route.GET(new Request('https://example.test/host/status'),{params})).status,404);
+ await assert.rejects(page.default({params}),/NOT_FOUND/);
 });
 
 it('R4F3 live host subscription retains authorized draft projection and withdraws it on revocation',()=>{
  const event=roster();let allowed=true;const hostRef={},publicRef={};const queries:any[]=[];
  const component=load('app/_components/event-host-view.tsx',{
   'next/link':{default:()=>null},'convex/react':{useQuery:(ref:any,args:any)=>{queries.push(args);return ref===hostRef&&allowed?event:null;}},'@convex-generated-api':{api:{events:{getHostBySlug:hostRef,getPublicBySlug:publicRef}}},
-  '@/components/ui/button':{},'@/components/ui/copy-value-row':{},'@/components/ui/page-shell':{},
+  '@/components/ui/card':{},'@/components/ui/entity-image':{},'@/components/ui/button':{buttonVariants:()=>''},'@/components/ui/copy-value-row':{},'@/components/ui/page-shell':{},
   '@/lib/event-dj-target':{eventDjTarget},'@/lib/event-path':{publicEventPath:()=>'/club/events/show'},
   './event-operator-preview':{},'./event-public-page':{eventLineupForDisplay:()=>[]},'./viewer-local-event-times':{},'./vrcdn-stream-player':{},
  });
  assert.equal(component.EventHostView({event})?.props.event,event);
  assert.equal(JSON.stringify(queries[0]),JSON.stringify({slug:'show',communitySlug:'club'}));
  allowed=false;assert.equal(component.EventHostView({event}),null);
+});
+
+it('host shortcut keeps schedule order, tied positions and missing-link performers',()=>{
+ const React=webRequire('react');
+ const {renderToStaticMarkup}=webRequire('react-dom/server');
+ const component=load('app/_components/event-host-view.tsx',{
+  react:{...React,useState:(value:unknown)=>[value===0?1000:value,()=>{}],useEffect:()=>{}},
+  'next/link':{default:({children,...props}:any)=>React.createElement('a',props,children)},
+  'convex/react':{},'@convex-generated-api':{api:{}},
+  '@/components/ui/card':{Card:({children,padding,...props}:any)=>React.createElement('section',props,children)},
+  '@/components/ui/entity-image':{EntityImage:()=>null},
+  '@/components/ui/button':{buttonVariants:()=>''},
+  '@/components/ui/copy-value-row':{CopyValueRow:({label,value}:any)=>React.createElement('button',{'aria-label':`Copy ${label}`},value)},
+  '@/components/ui/page-shell':{PageShell:({children}:any)=>children,PageContainer:({children}:any)=>children},
+  '@/lib/event-dj-target':{eventDjTarget},'@/lib/event-path':{publicEventPath:()=>'/club/events/show'},
+  './event-operator-preview':{},'./event-public-page':{eventLineupForDisplay:(event:any)=>event.lineup},
+  './viewer-local-event-times':{ViewerLocalEventTimeRange:()=>null},'./vrcdn-stream-player':{},
+ });
+ const person={slug:'performer',displayName:'Selected performer',outboundLinks:[{url:'https://twitch.tv/first'},{url:'vrcdn:default'},{url:'vrcdn:selected'}]};
+ const rows=[{key:'late',position:0,startAt:3000,displayLabel:'Later'},
+  {key:'tie-b',position:4,startAt:2000,displayLabel:'Wrong tie'},
+  {key:'tie-a',position:2,startAt:2000,displayLabel:'Right tie',performer:person},
+  {key:'untimed',position:1,displayLabel:'Untimed'}];
+ const render=(lineup:any[],slots:any[]=[])=>renderToStaticMarkup(component.EventHostContent({event:{slug:'show',title:'Show',lineup,slots,participants:[]}}));
+ const next=(html:string)=>html.match(/<section aria-label="Up next"[\s\S]*?<\/section>/)?.[0] ?? '';
+ const selected=next(render(rows,[{playbackKey:'tie-a',stream:{streamId:'selected'}}]));
+ assert.match(selected,/Selected performer/);assert.match(selected,/rtspt:\/\/stream.vrcdn.live\/live\/selected/);
+ const fallback=next(render(rows));assert.match(fallback,/rtspt:\/\/stream.vrcdn.live\/live\/default/);
+ const generic=next(render([{...rows[2],performer:{...person,outboundLinks:[{url:'https://twitch.tv/first'},{url:'https://twitch.tv/second'}]}}]));assert.match(generic,/https:\/\/www.twitch.tv\/first/);
+ const missing=next(render([{key:'missing',position:0,startAt:1500,displayLabel:'Missing links'},...rows]));
+ assert.match(missing,/Missing links/);assert.match(missing,/No links/);assert.doesNotMatch(missing,/Copy Next/);
+ assert.equal(next(render([{key:'past',position:0,startAt:999,displayLabel:'Past'},{key:'untimed',position:1,displayLabel:'Untimed'}])), '');
 });

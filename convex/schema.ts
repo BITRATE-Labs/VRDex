@@ -426,6 +426,7 @@ const communityCapability = v.union(
   v.literal("manage_profile"),
   v.literal("manage_roster"),
   v.literal("manage_events"),
+  v.literal("host_events"),
   v.literal("manage_event_media"),
   v.literal("view_event_operations"),
   v.literal("manage_staff"),
