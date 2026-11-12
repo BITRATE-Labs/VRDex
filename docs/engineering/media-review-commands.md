@@ -258,8 +258,9 @@ same URL. Stored-asset previews reuse upload raster validation: a single still i
 Remote current artwork retains its 16,777,216-pixel budget and first-frame
 rendering without the upload-only per-side/still-image restrictions. Both paths
 use sequential decoding and retain the 12 MiB input, 2,048 maximum output edge
-and 4 MiB PNG output bounds. High-entropy images are resized through
-bounded halvings until the raster output fits. Native SVG and donor source-URL
+and 4 MiB PNG output bounds. Each source is decoded once into a raster no
+larger than 2,048 pixels per side. High-entropy images use bounded halvings of
+that raster until the PNG output fits; retries never decode the source again. Native SVG and donor source-URL
 bytes are never returned. Image delivery records no claim of human examination.
 
 Local Storybook fixtures exercise URL-free provenance up to 1,000 characters,

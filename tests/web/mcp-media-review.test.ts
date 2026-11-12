@@ -763,3 +763,25 @@ it("preserves remote current first-frame and wide-artwork previews with the orig
     }
   }
 });
+
+it("preserves RGBA pixels through the bounded raw preview raster", async () => {
+  const body = await sharp({
+    create: { width: 4, height: 4, channels: 4, background: { r: 120, g: 30, b: 200, alpha: 0.25 } },
+  }).png().toBuffer();
+  const prepared = await validateAndPrepareProfileAsset(body, "image/png");
+  const d = detail();
+  d.candidate.contentSha256 = prepared.download.contentSha256;
+  const handlers = createMcpMediaReviewHandlers(dependencies({
+    query: async (name) => name === "candidate"
+      ? { storageKey: "transparent-candidate", mimeType: "image/png", profileDisplayName: "Fixture" }
+      : d,
+    readStoredObject: async () => ({ body: prepared.download.body, contentType: "image/png" }),
+  }));
+  const result = await handlers.preview({ submissionId: "submission-1", expectedReviewVersion: version });
+  const image = result.content[0];
+  assert.ok(image?.type === "image");
+  assert.deepEqual(
+    await sharp(Buffer.from(image.data, "base64")).ensureAlpha().raw().toBuffer(),
+    await sharp(prepared.download.body).ensureAlpha().raw().toBuffer(),
+  );
+});

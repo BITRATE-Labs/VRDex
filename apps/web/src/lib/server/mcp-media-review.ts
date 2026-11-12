@@ -151,10 +151,17 @@ async function rasterPreview(body: Uint8Array, remote: boolean) {
   const pipeline = remote
     ? sharp(body, { limitInputPixels: 16_777_216, sequentialRead: true })
     : await validatedProfileAssetRaster(body);
-  // Eight halvings bound CPU while keeping aspect ratio and lossless PNG output.
+  // Decode the source once; retry encodes only from the bounded raw raster.
+  const raster = await pipeline.rotate().resize({
+    width: MAX_PREVIEW_EDGE,
+    height: MAX_PREVIEW_EDGE,
+    fit: "inside",
+    withoutEnlargement: true,
+  }).raw().toBuffer({ resolveWithObject: true });
   for (let edge = MAX_PREVIEW_EDGE; edge >= 16; edge = Math.floor(edge / 2)) {
-    const preview = await pipeline.clone()
-      .rotate()
+    const preview = await sharp(raster.data, {
+      raw: { width: raster.info.width, height: raster.info.height, channels: raster.info.channels },
+    })
       .resize({
         width: edge,
         height: edge,
