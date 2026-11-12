@@ -255,13 +255,13 @@ async function providerSourceAccess(ctx: Ctx, source: PeopleReferenceSource, per
   return view?.source.kind === "invitation_review" && (view.source.destination.kind !== "group" || permissions.includes("group-invites-manage"));
 }
 
-async function validReferences(ctx: Ctx, person: Doc<"clubPeople">, forWork: boolean, providerPermissions?: readonly string[]) {
+async function validReferences(ctx: Ctx, person: Doc<"clubPeople">, forWork: boolean, providerPermissions?: readonly string[]): Promise<boolean | null> {
   const integration = await ctx.db.get(person.integrationId);
   if (!integration?.communityProfileId) return false;
   try { await scope(ctx, integration.communityProfileId, integration._id, person.epochStartedAt); } catch { return false; }
-  // shortcut: a bounded witness is enough to authorize work; the sweeper checks each reference independently.
-  const refs = await ctx.db.query("clubPeopleReferences").withIndex("by_person_key", q => q.eq("personId", person._id)).take(100);
-  for (const ref of refs) {
+  // A truncated scan proves neither authority nor absence; the sweeper prunes references independently.
+  const refs = await ctx.db.query("clubPeopleReferences").withIndex("by_person_key", q => q.eq("personId", person._id)).take(101);
+  for (const ref of refs.slice(0, 100)) {
     if (ref.expiresAt <= Date.now()) continue;
     try {
       const actor = ref.subject ? await resolveClubSubject(ctx.db, integration.communityProfileId, ref.subject) : null;
@@ -270,7 +270,7 @@ async function validReferences(ctx: Ctx, person: Doc<"clubPeople">, forWork: boo
           (providerPermissions === undefined || await providerSourceAccess(ctx, ref.source, providerPermissions))) return true;
     } catch { /* Removed sources and revoked permissions cannot authorize work. */ }
   }
-  return false;
+  return refs.length > 100 ? null : false;
 }
 
 const worker = { collectorAccountId: v.id("collectorAccounts"), workerId: v.string(), workerKeyHash: v.string() };
@@ -278,14 +278,15 @@ type Worker = { collectorAccountId: Id<"collectorAccounts">; workerId: string; w
 async function workerAccount(ctx: Ctx, args: Worker) {
   const account = await ctx.db.get(args.collectorAccountId);
   const fleet = await ctx.db.query("collectorFleetSettings").withIndex("by_key", q => q.eq("key", "global")).unique();
-  if (!account || account.workerKeyHash !== args.workerKeyHash || account.state !== "ready" || account.killSwitchEnabled || fleet?.killSwitchEnabled || (account.cooldownUntil ?? 0) > Date.now()) return null;
+  // Cooldown blocks new work, but authenticated in-flight results can extend it.
+  if (!account || account.workerKeyHash !== args.workerKeyHash || account.state !== "ready" || account.killSwitchEnabled || fleet?.killSwitchEnabled) return null;
   return { account, fleet };
 }
 async function workerScope(ctx: Ctx, person: Doc<"clubPeople">, account: Doc<"collectorAccounts">) {
   const integration = await ctx.db.get(person.integrationId);
   if (!integration || integration.assignedCollectorAccountId !== account._id || person.collectorAccountId !== account._id || person.epochStartedAt !== epoch(integration) || (integration.backoffUntil ?? 0) > Date.now()) return false;
   const authority = currentClubAuthority(integration, account, Date.now());
-  return authority?.membershipStatus === "member" && await validReferences(ctx, person, true, authority.permissions);
+  return authority?.membershipStatus === "member" && await validReferences(ctx, person, true, authority.permissions) === true;
 }
 export const claim = internalMutation({
   args: { ...worker, limit: v.optional(v.number()) },
@@ -295,7 +296,7 @@ export const claim = internalMutation({
     // Live provider acceptance is a release gate, independent of queue admission.
     if (process.env.VRDEX_PEOPLE_RESOLUTION_ENABLED !== "true") return { jobs: [] };
     const authorized = await workerAccount(ctx, args);
-    if (!authorized) return { jobs: [] };
+    if (!authorized || (authorized.account.cooldownUntil ?? 0) > Date.now()) return { jobs: [] };
     const now = Date.now();
     // A due operational or collection assignment on any group has priority.
     for (const state of ["active", "degraded", "connecting", "disconnecting"] as const) {
@@ -308,7 +309,9 @@ export const claim = internalMutation({
     for (const person of candidates) {
       if (person.priority === 0 && person.interestUntil <= now) { await ctx.db.patch(person._id, { priority: 1 }); continue; }
       if (person.lease && person.lease.expiresAt > now) continue;
-      if (!await validReferences(ctx, person, true)) { await ctx.db.patch(person._id, { dueAt: undefined, lease: undefined }); continue; }
+      const referenceAuthority = await validReferences(ctx, person, true);
+      if (referenceAuthority === null) continue;
+      if (!referenceAuthority) { await ctx.db.patch(person._id, { dueAt: undefined, lease: undefined }); continue; }
       if (!await workerScope(ctx, person, authorized.account)) {
         const integration = await ctx.db.get(person.integrationId);
         if (integration && integration.assignedCollectorAccountId === authorized.account._id && epoch(integration) === person.epochStartedAt) {
@@ -410,7 +413,7 @@ export const sweep = internalMutation({
     }
     const people = await ctx.db.query("clubPeople").withIndex("by_checkAt", q => q.lte("checkAt", now)).take(10);
     for (const person of people) {
-      if (!await validReferences(ctx, person, false)) await ctx.db.delete(person._id);
+      if (await validReferences(ctx, person, false) === false) await ctx.db.delete(person._id);
       else await ctx.db.patch(person._id, { checkAt: now + 60 * 60_000 });
     }
     if (views.length === 100 || refs.length === 50 || people.length === 10) await ctx.scheduler.runAfter(0, internal.clubPeople.sweep, {});

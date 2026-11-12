@@ -391,3 +391,54 @@ it("missing provider authority wakes collection and provider permission loss rej
   });
   assert.deepEqual(await s.t.mutation(internal.clubPeople.recordResult, { ...worker, personId: job.personId, leaseToken: job.leaseToken, result: { status: "resolved", userId: A, displayName: "Mira" } }), { accepted: false });
 });
+
+it("concurrent rate-limit results extend the shared cooldown while new claims stay blocked", async (test) => {
+  test.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1800000000000 });
+  for (const delays of [[60000, 3600000], [3600000, 60000]]) {
+    const s = await setup(), worker = await ready(s);
+    await s.owner.mutation(api.clubPeople.requestView, { communityProfileId: s.communityProfileId, source: review([A, B]) });
+    const first = (await s.t.mutation(internal.clubPeople.claim, worker)).jobs[0];
+    const secondWorker = { ...worker, workerId: "replica" };
+    const second = (await s.t.mutation(internal.clubPeople.claim, secondWorker)).jobs[0];
+    const result = (job: typeof first, claimant: typeof worker, retryAfterMs: number) => s.t.mutation(internal.clubPeople.recordResult, {
+      ...claimant, personId: job.personId, leaseToken: job.leaseToken, result: { status: "transient", retryAfterMs, rateLimited: true },
+    });
+    assert.deepEqual(await result(first, worker, delays[0]), { accepted: true, cooldownRecorded: true });
+    assert.deepEqual(await s.t.mutation(internal.clubPeople.claim, worker), { jobs: [] });
+    assert.deepEqual(await result(second, { ...secondWorker, workerKeyHash: "superseded" }, delays[1]), { accepted: false, cooldownRecorded: false });
+    assert.equal((await s.t.run(ctx => ctx.db.get(s.collectorAccountId)))!.cooldownUntil, Date.now() + delays[0]);
+    assert.deepEqual(await result(second, secondWorker, delays[1]), { accepted: true, cooldownRecorded: true });
+    assert.equal((await s.t.run(ctx => ctx.db.get(s.collectorAccountId)))!.cooldownUntil, Date.now() + 3600000);
+    assert.deepEqual(await s.t.mutation(internal.clubPeople.claim, secondWorker), { jobs: [] });
+  }
+});
+
+it("a truncated reference scan preserves cached names and queued work until bounded pruning reaches the live reference", async (test) => {
+  test.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1800000000000 });
+  const s = await setup(), worker = await ready(s);
+  const { viewId } = await s.owner.mutation(api.clubPeople.requestView, { communityProfileId: s.communityProfileId, source: review() });
+  const personId = await s.t.run(async ctx => {
+    await ctx.db.patch(s.integrationId, { enabledFeatures: ["analytics", "membership_management"] });
+    const person = (await ctx.db.query("clubPeople").first())!;
+    await ctx.db.patch(person._id, { displayName: "Retained Mira", observedAt: Date.now() - 1000, checkAt: Date.now() });
+    for (let n = 0; n < 100; n++) {
+      const eventId = await ctx.db.insert("communityMembershipEvents", { integrationId: s.integrationId, epochStartedAt: s.snapshot.epochStartedAt, groupId: "grp_test", auditId: `invalid${n}`, eventType: "group.member.join", targetUserId: A, occurredAt: Date.now() - 100, receivedAt: Date.now(), verified: false });
+      const source = { kind: "audit" as const, eventId };
+      await ctx.db.insert("clubPeopleReferences", { personId: person._id, integrationId: s.integrationId, source, sourceKey: JSON.stringify([source, null]), expiresAt: Number.MAX_SAFE_INTEGER, checkAt: Date.now() + 3600000 });
+    }
+    return person._id;
+  });
+  assert.deepEqual(await s.t.mutation(internal.clubPeople.claim, worker), { jobs: [] });
+  assert.equal((await s.t.run(ctx => ctx.db.get(personId)))!.dueAt, Date.now());
+  await s.t.mutation(internal.clubPeople.sweep, {});
+  assert.equal((await s.t.run(ctx => ctx.db.get(personId)))?.displayName, "Retained Mira");
+  assert.equal((await s.owner.query(api.clubPeople.readView, { viewId })).people[0].displayName, "Retained Mira");
+  await s.t.run(async ctx => {
+    const refs = await ctx.db.query("clubPeopleReferences").withIndex("by_person_key", q => q.eq("personId", personId)).collect();
+    for (const ref of refs) if (ref.source.kind === "audit") await ctx.db.patch(ref._id, { checkAt: Date.now() });
+  });
+  await s.t.mutation(internal.clubPeople.sweep, {});
+  await s.t.mutation(internal.clubPeople.sweep, {});
+  assert.equal((await s.t.mutation(internal.clubPeople.claim, worker)).jobs[0].personId, personId);
+  assert.equal((await s.t.run(ctx => ctx.db.get(personId)))?.displayName, "Retained Mira");
+});
