@@ -157,15 +157,19 @@ export function clerkTestEmail(runSuffix: string) {
 /**
  * Whether the target is serving this exact commit.
  *
- * A local run always is, by definition. For hosted runs this matches on `main`
- * and nothing else, because staging only ever deploys `main`: a feature branch
- * reads `false` and keeps the tolerances below, while the post-merge health lane
- * reads `true` and loses them. That asymmetry is the point — the branch
- * genuinely is ahead of staging, and after merge it genuinely is not.
+ * Local runs use this checkout. Candidate previews require their dedicated
+ * full head, since GitHub's GITHUB_SHA names a PR merge commit. Shared staging
+ * retains its historical revision tolerance while it catches up with main.
  */
 export async function hostedTargetRunsCurrentRevision(request: APIRequestContext) {
   if (!process.env.PLAYWRIGHT_BASE_URL) {
     return true;
+  }
+
+  const candidate = process.env.CANDIDATE_HEAD_SHA?.trim();
+  if (candidate) {
+    const response = await request.get("/api/deployment");
+    return response.ok() && /^[a-f0-9]{40}$/.test(candidate) && (await response.json()).commit === candidate;
   }
 
   const revision = process.env.GITHUB_SHA?.trim().slice(0, 7);
@@ -429,6 +433,28 @@ export async function cleanupClerkTestAccountData(
     headers: { "x-vrdex-e2e-token": e2eToken },
     data: { email: account.email },
   });
+}
+
+export const CLEANUP_DRAIN_PASSES = 3;
+
+// An empty pass after deletion drains provisioning already accepted before the browser closed.
+export async function drainClerkTestAccountData(
+  request: APIRequestContext,
+  e2eToken: string,
+  account: Pick<ClerkTestAccount, "email"> | undefined,
+) {
+  let lastCleanup: Awaited<ReturnType<typeof cleanupClerkTestAccountData>>;
+  let cleaned = false;
+  let drained = false;
+  for (let pass = 0; pass < CLEANUP_DRAIN_PASSES; pass += 1) {
+    lastCleanup = await cleanupClerkTestAccountData(request, e2eToken, account).catch(() => undefined);
+    const body: unknown = lastCleanup?.ok() ? await lastCleanup.json().catch(() => undefined) : undefined;
+    if (!body || typeof body !== "object" || !("deleted" in body)) break;
+    if (body.deleted === true) { cleaned = true; continue; }
+    drained = body.deleted === false;
+    break;
+  }
+  return { lastCleanup, cleaned, drained };
 }
 
 /**

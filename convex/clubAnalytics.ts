@@ -1,3 +1,4 @@
+import { resolveEventRecapWindow } from "./_eventRecapWindow";
 import { resolveManagedIntegrationSession, isManagedIntegrationSession, readIntegrationRollups, readManagedIntegration } from "./_groupObservationPolicy";
 import { membershipCoverage, readPopulationGaps } from "./_collectionCoverage";
 import { paginationOptsValidator } from "convex/server";
@@ -31,6 +32,12 @@ const point = v.object({
   value: v.number(),
   coverage: v.string(),
   breakBefore: v.optional(v.boolean()),
+});
+const instanceSeriesPointValidator = v.object({
+  ...point.fields,
+  userCount: v.optional(v.number()),
+  queueSize: v.optional(v.number()),
+  platforms: v.optional(v.record(v.string(), v.number())),
 });
 const summary = v.object({
   peak: v.union(v.number(), v.null()),
@@ -138,6 +145,14 @@ function instancePoint(
     at: row.observedAt,
     value: row.population,
     coverage: row.coverageState,
+  };
+}
+function instanceSeriesPoint(row: Doc<"instancePopulationObservations">) {
+  return {
+    ...instancePoint(row),
+    ...(row.userCount !== undefined ? { userCount: row.userCount } : {}),
+    ...(row.queueSize !== undefined ? { queueSize: row.queueSize } : {}),
+    ...(row.platforms !== undefined ? { platforms: row.platforms } : {}),
   };
 }
 async function preferencesFor(
@@ -706,7 +721,12 @@ export const getInstanceSeries = query({
     sessionId: v.id("instanceSessions"),
     paginationOpts: paginationOptsValidator,
   },
-  returns: pageReturn,
+  returns: v.object({
+    ...pageReturn.fields,
+    page: v.array(instanceSeriesPointValidator),
+    before: v.union(instanceSeriesPointValidator, v.null()),
+    after: v.union(instanceSeriesPointValidator, v.null()),
+  }),
   handler: async (ctx, args) => {
     checkedRange(args.startAt, args.endAt, Infinity);
     const { state, session } = await requireSession(
@@ -753,11 +773,11 @@ export const getInstanceSeries = query({
       )
       .first();
     return {
-      page: requirePopulationPoints(await projectPopulationPoints(ctx, session.integrationId, Math.max(state.epoch, session.openedAt), result.page.map(instancePoint), session._id)),
+      page: requirePopulationPoints(await projectPopulationPoints(ctx, session.integrationId, Math.max(state.epoch, session.openedAt), result.page.map(instanceSeriesPoint), session._id)),
       isDone: result.isDone,
       continueCursor: result.continueCursor,
-      before: before ? instancePoint(before) : null,
-      after: after ? requirePopulationPoints(await projectPopulationPoints(ctx, session.integrationId, Math.max(state.epoch, session.openedAt), [instancePoint(after)], session._id))[0]! : null,
+      before: before ? instanceSeriesPoint(before) : null,
+      after: after ? requirePopulationPoints(await projectPopulationPoints(ctx, session.integrationId, Math.max(state.epoch, session.openedAt), [instanceSeriesPoint(after)], session._id))[0]! : null,
     };
   },
 });
@@ -910,6 +930,11 @@ export const listEventRecaps = query({
         endAt: v.number(),
         peak: v.number(),
         playerHours: v.number(),
+        scheduledStartAt: v.number(),
+        scheduledEndAt: v.union(v.number(), v.null()),
+        effectiveEndAt: v.union(v.number(), v.null()),
+        recapEndAt: v.union(v.number(), v.null()),
+        canEdit: v.boolean(),
         coverageRatio: v.number(),
         groupMemberCount: v.optional(v.number()),
         netChange: v.optional(v.number()),
@@ -945,6 +970,7 @@ export const listEventRecaps = query({
     }
     const page = [];
     let scanned = 0;
+    let remainingAssociations = 2500;
     let isDone = false;
     // Convex permits one .paginate() per query. Walk a bounded indexed range
     // with a row cursor so hidden event rollups cannot consume visible slots.
@@ -963,7 +989,15 @@ export const listEventRecaps = query({
         const event = await ctx.db.get(row.eventId);
         if (!event || event.communityProfileId !== state.community._id ||
           (!managesEvents && event.publicationState !== "published")) continue;
+        const window = await resolveEventRecapWindow(ctx.db, event, state.integration, Math.min(1000, remainingAssociations));
+        remainingAssociations -= window?.associationCount ?? 0;
+        if (!window) continue;
         page.push({
+          scheduledStartAt: window.startAt,
+          scheduledEndAt: event.endAt ?? null,
+          effectiveEndAt: window.rangeValid ? window.endAt : null,
+          recapEndAt: event.recapEndAt ?? null,
+          canEdit: managesEvents,
           id: row._id,
           eventId: event._id,
           title: event.title,

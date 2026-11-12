@@ -151,6 +151,15 @@ it("isolates synthetic analytics behind local opt-in and preserves unexpected ro
   const data = await t.mutation(ref("seedAnalytics"), args);
   await assert.rejects(t.mutation(ref("cleanup"), args), /unrelated activity/);
   await t.run(async (ctx) => {
+    const observations = await ctx.db.query("instancePopulationObservations").withIndex("by_sessionId_observedAt", q => q.eq("sessionId", data.sessionId)).collect();
+    assert.ok(data.endAt > observations.at(-1)!.observedAt);
+    assert.equal(observations.at(-1)?.queueSize, 7);
+    assert.equal(observations.at(-1)?.userCount, 24);
+    assert.deepEqual(observations.at(-1)?.platforms, { standalonewindows: 20, android: 4 });
+    const alias = await ctx.db.get(data.aliasId);
+    assert.equal(alias?.mergedIntoSessionId, data.sessionId);
+    const session = await ctx.db.get(data.sessionId);
+    assert.ok(session!.closedAt! < session!.lastObservedAt);
     const row = await ctx.db.get(data.integrationId);
     assert.equal(row!.state, "blocked");
     assert.equal(row!.killSwitchEnabled, true);
@@ -167,6 +176,8 @@ it("isolates synthetic analytics behind local opt-in and preserves unexpected ro
     }),
   );
   await t.mutation(ref("cleanupAnalytics"), args);
+  const remaining = await t.run(ctx => ctx.db.query("instanceSessions").withIndex("by_integrationId_state", q => q.eq("integrationId", data.integrationId)).collect());
+  assert.deepEqual(remaining, []);
   await t.mutation(ref("cleanup"), args);
   assert.equal(await t.mutation(ref("lookup"), base), null);
 });

@@ -31,6 +31,8 @@ import {
 import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
+type ChartScenario = "paired" | "paged" | "legacy" | "noQueue" | "partial" | "multiDay";
+
 // Storybook-only transport. Every query is resolved here; no server is contacted.
 class AnalyticsFixtureClient extends ConvexReactClient {
   private readonly cache = new Map<string, unknown>();
@@ -43,12 +45,28 @@ class AnalyticsFixtureClient extends ConvexReactClient {
   private clubDefaults = this.preferences;
   private personal = false;
   private associatedEvent = false;
+  private recapEndAt: number | null = null;
   private suggestions = [
     { id: "fixture-suggestion-1", eventTitle: "Afterhours 043", sessionId: "fixture-session-2", worldName: "Afterhours Lounge", openedAt: this.now - 3 * 86400_000, confidence: 0.75, canConfirm: true },
     { id: "fixture-suggestion-2", eventTitle: "Afterhours 043", sessionId: null, worldName: null, openedAt: null, confidence: 0.75, canConfirm: false },
   ];
-  constructor(private readonly repaired = false) {
+  constructor(private readonly repaired = false, private readonly canManageEvents = true, invalidRecapRange = false, private readonly chartScenario?: ChartScenario) {
     super("https://fixture.invalid");
+    if (invalidRecapRange) this.recapEndAt = Infinity;
+  }
+  private chartRows() {
+    const start = Date.UTC(2026, 10, 7, 20);
+    return Array.from({ length: this.chartScenario === "paged" ? 502 : 9 }, (_, index) => {
+      const at = start + (this.chartScenario === "multiDay" && index > 4 ? 24 * 3600000 : 0) + index * 180000;
+      const value = index === 4 ? 110 : 18 + index;
+      return { at, value, coverage: "observed", ...(index === 3 ? { breakBefore: true } : {}),
+        ...(this.chartScenario === "legacy" ? {} : {
+          userCount: index === 4 ? 78 : value,
+          queueSize: this.chartScenario === "noQueue" ? 0 : this.chartScenario === "paged" ? index === 501 ? 28 : 0 : index === 4 ? 135 : 0,
+          platforms: this.chartScenario === "partial" ? { android: 0 } : { standalonewindows: index === 4 ? 58 : 14, android: index === 4 ? 18 : 4 },
+        }),
+      };
+    });
   }
   private result(name: string, args: Record<string, unknown>) {
     const key = JSON.stringify([name, args]);
@@ -123,6 +141,11 @@ class AnalyticsFixtureClient extends ConvexReactClient {
         { startAt: start, endAt: start + 91 * 300_000 },
         { startAt: start + 104 * 300_000, endAt: end },
       ] };
+    } else if (name === "clubAnalytics:getInstanceSeries" && this.chartScenario) {
+      const opts = args.paginationOpts;
+      const cursor = opts && typeof opts === "object" && "cursor" in opts ? Number(opts.cursor ?? 0) : 0;
+      const rows = this.chartRows();
+      result = { ...page(rows.slice(cursor, cursor + 500)), isDone: cursor + 500 >= rows.length, continueCursor: String(cursor + 500) };
     } else if (
       name === "clubAnalytics:getSeries" ||
       name === "clubAnalytics:getInstanceSeries"
@@ -153,7 +176,8 @@ class AnalyticsFixtureClient extends ConvexReactClient {
         throw new Error("Instance not found.");
       if (this.repaired) return { ...session(2), state: "open", closedAt: null };
       const index = Number(String(args.sessionId).split("-").at(-1));
-      result = session(index, index < 2);
+      result = this.chartScenario ? { ...session(2), openedAt: this.chartRows()[0]!.at, lastObservedAt: this.chartRows().at(-1)!.at,
+        closedAt: this.chartScenario === "multiDay" ? this.chartRows()[0]!.at + 24 * 3600000 + 16.5 * 60000 : this.chartRows()[0]!.at + 13.5 * 60000 } : session(index, index < 2);
     } else if (name === "clubMembership:getMovementBucket")
       result = { joins: 4, departures: 2, complete: true };
     else if (name === "clubAnalytics:getInstanceSummaryPage")
@@ -177,6 +201,11 @@ class AnalyticsFixtureClient extends ConvexReactClient {
           endAt: this.now - 3 * 86400_000 + 4 * 3600_000,
           peak: 154,
           playerHours: 602,
+          scheduledStartAt: this.now - 3 * 86400_000,
+          scheduledEndAt: this.now - 3 * 86400_000 + 4 * 3600_000,
+          effectiveEndAt: this.recapEndAt !== null && (!Number.isFinite(this.recapEndAt) || this.recapEndAt <= this.now - 3 * 86400_000) ? null : this.recapEndAt ?? this.now - 3 * 86400_000 + 6 * 3600_000,
+          recapEndAt: this.recapEndAt,
+          canEdit: this.canManageEvents,
           coverageRatio: 0.97,
         },
       ]);
@@ -238,6 +267,10 @@ class AnalyticsFixtureClient extends ConvexReactClient {
     if (getFunctionName(mutation) === "clubProviderReads:request")
       return "fixture-read" as FunctionReturnType<Mutation>;
     const value = args[0] as Record<string, unknown> | undefined;
+    if (getFunctionName(mutation) === "communityTelemetry:setEventRecapEnd") {
+      if (value?.endAt === Date.parse("2026-01-01T00:00:00Z")) throw new Error("Fixture failure");
+      this.recapEndAt = value?.endAt as number | null;
+    }
     if (getFunctionName(mutation) === "clubOperations:enqueue" &&
       (value?.schedule as {kind: string})?.kind !== "immediate")
       throw new Error("Expected immediate schedule");
@@ -304,14 +337,18 @@ function AnalyticsFixture({
   canManageEvents = true,
   canReadInstances = true,
   repaired = false,
+  invalidRecapRange = false,
+  chartScenario,
 }: {
   mode?: "home" | "analytics" | "instances";
   initialInstance?: string;
   canManageEvents?: boolean;
   canReadInstances?: boolean;
   repaired?: boolean;
+  invalidRecapRange?: boolean;
+  chartScenario?: ChartScenario;
 }) {
-  const [client] = useState(() => new AnalyticsFixtureClient(repaired));
+  const [client] = useState(() => new AnalyticsFixtureClient(repaired, canManageEvents, invalidRecapRange, chartScenario));
   const [href, setHref] = useState(
     `/account/communities/afterhours${mode === "home" ? "" : `/${mode}`}${initialInstance ? `?instance=${initialInstance}` : ""}`,
   );
@@ -741,3 +778,14 @@ function MembershipClockFixture() {
 export const MembershipClock: Story = {
   render: () => <MembershipClockFixture />,
 };
+
+export const InvalidRecapRange: Story = {
+  render: () => <AnalyticsFixture mode="analytics" invalidRecapRange />,
+};
+
+export const InstanceChartPaired: Story = { render: () => <AnalyticsFixture mode="instances" initialInstance="fixture-session-2" chartScenario="paired" /> };
+export const InstanceChartPaged: Story = { render: () => <AnalyticsFixture mode="instances" initialInstance="fixture-session-2" chartScenario="paged" /> };
+export const InstanceChartLegacy: Story = { render: () => <AnalyticsFixture mode="instances" initialInstance="fixture-session-2" chartScenario="legacy" /> };
+export const InstanceChartNoQueue: Story = { render: () => <AnalyticsFixture mode="instances" initialInstance="fixture-session-2" chartScenario="noQueue" /> };
+export const InstanceChartPartial: Story = { render: () => <AnalyticsFixture mode="instances" initialInstance="fixture-session-2" chartScenario="partial" /> };
+export const InstanceChartMultiDay: Story = { render: () => <AnalyticsFixture mode="instances" initialInstance="fixture-session-2" chartScenario="multiDay" /> };

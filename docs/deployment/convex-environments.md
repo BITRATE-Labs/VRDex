@@ -499,15 +499,22 @@ or printed.
 
 ## Pull Request Preview Backends
 
-PR preview backends are created only by the manual `On-Demand Vercel Preview`
-workflow. Baseline Checks no longer deploys Vercel previews or Convex preview
-backends. When `CONVEX_DEPLOY_KEY_PREVIEW` is
-configured, the preview deploy job first creates or updates a Convex preview
-deployment named for the PR with `convex deploy --preview-create` and builds the
-web app with that preview Convex URL. The project-level
+Selected same-repository `ci:browsers` and `ci:visuals` PR runs call the existing
+`On-Demand Vercel Preview` implementation through Baseline Checks. Manual preview
+requests use the same deploy implementation. Both deploy the selected full head
+and build Vercel with the matching Convex browser/server URLs. The project-level
 `CONVEX_DEPLOY_KEY_PREVIEW` remains in GitHub Actions and is never injected into
-Vercel. A pull request with no requested preview has no `pr-<number>` Convex
-deployment.
+Vercel. It is required for candidate acceptance, optional for a manual shell-only
+preview.
+
+CI acceptance serialises and reuses `ci-pr-<number>` across heads and retries.
+Manual previews use `pr-<number>`; manually requested acceptance has the separate
+`manual-accept-pr-<number>` namespace and concurrency group. A PR with neither
+browser selection nor a manual request creates no preview. Retain current PR
+backends and reclaim closed PR previews through the exact-name dashboard
+procedure in [Vercel preview deployment](vercel-preview.md). Run artifacts retain
+the full head, preview origin, both backend URLs and executed coverage; an old
+preview URL alone does not establish current acceptance.
 
 The `Hosted MCP Preview Smoke` job runs `pnpm smoke:mcp-compat` against
 the Vercel preview `/mcp` endpoint in that same on-demand run. CI passes that
@@ -586,7 +593,11 @@ for exact copy and delivery behavior.
 
 ## Hosted E2E Helpers
 
-Hosted mutation-backed Playwright runs use only the shared development/staging target. Do not enable these helpers in production.
+Selected PR acceptance runs real mutation/readback/cleanup and development
+Clerk auth/account assertions against its same-branch preview. Deployed-health
+runs retain the shared development/staging target. Neither lane may target
+production. See [candidate acceptance](vercel-preview.md) for required switches,
+matching Clerk instance keys, artifact retention and backend reclamation.
 
 ### Preview deployments need a project-level default
 

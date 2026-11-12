@@ -15,6 +15,16 @@ on:
         description: Head commit the maintainer reviewed when they requested the preview. Required for fork heads.
         required: false
         type: string
+      browser_acceptance:
+        description: Require exact-candidate browser/backend acceptance.
+        required: false
+        default: false
+        type: boolean
+      capture_screenshots:
+        description: Capture review screenshots during browser acceptance.
+        required: false
+        default: false
+        type: boolean
   workflow_call:
     inputs:
       pull_number:
@@ -29,6 +39,33 @@ on:
         description: Head commit the maintainer reviewed when they requested the preview. Required for fork heads.
         required: false
         type: string
+      browser_acceptance:
+        description: Require exact-candidate browser/backend acceptance.
+        required: false
+        default: false
+        type: boolean
+      capture_screenshots:
+        description: Capture review screenshots during browser acceptance.
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      VERCEL_TOKEN:
+        required: false
+      VERCEL_ORG_ID:
+        required: false
+      VERCEL_PROJECT_ID:
+        required: false
+      CONVEX_DEPLOY_KEY_PREVIEW:
+        required: false
+      CLERK_JWT_ISSUER_DOMAIN:
+        required: false
+      VRDEX_HOSTED_E2E_BROWSER_TOKEN:
+        required: false
+      VRDEX_HOSTED_E2E_CLERK_PUBLISHABLE_KEY:
+        required: false
+      VRDEX_HOSTED_E2E_CLERK_SECRET_KEY:
+        required: false
     outputs:
       deployment_url:
         description: Preview deployment URL.
@@ -36,27 +73,29 @@ on:
 
 permissions:
   contents: read
-  issues: write
   pull-requests: read
 
-# Workflow scope, not job scope. Two jobs sharing one group with
-# cancel-in-progress, both eligible to start, can reverse-cancel: a newer deploy
-# acquires the group and is then killed by an older run's newly eligible smoke,
-# discarding the most recent human request. At workflow scope a newer request
-# cancels the entire older run, which is the intended behaviour.
+# Keep deployment and its consumers in one group. Manual refreshes replace old
+# manual runs; acceptance queues so a backend writer finishes before reuse.
 concurrency:
-  group: on-demand-vercel-preview-${{ inputs.pull_number }}
-  cancel-in-progress: true
+  group: on-demand-vercel-preview-${{ inputs.pull_number }}-${{ inputs.browser_acceptance && 'acceptance' || 'manual' }}-${{ github.event_name }}
+  cancel-in-progress: ${{ !inputs.browser_acceptance }}
 
 jobs:
   deploy-preview:
     name: Deploy On-Demand Preview
-    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
+      preview_name: ${{ steps.pr.outputs.preview_name }}
+      e2e_auth_enabled: ${{ steps.deploy.outputs.e2e_auth_enabled }}
       convex_preview_enabled: ${{ steps.convex-preview-gate.outputs.enabled }}
       convex_preview_url: ${{ steps.convex-preview.outputs.convex_url }}
       deployment_url: ${{ steps.deploy.outputs.url }}
+      head_ref: ${{ steps.pr.outputs.head_ref }}
       head_sha: ${{ steps.pr.outputs.head_sha }}
       is_fork: ${{ steps.pr.outputs.is_fork }}
       pr_number: ${{ steps.pr.outputs.pr_number }}
@@ -66,6 +105,7 @@ jobs:
         id: pr
         uses: actions/github-script@v9
         env:
+          BROWSER_ACCEPTANCE: ${{ inputs.browser_acceptance }}
           INPUT_HEAD_SHA: ${{ inputs.head_sha }}
           INPUT_PULL_NUMBER: ${{ inputs.pull_number }}
         with:
@@ -88,6 +128,10 @@ jobs:
             if (isFork) {
               core.notice(`Fork head ${pull.head.repo?.full_name}@${pull.head.sha}: hosted E2E helpers withheld.`);
             }
+            if (isFork && process.env.BROWSER_ACCEPTANCE === "true") {
+              core.setFailed("Private browser acceptance is unavailable for fork heads. Request a manual preview without browser acceptance.");
+              return;
+            }
 
             if (pull.state !== "open") {
               core.setFailed(
@@ -96,9 +140,8 @@ jobs:
               return;
             }
 
-            // The maintainer reviewed a specific commit before commenting. If the
-            // head moved since then, the reviewed diff is not what would build,
-            // so refuse rather than deploy unreviewed code with our credentials.
+            // Pin the selection snapshot. Fork requests require a maintainer-reviewed
+            // SHA; same-repository browser selection supplies its event head.
             const requestedSha = String(process.env.INPUT_HEAD_SHA || "").trim();
             if (isFork && !requestedSha) {
               core.setFailed(
@@ -113,6 +156,10 @@ jobs:
               return;
             }
 
+            const purpose = context.eventName === "pull_request" ? "ci" : "manual-accept";
+            core.setOutput("preview_name", process.env.BROWSER_ACCEPTANCE === "true"
+              ? `${purpose}-pr-${pull.number}`
+              : `pr-${pull.number}`);
             core.setOutput("head_sha", requestedSha || pull.head.sha);
             core.setOutput("head_ref", pull.head.ref);
             core.setOutput("pr_number", String(pull.number));
@@ -188,7 +235,7 @@ jobs:
         id: convex-preview
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PREVIEW }}
-          PREVIEW_NAME: pr-${{ steps.pr.outputs.pr_number }}
+          PREVIEW_NAME: ${{ steps.pr.outputs.preview_name }}
         run: pnpm exec convex deploy --yes --typecheck=enable --preview-create "$PREVIEW_NAME" --cmd "node scripts/write-convex-preview-output.mjs" --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL
 
       - name: Configure Convex preview runtime and smoke fixture
@@ -198,7 +245,7 @@ jobs:
           HOSTED_E2E_AUTH_HELPERS: ${{ steps.pr.outputs.is_fork == 'false' && vars.VRDEX_HOSTED_E2E_AUTH_HELPERS || '' }}
           HOSTED_E2E_BROWSER_TOKEN: ${{ steps.pr.outputs.is_fork == 'false' && secrets.VRDEX_HOSTED_E2E_BROWSER_TOKEN || '' }}
           HOSTED_E2E_DEVELOPER_CREDENTIALS: ${{ steps.pr.outputs.is_fork == 'false' && vars.VRDEX_HOSTED_E2E_DEVELOPER_CREDENTIALS || '' }}
-          PREVIEW_NAME: pr-${{ steps.pr.outputs.pr_number }}
+          PREVIEW_NAME: ${{ steps.pr.outputs.preview_name }}
         run: |
           set -euo pipefail
           bridge_secret=$(openssl rand -hex 32)
@@ -210,14 +257,16 @@ jobs:
           printf '%s' "$bridge_secret" | pnpm exec convex env set --preview-name "$PREVIEW_NAME" VRDEX_PREVIEW_PERSISTENCE_SECRET
 
           preview_e2e_auth_enabled=false
-          if [ "$HOSTED_E2E_AUTH_HELPERS" = "true" ] && [ "$HOSTED_E2E_DEVELOPER_CREDENTIALS" = "true" ] && [ -n "$HOSTED_E2E_BROWSER_TOKEN" ]; then
+          if [ "$HOSTED_E2E_AUTH_HELPERS" = "true" ] && [ -n "$HOSTED_E2E_BROWSER_TOKEN" ]; then
             e2e_convex_secret=$(openssl rand -hex 32)
             node scripts/generate-preview-developer-runtime-secrets.mjs
             echo "::add-mask::$e2e_convex_secret"
             echo "VRDEX_PREVIEW_E2E_CONVEX_SECRET=$e2e_convex_secret" >> "$GITHUB_ENV"
             printf '%s' true | pnpm exec convex env set --preview-name "$PREVIEW_NAME" VRDEX_ENABLE_E2E_HELPERS
             printf '%s' true | pnpm exec convex env set --preview-name "$PREVIEW_NAME" VRDEX_ENABLE_E2E_AUTH_HELPERS
-            printf '%s' true | pnpm exec convex env set --preview-name "$PREVIEW_NAME" VRDEX_ENABLE_PREVIEW_OAUTH_TOKEN_BRIDGE
+            developer_bridge=false
+            if [ "$HOSTED_E2E_DEVELOPER_CREDENTIALS" = "true" ]; then developer_bridge=true; fi
+            printf '%s' "$developer_bridge" | pnpm exec convex env set --preview-name "$PREVIEW_NAME" VRDEX_ENABLE_PREVIEW_OAUTH_TOKEN_BRIDGE
             printf '%s' "$e2e_convex_secret" | pnpm exec convex env set --preview-name "$PREVIEW_NAME" VRDEX_E2E_CONVEX_SECRET
             # Clerk signs the tokens Convex trusts, so the preview no longer mints
             # its own RS256 pair. Authenticated preview flows need a Clerk instance
@@ -256,7 +305,7 @@ jobs:
           HEAD_REF: ${{ steps.pr.outputs.head_ref }}
           HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
           PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
-          PREVIEW_NAME: pr-${{ steps.pr.outputs.pr_number }}
+          PREVIEW_NAME: ${{ steps.pr.outputs.preview_name }}
           VRDEX_E2E_BROWSER_TOKEN: ${{ steps.pr.outputs.is_fork == 'false' && secrets.VRDEX_HOSTED_E2E_BROWSER_TOKEN || '' }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -310,6 +359,7 @@ jobs:
             fi
           fi
 
+          echo "e2e_auth_enabled=${VRDEX_PREVIEW_E2E_AUTH_ENABLED:-false}" >> "$GITHUB_OUTPUT"
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
           {
             echo "## On-demand Vercel preview"
@@ -320,19 +370,29 @@ jobs:
             echo "- Deployment identity: $deployment_url/api/deployment"
           } >> "$GITHUB_STEP_SUMMARY"
 
+
+  preview-comments:
+    name: Report Manual Preview
+    timeout-minutes: 5
+    needs: [deploy-preview]
+    if: always() && !inputs.browser_acceptance && needs.deploy-preview.outputs.pr_number != ''
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
       # Non-fatal: a live preview must not be reported as a failed deploy just
       # because the comment API call did not land.
       - name: Post preview comment
-        if: success()
+        if: needs.deploy-preview.result == 'success'
         continue-on-error: true
         uses: actions/github-script@v9
         env:
           COMMENT_ID: ${{ inputs.comment_id }}
-          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
-          HEAD_REF: ${{ steps.pr.outputs.head_ref }}
-          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
-          IS_FORK: ${{ steps.pr.outputs.is_fork }}
-          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          DEPLOYMENT_URL: ${{ needs.deploy-preview.outputs.deployment_url }}
+          HEAD_REF: ${{ needs.deploy-preview.outputs.head_ref }}
+          HEAD_SHA: ${{ needs.deploy-preview.outputs.head_sha }}
+          IS_FORK: ${{ needs.deploy-preview.outputs.is_fork }}
+          PR_NUMBER: ${{ needs.deploy-preview.outputs.pr_number }}
         with:
           script: |
             const marker = "<!-- on-demand-vercel-preview-comment -->";
@@ -353,7 +413,7 @@ jobs:
               isFork
                 ? "Hosted MCP preview smoke is skipped for fork heads; it needs the hosted end-to-end credentials this build runs without."
                 : `Hosted MCP preview smoke runs after this deploy in the same run: ${runUrl}`,
-              "This workflow is dispatched, so its jobs do not appear as pull request status checks. Open the run to read the smoke result.",
+              "Open the linked workflow run to read the manual preview smoke result.",
               "",
               "Comment `@vrdex preview` or `/vercel-preview` on this pull request for a fresh deployment.",
             ].join("\n");
@@ -389,11 +449,11 @@ jobs:
             }
 
       - name: Report failure on pull request
-        if: failure() && steps.pr.outcome == 'success'
+        if: needs.deploy-preview.result == 'failure'
         uses: actions/github-script@v9
         env:
           COMMENT_ID: ${{ inputs.comment_id }}
-          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          PR_NUMBER: ${{ needs.deploy-preview.outputs.pr_number }}
         with:
           script: |
             const marker = "<!-- on-demand-vercel-preview-failure-comment -->";
@@ -441,13 +501,99 @@ jobs:
               }
             }
 
+  candidate-browser-acceptance:
+    name: Candidate Browser and Backend Acceptance
+    permissions:
+      contents: read
+      pull-requests: read
+    needs: [deploy-preview]
+    if: inputs.browser_acceptance && needs.deploy-preview.outputs.is_fork == 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CANDIDATE_PREVIEW_NAME: ${{ needs.deploy-preview.outputs.preview_name }}
+      CANDIDATE_HEAD_SHA: ${{ needs.deploy-preview.outputs.head_sha }}
+      CANDIDATE_CONVEX_URL: ${{ needs.deploy-preview.outputs.convex_preview_url }}
+      PLAYWRIGHT_BASE_URL: ${{ needs.deploy-preview.outputs.deployment_url }}
+      PLAYWRIGHT_SKIP_WEBSERVERS: "true"
+      PLAYWRIGHT_CAPTURE_SCREENSHOTS: ${{ inputs.capture_screenshots }}
+      PLAYWRIGHT_RECORD_VIDEO: "true"
+      VRDEX_ENABLE_E2E_AUTH_HELPERS: ${{ needs.deploy-preview.outputs.e2e_auth_enabled }}
+      VRDEX_ENABLE_E2E_CLERK_AUTH: ${{ vars.VRDEX_HOSTED_E2E_CLERK_AUTH }}
+      VRDEX_E2E_BROWSER_TOKEN: ${{ secrets.VRDEX_HOSTED_E2E_BROWSER_TOKEN }}
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.VRDEX_HOSTED_E2E_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.VRDEX_HOSTED_E2E_CLERK_SECRET_KEY }}
+      VRDEX_E2E_RUN_ID: candidate-${{ needs.deploy-preview.outputs.pr_number }}-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ needs.deploy-preview.outputs.head_sha }}
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify candidate identity before mutations
+        run: node scripts/candidate-preview-acceptance.mjs preflight
+      - name: Configure Ubuntu package mirror
+        run: sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
+      - name: Install Chromium
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Profile mutation, public readback and owned cleanup
+        working-directory: apps/web
+        env:
+          PLAYWRIGHT_OUTPUT_DIR: test-results-candidate-mutation
+          PLAYWRIGHT_HTML_REPORT_DIR: playwright-report-candidate-mutation
+          PLAYWRIGHT_JSON_REPORT_FILE: playwright-artifacts/candidate-mutation.json
+        run: pnpm exec playwright test profile-submission.flow.spec.ts --grep "profile submission writes through to public profile and discovery" --project=desktop-chromium
+      - name: Development-instance auth on desktop and mobile
+        working-directory: apps/web
+        env:
+          PLAYWRIGHT_OUTPUT_DIR: test-results-candidate-auth
+          PLAYWRIGHT_HTML_REPORT_DIR: playwright-report-candidate-auth
+          PLAYWRIGHT_JSON_REPORT_FILE: playwright-artifacts/candidate-auth.json
+        run: pnpm exec playwright test auth-session.flow.spec.ts --project=desktop-chromium --project=mobile-chromium
+      - name: Account assertions and selected captures on desktop and mobile
+        working-directory: apps/web
+        env:
+          PLAYWRIGHT_OUTPUT_DIR: test-results-candidate-account
+          PLAYWRIGHT_HTML_REPORT_DIR: playwright-report-candidate-account
+          PLAYWRIGHT_JSON_REPORT_FILE: playwright-artifacts/candidate-account.json
+        run: pnpm test:e2e:hosted:account-visual
+      - name: Verify selected screenshot coverage
+        run: node .github/scripts/visual-ci.cjs --check-captures apps/web/playwright-artifacts/screenshots
+      - name: Verify executed coverage and recheck deployment identity
+        run: node scripts/candidate-preview-acceptance.mjs report
+      - name: Reject evidence for a superseded PR head
+        uses: actions/github-script@v9
+        env:
+          PR_NUMBER: ${{ needs.deploy-preview.outputs.pr_number }}
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: Number(process.env.PR_NUMBER) });
+            if (pr.head.sha !== process.env.CANDIDATE_HEAD_SHA) core.setFailed("Candidate head changed during acceptance; run again for the new head.");
+      - name: Upload candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-hosted-data-flow
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            apps/web/playwright-artifacts/
+            apps/web/test-results-candidate-*/
+            apps/web/playwright-report-candidate-*/
+
   hosted-mcp-preview-smoke:
     name: Hosted MCP Preview Smoke
     needs: [deploy-preview]
     # Gate on a real deployment URL rather than the aggregate job result, so a
     # deploy that succeeded but whose comment step failed is still smoked, and a
     # deploy that produced no URL is correctly skipped.
-    if: ${{ !cancelled() && needs.deploy-preview.outputs.deployment_url != '' && needs.deploy-preview.outputs.is_fork == 'false' }}
+    if: ${{ !cancelled() && !inputs.browser_acceptance && needs.deploy-preview.outputs.deployment_url != '' && needs.deploy-preview.outputs.is_fork == 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

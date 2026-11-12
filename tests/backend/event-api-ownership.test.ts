@@ -168,7 +168,25 @@ describe("API-created event ownership", () => {
       bucketStartAt: originalStart,
       bucketEndAt: originalStart + 2 * 60 * 60_000,
     });
-    assert.equal((await t.run((ctx) => ctx.db.get(rollupId)))?.peakConcurrency, 8);
+    const automatic = await t.run((ctx) => ctx.db.get(rollupId));
+    assert.equal(automatic?.peakConcurrency, 12);
+    assert.equal(automatic?.bucketEndAt, originalStart + 150 * 60_000 + 1);
+    assert.equal((await t.run(ctx => ctx.db.get(created.eventId)))?.endAt, originalStart + 2 * 60 * 60_000);
+    await t.withIdentity(identity).mutation(api.communityTelemetry.setEventRecapEnd, {
+      communitySlug: "faceless", eventId: created.eventId, endAt: originalStart + 2 * 60 * 60_000,
+    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await t.finishInProgressScheduledFunctions();
+    const canonical = await t.run(ctx => ctx.db.get(rollupId));
+    assert.equal(canonical?.peakConcurrency, 8);
+    assert.equal(canonical?.bucketEndAt, originalStart + 2 * 60 * 60_000);
+    await t.withIdentity(identity).mutation(api.communityTelemetry.setEventRecapEnd, {
+      communitySlug: "faceless", eventId: created.eventId, endAt: null,
+    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await t.finishInProgressScheduledFunctions();
+    assert.equal((await t.run(ctx => ctx.db.get(rollupId)))?.peakConcurrency, 12);
+    assert.equal((await t.run(ctx => ctx.db.get(created.eventId)))?.recapEndAt, undefined);
     const secondCommunityId = await t.run(async (ctx) => {
       const id = await ctx.db.insert("profiles", {
         slug: "second-owned-club",

@@ -4,7 +4,7 @@ This is the first hosted deployment path for `apps/web`. It is intentionally nar
 
 Preview deploys are manual. Two independent paths could create one, and both are closed:
 
-- GitHub Actions. Nothing in `Baseline Checks` deploys to Vercel, and no `push` or `pull_request` event triggers a preview. A preview exists only after a human requests it, as described in [On-demand preview deploy](#on-demand-preview-deploy).
+- GitHub Actions. Same-repository PRs selected with `ci:browsers` or `ci:visuals` deploy an exact-head preview for browser/backend acceptance through `Baseline Checks`. Other previews are requested through [On-demand preview deploy](#on-demand-preview-deploy).
 - The Vercel Git integration. `apps/web/vercel.json` sets `git.deploymentEnabled` to `{ "**": false, "main": true }`, so pushing a commit to any branch other than `main` creates no automatic Vercel deployment. `main` is listed explicitly because Vercel deploys a branch when it matches at least one `true` rule, and production hosting depends on the Git integration for `main`.
 
 Two caveats on the Git-integration control. Vercel reads `vercel.json` from the commit being pushed, so a branch that does not yet carry this setting still auto-deploys until it picks the change up from `main`. And `git.deploymentEnabled` governs the Git integration only; it does not affect `vercel deploy` from the CLI, which is how the on-demand workflow and `staging-deploy.yml` deploy.
@@ -45,7 +45,8 @@ If any of the three Vercel secrets is missing, the run fails and names the missi
 `VERCEL_TOKEN` must be a Vercel account access token created from Vercel account settings. The local Vercel CLI session token from `auth.json` is not accepted by `vercel --token` in GitHub Actions and should not be stored as this secret.
 
 When `CONVEX_DEPLOY_KEY_PREVIEW` exists, the workflow creates or updates the
-`pr-<number>` Convex deployment with `convex deploy --preview-create` before the
+`pr-<number>` Convex deployment for manual previews, or a run-owned
+`ci-pr-<number>` deployment for acceptance with `convex deploy --preview-create` before the
 Vercel build. It writes only the resulting `NEXT_PUBLIC_CONVEX_URL` as a step
 output. The project preview deploy key remains confined to GitHub Actions and is
 never injected into Vercel, written to an artifact, or posted in a PR comment.
@@ -59,44 +60,87 @@ capability flag permits the same bridge secret to issue client-credentials
 access-token records. PR previews do not receive `CONVEX_ADMIN_TOKEN`; all
 broader internal operations remain unavailable from the preview web runtime.
 
-When `VRDEX_HOSTED_E2E_AUTH_HELPERS=true`,
-`VRDEX_HOSTED_E2E_DEVELOPER_CREDENTIALS=true`, and the
-`VRDEX_HOSTED_E2E_BROWSER_TOKEN` repository secret are all present, that same
-on-demand preview workflow also creates a separate random Convex E2E secret. It enables
-the auth helper only on the named Convex preview and injects the matching helper
-flags, generated Convex secret, and repository browser token only into the
-matching Vercel preview. This supports reviewed OAuth clients for hosted MCP compatibility evidence
-without enabling the helper on shared staging or production. The workflow binds
-`SITE_URL` to the concrete Vercel deployment URL after deployment.
+When `VRDEX_HOSTED_E2E_AUTH_HELPERS=true` and the browser token exists, the
+workflow enables the guarded auth helpers with a separate per-preview Convex
+secret. `VRDEX_HOSTED_E2E_DEVELOPER_CREDENTIALS` independently controls the
+preview OAuth token bridge. Leaving that switch false does not disable browser
+auth acceptance or enable developer-token issuance.
 
-**It does not generate any Clerk configuration, and preview sign-in does not
-work on its own.** Clerk is an external prerequisite: a preview needs an
-instance, its keys on the Vercel preview, and `CLERK_JWT_ISSUER_DOMAIN`
-inherited from the Convex project's preview environment-variable defaults.
-Since #226 the authenticated flows use Clerk testing tokens rather than a
-sign-in form, and **this workflow does not wire them up.** `vercel-preview-deploy.yml`
-passes no Clerk E2E secrets, runs no auth spec, and invokes no
-credential generator, so installing those secrets changes nothing here.
-Authenticated E2E and generated MCP OAuth credentials run from
-`baseline-checks.yml` and `deployed-health.yml` against the shared staging
-target — see [`docs/testing/playwright-visual-preview.md`](../testing/playwright-visual-preview.md).
-A preview still needs its own Clerk instance and keys for a human to sign in to
-it by hand. Separate per-preview runtime material supplies the API token pepper,
-OAuth client-secret and refresh-token peppers, and OAuth access-token signing
-key needed by developer credential and client-credentials flows. The token route
-uses the dedicated preview capability described above instead of an admin key.
-When any gate is absent, the workflow writes the Convex E2E and preview OAuth
-token capability switches as `false` and omits the developer runtime secrets for
-that preview.
+Selected same-repository browser runs require `VRDEX_HOSTED_E2E_CLERK_AUTH=true`
+and both existing `VRDEX_HOSTED_E2E_CLERK_PUBLISHABLE_KEY` and
+`VRDEX_HOSTED_E2E_CLERK_SECRET_KEY` secrets. They must name the development Clerk
+instance already configured in Vercel Preview and the Convex project's preview
+`CLERK_JWT_ISSUER_DOMAIN` default. No Clerk instance or JWT template is created
+by this workflow. Missing configuration fails selected coverage rather than
+reporting an empty successful run.
+
+Before creating test data, `scripts/candidate-preview-acceptance.mjs` checks
+`/api/deployment` for the full candidate commit, preview environment, matching
+browser and server Convex URLs, and the runner's development Clerk instance.
+The existing profile submission suite writes, reads back and cleans up one
+isolated profile. Existing auth/session and account suites run on desktop and
+mobile with disposable Clerk test accounts and their cleanup helpers.
+Screenshot capture follows `ci:visuals`; browser assertions run with either
+selection. Three separate reports preserve each suite's output. The seven-day acceptance
+artifact binds the full head, preview origin, both backend URLs, observed time
+and actual expected passes. Missing, skipped, empty or failed required coverage
+fails acceptance. A final live identity and PR-head refresh rejects stale evidence.
+
+This is a deployed Next production-build preview with a same-branch backend,
+not a claim about production accounts, worker/provider behavior or real devices.
+Broadcast retains its separate integrated rehearsal. Production data is not a
+target. Shared staging remains useful for deployed health, not PR acceptance.
+
+## Automatic-build trust boundary
+
+Selecting browser coverage on a same-repository PR authorizes a credentialed
+build and preview deployment of its latest head. It is a freshness check, not
+an independent human approval. The existing Vercel account token and Convex
+preview deploy key stay in Actions; only trusted repository writers and
+operators should control this path. Forks do not receive private browser
+credentials or automatic acceptance. No new approval environment is introduced.
 
 ## On-demand preview deploy
 
-This is the only path that deploys a Vercel preview. Two workflows implement it:
+Acceptance and manual previews have separate concurrency groups and Convex
+names. A manual request cannot cancel the required lane or rotate its helper
+secret. Acceptance serialises per PR instead of cancelling its predecessor. It reuses
+one `ci-pr-<number>` backend across heads and retries. A manual dispatch with
+acceptance enabled uses its own `manual-accept-pr-<number>` backend and
+event-scoped group, so it cannot cancel or rewrite PR acceptance.
+Historical preview URLs can point at a backend advanced by a later head. Use
+the full-head, timestamped run artifact as point-in-time evidence and the latest
+run for current acceptance.
+Acceptance suppresses the manual PR comments and
+unrelated MCP smoke; its deployment and browser results feed PR verification.
+
+CI preview deployments consume the existing project's preview quota. No numeric
+cap is assumed here because it is provider/account configuration. After retaining
+the run artifacts and confirming that no task uses a closed PR's backend,
+reclaim that exact `ci-pr-<number>` deployment in the Convex
+Dashboard's preview deployment controls. Check the run's recorded name and URL
+before deletion. Retain its backend while a PR is open; reclaim closed PR previews after active
+uses finish. Leave staging, production and manual `pr-<number>` previews alone.
+The installed Convex CLI exposes no preview-deletion command, so this change does
+not invent a deletion API or automate reclamation. A quota failure stops the lane;
+it does not purchase capacity or fall back to shared staging.
+
+### Preview release checklist
+
+- [ ] Before merge, retain the current exact-head report and confirm its required
+  browser coverage passed.
+- [ ] When a PR closes, confirm no active run or operator still uses its CI or
+  manual-acceptance backend.
+- [ ] Sweep closed PRs in the Convex dashboard and reclaim their exact
+  `ci-pr-<number>` and `manual-accept-pr-<number>` deployments. Check the recorded
+  name and URL; leave production, staging and ordinary manual previews alone.
+
+The preview deploy implementation is reused by selected same-repository PR browser runs. Two workflows also expose manual requests:
 
 - `.github/workflows/vercel-preview-comment.yml` listens for `issue_comment` and dispatches the deploy when a pull request comment contains `@vrdex preview` or `/vercel-preview`. It requires an `author_association` of `OWNER`, `MEMBER`, or `COLLABORATOR`, and refuses non-open pull requests. Fork heads are allowed; see [Fork pull requests](#fork-pull-requests).
-- `.github/workflows/vercel-preview-deploy.yml` performs the deploy. Its only triggers are `workflow_dispatch` and `workflow_call`, so it cannot fire on `push` or `pull_request`. The `workflow_call` interface exposes a `deployment_url` output so a calling workflow can capture the link.
+- `.github/workflows/vercel-preview-deploy.yml` performs the deploy. Its only triggers are `workflow_dispatch` and `workflow_call`, and is also called by `Baseline Checks` for selected same-repository PRs. The `workflow_call` interface exposes a `deployment_url` output so a calling workflow can capture the link.
 
-So a preview deploy happens only when a person comments `@vrdex preview` or `/vercel-preview` on a pull request, or runs the `On-Demand Vercel Preview` workflow from the Actions tab or `gh workflow run`. Pushing another commit to a pull request does not redeploy; request a fresh preview when you want one to match new commits.
+An unselected preview deploy happens when a person comments `@vrdex preview` or `/vercel-preview` on a pull request, or runs the `On-Demand Vercel Preview` workflow from the Actions tab or `gh workflow run`. Pushing a commit reruns selected browser acceptance on that exact head. Without browser selection, request a fresh preview explicitly. Manual dispatch can set `browser_acceptance=true` to require the same acceptance lane.
 
 This path reuses the existing `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` repository secrets and adds no new ones.
 
