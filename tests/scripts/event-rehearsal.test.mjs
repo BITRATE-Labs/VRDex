@@ -234,7 +234,7 @@ test('API and MCP verification installs FFmpeg before full script coverage', asy
  assert.match(steps[install].run, /ffmpeg -version/);
  assert.equal(steps[verify].run, 'pnpm verify:vrdex-mcp');
 });
-test('media CI prefers independent HTTPS mirrors without weakening package verification', async () => {
+test('media CI configures HTTPS mirrors without weakening package verification', async () => {
  const { parse } = await import('yaml');
  const workflow = parse(await readFile('.github/workflows/baseline-checks.yml', 'utf8'));
  workflow.jobs.reusableProbe = { uses: './.github/workflows/reusable.yml' };

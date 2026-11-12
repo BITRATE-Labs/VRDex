@@ -170,18 +170,7 @@ it("discovers effective baseline limits without intake and keeps capacity separa
   assert.equal(lowered.limits.actorBytes, 64);
   assert.equal(lowered.remaining.bytes, 64);
   assert.equal(lowered.remaining.concurrency, 0);
-  const request = await t.mutation(internal.contributionCapacity.request, {
-    ...authority,
-    key: "ask",
-    kind: "trusted_contributor",
-    evidence: "https://example.test/collection",
-    reason: "collection",
-  });
-  assert.equal(request.state, "pending");
-  assert.equal(
-    (await t.query(internal.contributionCapacity.get, authority)).tier,
-    "ordinary",
-  );
+
 });
 it("replays terminal quota refusal, authorizes before replay, and reports status through pause", async () => {
   const t = convexTest({ schema, modules }),

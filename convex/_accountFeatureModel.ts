@@ -46,7 +46,7 @@ export function accountFeatureAccessFromGrants(
   return {
     superAdmin,
     canReviewMedia: activeFeatures.has("media_reviewer"),
-    canPublishMedia: activeFeatures.has("trusted_publisher"),
+    canPublishMedia: superAdmin || activeFeatures.has("trusted_publisher"),
     canContributeBulk: activeFeatures.has("trusted_contributor"),
     canViewPrivateSeedLookup:
       superAdmin || activeFeatures.has("view_private_seed_lookup"),

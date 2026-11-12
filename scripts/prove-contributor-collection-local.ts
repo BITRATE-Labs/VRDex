@@ -20,8 +20,6 @@ if (
 )
   throw new Error("POLICY_IDENTITY_DENIED");
 Object.assign(process.env, {
-  CONVEX_DEPLOYMENT: "local:contributor-capacity-proof",
-  VRDEX_CONTRIBUTION_POLICY: "synthetic-v1",
   VRDEX_CONTRIBUTION_BATCHES_ENABLED: "true",
   VRDEX_CONTRIBUTION_UPLOADS_ENABLED: "true",
   VRDEX_MEDIA_UPLOAD_CLEANUP_READY: "true",

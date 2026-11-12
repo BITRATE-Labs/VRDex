@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { it } from "node:test";
 import { convexTest } from "convex-test";
 import { internal } from "../../convex/_generated/api";
-import { batchAllowance } from "../../convex/_contributionCapacity";
 import { modules as base, schema, seed, NOW } from "./_mediaReviewFixture";
 
 const modules = {
@@ -35,75 +34,6 @@ async function setup() {
     emailVerificationAttestedAt: Date.now() });
   return { t, s, authority };
 }
-
-it("keeps expired pending allowances out of the request cap while preserving replay", async () => {
-  const { t, s, authority } = await setup();
-  const batchId = await t.run(async ctx => {
-    const id = await ctx.db.insert("contributionBatches", {
-      actorUserId: s.contributorUserId, idempotencyKey: "batch", label: "Batch",
-      archived: false, rowCount: 0, createdAt: Date.now(),
-    });
-    for (let i = 0; i < 20; i++) await ctx.db.insert("contributionCapacityRequests", {
-      actorUserId: s.contributorUserId, key: `expired-${i}`, kind: "batch_allowance",
-      batchId: id, evidence: "collection", reason: "temporary_batch", rows: 1, bytes: 100,
-      expiresAt: Date.now() - 1, state: "pending", createdAt: 1, updatedAt: 1,
-    });
-    return id;
-  });
-  const input = { ...authority(), key: "new", kind: "batch_allowance" as const,
-    evidence: "collection", reason: "temporary_batch" as const,
-    batchId, rows: 1, bytes: 100, expiresAt: Date.now() + 3600000 };
-  const first = await t.mutation(internal.contributionCapacity.request, input);
-  assert.equal((await t.mutation(internal.contributionCapacity.request, input)).requestId, first.requestId);
-  await t.run(async ctx => {
-    for (let i = 0; i < 18; i++) await ctx.db.insert("contributionCapacityRequests", {
-      actorUserId: s.contributorUserId, key: `live-${i}`, kind: "batch_allowance",
-      batchId, evidence: "collection", reason: "temporary_batch", rows: 1, bytes: 100,
-      expiresAt: Date.now() + 3600000, state: "pending", createdAt: 1, updatedAt: 1,
-    });
-  });
-  await t.mutation(internal.contributionCapacity.request, { ...input, key: "twentieth" });
-  await assert.rejects(t.mutation(internal.contributionCapacity.request, { ...input, key: "overflow" }), /CAPACITY_REQUEST_LIMIT/);
-  assert.equal((await t.mutation(internal.contributionCapacity.request, input)).requestId, first.requestId);
-});
-
-it("allows only one active batch approval, ignores expired approvals, and rejects stale requests", async () => {
-  const { t, s } = await setup();
-  const { batchId, requests } = await t.run(async ctx => {
-    const batchId = await ctx.db.insert("contributionBatches", {
-      actorUserId: s.contributorUserId, idempotencyKey: "batch", label: "Batch",
-      archived: false, rowCount: 0, createdAt: Date.now(),
-    });
-    const requests = [];
-    for (let i = 0; i < 4; i++) requests.push(await ctx.db.insert("contributionCapacityRequests", {
-      actorUserId: s.contributorUserId, key: `ask-${i}`, kind: "batch_allowance",
-      batchId, evidence: "collection", reason: "temporary_batch", rows: 2, bytes: 1000,
-      expiresAt: Date.now() + (i === 3 ? -1 : 3600000), state: "pending",
-      createdAt: 1, updatedAt: 1,
-    }));
-    return { batchId, requests };
-  });
-  const approve = (requestId: typeof requests[number]) => t.mutation(internal.contributionCapacity.decideRequest,
-    { adminUserId: s.moderatorUserId, requestId, decision: "approved", reason: "reviewed" });
-  const outcomes = await Promise.allSettled([approve(requests[0]), approve(requests[1])]);
-  assert.equal(outcomes.filter(x => x.status === "fulfilled").length, 1);
-  assert.match(String((outcomes.find(x => x.status === "rejected") as PromiseRejectedResult).reason), /CAPACITY_ALLOWANCE_CONFLICT/);
-  await assert.rejects(approve(requests[3]), /CAPACITY_REQUEST_UNAVAILABLE/);
-  const winner = await t.run(ctx => ctx.db.query("contributionCapacityRequests")
-    .withIndex("by_batch_state", q => q.eq("batchId", batchId).eq("state", "approved")).unique());
-  await t.run(ctx => ctx.db.patch(winner!._id, { expiresAt: Date.now() - 1 }));
-  await approve(requests[2]);
-  process.env.VRDEX_CONTRIBUTION_POLICY = "synthetic-v1";
-  process.env.CONVEX_DEPLOYMENT = "local:contributor-capacity-proof";
-  try {
-    assert.equal((await t.run(ctx => batchAllowance(ctx.db, batchId, s.contributorUserId)))?._id, requests[2]);
-    await t.run(ctx => ctx.db.patch(winner!._id, { expiresAt: Date.now() + 3600000 }));
-    await assert.rejects(t.run(ctx => batchAllowance(ctx.db, batchId, s.contributorUserId)), /CAPACITY_ALLOWANCE_CONFLICT/);
-  } finally {
-    delete process.env.VRDEX_CONTRIBUTION_POLICY;
-    delete process.env.CONVEX_DEPLOYMENT;
-  }
-});
 
 it("deletes expired source-host windows in bounded pages and leaves current counters", async () => {
   const { t } = await setup();

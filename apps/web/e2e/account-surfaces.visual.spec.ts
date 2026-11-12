@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { gunzipSync } from "node:zlib";
 
 import {
   CLEANUP_DRAIN_PASSES,
@@ -133,6 +134,9 @@ test.describe("account surfaces @visual @flow @account-visual", () => {
   let reservedEmail: string | undefined;
 
   let authenticated = false;
+  let other: ClerkTestAccount | undefined;
+  let otherEmail: string | undefined;
+  let otherAuthenticated = false;
 
   test.beforeEach(async ({ page }, testInfo) => {
     // Resolved before an account exists, because it throws on a hosted run with
@@ -152,6 +156,9 @@ test.describe("account surfaces @visual @flow @account-visual", () => {
 
     authenticated = false;
     reservedEmail = undefined;
+    other = undefined;
+    otherEmail = undefined;
+    otherAuthenticated = false;
 
     // Matches the hosted flow specs. The default 30s covers this hook *and* the
     // test body, while `signInClerkTestAccount` alone allows a 15s Clerk load
@@ -175,7 +182,8 @@ test.describe("account surfaces @visual @flow @account-visual", () => {
     });
   });
 
-  test.afterEach(async ({ page, request }) => {
+  test.afterEach(async ({ page, context, request }) => {
+    await context.setOffline(false).catch(() => {});
     // Closed before anything is deleted, because the page is still signed in and
     // still subscribed. `ProvisionedChildren` in `src/app/ConvexClientProvider.tsx`
     // watches `accounts.viewer` and calls `ensureCurrentUser` whenever that row is
@@ -194,6 +202,18 @@ test.describe("account surfaces @visual @flow @account-visual", () => {
     // `about:blank` would snapshot `about:blank`.
     const browserStopped = await page.close().then(() => true, () => false);
     expect.soft(browserStopped, "Browser close failed; attempt data cleanup and preserve the identity").toBe(true);
+
+    const secondTarget = other ?? (otherEmail ? { email: otherEmail } : undefined);
+    if (secondTarget) {
+      const { cleaned, drained } = await drainClerkTestAccountData(request, e2eBrowserToken(), secondTarget);
+      const settled = browserStopped && (otherAuthenticated ? cleaned && drained : drained);
+      const deletion = settled ? other ? await deleteClerkTestAccount(other) : await deleteClerkTestAccountByEmail(secondTarget.email) : undefined;
+      const deleted = deletion && ("checked" in deletion ? deletion.checked && deletion.failed === 0 : deletion.ok || deletion.status === 404);
+      expect.soft(settled, `Second synthetic account ${secondTarget.email} must drain before identity deletion`).toBe(true);
+      expect.soft(deleted, `Second synthetic identity ${secondTarget.email} must be removed`).toBe(true);
+    }
+    other = undefined;
+    otherEmail = undefined;
 
     // Convex rows first, then the Clerk user. Provisioning is on-demand from the
     // client with no webhook, so Convex never learns about a Clerk deletion —
@@ -405,6 +425,113 @@ test.describe("account surfaces @visual @flow @account-visual", () => {
       mask: unstableSignedInRegions(page, account?.email),
     });
   });
+
+  if (process.env.VRDEX_ANALYTICS_ACCEPTANCE === "true") {
+    test("signed-in analytics preserves identity, retries offline and separates accounts", async ({ page, context }, testInfo) => {
+      test.setTimeout(180_000);
+      const identities: string[] = [];
+      const identifiedIds: unknown[] = [];
+      const protectedIdentities: string[] = [];
+      const ingestionTokens = new Set<unknown>();
+      let off = false;
+      let requestsWhileOff = 0;
+      await context.route("**/ingest/**", async route => {
+        if (off) requestsWhileOff++;
+        const buffer = route.request().postDataBuffer();
+        if (buffer) {
+          try {
+            const data: unknown = JSON.parse(buffer[0] === 31 && buffer[1] === 139 ? gunzipSync(buffer).toString() : buffer.toString());
+            for (const event of Array.isArray(data) ? data : [data]) {
+              if (typeof event !== "object" || event === null || !("event" in event) || event.event !== "$pageview"
+                || !("properties" in event) || typeof event.properties !== "object" || event.properties === null) continue;
+              const props = event.properties;
+              ingestionTokens.add("token" in props ? props.token : undefined);
+              if ("analytics_mode" in props && props.analytics_mode === "full" && "deployment_category" in props
+                && props.deployment_category === "preview" && "distinct_id" in props && typeof props.distinct_id === "string") {
+                identities.push(props.distinct_id);
+                identifiedIds.push("$user_id" in props ? props.$user_id : undefined);
+                if ("route_class" in props && props.route_class === "protected") protectedIdentities.push(props.distinct_id);
+              }
+            }
+          } catch { /* Config requests have no event envelope. */ }
+        }
+        await route.fulfill({ json: { status: 1, featureFlags: {}, sessionRecording: false } });
+      });
+      const panel = page.getByRole("region", { name: "Usage & privacy", exact: true });
+      const openChoices = async () => {
+        await expect(page.getByRole("heading", { name: "No owned profiles yet", exact: true })).toBeVisible(hostedExpectOptions);
+        if (!await panel.isVisible()) await page.getByRole("button", { name: "Usage & privacy", exact: true }).first().click();
+        await expect(panel).toBeVisible(hostedExpectOptions);
+      };
+      await page.goto("/account/privacy");
+      await openChoices();
+      await expect(panel.getByRole("button", { name: "On", exact: true })).toBeEnabled(hostedExpectOptions);
+      await panel.getByRole("button", { name: "On", exact: true }).click();
+      await expect(panel).toHaveCount(0, hostedExpectOptions);
+      await expect.poll(() => identities.length, hostedExpectOptions).toBeGreaterThan(0);
+      expect([...ingestionTokens]).toEqual(["phc_synthetic_analytics_acceptance"]);
+      const first = identities.at(-1);
+      if (!first) throw new Error("Consented account emitted no analytics identity");
+      expect(first).toMatch(/^[a-f0-9-]{36}$/);
+      expect(identifiedIds.at(-1)).toBe(first);
+      expect(protectedIdentities).toContain(first);
+      const beforeReload = identities.length;
+      await page.reload();
+      await expect.poll(() => identities.length, hostedExpectOptions).toBeGreaterThan(beforeReload);
+      expect(identities.at(-1)).toBe(first);
+      expect(identifiedIds.at(-1)).toBe(first);
+      await openChoices();
+      await context.setOffline(true);
+      await panel.getByRole("button", { name: "Off", exact: true }).click();
+      await expect.poll(() => page.evaluate(() => localStorage.getItem("vrdex-analytics-choice")), hostedExpectOptions).toBe("off");
+      off = true;
+      await page.evaluate(() => history.pushState({}, "", "/account/privacy?offline=synthetic"));
+      await context.setOffline(false);
+      await expect(panel).toHaveCount(0, hostedExpectOptions);
+      await page.evaluate(() => {
+        localStorage.removeItem("vrdex-analytics-choice");
+        localStorage.removeItem("vrdex-analytics-choice-owner");
+      });
+      await page.reload();
+      await openChoices();
+      await expect(panel.getByRole("button", { name: "Off", exact: true })).toHaveAttribute("aria-pressed", "true");
+      expect(requestsWhileOff).toBe(0);
+      off = false;
+      const beforeOn = identities.length;
+      await panel.getByRole("button", { name: "On", exact: true }).click();
+      await expect(panel).toHaveCount(0, hostedExpectOptions);
+      await expect.poll(() => identities.length, hostedExpectOptions).toBeGreaterThan(beforeOn);
+      expect(identities.at(-1)).toBe(first);
+      expect(identifiedIds.at(-1)).toBe(first);
+
+      await page.goto("/account");
+      await page.getByRole("button", { name: "Sign out", exact: true }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Sign out", exact: true }).click();
+      await expect(page).toHaveURL(/\/sign-in(?:\?|$)/, hostedExpectOptions);
+      other = await createClerkTestAccount(`analytics-${testInfo.workerIndex}-${Date.now()}`, { onEmailReserved: email => { otherEmail = email; } });
+      const beforeSwitch = protectedIdentities.length;
+      await signInClerkTestAccount(page, other, { onAuthenticated: () => { otherAuthenticated = true; } });
+      await page.goto("/account/privacy");
+      await openChoices();
+      await expect(panel.getByRole("button", { name: "On", exact: true })).toHaveAttribute("aria-pressed", "false");
+      expect(protectedIdentities).toHaveLength(beforeSwitch);
+      const beforeOther = identities.length;
+      await panel.getByRole("button", { name: "On", exact: true }).click();
+      await expect(panel).toHaveCount(0, hostedExpectOptions);
+      await expect.poll(() => identities.length, hostedExpectOptions).toBeGreaterThan(beforeOther);
+      const second = identities.at(-1);
+      expect(second).not.toBe(first);
+      expect(identifiedIds.at(-1)).toBe(second);
+      const beforeOtherReload = identities.length;
+      await page.reload();
+      await expect.poll(() => identities.length, hostedExpectOptions).toBeGreaterThan(beforeOtherReload);
+      expect(identities.at(-1)).toBe(second);
+      expect(identifiedIds.at(-1)).toBe(second);
+      expect([...ingestionTokens]).toEqual(["phc_synthetic_analytics_acceptance"]);
+      await openChoices();
+      await captureRouteScreenshot(page, testInfo, "account-analytics", { mask: unstableSignedInRegions(page, other.email) });
+    });
+  }
 
   test("developer tokens", async ({ page }, testInfo) => {
     await page.goto("/developers/tokens");

@@ -14,6 +14,42 @@ function runMcpProbe(script: string) {
     },
   });
 }
+
+it("advertised profile input schemas omit legacy schema IDs while runtime validation stays strict", () => {
+  runMcpProbe(`
+    import assert from "node:assert/strict";
+    import { createVrdexMcpHandler } from "./apps/web/src/lib/server/vrdex-mcp.ts";
+    const handler = createVrdexMcpHandler();
+    async function rpc(method, params) {
+      const response = await handler.fetch(new Request("https://app.example.test/mcp", {
+        method: "POST", headers: { accept: "application/json, text/event-stream", "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+      }));
+      const body = await response.text();
+      return JSON.parse(body.split(/\\r?\\n/).find(line => line.startsWith("data: "))?.slice(6) ?? body);
+    }
+    const tools = (await rpc("tools/list", {})).result.tools;
+    for (const name of ["vrdex_profile_submit", "vrdex_profile_update"]) {
+      const schema = tools.find(tool => tool.name === name).inputSchema;
+      assert.equal(schema.$defs.ApiProfileLinkInput.id, undefined, name);
+      assert.equal(schema.$defs.ProfileLinkType.id, undefined, name);
+      assert.equal(schema.$defs.ApiProfileLinkInput.properties.type.$ref, "#/$defs/ProfileLinkType");
+      if (name.endsWith("update")) assert.equal(schema.$defs.ApiProfileUpdateRequest.id, undefined);
+    }
+    for (const [name, input, field] of [
+      ["vrdex_profile_submit", { profileType: "invalid", displayName: "Probe", idempotencyKey: "schema-probe" }, "profileType"],
+      ["vrdex_profile_submit", { profileType: "community", displayName: "Probe" }, "idempotencyKey"],
+      ["vrdex_profile_update", { slug: "probe", idempotencyKey: "schema-probe", update: {} }, "expectedUpdatedAt"],
+      ["vrdex_profile_update", { slug: "probe", idempotencyKey: "schema-probe", update: { expectedUpdatedAt: 1, outboundLinks: [{ type: "invalid", url: "https://example.com" }] } }, "outboundLinks"],
+    ]) {
+      const result = await rpc("tools/call", { name, arguments: input });
+      assert.equal(result.result?.isError, true, JSON.stringify(result));
+      assert.match(result.result.content[0].text, /Input validation error/);
+      assert.ok(result.result.content[0].text.includes(field), JSON.stringify(result));
+    }
+    await handler.close();
+  `);
+});
 it("hosted profile reads preserve dated connections and name them in fetched documents", () => {
   const output = runMcpProbe(`
     import assert from "node:assert/strict";
@@ -3332,7 +3368,8 @@ it("advertises bounded private collection companions and no seed operator method
  `);
  const tools=jsonBodyFromProbe(output).result?.tools??[];
  const batchTools=tools.filter((t) =>t.name?.startsWith("vrdex_contribution_"),
-  );assert.equal(batchTools.length,11);
+  );assert.equal(batchTools.length,9);
+ for(const name of ["vrdex_contribution_capacity_request","vrdex_contribution_capacity_requests"])assert.equal(tools.some(tool=>tool.name===name),false,name);
  for(const tool of batchTools){const meta=tool._meta as {securitySchemes:{type:string;scopes:string[]}[]};assert.ok(meta.securitySchemes.every((s) =>s.type==="oauth2"));assert.ok(meta.securitySchemes.every((s) =>s.scopes.some(
           (scope) =>scope.includes(":contribute")||scope==="assets:review:read",
         ),
@@ -3409,7 +3446,7 @@ it("registered publication and withdrawal record definite backend refusals", () 
   assert.match(output, /publication and withdrawal refusals passed/);
 });
 
-it("registered capacity and upload callbacks persist outcomes without fabricating a refusal operation", () => {
+it("registered upload and review callbacks persist outcomes without fabricating a refusal operation", () => {
   const output = runMcpProbe(`
     import assert from "node:assert/strict";
     import { ConvexError } from "convex/values";
@@ -3420,19 +3457,16 @@ it("registered capacity and upload callbacks persist outcomes without fabricatin
     const t=convexTest({schema,modules}),s=await seed(t);
     const adminConvex={query:(ref,args)=>t.query(ref,args),mutation:(ref,args)=>{
       const name=getFunctionName(ref);
-      if(name==="contributionCapacity:request")return Promise.resolve({operationId:"capacity-1",operationState:"refused",code:"CAPACITY_ALLOWANCE_CONFLICT"});
       if(name==="contributionUploads:claim")throw new ConvexError({code:"UPLOAD_REFUSAL_RECEIPT_LIMIT"});
       return t.mutation(ref,args);
     }};
     const handler=createVrdexMcpHandler({verifyContributorEmail:async()=>true,adminConvex});
     const authInfo={token:"test",clientId:"client",scopes:["mcp:write","assets:contribute"],resource:new URL("https://app.example.test/mcp"),extra:{subjectType:"user",userId:s.contributorUserId,tokenId:"token",requestId:"request"}};
     async function call(name,args,target=handler,tokenInfo=authInfo){const response=await target.fetch(new Request("https://app.example.test/mcp",{method:"POST",headers:{accept:"application/json, text/event-stream","content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:1,method:"tools/call",params:{name,arguments:args}})}),{authInfo:tokenInfo});const body=await response.text();return JSON.parse(body.split(/\\r?\\n/).find(line=>line.startsWith("data: "))?.slice(6)??body).result;}
-    const capacity=await call("vrdex_contribution_capacity_request",{key:"request-1",kind:"trusted_contributor",evidence:"Collection",reason:"collection"});
-    assert.equal(capacity.structuredContent.operationState,"refused");
     const upload=await call("vrdex_media_upload_complete",{intentId:"intent",idempotencyKey:"same"});
     assert.equal(upload.isError,true);assert.match(upload.content[0].text,/UPLOAD_REFUSAL_RECEIPT_LIMIT/);assert.doesNotMatch(JSON.stringify(upload),/operationId/);
     const events=await t.run(ctx=>ctx.db.query("mcpToolEvents").collect());
-    for(const name of ["vrdex_contribution_capacity_request","vrdex_media_upload_complete"]){const event=events.find(row=>row.toolName===name);assert.equal(event?.result,"denied");assert.equal(event?.actorUserId,s.contributorUserId);assert.equal(event?.oauthClientId,"client");assert.equal(event?.oauthTokenId,"token");assert.equal(event?.requestId,"request");}
+    const event=events.find(row=>row.toolName==="vrdex_media_upload_complete");assert.equal(event?.result,"denied");assert.equal(event?.actorUserId,s.contributorUserId);assert.equal(event?.oauthClientId,"client");assert.equal(event?.oauthTokenId,"token");assert.equal(event?.requestId,"request");
     let decisions=0;
     const reviewer=createVrdexMcpHandler({verifyContributorEmail:async()=>true,adminConvex:{query:adminConvex.query,mutation:(ref,args)=>getFunctionName(ref)==="profileMediaSubmissions:decideForMcpActor"?Promise.resolve({operationId:"decision-"+(++decisions),operationState:decisions===1?"committed":"refused",code:decisions===1?undefined:"review_changed"}):t.mutation(ref,args)}});
     const reviewerAuth={...authInfo,scopes:["mcp:write","assets:review:write"],extra:{...authInfo.extra,userId:s.moderatorUserId}};
@@ -3442,7 +3476,7 @@ it("registered capacity and upload callbacks persist outcomes without fabricatin
     assert.equal(mixedEvent?.result,"denied");assert.equal(mixedEvent?.actorUserId,s.moderatorUserId);
     await reviewer.close();
     const failedLogger=createVrdexMcpHandler({verifyContributorEmail:async()=>true,adminConvex:{query:adminConvex.query,mutation:(ref,args)=>getFunctionName(ref)==="mcpToolEvents:recordWriteInvocation"?Promise.reject(new Error("logger unavailable")):adminConvex.mutation(ref,args)}});
-    assert.deepEqual(await call("vrdex_contribution_capacity_request",{key:"request-1",kind:"trusted_contributor",evidence:"Collection",reason:"collection"},failedLogger),capacity);
+    assert.deepEqual(await call("vrdex_media_upload_complete",{intentId:"intent",idempotencyKey:"same"},failedLogger),upload);
     await failedLogger.close();
     await handler.close();console.log("persisted outcomes passed");
   `);
@@ -3570,7 +3604,34 @@ it("filtered catalog preserves every descriptor emitted by the installed SDK", (
     for(const [name,tool] of Object.entries(app._registeredTools))sdk.registerTool(name,{title:tool.title,description:tool.description,inputSchema:tool.inputSchema,outputSchema:tool.outputSchema,annotations:tool.annotations,icons:tool.icons,execution:tool.execution,_meta:tool._meta},async()=>({content:[]}));
     const reference=createMcpHandler(()=>sdk,{legacy:"stateless"}),actual=createVrdexMcpHandler();
     async function list(handler){const response=await handler.fetch(new Request("https://app.example.test/mcp",{method:"POST",headers:{accept:"application/json, text/event-stream","content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:1,method:"tools/list",params:{}})}));const body=await response.text();return JSON.parse(body.split(/\\r?\\n/).find(line=>line.startsWith("data: "))?.slice(6)??body).result.tools;}
-    assert.deepEqual(await list(actual),(await list(reference)).filter(tool=>tool.name!=="vrdex_media_submission_declare"));
+    // Independent JSON Schema positions: the production cleaner is not the comparison oracle.
+    const maps = new Set(["$defs", "definitions", "dependentSchemas", "dependencies", "patternProperties", "properties"]);
+    const schemas = new Set(["additionalProperties", "unevaluatedProperties", "propertyNames", "contains", "items", "additionalItems", "unevaluatedItems", "not", "if", "then", "else", "contentSchema", "allOf", "anyOf", "oneOf", "prefixItems"]);
+    function assertInputSchema(observed, original, position = "schema") {
+      if (position === "data" || original === null || typeof original !== "object") {
+        assert.deepEqual(observed, original); return;
+      }
+      if (Array.isArray(original)) {
+        assert.ok(Array.isArray(observed)); assert.equal(observed.length, original.length);
+        original.forEach((value, index) => assertInputSchema(observed[index], value, position)); return;
+      }
+      const keys = Object.keys(original).filter(key => position !== "schema" || key !== "id");
+      assert.deepEqual(Object.keys(observed).sort(), [...keys].sort());
+      for (const key of keys) {
+        const next = position === "map" ? "schema" : maps.has(key) ? "map" : schemas.has(key) ? "schema" : "data";
+        assertInputSchema(observed[key], original[key], next);
+      }
+    }
+    // The oracle must reject constraint loss and data changes, not just leftover IDs.
+    assert.throws(() => assertInputSchema({type:"object"}, {type:"object",required:["id"]}));
+    assert.throws(() => assertInputSchema({default:{}}, {default:{id:"data"}}));
+    const observed = await list(actual), original = (await list(reference)).filter(tool => tool.name !== "vrdex_media_submission_declare");
+    assert.equal(observed.length, original.length);
+    original.forEach((tool, index) => {
+      const {inputSchema, ...metadata} = tool, {inputSchema: actualInput, ...actualMetadata} = observed[index];
+      assert.deepEqual(actualMetadata, metadata);
+      assertInputSchema(actualInput, inputSchema);
+    });
     await actual.close();await reference.close();await app.close();console.log("SDK descriptor parity passed");
   `);
   assert.match(output,/SDK descriptor parity passed/);

@@ -112,6 +112,7 @@ import type * as _mediaRelayOperations from "../_mediaRelayOperations.js";
 import type * as _mediaRelayTables from "../_mediaRelayTables.js";
 import type * as _mediaReview from "../_mediaReview.js";
 import type * as _mediaSubmissionCleanup from "../_mediaSubmissionCleanup.js";
+import type * as _membershipActivityIdentity from "../_membershipActivityIdentity.js";
 import type * as _oauth from "../_oauth.js";
 import type * as _oauthConsentTransactions from "../_oauthConsentTransactions.js";
 import type * as _opsAlerts from "../_opsAlerts.js";
@@ -385,6 +386,7 @@ declare const fullApi: ApiFromModules<{
   _mediaRelayTables: typeof _mediaRelayTables;
   _mediaReview: typeof _mediaReview;
   _mediaSubmissionCleanup: typeof _mediaSubmissionCleanup;
+  _membershipActivityIdentity: typeof _membershipActivityIdentity;
   _oauth: typeof _oauth;
   _oauthConsentTransactions: typeof _oauthConsentTransactions;
   _opsAlerts: typeof _opsAlerts;

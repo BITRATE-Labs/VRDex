@@ -264,6 +264,8 @@ export async function applyReviewDecision(
     actor,
     submission,
   );
+  if (args.decision === "approve" && profile.claimState !== "unclaimed" && !ownsProfile)
+    throw new ConvexError({ code: "MEDIA_TARGET_CLAIMED", message: "This profile has been claimed. Its owner manages its media." });
   if (args.decision === "approve" && (submission.requestKind !== "identity_placement" || submission.candidateAssetId !== undefined) &&
     !publicKitAvailable(profile))
     throw new ConvexError({ code: "MEDIA_RESOURCE_UNAVAILABLE", message: "Media contribution unavailable." });
@@ -728,6 +730,8 @@ export async function decideReviewCommand(
     profile.publicSurfacingState !== "public"
   )
     code = "target_unavailable";
+  else if (args.decision === "approve" && profile.claimState !== "unclaimed" && !authority.ownsProfile)
+    code = "target_claimed";
   else if (args.decision === "approve" && (submission.requestKind !== "identity_placement" || submission.candidateAssetId !== undefined) &&
     !publicKitAvailable(profile)) code = "target_unavailable";
   else if (snapshot.reviewVersion !== args.expectedReviewVersion)

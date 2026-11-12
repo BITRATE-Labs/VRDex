@@ -1,7 +1,10 @@
 import { VrchatProviderError } from "./vrchat-client.mjs";
 
-// https://raw.githubusercontent.com/vrchatapi/specification/main/openapi/components/schemas/GroupAuditLogEntry.yaml
-// actorDisplayName identifies the actor, not necessarily the membership target.
+const uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const userId = new RegExp(`^usr_${uuid}$`, "i");
+const roleId = new RegExp(`^grol_${uuid}$`, "i");
+const name = value => typeof value === "string" && value.trim() && value.length <= 200 && !/[\u0000-\u001f\u007f]/u.test(value) ? value.trim() : undefined;
+// vrchatapi/specification@088c09ecc9f6d61334693e667fd4f1d458b03e14, GroupAuditLogDataGroupMemberRole.
 export function normalizeMembershipAuditPage(items, { groupId, startAt, endAt }) {
   const invalid = () => { throw new VrchatProviderError("Malformed membership audit page.", { category: "schema_drift" }); };
   if (!Array.isArray(items) || items.length > 100 || !Number.isSafeInteger(startAt) || !Number.isSafeInteger(endAt) || endAt <= startAt) invalid();
@@ -10,10 +13,22 @@ export function normalizeMembershipAuditPage(items, { groupId, startAt, endAt })
         typeof item.eventType !== "string" || !item.eventType || item.eventType.length > 200 || typeof item.created_at !== "string") invalid();
     const occurredAt = Date.parse(item.created_at);
     if (!Number.isSafeInteger(occurredAt)) invalid();
-    // The provider's date filters may include the upper boundary; storage uses half-open ranges.
     if (occurredAt < startAt || occurredAt >= endAt) return [];
-    return [{ auditId: item.id, eventType: item.eventType, occurredAt,
-      ...(typeof item.targetId === "string" && /^usr_[0-9a-f-]{36}$/i.test(item.targetId) ? { targetUserId: item.targetId } : {}),
-    }];
+    const event = { auditId: item.id, eventType: item.eventType, occurredAt };
+    if (typeof item.targetId === "string" && userId.test(item.targetId)) event.targetUserId = item.targetId;
+    if (typeof item.actorId === "string" && userId.test(item.actorId)) {
+      event.actorUserId = item.actorId.toLowerCase();
+      const actorName = name(item.actorDisplayName);
+      if (actorName) event.actorDisplayName = actorName;
+    }
+    if (["group.member.role.assign", "group.member.role.unassign"].includes(item.eventType)) {
+      const data = item.data;
+      if (data && typeof data === "object") {
+        if (typeof data.roleId === "string" && roleId.test(data.roleId)) event.roleId = data.roleId.toLowerCase();
+        const roleName = name(data.roleName);
+        if (roleName) event.roleName = roleName;
+      }
+    }
+    return [event];
   });
 }

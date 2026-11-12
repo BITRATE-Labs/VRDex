@@ -620,3 +620,54 @@ it("known unavailable contribution returns the stable tool refusal", async () =>
   assert.equal(result.isError, true);
   assert.deepEqual(result.content, [{ type: "text", text: "Contribution unavailable." }]);
 });
+
+it("review list follows empty batch checkpoints before reporting the queue", async () => {
+  const cursors: unknown[] = [];
+  const handlers = createMcpMediaReviewHandlers(dependencies({ query: async (name, args) => {
+    assert.equal(name, "list");
+    const cursor = (args.paginationOpts as { cursor: unknown }).cursor;
+    cursors.push(cursor);
+    return cursor === null ? { page: [], continueCursor: "checkpoint", isDone: false }
+      : { page: [detail()], continueCursor: "done", isDone: true };
+  } }));
+  const result = await handlers.list({ batchId: "batch" });
+  assert.deepEqual(cursors, [null, "checkpoint"]);
+  assert.equal((result.structuredContent as { page: unknown[] }).page.length, 1);
+});
+
+it("refreshes email attestation across a slow checkpoint traversal", async () => {
+  let now = 2000, calls = 0, checks = 0;
+  const handlers = createMcpMediaReviewHandlers(dependencies({ now: () => now,
+    verifyContributorEmail: async () => { checks++; return true; },
+    query: async (_name, args) => {
+      assert.equal(args.emailVerificationAttestedAt, now);
+      if (++calls === 1) { now += 121000; return { page: [], continueCursor: "later", isDone: false }; }
+      return { page: [detail()], continueCursor: "done", isDone: true };
+    },
+  }));
+  const result = await handlers.list({ batchId: "batch" });
+  assert.equal((result.structuredContent as { page: unknown[] }).page.length, 1);
+  assert.equal(checks, 2);
+});
+
+it("keeps the last cursor with an explicit error if a checkpoint stops advancing", async () => {
+  let calls = 0;
+  const handlers = createMcpMediaReviewHandlers(dependencies({ query: async () => {
+    calls++; return { page: [], continueCursor: "last-good", isDone: false };
+  } }));
+  const result = await handlers.list({ batchId: "batch" });
+  assert.equal(calls, 2);
+  assert.equal(result.isError, true);
+  assert.equal(result.structuredContent?.continueCursor, "last-good");
+  assert.ok(result.content.some(item => item.type === "text" && item.text === "PAGE_CURSOR_INVALID"));
+});
+it("keeps a resumable cursor after bounded empty checkpoint traversal", async () => {
+  let calls = 0;
+  const handlers = createMcpMediaReviewHandlers(dependencies({ query: async () => ({
+    page: [], continueCursor: String(++calls), isDone: false,
+  }) }));
+  const result = await handlers.list({ batchId: "batch" });
+  assert.equal(calls, 41);
+  assert.equal(result.structuredContent?.continueCursor, "41");
+  assert.equal(result.structuredContent?.isDone, false);
+});

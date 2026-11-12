@@ -904,6 +904,7 @@ export default defineSchema({
     .index("by_requestedBy", ["requestedBy.tokenIdentifier"]),
   contributionCapacity: defineTable({
     scope: v.string(), bytes: v.number(), processing: v.number(),
+    submissionTimes: v.optional(v.array(v.number())),
     byteLimit: v.optional(v.number()), processingLimit: v.optional(v.number()),
   }).index("by_scope", ["scope"]),
   contributionUploadReservations: defineTable({
@@ -1969,6 +1970,10 @@ export default defineSchema({
     occurredAt: v.number(),
     targetUserId: v.optional(v.string()),
     targetDisplayName: v.optional(v.string()),
+    actorUserId: v.optional(v.string()),
+    actorDisplayName: v.optional(v.string()),
+    roleId: v.optional(v.string()),
+    roleName: v.optional(v.string()),
     receivedAt: v.number(),
     verified: v.boolean(),
   }).index("by_audit", ["integrationId", "epochStartedAt", "auditId"])

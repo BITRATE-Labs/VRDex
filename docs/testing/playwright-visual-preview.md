@@ -365,21 +365,20 @@ Each data-flow run uses a unique `VRDEX_E2E_RUN_ID` prefix and creates only `e2e
 
 ## CI behavior
 
-The API/MCP, backend and restream host prerequisite steps give the
-[Linux Kernel Archives Ubuntu mirror](https://mirrors.kernel.org/) explicit APT priority
-over the runner's Canonical mirrors to reduce reliance on Canonical DNS.
-The runner's HTTPS fallbacks and Ubuntu package-signature verification remain in place.
+The API/MCP, backend and restream host prerequisite steps prefer the official
+HTTPS Ubuntu archive. Shared mirror setup removes the previously preferred
+kernel mirror and Azure archive entries while preserving other mirror-list fallbacks.
+APT HTTP and HTTPS connection/data inactivity timeouts are 15 seconds with one
+retry. These are acquisition bounds, not total transaction deadlines. Ubuntu
+package-signature verification and existing job time limits remain in place.
 Installation keeps its five-minute bound. The native transport gate still uses its packaged runtime.
 Docker container creation has a 30-second startup bound within a seven-minute outer
 deadline and an eight-minute CI step. This preserves the native suite's full allowance.
 Playwright browser installs in baseline, deployed-health, and staging workflows, plus
-synthetic-media installation, prepare the same independent mirror through
+synthetic-media installation, prepare the same mirror and acquisition settings through
 `.github/scripts/configure-ubuntu-mirror.mjs` before installing dependencies. These install
 steps have a ten-minute timeout for system dependencies and browser downloads. The helper logs the effective mirror list and
 retains Ubuntu package signature verification and the existing HTTPS fallbacks.
-Individual APT HTTP/HTTPS requests have a 15-second inactivity timeout and one
-retry, so an unresponsive preferred mirror cannot consume the whole install
-window before fallback. These settings apply only to CI's APT configuration.
 Runners without a mirror-list file explicitly report that their configured sources
 remain in use.
 Linux tests execute the helper against disposable missing, empty, unterminated and

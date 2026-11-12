@@ -17,25 +17,6 @@ import {
 } from "./mcp-media-upload";
 export const contributionOperations = {
   capacity: z.strictObject({}),
-  request: z.strictObject({
-    key: z.string().min(1).max(128),
-    kind: z.enum(["trusted_contributor", "batch_allowance"]),
-    evidence: z.string().min(1).max(2000),
-    reason: z.enum(["collection", "reconsideration", "temporary_batch"]),
-    batchId: z.string().optional(),
-    rows: z.number().int().min(1).max(10000).optional(),
-    bytes: z
-      .number()
-      .int()
-      .min(1)
-      .max(20 * 1024 ** 3)
-      .optional(),
-    expiresAt: z.number().int().positive().optional(),
-  }),
-  requests: z.strictObject({
-    cursor: z.string().nullable().default(null),
-    limit: z.number().int().min(1).max(40).default(20),
-  }),
   status: z.strictObject({
     cursor: z.string().nullable().default(null),
     limit: z.number().int().min(1).max(40).default(20),
@@ -62,19 +43,6 @@ export function createMcpContributionHandlers(deps: {
     const authority = await deps.authority();
     if (operation === "capacity")
       return admin().query(internal.contributionCapacity.get, authority);
-    if (operation === "request") {
-      const input = contributionOperations.request.parse(raw);
-      return admin().mutation(internal.contributionCapacity.request, {
-        ...authority,
-        ...input,
-        batchId: input.batchId as Id<"contributionBatches"> | undefined,
-      });
-    }
-    if (operation === "requests")
-      return admin().query(internal.contributionCapacity.requests, {
-        ...authority,
-        ...contributionOperations.requests.parse(raw),
-      });
     if (operation === "status") {
       const input = contributionOperations.status.parse(raw);
       return admin().query(internal.contributionCapacity.status, {

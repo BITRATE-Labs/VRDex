@@ -118,12 +118,12 @@ for (const scenario of [
   });
 }
 
-it("separates the publisher grant from admin and reviewer authority", () => {
+it("separates reviewer capacity from publication and grants superadmins explicit publication", () => {
   for (const feature of ["super_admin", "media_reviewer"] as const) {
     assert.equal(
       accountFeatureAccessFromGrants([{ feature, state: "active" }], Date.now())
         .canPublishMedia,
-      false,
+      feature === "super_admin",
     );
   }
   const facts: PublicationFacts = {
@@ -209,7 +209,12 @@ it("publishes a community logo, preserves independent self-review refusal, and r
     (await f.t.run((ctx) => ctx.db.query("profileAssets").collect())).length,
     1,
   );
-  await f.t.run((ctx) => ctx.db.patch(f.grantId, { state: "revoked" }));
+  await f.t.run(async (ctx) => {
+    for (const grant of await ctx.db.query("accountFeatureGrants").withIndex("by_userId_feature_state", q =>
+      q.eq("userId", f.s.contributorUserId).eq("feature", "super_admin").eq("state", "active")).collect())
+      await ctx.db.patch(grant._id, { state: "revoked" });
+    await ctx.db.patch(f.grantId, { state: "revoked" });
+  });
   await assert.rejects(
     f.actor.mutation(api.profileMediaSubmissions.publish, input),
     /publication access/,
@@ -633,5 +638,22 @@ for (const kind of ["vrchat_user", "vrchat_group", "discord_guild"] as const) {
     assert.equal(receipt.code, "review_changed");
     assert.equal((await f.t.run(ctx => ctx.db.query("profileAssets").collect())).length, 0);
     assert.equal((await f.publish()).operationState, "committed");
+  });
+}
+
+it("a superadmin explicitly publishes their own validated logo without a separate publisher grant", async () => {
+  const f = await fixture();
+  await f.t.run(ctx => ctx.db.patch(f.grantId, { feature: "super_admin" }));
+  assert.equal((await f.t.run(ctx => ctx.db.get(f.intent.submissionId)))?.status, "submitted");
+  assert.equal((await f.publish()).operationState, "committed");
+  const submission = await f.t.run(ctx => ctx.db.get(f.intent.submissionId));
+  assert.equal(submission?.publicationActorUserId, f.s.contributorUserId);
+  assert.equal(submission?.reviewer, undefined);
+});
+for (const feature of ["media_reviewer", "trusted_contributor"] as const) {
+  it(`${feature} capacity never grants publication`, async () => {
+    const f = await fixture();
+    await f.t.run(ctx => ctx.db.patch(f.grantId, { feature }));
+    await assert.rejects(f.publish(), /publication access/);
   });
 }

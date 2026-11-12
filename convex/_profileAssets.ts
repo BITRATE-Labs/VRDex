@@ -393,6 +393,9 @@ export function sanitizeProfileAssetCreditUrl(value: string | undefined): string
     if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
       throw new Error("Credit links must use HTTP or HTTPS without embedded credentials.");
     }
+    if (url.href.length > PROFILE_ASSET_CREDIT_URL_MAX_LENGTH) {
+      throw new Error(`Credit links must be ${PROFILE_ASSET_CREDIT_URL_MAX_LENGTH} characters or fewer.`);
+    }
     return url.href;
   } catch (error) {
     if (error instanceof Error && error.message.includes("Credit links")) {
@@ -1070,8 +1073,13 @@ export async function finalizeProfileAssetUploadIntentUpload(
   }
   if(intent.purpose === "community_proposal"){
     if(process.env.VRDEX_CONTRIBUTION_INTAKE_PAUSED === "true")throw new Error("CONTRIBUTION_INTAKE_PAUSED");
-    const contribution=intent.targetSubmissionId?await db.get(intent.targetSubmissionId):null;
-    if(contribution)await assertCapacityNotRevoked(db,contribution.submitterUserId,contribution.createdAt);
+    const contribution = intent.targetSubmissionId ? await db.get(intent.targetSubmissionId) : null;
+    const profile = contribution ? await db.get(contribution.profileId) : null;
+    if (!contribution || !profile || intent.targetProfileId !== profile._id ||
+      profile.claimState !== "unclaimed" || profile.publicationState !== "published" ||
+      profile.publicSurfacingState !== "public")
+      throw new ConvexError({ code: "MEDIA_RESOURCE_UNAVAILABLE", message: "Media contribution unavailable." });
+    await assertCapacityNotRevoked(db, contribution.submitterUserId, contribution.createdAt);
   }
 
   if (intent.targetProfileId !== undefined && intent.purpose !== "community_proposal") {

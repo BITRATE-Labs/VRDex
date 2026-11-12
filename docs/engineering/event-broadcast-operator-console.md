@@ -70,8 +70,11 @@ deadline and Stop uses its request time plus the existing 30-second grace period
 Expired lifecycle evidence becomes Unknown. Fresh per-output health takes priority
 over the lifecycle label. Only the active primary destination can fall back to
 the session lifecycle; unobserved simulcast and revoked destinations stay Unknown. Ended sessions
-display Off air and no observed mode while cleanup still locks Start; an error
-remains Unknown until output cleanup unlocks configuration. Missing active sessions
+display Off air and no observed mode while cleanup still locks Start. The worker
+synchronously fences publication with `outputs.stopNow()` before acknowledging
+Stop as ended; process-stop confirmation and resource cleanup follow separately.
+Lease loss records error, which remains Unknown until output cleanup unlocks
+configuration. Missing active sessions
 and stale live observations never inherit another session's output.
 The failed-session placeholder says Error while its unconfirmed output stays
 Unknown; a never-started broadcast shows Off air.
