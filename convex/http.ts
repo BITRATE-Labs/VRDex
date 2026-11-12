@@ -268,6 +268,7 @@ const telemetryWorker = httpAction(async (ctx, request) => {
         workerKeyHash: presentedHash,
         epochStartedAt: body.epochStartedAt,
         authority: body.authority,
+        ...(body.roles !== undefined ? { roles: body.roles } : {}),
       } as never));
     }
     if (body.operation === "club_read_claim" || body.operation === "club_read_complete") {
@@ -305,6 +306,15 @@ const telemetryWorker = httpAction(async (ctx, request) => {
         now,
       } as never);
       return json({ ok: true });
+    }
+    if (body.operation.startsWith("membership_recovery_")) {
+      const scope = { ...common, workerKeyHash: presentedHash, epochStartedAt: body.epochStartedAt, groupId: body.groupId };
+      if (body.operation === "membership_recovery_claim") return json(await ctx.runMutation(internal.clubMembershipRecovery.claim, scope as never));
+      const lease = { ...scope, recoveryId: body.recoveryId, expectedRevision: body.expectedRevision };
+      if (body.operation === "membership_recovery_check") return json(await ctx.runMutation(internal.clubMembershipRecovery.check, lease as never));
+      if (body.operation === "membership_recovery_failure") return json(await ctx.runMutation(internal.clubMembershipRecovery.recordFailure, { ...lease, rateLimited: body.rateLimited, retryAfterMs: body.retryAfterMs } as never));
+      if (body.operation === "membership_recovery_page") return json(await ctx.runMutation(internal.clubMembershipRecovery.recordPage, { ...lease, offset: body.offset, events: body.events, rawAuditIds: body.rawAuditIds, sourceCount: body.sourceCount, exhausted: body.exhausted } as never));
+      return json({ error: "invalid_operation" }, 400);
     }
     if (body.operation === "membership_scan_begin" || body.operation === "membership_scan_page" || body.operation === "membership_scan_resume" || body.operation === "membership_scan_finalize") {
       const scope = {...common, workerKeyHash: presentedHash, epochStartedAt: body.epochStartedAt, groupId: body.groupId};

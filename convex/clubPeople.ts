@@ -67,7 +67,8 @@ async function sourceTargets(ctx: Ctx, integration: Integration, actor: ClubActo
       if (integration.namedMembershipCollectionEnabled === false) throw new Error("History unavailable.");
       const event = await ctx.db.get(source.eventId);
       if (!event?.verified || event.integrationId !== integration._id || event.epochStartedAt !== epoch(integration)) throw new Error("Event unavailable.");
-      return targets([{ id: event.targetUserId, name: event.targetDisplayName }, { id: event.actorUserId, name: event.actorDisplayName }], source, Number.MAX_SAFE_INTEGER, true, event.occurredAt);
+      const supplemental = await ctx.db.query("communityMembershipEvidence").withIndex("by_audit", q => q.eq("integrationId", integration._id).eq("epochStartedAt", epoch(integration)).eq("auditId", event.auditId)).unique();
+      return targets([{ id: event.targetUserId, name: event.targetDisplayName }, { id: event.actorUserId ?? supplemental?.actorUserId, name: event.actorDisplayName ?? supplemental?.actorDisplayName }], source, Number.MAX_SAFE_INTEGER, true, event.occurredAt);
     }
     case "review": {
       const view = await ctx.db.get(source.viewId);

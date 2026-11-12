@@ -5,6 +5,7 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 crons.interval("sweep private people references", { minutes: 10 }, internal.clubPeople.sweep, {});
+crons.interval("sweep membership recovery scopes", { minutes: 10 }, internal.clubMembershipRecovery.sweep, {});
 crons.hourly("prune completed broadcast connection tests", {minuteUTC: 35}, internal.eventBroadcastConnectionTests.pruneConnectionTests, {});
 crons.interval("refresh admission monitoring", { minutes: 1 }, makeFunctionReference<"mutation">("groupObservations:refreshAdmissionMonitoring"), {});
 

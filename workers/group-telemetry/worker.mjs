@@ -4,6 +4,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { VrchatClient, VrchatProviderError } from "./vrchat-client.mjs";
 import { refreshClubAuthority } from "./club-authority.mjs";
 import { collectMembershipPage } from "./membership-collection.mjs";
+import { recoverMembershipPage } from "./membership-recovery.mjs";
 import { budgetedClubProvider } from "./club-request-budget.mjs";
 import { ClubProvider } from "./club-provider.mjs";
 import { readClubProviderJob } from "./club-read-jobs.mjs";
@@ -438,6 +439,15 @@ async function collect(assignment) {
           continue;
         }
         if (!result?.collected) break;
+      }
+      if (!stopping && Date.now() < deadline) {
+        try {
+          await recoverMembershipPage({ assignment, authority, provider, control, expectedUserId: secret.vrchatUserId,
+            accountBudget, integrationBudget, shouldStop: () => stopping, deadline });
+        } catch (error) {
+          if (["authentication", "rate_limit", "membership"].includes(error?.category) || /^Control plane (401|403|429):/.test(error?.message ?? "")) throw error;
+          logEvent({ event: "membership_recovery_failed", category: boundedProviderCategory(error?.category) });
+        }
       }
     }
   } catch (error) {

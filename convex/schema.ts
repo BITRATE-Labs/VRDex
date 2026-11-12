@@ -1,3 +1,4 @@
+import { membershipRecoveryTables } from "./_clubMembershipRecoveryTables";
 import { peopleSource, peopleReferenceSource, peopleStatus } from "./_clubPeople";
 import {managedConnectionValidator,connectionProvider} from "./_eventBroadcastConnections";
 import { mediaRelayTables } from "./_mediaRelayTables";
@@ -726,6 +727,7 @@ const sharedProfileFields = {
 };
 
 export default defineSchema({
+  ...membershipRecoveryTables,
   ...mediaRelayTables,
   clubPeopleViews: defineTable({
     communityProfileId: v.id("profiles"), integrationId: v.id("communityVrchatIntegrations"), epochStartedAt: v.number(),
@@ -1998,7 +2000,10 @@ export default defineSchema({
     verified: v.boolean(),
   }).index("by_audit", ["integrationId", "epochStartedAt", "auditId"])
     .index("by_time", ["integrationId", "epochStartedAt", "occurredAt"])
-    .index("by_verified_time", ["integrationId", "epochStartedAt", "verified", "occurredAt"]),
+    .index("by_verified_time", ["integrationId", "epochStartedAt", "verified", "occurredAt"])
+    .index("by_verified_target_time", ["integrationId", "epochStartedAt", "verified", "targetUserId", "occurredAt"])
+    .index("by_verified_type_time", ["integrationId", "epochStartedAt", "verified", "eventType", "occurredAt"])
+    .index("by_verified_target_type_time", ["integrationId", "epochStartedAt", "verified", "targetUserId", "eventType", "occurredAt"]),
   communityMembershipCoverage: defineTable({
     integrationId: v.id("communityVrchatIntegrations"),
     epochStartedAt: v.number(),

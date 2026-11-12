@@ -1,3 +1,5 @@
+import { membershipRecoveryProjection, recoveryProvenance } from "./_membershipRecoveryProjection";
+import { validUserId } from "./_clubMembershipRecovery";
 import { admitVerifiedAudit } from "./clubPeople";
 import { membershipActivityIdentities, membershipIdentity } from "./_membershipActivityIdentity";
 import { readCollectionSubject, readManagedIntegration, resolveGroupObservationPolicy } from "./_groupObservationPolicy";
@@ -23,7 +25,7 @@ import {
   mergeCoverage,
   membershipMovement,
 } from "./_clubMembership";
-const event = v.object({
+export const event = v.object({
   auditId: v.string(),
   eventType: v.string(),
   occurredAt: v.number(),
@@ -34,12 +36,12 @@ const event = v.object({
     roleId: v.optional(v.string()),
     roleName: v.optional(v.string()),
 });
-const scope = {
+export const scope = {
   integrationId: v.id("communityVrchatIntegrations"),
   epochStartedAt: v.number(),
   groupId: v.string(),
 };
-const workerScope = {
+export const workerScope = {
   collectorAccountId: v.id("collectorAccounts"),
   workerKeyHash: v.string(),
   workerId: v.string(),
@@ -51,7 +53,7 @@ type WorkerScope = {
   workerId: string;
   fencingToken: number;
 };
-async function authorizeWorker(
+export async function authorizeWorker(
   ctx: MutationCtx,
   args: WorkerScope & {
     integrationId: Id<"communityVrchatIntegrations">;
@@ -114,7 +116,7 @@ function projectScan(scan: {
     complete: scan.complete,
   };
 }
-async function active(
+export async function active(
   ctx: QueryCtx | MutationCtx,
   args: {
     integrationId: Id<"communityVrchatIntegrations">;
@@ -526,15 +528,18 @@ export const listActivity = query({
     startAt: v.number(),
     endAt: v.number(),
     paginationOpts: paginationOptsValidator,
+    targetUserId: v.optional(v.string()),
+    eventType: v.optional(v.string()),
   },
   returns: v.object({
-    page: v.array(v.object({ ...event.fields, targetIdentity: v.optional(membershipIdentity), actorIdentity: v.optional(membershipIdentity) })),
+    page: v.array(v.object({ ...event.fields, ...recoveryProvenance, targetIdentity: v.optional(membershipIdentity), actorIdentity: v.optional(membershipIdentity) })),
     isDone: v.boolean(),
     continueCursor: v.string(),
     scopeUnavailable: v.optional(v.literal(true)),
   }),
   handler: async (ctx, args) => {
     checkedMembershipRange(args.startAt, args.endAt, 366 * DAY_MS);
+    if ((args.targetUserId !== undefined && !validUserId(args.targetUserId)) || (args.eventType !== undefined && (!args.eventType || args.eventType.length > 200))) throw new Error("Invalid membership filter.");
     if (
       !Number.isInteger(args.paginationOpts.numItems) ||
       args.paginationOpts.numItems < 1 ||
@@ -544,28 +549,26 @@ export const listActivity = query({
     const state = await readContext(ctx, args.communitySlug, true);
     if (!state) return { page: [], isDone: true, continueCursor: "", scopeUnavailable: true as const };
     try {
-      const result = await ctx.db
-        .query("communityMembershipEvents")
-        .withIndex("by_verified_time", (q) =>
-          q
-            .eq("integrationId", state.integrationId)
-            .eq("epochStartedAt", state.epochStartedAt)
-            .eq("verified", true)
-            .gte("occurredAt", args.startAt)
-            .lt("occurredAt", args.endAt),
-        )
-        .order("desc")
-        .paginate(args.paginationOpts);
+      const events = ctx.db.query("communityMembershipEvents");
+      const filtered = args.targetUserId !== undefined && args.eventType !== undefined
+        ? events.withIndex("by_verified_target_type_time", q => q.eq("integrationId", state.integrationId).eq("epochStartedAt", state.epochStartedAt).eq("verified", true).eq("targetUserId", args.targetUserId).eq("eventType", args.eventType!).gte("occurredAt", args.startAt).lt("occurredAt", args.endAt))
+        : args.targetUserId !== undefined
+          ? events.withIndex("by_verified_target_time", q => q.eq("integrationId", state.integrationId).eq("epochStartedAt", state.epochStartedAt).eq("verified", true).eq("targetUserId", args.targetUserId).gte("occurredAt", args.startAt).lt("occurredAt", args.endAt))
+          : args.eventType !== undefined
+            ? events.withIndex("by_verified_type_time", q => q.eq("integrationId", state.integrationId).eq("epochStartedAt", state.epochStartedAt).eq("verified", true).eq("eventType", args.eventType!).gte("occurredAt", args.startAt).lt("occurredAt", args.endAt))
+            : events.withIndex("by_verified_time", q => q.eq("integrationId", state.integrationId).eq("epochStartedAt", state.epochStartedAt).eq("verified", true).gte("occurredAt", args.startAt).lt("occurredAt", args.endAt));
+      const result = await filtered.order("desc").paginate(args.paginationOpts);
+      const projectedRows = await Promise.all(result.page.map(row => membershipRecoveryProjection(ctx, row)));
       let identities: Awaited<ReturnType<typeof membershipActivityIdentities>> = new Map();
       try {
-        identities = await membershipActivityIdentities(ctx, result.page.flatMap(row => [row.targetUserId, row.actorUserId].filter((id): id is string => !!id)));
+        identities = await membershipActivityIdentities(ctx, projectedRows.flatMap(row => [row.targetUserId, row.actorUserId].filter((id): id is string => !!id)));
       } catch (error) {
         console.error("Membership activity identity enrichment failed", error);
       }
       return {
         isDone: result.isDone,
         continueCursor: result.continueCursor,
-        page: result.page.map(row => ({
+        page: projectedRows.map(row => ({
           auditId: row.auditId,
           eventType: row.eventType,
           occurredAt: row.occurredAt,
@@ -573,8 +576,12 @@ export const listActivity = query({
           ...(row.targetDisplayName ? { targetDisplayName: row.targetDisplayName } : {}),
           ...(row.actorUserId ? { actorUserId: row.actorUserId } : {}),
           ...(row.actorDisplayName ? { actorDisplayName: row.actorDisplayName } : {}),
+          ...(row.actorNameSource ? { actorNameSource: row.actorNameSource } : {}),
           ...(row.roleId ? { roleId: row.roleId } : {}),
           ...(row.roleName ? { roleName: row.roleName } : {}),
+          ...(row.roleNameSource ? { roleNameSource: row.roleNameSource } : {}),
+          ...(row.roleNameObservedAt !== undefined ? { roleNameObservedAt: row.roleNameObservedAt } : {}),
+          ...(row.evidenceRecoveredAt !== undefined ? { evidenceRecoveredAt: row.evidenceRecoveredAt } : {}),
           ...(row.targetUserId && identities.has(row.targetUserId.toLowerCase()) ? { targetIdentity: identities.get(row.targetUserId.toLowerCase()) } : {}),
           ...(row.actorUserId && identities.has(row.actorUserId.toLowerCase()) ? { actorIdentity: identities.get(row.actorUserId.toLowerCase()) } : {}),
         })),
