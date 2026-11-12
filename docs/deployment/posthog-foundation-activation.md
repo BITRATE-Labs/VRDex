@@ -29,6 +29,8 @@ subscriptions, null usage limits, `no_billing_limit=false`, and no custom USD
 limit for either product. These fields do not establish an effective spending
 ceiling. No billing setting was changed. Keep proxy request volume visible;
 recording sample rate alone does not bound analytics or Vercel costs.
+Refresh the effective billing limits and exact provider settings diff
+immediately before the separate production approval.
 
 Signed-in analytics acceptance uses the existing isolated preview workflow,
 a fake ingestion key and intercepted transport. See

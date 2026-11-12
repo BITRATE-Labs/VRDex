@@ -308,6 +308,7 @@ jobs:
         if: inputs.analytics_acceptance
         run: |
           sed -i -E '/^NEXT_PUBLIC_POSTHOG_(FOUNDATION_ENABLED|LIMITED_ENABLED|KEY|DEPLOYMENT_CATEGORY)=/d' .vercel/.env.preview.local
+          printf '\n' >> .vercel/.env.preview.local
           cat <<'ENV' | tee -a "$GITHUB_ENV" .vercel/.env.preview.local > /dev/null
           NEXT_PUBLIC_POSTHOG_FOUNDATION_ENABLED=true
           NEXT_PUBLIC_POSTHOG_LIMITED_ENABLED=false
