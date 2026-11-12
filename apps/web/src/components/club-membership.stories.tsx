@@ -102,8 +102,8 @@ class MembershipFixtureClient extends ConvexReactClient {
     const pagination = input.paginationOpts;
     if (!pagination || typeof pagination !== "object" || !("numItems" in pagination) || typeof pagination.numItems !== "number" || !("cursor" in pagination)) throw new Error("Missing pagination");
     const offset = Number(pagination.cursor ?? 0);
-    if (pagination.numItems !== 25) throw new Error("Restoration must preserve 25-row page boundaries");
-    const end = "endCursor" in pagination && typeof pagination.endCursor === "string" ? Number(pagination.endCursor) : Math.min(300, offset + pagination.numItems - (this.newest && offset === 0 ? 1 : 0));
+    const pageSize = pagination.numItems;
+    if (pageSize !== 25) throw new Error("Restoration must preserve 25-row page boundaries");
     let observedNewest: boolean | undefined;
     let value: FunctionReturnType<typeof import("@convex-generated-api").api.clubMembership.listActivity> | undefined;
     return {
@@ -115,6 +115,7 @@ class MembershipFixtureClient extends ConvexReactClient {
         if (this.paused && offset >= 75) return undefined;
         if (observedNewest !== this.newest) {
           observedNewest = this.newest;
+          const end = "endCursor" in pagination && typeof pagination.endCursor === "string" ? Number(pagination.endCursor) : Math.min(300, offset + pageSize - (this.newest && offset === 0 ? 1 : 0));
           const first = offset === 0 && this.newest ? -1 : offset;
           value = { page: Array.from({ length: end - first }, (_, index) => ({ auditId: `fixture-${first + index}`, eventType: "group.member.join", occurredAt: start, targetDisplayName: `Fixture member ${first + index}` })), isDone: end === 300, continueCursor: String(end) };
         }
@@ -124,8 +125,8 @@ class MembershipFixtureClient extends ConvexReactClient {
     };
   }
 }
-function PaginationPreview() {
-  const [client] = useState(() => new MembershipFixtureClient());
+function PaginationPreview({ initialFailure = false }: { initialFailure?: boolean }) {
+  const [client] = useState(() => { const client = new MembershipFixtureClient(); client.failAll = initialFailure; return client; });
   const [mounted, setMounted] = useState(true);
   return <ConvexProvider client={client}>
     <div className="flex flex-wrap gap-3 p-5">
@@ -144,3 +145,4 @@ function PaginationPreview() {
   </ConvexProvider>;
 }
 export const PaginationAndAccess: Story = { render: () => <PaginationPreview /> };
+export const InitialActivityFailure: Story = { render: () => <PaginationPreview initialFailure /> };

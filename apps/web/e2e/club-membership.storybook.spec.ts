@@ -198,3 +198,22 @@ test("membership access recovery starts a fresh cursor chain @storybook-visual",
     await expect(page.locator("p.font-medium").filter({ hasText: new RegExp(`^Fixture member ${index}$`) })).toHaveCount(1);
   }
 });
+
+test("membership pages stay contiguous when new events arrive @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership--pagination-and-access&viewMode=story");
+  await expect(page.getByText("Fixture member 24", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Load more activity" }).click();
+  await expect(page.getByText("Fixture member 49", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Insert newest fixture event" }).click();
+  for (const index of [-1, ...Array.from({ length: 50 }, (_, index) => index)]) {
+    await expect(page.locator("p.font-medium").filter({ hasText: new RegExp(`^Fixture member ${index}$`) })).toHaveCount(1);
+  }
+});
+
+test("a failed first membership page does not claim empty history @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership--initial-activity-failure&viewMode=story");
+  await expect(page.getByRole("alert")).toContainText("Unable to load activity.");
+  await expect(page.getByText("No recorded membership events.")).toHaveCount(0);
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(page.getByText("Fixture member 24", { exact: true }).first()).toBeVisible();
+});

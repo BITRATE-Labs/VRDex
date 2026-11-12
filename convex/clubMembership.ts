@@ -568,6 +568,7 @@ export const listActivity = query({
           (error instanceof ConvexError && typeof error.data === "object" && error.data?.paginationError === "InvalidCursor")) {
         throw new ConvexError({ code: "MEMBERSHIP_ACTIVITY_CURSOR_INVALID" });
       }
+      console.error("Membership activity page failed", error);
       throw new ConvexError({ code: "MEMBERSHIP_ACTIVITY_PAGE_FAILED" });
     }
   },

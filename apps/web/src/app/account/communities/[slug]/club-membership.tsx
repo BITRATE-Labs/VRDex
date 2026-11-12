@@ -337,8 +337,15 @@ function MembershipActivityQuery({
   const loading = errors.length === 0 && Object.values(pages).some(page => page === undefined);
   const canLoadMore = !loading && errors.length === 0 && lastPage !== undefined && !lastPage.isDone;
   const continueCursor = lastPage?.continueCursor;
+  const loadMore = () => {
+    if (continueCursor === undefined) return;
+    setRequests(current => [
+      ...current.map((request, index) => index === current.length - 1 ? { ...request, endCursor: continueCursor } : request),
+      { cursor: continueCursor, id: current[0].id },
+    ]);
+  };
   if (canLoadMore && events.length < restoreCount && continueCursor !== undefined) {
-    setRequests([...requests, { cursor: continueCursor, id: requests[0].id }]);
+    loadMore();
   }
   useEffect(() => {
     if (events.length > 0) {
@@ -354,11 +361,11 @@ function MembershipActivityQuery({
       ...request, id: request.id + 1,
       ...(cached[index]?.continueCursor ? { endCursor: cached[index].continueCursor } : {}),
     } : request))}>Retry</Button></Notice> : null}
-    {!clearHistory ? <MembershipActivityView
+    {!clearHistory && (events.length > 0 || errors.length === 0) ? <MembershipActivityView
       events={events}
       loading={loading}
       canLoadMore={canLoadMore}
-      onLoadMore={() => { if (continueCursor !== undefined) setRequests(current => [...current, { cursor: continueCursor, id: current[0].id }]); }}
+      onLoadMore={loadMore}
     /> : null}
   </>;
 }
