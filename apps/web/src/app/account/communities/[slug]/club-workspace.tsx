@@ -3,13 +3,14 @@
 import { useConvexAuth, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Component, createContext, useContext, type ReactNode } from "react";
 import { api } from "@convex-generated-api";
 import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { Notice } from "@/components/ui/notice";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
+import { protectedRouteSignInPath } from "@/lib/protected-route-redirect";
 import { clubNavigation } from "./club-workspace-model";
 
 export type WorkspaceData = NonNullable<
@@ -139,6 +140,7 @@ function ConnectedWorkspace({
 }) {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const pathname = usePathname();
+  const search = useSearchParams();
   const data = useQuery(
     api.clubStaff.getWorkspace,
     isLoading || !isAuthenticated ? "skip" : { communitySlug },
@@ -148,7 +150,7 @@ function ConnectedWorkspace({
     return (
       <Link
         className={buttonVariants()}
-        href={`/sign-in?returnTo=${encodeURIComponent(pathname)}`}
+        href={protectedRouteSignInPath(pathname, search.size ? `?${search}` : "")}
       >
         Sign in
       </Link>

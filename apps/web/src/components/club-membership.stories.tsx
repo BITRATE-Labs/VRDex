@@ -204,3 +204,12 @@ export const ProfileNameFallback: Story = {
     { userId: "usr_00000000-0000-4000-8000-000000000002", displayName: "Profile Sol", vrdexUrl: "/sol", source: "vrdex_profile", status: "resolved" },
   ]} />,
 };
+
+
+export const EvidenceProvenance: Story = {
+  render: () => <MembershipActivityView events={[
+    { auditId: "recorded-role", eventType: "group.member.role.assign", occurredAt: start, targetDisplayName: "Mira", actorDisplayName: "Original Sol", actorNameSource: "recorded", roleName: "Original DJ", roleNameSource: "recorded", evidenceRecoveredAt: start + 1000 },
+    { auditId: "recovered-role", eventType: "group.member.role.assign", occurredAt: start, targetDisplayName: "Mira", actorDisplayName: "Recovered Sol", actorNameSource: "recovered", roleName: "Recovered DJ", roleNameSource: "recovered", evidenceRecoveredAt: start + 2000 },
+    { auditId: "observed-role", eventType: "group.member.role.assign", occurredAt: start, targetDisplayName: "Mira", roleName: "Current DJ", roleNameSource: "role_observation", roleNameObservedAt: start + 3000 },
+  ]} />,
+};
