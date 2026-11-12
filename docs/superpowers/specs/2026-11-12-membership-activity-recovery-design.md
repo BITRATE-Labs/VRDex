@@ -4,7 +4,7 @@
 
 Make activity history readable without sending every name click to VRChat. The main name opens a verified visible VRDex profile when one exists and is plain text otherwise. Every row has the same separate Details control. A larger, separate VRChat control remains available. Remove the redundant VRDex link.
 
-Resolve missing people automatically in the background, for new activity and recently viewed history. BASIC selected this approach on November 12. Historical role recovery is also proposed below; it is not yet approved or implemented. Production data and provider sessions have not been changed for this design.
+Resolve missing people automatically in the background, for new activity and recently viewed history. BASIC selected this approach on November 12 and subsequently approved this expanded design for implementation, independent review and PR iteration until merge-ready. The provider checkpoint remains required before claiming historical recovery coverage. Production rollout and historical repair execution are separate from this implementation approval.
 
 The requested judgment is whether the row interaction and the bounded role-recovery proposal are right. BASIC also requested the related workspace improvements below, starting with invitations and scheduled actions. The main tradeoff is additional provider traffic in exchange for useful names. Some records will remain incomplete when the provider no longer has the evidence.
 
