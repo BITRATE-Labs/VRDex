@@ -33,3 +33,9 @@ test("optional metadata is bounded and unknown targets never become members", ()
   const [malformed] = normalizeMembershipAuditPage([{ ...row, eventType: "group.member.role.assign", actorDisplayName: "x".repeat(201), data: { roleId: "invalid", roleName: "x".repeat(201) } }], scope);
   assert.deepEqual(malformed, { auditId: "audit1", eventType: "group.member.role.assign", occurredAt: 2000, targetUserId: target });
 });
+
+test("preserves target casing so old audit evidence remains replay compatible", () => {
+  const targetId = target.toUpperCase();
+  const [event] = normalizeMembershipAuditPage([{ ...row, targetId }], scope);
+  assert.equal(event.targetUserId, targetId);
+});

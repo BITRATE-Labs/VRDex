@@ -15,7 +15,7 @@ export function normalizeMembershipAuditPage(items, { groupId, startAt, endAt })
     if (!Number.isSafeInteger(occurredAt)) invalid();
     if (occurredAt < startAt || occurredAt >= endAt) return [];
     const event = { auditId: item.id, eventType: item.eventType, occurredAt };
-    if (typeof item.targetId === "string" && userId.test(item.targetId)) event.targetUserId = item.targetId.toLowerCase();
+    if (typeof item.targetId === "string" && userId.test(item.targetId)) event.targetUserId = item.targetId;
     if (typeof item.actorId === "string" && userId.test(item.actorId)) {
       event.actorUserId = item.actorId.toLowerCase();
       const actorName = name(item.actorDisplayName);
