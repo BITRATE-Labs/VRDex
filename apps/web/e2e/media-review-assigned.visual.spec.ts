@@ -222,3 +222,23 @@ test("production panel recovers runner failure and retains selected command @sto
     ),
   ).toHaveLength(1);
 });
+
+test("production queue follows initial and later empty checkpoints @storybook-visual", async ({ page }, testInfo) => {
+  await prepareStorybookVisualPage(page);
+  await gotoComponentStory(page, "account-assigned-media-review--production-checkpoints");
+  await page.getByRole("combobox", { name: "Collection", exact: true }).selectOption("assigned");
+  await expect(page.getByText("First checkpoint item", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Load more", exact: true }).click();
+  await expect(page.getByText("Later checkpoint item", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Load more", exact: true })).toHaveCount(0);
+  await captureStorybookScreenshot(page, testInfo, "review-empty-checkpoints");
+});
+test("production queue bounds empty checkpoint subscriptions @storybook-visual", async ({ page }, testInfo) => {
+  await prepareStorybookVisualPage(page);
+  await gotoComponentStory(page, "account-assigned-media-review--production-stalled-checkpoints");
+  await page.getByRole("combobox", { name: "Collection", exact: true }).selectOption("assigned");
+  await expect(page.getByTestId("checkpoint-subscriptions")).toHaveText("41");
+  await expect(page.getByRole("button", { name: "Load more", exact: true })).toBeVisible();
+  await captureStorybookScreenshot(page, testInfo, "review-bounded-checkpoints");
+  await expect(page.getByTestId("checkpoint-subscriptions")).toHaveText("41");
+});

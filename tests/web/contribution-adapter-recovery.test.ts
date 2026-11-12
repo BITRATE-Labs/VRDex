@@ -177,7 +177,13 @@ it("registered upload begin reports terminal signing failure only for its own se
     assert.equal(replay.nextAction, "retry_same_key");
     assert.deepEqual((await read()).capacity, before.capacity);
     // Admit the independent signing-failure case outside the actor burst window.
-    await t.run(ctx => ctx.db.patch(before.submission._id, {createdAt: Date.now() - 86400000}));
+    await t.run(async ctx => {
+      const createdAt = Date.now() - 86400000;
+      await ctx.db.patch(before.submission._id, {createdAt});
+      for (const row of await ctx.db.query("contributionCapacity").collect()) {
+        if (row.submissionTimes) await ctx.db.patch(row._id, {submissionTimes: row.submissionTimes.map(() => createdAt)});
+      }
+    });
     const firstFailure = await call("new-key");
     assert.equal(firstFailure.code, "UPLOAD_TARGET_UNAVAILABLE");
     assert.equal(firstFailure.operationState, "refused");

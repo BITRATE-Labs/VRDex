@@ -57,7 +57,7 @@ async function main() {
     backend: env.CANDIDATE_CONVEX_URL ?? "",
     clerkKey: env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "",
   });
-  const evidence = { previewName: env.CANDIDATE_PREVIEW_NAME, head: env.CANDIDATE_HEAD_SHA, deployment: target.origin, ...identity, observedAt: new Date().toISOString() };
+  const evidence = { previewName: env.CANDIDATE_PREVIEW_NAME, head: env.CANDIDATE_HEAD_SHA, deployment: target.origin, ...identity, analyticsAcceptance: env.VRDEX_ANALYTICS_ACCEPTANCE === "true", observedAt: new Date().toISOString() };
   if (process.argv[2] === "report") {
     const read = name => JSON.parse(readFileSync(`apps/web/playwright-artifacts/${name}.json`, "utf8"));
     evidence.coverage = {
@@ -66,7 +66,9 @@ async function main() {
         "a Clerk session resolves to a verified Convex identity and clears on sign-out @auth-session-staging",
         "a signed-out browser is sent to sign-in with its return path @auth-session-staging",
       ], ["desktop-chromium", "mobile-chromium"]),
-      account: checkCoverage(read("candidate-account"), ["account overview", "account privacy", "managed events", "media contributions", "media review access", "developer tokens"], ["desktop-chromium", "mobile-chromium"]),
+      account: checkCoverage(read("candidate-account"), ["account overview", "account privacy", "managed events", "media contributions", "media review access", "developer tokens",
+        ...(env.VRDEX_ANALYTICS_ACCEPTANCE === "true" ? ["signed-in analytics preserves identity, retries offline and separates accounts"] : []),
+      ], ["desktop-chromium", "mobile-chromium"]),
     };
   } else {
     assert.equal(process.argv[2], "preflight", "Expected preflight or report");

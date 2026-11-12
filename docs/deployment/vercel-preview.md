@@ -183,6 +183,28 @@ Before commenting `@vrdex preview` on a fork pull request:
 
 Because this workflow is dispatched rather than triggered by `pull_request`, its jobs do not appear as pull request status checks, so a failure cannot turn the pull request red. Two things compensate. The preview comment links the workflow run so the smoke result stays one click from the pull request. And when the smoke fails, the smoke job posts its own `Hosted MCP preview smoke failed` comment on the pull request and reacts `confused` to the requesting comment, so a failure is never silent even though the preview deploy itself succeeded. A later passing run rewrites that same comment in place to `Hosted MCP preview smoke passed`, so a stale failure never outlives the run that cleared it.
 
+## Signed-in analytics acceptance
+
+For the analytics rollout check, dispatch `vercel-preview-deploy.yml` with
+`browser_acceptance=true`, `analytics_acceptance=true`, and
+`capture_screenshots=true`, pinned to the reviewed open PR head. The analytics
+switch defaults false and requires browser acceptance.
+
+That run enables the foundation only in its isolated preview build, with a
+synthetic PostHog key, preview category and Limited collection disabled. The
+signed-in account suite intercepts PostHog transport and verifies persisted
+Off/On, offline-save recovery, stable account identity after reload and a
+different identity after switching accounts. Required desktop/mobile results
+are checked in `candidate-account.json`; missing or skipped results fail the
+selected lane. `candidate-report.json` records `analyticsAcceptance` explicitly.
+Both disposable accounts are drained in `afterEach`, including when the test
+body times out, before their Clerk identities are deleted.
+
+This is auth/backend and SDK transport acceptance. It neither changes production
+settings nor establishes live PostHog ingestion or replay receipt.
+The link-only preview includes the draft panel and privacy page for review;
+production copy approval remains separate.
+
 ## Web environment
 
 Set these in the Vercel project as needed:

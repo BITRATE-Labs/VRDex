@@ -1,7 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useQueries, usePaginatedQuery } from "convex/react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import type { FunctionReturnType } from "convex/server";
+import { ClubErrorBoundary } from "./club-workspace";
+import { useQueries } from "convex/react";
+import { ConvexError } from "convex/values";
 import { api } from "@convex-generated-api";
 import {
   Bar,
@@ -23,23 +27,18 @@ export type MovementPoint = {
   joins: number | null;
   departures: number | null;
 };
-export type MembershipEvent = {
-  auditId: string;
-  eventType: string;
-  occurredAt: number;
-  targetUserId?: string;
-  targetDisplayName?: string;
-};
-export function membershipEventLabel(type: string) {
-  return (
-    (
-      {
-        "group.member.join": "Joined",
-        "group.member.leave": "Left",
-        "group.member.remove": "Removed",
-      } as Record<string, string>
-    )[type] ?? type
-  );
+export type MembershipEvent = FunctionReturnType<typeof api.clubMembership.listActivity>["page"][number];
+export function membershipEventLabel(type: string, roleName?: string) {
+  if (type === "group.member.role.assign") return roleName ? <>Assigned role: <bdi>{roleName}</bdi></> : "Role assigned";
+  if (type === "group.member.role.unassign") return roleName ? <>Removed role: <bdi>{roleName}</bdi></> : "Role removed";
+  return ({ "group.member.join": "Joined", "group.member.leave": "Left", "group.member.remove": "Removed" } as Record<string, string>)[type] ?? "Other activity";
+}
+function accessiblePersonName(name: string) {
+  return name.replace(/[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, "").trim() || "Unknown member";
+}
+function PersonName({ identity, recordedName }: { identity?: MembershipEvent["targetIdentity"]; recordedName?: string }) {
+  const name = identity?.displayName || recordedName || "Unknown member";
+  return identity ? <a href={identity.vrchatUrl} target="_blank" rel="noreferrer" aria-label={`${accessiblePersonName(name)} (VRChat profile, opens in a new tab)`} className="underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2"><bdi>{name}</bdi><span className="sr-only"> (VRChat profile, opens in a new tab)</span></a> : <bdi>{name}</bdi>;
 }
 export function MembershipMovementView({
   points,
@@ -237,31 +236,35 @@ export function MembershipActivityView({
       <SectionTitle>Membership activity</SectionTitle>
       <div className="mt-4 divide-y divide-border">
         {events.map((event) => (
-          <div
-            key={event.auditId}
-            className="grid gap-2 py-4 sm:grid-cols-[minmax(0,1fr)_8rem_12rem]"
-          >
-            <div className="min-w-0">
-              <p className="truncate font-medium">
-                {event.targetDisplayName ??
-                  event.targetUserId ??
-                  "Unknown member"}
-              </p>
-              {event.targetDisplayName && event.targetUserId ? (
-                <p className="mt-1 break-all text-xs text-muted">
-                  {event.targetUserId}
-                </p>
-              ) : null}
+          <div key={event.auditId} className="py-4">
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_12rem]">
+              <div className="min-w-0">
+                <p className="break-words font-medium"><PersonName identity={event.targetIdentity} recordedName={event.targetDisplayName} /></p>
+                {event.targetIdentity ? <div className="mt-1 flex gap-4 text-xs text-muted">
+                  <a href={event.targetIdentity.vrchatUrl} target="_blank" rel="noreferrer" className="underline underline-offset-4">VRChat<span className="sr-only"> (opens in a new tab)</span></a>
+                  {event.targetIdentity.vrdexUrl ? <Link href={event.targetIdentity.vrdexUrl} className="underline underline-offset-4">VRDex</Link> : null}
+                </div> : null}
+              </div>
+              <div className="min-w-0">
+                <p className="break-words text-sm">{membershipEventLabel(event.eventType, event.roleName)}</p>
+                {event.actorUserId || event.actorDisplayName ? <p className="mt-1 break-words text-xs text-muted">By <PersonName identity={event.actorIdentity} recordedName={event.actorDisplayName} />{event.actorIdentity?.vrdexUrl ? <> | <Link href={event.actorIdentity.vrdexUrl} className="underline">VRDex</Link></> : null}</p> : null}
+                {event.eventType.startsWith("group.member.role.") && !event.roleName ? <p className="mt-1 text-xs text-muted">Role unavailable</p> : null}
+              </div>
+              <time dateTime={new Date(event.occurredAt).toISOString()} className="text-xs text-muted sm:text-right">{metricTime(event.occurredAt)}</time>
             </div>
-            <p className="break-words text-sm">
-              {membershipEventLabel(event.eventType)}
-            </p>
-            <time
-              dateTime={new Date(event.occurredAt).toISOString()}
-              className="text-xs text-muted sm:text-right"
-            >
-              {metricTime(event.occurredAt)}
-            </time>
+            <details className="mt-3 text-xs text-muted">
+              <summary aria-label={`Details for ${accessiblePersonName(event.targetIdentity?.displayName || event.targetDisplayName || "Unknown member")}, ${event.auditId}`} className="w-fit cursor-pointer rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">Details</summary>
+              <dl className="mt-3 grid gap-2 border-l border-border pl-3">
+                {[
+                  ["Event type", event.eventType], ["Audit ID", event.auditId], ["Target ID", event.targetUserId],
+                  ["Name recorded with event", event.targetDisplayName],
+                  ["Name last checked", event.targetIdentity?.observedAt === undefined ? undefined : metricTime(event.targetIdentity.observedAt)],
+                  ["Actor ID", event.actorUserId], ["Actor name recorded with event", event.actorDisplayName],
+                  ["Actor name last checked", event.actorIdentity?.observedAt === undefined ? undefined : metricTime(event.actorIdentity.observedAt)],
+                  ["Role ID", event.roleId], ["Role recorded with event", event.roleName],
+                ].map(([label, value]) => value ? <div key={label}><dt>{label}</dt><dd className="break-all text-foreground">{value}</dd></div> : null)}
+              </dl>
+            </details>
           </div>
         ))}
       </div>
@@ -278,7 +281,7 @@ export function MembershipActivityView({
     </Card>
   );
 }
-export function ClubMembershipActivity({
+function MembershipActivityQuery({
   communitySlug,
   startAt,
   endAt,
@@ -287,19 +290,103 @@ export function ClubMembershipActivity({
   startAt: number;
   endAt: number;
 }) {
-  const query = usePaginatedQuery(
-    api.clubMembership.listActivity,
-    { communitySlug, startAt, endAt },
-    { initialNumItems: 25 },
-  );
-  return (
-    <MembershipActivityView
-      events={query.results}
-      loading={
-        query.status === "LoadingFirstPage" || query.status === "LoadingMore"
+  const storageKey = `membership-pages:${communitySlug}:${startAt}:${endAt}`;
+  const [restoreCount] = useState(() => {
+    try {
+      const count = Number(sessionStorage.getItem(storageKey));
+      return Number.isSafeInteger(count) && count > 25 ? Math.min(250, count) : 25;
+    } catch { return 25; }
+  });
+  type Page = FunctionReturnType<typeof api.clubMembership.listActivity>;
+  const [requests, setRequests] = useState<{ cursor: string | null; id: number; endCursor?: string }[]>([{ cursor: null, id: 0 }]);
+  const [cached, setCached] = useState<Record<string, Page>>({});
+  const [cursorResets, setCursorResets] = useState(0);
+  const queries = useMemo(() => Object.fromEntries(requests.map((pagination, index) => [index, {
+    query: api.clubMembership.listActivity,
+    args: { communitySlug, startAt, endAt, paginationOpts: { ...pagination, numItems: 25 } },
+  }])), [communitySlug, startAt, endAt, requests]);
+  const pages: Record<string, Page | Error | undefined> = useQueries(queries);
+  const [previousPages, setPreviousPages] = useState(pages);
+  const scopeUnavailable = Object.values(pages).some(page => page && !(page instanceof Error) && page.scopeUnavailable === true);
+  const errors = Object.values(pages).filter((page): page is Error => page instanceof Error);
+  const invalidCursor = errors.some(error => error.message.includes("InvalidCursor") ||
+    (error instanceof ConvexError && typeof error.data === "object" &&
+      (error.data?.code === "MEMBERSHIP_ACTIVITY_CURSOR_INVALID" ||
+        (error.data?.isConvexSystemError === true && error.data?.paginationError === "InvalidCursor"))));
+  // Only errors issued after authorization may keep previously authorized rows.
+  const clearHistory = errors.some(error => !(error instanceof ConvexError && typeof error.data === "object" && error.data?.code === "MEMBERSHIP_ACTIVITY_PAGE_FAILED"));
+  if (pages !== previousPages) {
+    setPreviousPages(pages);
+    if (invalidCursor && cursorResets === 0) {
+      setCursorResets(1);
+      setRequests([{ cursor: null, id: requests[0].id + 1 }]);
+      setCached({});
+    } else if (clearHistory || scopeUnavailable) {
+      if (Object.keys(cached).length) setCached({});
+      if (!invalidCursor && (requests.length > 1 || requests[0].endCursor !== undefined)) setRequests([{ cursor: null, id: requests[0].id + 1 }]);
+    } else setCached(current => {
+      const next = { ...current };
+      let changed = false;
+      for (const [key, page] of Object.entries(pages)) {
+        if (page && !(page instanceof Error) && page !== current[key]) { next[key] = page; changed = true; }
       }
-      canLoadMore={query.status === "CanLoadMore"}
-      onLoadMore={() => query.loadMore(25)}
-    />
-  );
+      return changed ? next : current;
+    });
+  }
+  const events: MembershipEvent[] = [];
+  let lastPage: Page | undefined;
+  if (!clearHistory && !scopeUnavailable) for (let index = 0; index < requests.length; index++) {
+    const current = pages[index];
+    const page = current instanceof Error || current === undefined ? cached[index] : current;
+    if (!page) break;
+    events.push(...page.page);
+    lastPage = page;
+  }
+  const loading = !scopeUnavailable && errors.length === 0 && Object.values(pages).some(page => page === undefined);
+  const canLoadMore = !loading && errors.length === 0 && lastPage !== undefined && !lastPage.isDone;
+  if (cursorResets > 0 && errors.length === 0 && !loading && lastPage && (events.length >= restoreCount || lastPage.isDone)) {
+    setCursorResets(0);
+  }
+  const continueCursor = lastPage?.continueCursor;
+  const loadMore = () => {
+    if (continueCursor === undefined) return;
+    setRequests(current => [
+      ...current.map((request, index) => index === current.length - 1 ? { ...request, endCursor: continueCursor } : request),
+      { cursor: continueCursor, id: current[0].id },
+    ]);
+  };
+  if (canLoadMore && events.length < restoreCount && continueCursor !== undefined) {
+    loadMore();
+  }
+  useEffect(() => {
+    if (events.length > 0) {
+      try {
+        const stored = Number(sessionStorage.getItem(storageKey));
+        const previous = Number.isSafeInteger(stored) && stored > 25 ? stored : 25;
+        sessionStorage.setItem(storageKey, String(Math.min(250, Math.max(previous, restoreCount, events.length))));
+      } catch { /* Storage is optional. */ }
+    }
+  }, [storageKey, events.length, restoreCount]);
+  return <>
+    {errors.length > 0 ? <Notice variant="error" role="alert">Unable to load activity.<Button className="ml-3" size="sm" variant="secondary" onClick={() => {
+      if (invalidCursor) {
+        setCached({});
+        setRequests([{ cursor: null, id: requests[0].id + 1 }]);
+        return;
+      }
+      setRequests(current => current.map((request, index) => pages[index] instanceof Error ? {
+      ...request, id: request.id + 1,
+    } : request));
+    }}>Retry</Button></Notice> : null}
+    {!clearHistory && (events.length > 0 || errors.length === 0) ? <MembershipActivityView
+      events={events}
+      loading={loading}
+      canLoadMore={canLoadMore}
+      onLoadMore={loadMore}
+    /> : null}
+  </>;
+}
+
+export function ClubMembershipActivity(props: { communitySlug: string; startAt: number; endAt: number }) {
+  return <ClubErrorBoundary key={`${props.communitySlug}:${props.startAt}:${props.endAt}`} errorMessage="Unable to load activity."><MembershipActivityQuery {...props} /></ClubErrorBoundary>;
 }

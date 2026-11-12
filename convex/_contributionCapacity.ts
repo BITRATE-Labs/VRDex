@@ -9,7 +9,12 @@ import {
   validateProfileAssetByteSize,
 } from "./_profileAssets";
 
-// Conservative baseline ceilings. Higher tiers are a separate rollout.
+const journalPolicy = resolveContributionPolicy({});
+export const SUBMISSION_JOURNAL_LIMITS = {
+  actor: Math.max(journalPolicy.ordinary.dailyActor, journalPolicy.trusted.dailyActor),
+  target: Math.max(journalPolicy.ordinary.dailyTarget, journalPolicy.trusted.dailyTarget),
+};
+// Accounting validation defaults. Admission uses the current role policy.
 export const CONTRIBUTION_CAPACITY = {
   actorProcessing: 3,
   targetProcessing: 2,
@@ -33,11 +38,13 @@ export function localUploadModes(env: Record<string, string | undefined> = proce
 }
 // Includes archived and legacy envelopes. A bounded read also handles rows created
 // before envelope admission existed, without an unbounded migration transaction.
-export async function retainedBatchUsage(db: DatabaseReader, actor: Id<"users">, limit: number) {
+export async function retainedBatchUsage(db: DatabaseReader, actor: Id<"users">, limit: number, maximumBytesRead = 8 * 1024 * 1024) {
+  const usage = await db.query("contributionManifestUsage").withIndex("by_actor", q => q.eq("actorUserId", actor)).unique();
+  if (usage?.retainedBatches !== undefined) return { count: usage.retainedBatches, isLowerBound: false };
   const page = await db.query("contributionBatches")
     .withIndex("by_actor_key", q => q.eq("actorUserId", actor)).paginate({
       cursor: null, numItems: limit + 1, maximumRowsRead: limit + 1,
-      maximumBytesRead: 8 * 1024 * 1024,
+      maximumBytesRead,
     });
   return { count: page.page.length, isLowerBound: !page.isDone || page.pageStatus === "SplitRequired" };
 }
@@ -47,11 +54,12 @@ export async function effectiveContributionPolicy(
 ) {
   const policy = resolveContributionPolicy();
   const grants = await getAccountFeatureAccess(db, actor);
-  return {
-    ...policy,
-    tier: grants.canContributeBulk ? "trusted" : "ordinary",
-    limits: grants.canContributeBulk ? policy.trusted : policy.ordinary,
-  };
+  const tier = grants.superAdmin ? "superadmin" :
+    grants.canContributeBulk || grants.canReviewMedia || grants.canPublishMedia ? "trusted" : "ordinary";
+  return { ...policy, tier, limits: policy[tier] };
+}
+export function effectiveCapacityLimit(policyLimit: number | null, storedLimit?: number) {
+  return policyLimit === null ? storedLimit ?? null : Math.min(policyLimit, storedLimit ?? policyLimit);
 }
 export async function contributionChargeRefusal(
   db: DatabaseReader,
@@ -61,14 +69,13 @@ export async function contributionChargeRefusal(
   >,
   bytes: number,
   processing: number,
-  allowanceBytes = 0,
 ) {
   const policy = await effectiveContributionPolicy(db, reservation.actorUserId);
   if (policy.paused) return "CONTRIBUTION_INTAKE_PAUSED";
   for (const [scope, maxBytes, maxProcessing, category] of [
     [
       `actor:${reservation.actorUserId}`,
-      policy.limits.actorBytes + allowanceBytes,
+      policy.limits.actorBytes,
       policy.limits.actorProcessing,
       "ACTOR",
     ],
@@ -96,51 +103,30 @@ export async function contributionChargeRefusal(
             .withIndex("by_scope", (q) => q.eq("scope", "published"))
             .unique()
         : null;
+    const byteLimit = effectiveCapacityLimit(maxBytes, row?.byteLimit);
+    const processingLimit = effectiveCapacityLimit(maxProcessing, row?.processingLimit);
     if (
-      (row?.bytes ?? 0) + (published?.bytes ?? 0) + bytes >
-      Math.min(row?.byteLimit ?? maxBytes, maxBytes)
+      byteLimit !== null && (row?.bytes ?? 0) + (published?.bytes ?? 0) + bytes > byteLimit
     )
       return `CONTRIBUTION_${category}_BYTES`;
     if (
-      (row?.processing ?? 0) + processing >
-      Math.min(row?.processingLimit ?? maxProcessing, maxProcessing)
+      processingLimit !== null && (row?.processing ?? 0) + processing > processingLimit
     )
       return `CONTRIBUTION_${category}_CONCURRENCY`;
   }
   return null;
-}
-export async function batchAllowance(
-  db: DatabaseReader,
-  batchId: Id<"contributionBatches">,
-  actor: Id<"users">,
-) {
-  if (resolveContributionPolicy().version !== "synthetic-v1") return null;
-  const rows = await db
-    .query("contributionCapacityRequests")
-    .withIndex("by_batch_state_expiresAt", (q) =>
-      q.eq("batchId", batchId).eq("state", "approved").gt("expiresAt", Date.now()),
-    )
-    .take(2);
-  if (rows.length > 1) throw new ConvexError({ code: "CAPACITY_ALLOWANCE_CONFLICT" });
-  const row = rows[0];
-  return row?.actorUserId === actor ? row : null;
 }
 export async function assertCapacityNotRevoked(
   db: DatabaseReader,
   actor: Id<"users">,
   admittedAt: number,
 ) {
-  const grant = await db
-    .query("accountFeatureGrants")
-    .withIndex("by_userId_feature_state", (q) =>
-      q
-        .eq("userId", actor)
-        .eq("feature", "trusted_contributor")
-        .eq("state", "revoked"),
-    )
-    .order("desc")
-    .first();
-  if (grant?.revokedAt !== undefined && grant.revokedAt >= admittedAt)
+  const access = await getAccountFeatureAccess(db, actor);
+  if (access.superAdmin || access.canContributeBulk || access.canReviewMedia || access.canPublishMedia) return;
+  const groups = await Promise.all((["trusted_contributor", "media_reviewer", "trusted_publisher", "super_admin"] as const).map(feature =>
+    db.query("accountFeatureGrants").withIndex("by_userId_feature_state", q =>
+      q.eq("userId", actor).eq("feature", feature).eq("state", "revoked")).order("desc").first()));
+  if (groups.some(grant => grant?.revokedAt !== undefined && grant.revokedAt >= admittedAt))
     throw new ConvexError({ code: "CONTRIBUTION_CAPACITY_REVOKED" });
 }
 export async function changeContributionCharge(
@@ -298,4 +284,24 @@ export async function transferPublishedCharge(
     chargedBytes: row.quarantineBytes,
     publishedBytes: bytes,
   });
+}
+
+// Compact rolling admission history shares the existing actor/target ledgers.
+export async function submissionAdmissionTimes(db: DatabaseReader, scope: "actor" | "target", id: Id<"users"> | Id<"profiles">, now: number) {
+  const row = await db.query("contributionCapacity").withIndex("by_scope", q => q.eq("scope", `${scope}:${id}`)).unique();
+  if (row?.submissionTimes !== undefined) return row.submissionTimes.filter(time => time > now - 86400000);
+  const legacy = scope === "actor"
+    ? await db.query("profileMediaSubmissions").withIndex("by_submitterUserId_createdAt", q => q.eq("submitterUserId", id as Id<"users">).gt("createdAt", now - 86400000)).order("desc").take(SUBMISSION_JOURNAL_LIMITS.actor)
+    : await db.query("profileMediaSubmissions").withIndex("by_profileId_createdAt", q => q.eq("profileId", id as Id<"profiles">).gt("createdAt", now - 86400000)).order("desc").take(SUBMISSION_JOURNAL_LIMITS.target);
+  return legacy.map(row => row.createdAt);
+}
+export async function insertMediaSubmission(db: DatabaseWriter, submission: Omit<Doc<"profileMediaSubmissions">, "_id" | "_creationTime">) {
+  for (const [scope, id, limit] of [["actor", submission.submitterUserId, SUBMISSION_JOURNAL_LIMITS.actor], ["target", submission.profileId, SUBMISSION_JOURNAL_LIMITS.target]] as const) {
+    const row = await db.query("contributionCapacity").withIndex("by_scope", q => q.eq("scope", `${scope}:${id}`)).unique();
+    const times = await submissionAdmissionTimes(db, scope, id, submission.createdAt);
+    const submissionTimes = [submission.createdAt, ...times].sort((a, b) => b - a).slice(0, limit);
+    if (row) await db.patch(row._id, { submissionTimes });
+    else await db.insert("contributionCapacity", { scope: `${scope}:${id}`, bytes: 0, processing: 0, submissionTimes });
+  }
+  return db.insert("profileMediaSubmissions", submission);
 }

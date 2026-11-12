@@ -121,11 +121,14 @@ import { MediaReviewPanel } from "../app/account/media-review/media-review-panel
 function ProductionPanelFixture({
   failFirst = false,
   loseResponse = false,
+  checkpoints,
 }: {
   failFirst?: boolean;
   loseResponse?: boolean;
+  checkpoints?: "pages" | "stalled";
 }) {
   const [calls, setCalls] = useState<unknown[]>([]);
+  const [cursors, setCursors] = useState<string[]>([]);
   const [runner] = useState(() => {
     let fail = failFirst;
     return async (...args: Parameters<typeof decideSelectedReviews>) => {
@@ -156,8 +159,12 @@ function ProductionPanelFixture({
       },
     };
     Object.defineProperty(value, "watchQuery", {
-      value: (query: FunctionReference<"query">) => ({
+      value: (query: FunctionReference<"query">, args: { batchId?: string; paginationOpts?: { cursor: string | null } }) => ({
         onUpdate: (listener: () => void) => {
+          if (checkpoints && args.batchId) {
+            const cursor = args.paginationOpts?.cursor ?? "start";
+            setCursors(previous => previous.includes(cursor) ? previous : [...previous, cursor]);
+          }
           listeners.add(listener);
           return () => {
             listeners.delete(listener);
@@ -168,7 +175,7 @@ function ProductionPanelFixture({
           if (name.endsWith(":getReviewAccess"))
             return {
               superAdmin: false,
-              canReviewMedia: false,
+              canReviewMedia: !!checkpoints,
               profiles: [
                 {
                   profileId: row.profileId,
@@ -179,6 +186,19 @@ function ProductionPanelFixture({
               ],
             };
           if (name.endsWith(":reviewDetail")) return detail;
+          if (checkpoints && name.endsWith(":assignedReviewBatches"))
+            return { page: [{ batchId: "assigned", label: "Checkpoint batch" }], isDone: true, continueCursor: "" };
+          if (checkpoints && args.batchId) {
+            const cursor = args.paginationOpts?.cursor;
+            if (checkpoints === "stalled")
+              return { page: [], isDone: false, continueCursor: String(Number(cursor ?? 0) + 1) };
+            return {
+              page: cursor === "first" || cursor === "last" ? [{ ...row,
+                submissionId: cursor, profileDisplayName: cursor === "first" ? "First checkpoint item" : "Later checkpoint item" }] : [],
+              isDone: cursor === "last",
+              continueCursor: cursor === "first" ? "middle" : cursor === "middle" ? "last" : "first",
+            };
+          }
           return {
             page: removed ? [] : [{ ...row, requestKind: "identity_placement" }],
             isDone: true,
@@ -213,6 +233,7 @@ function ProductionPanelFixture({
     <ConvexProvider client={client}>
       <div className="mx-auto max-w-5xl p-4">
         <MediaReviewPanel runSelected={runner} />
+        {checkpoints ? <output data-testid="checkpoint-subscriptions">{cursors.length}</output> : null}
         <output className="block break-all" data-testid="panel-mutations">
           {JSON.stringify(calls)}
         </output>
@@ -277,3 +298,6 @@ function OwnInventoryFixture() {
 export const OwnInventory: Story = { render: () => <OwnInventoryFixture /> };
 
 export const PublishedReplacement: Story = { render: () => <Fixture replacement /> };
+
+export const ProductionCheckpoints: Story = { render: () => <ProductionPanelFixture checkpoints="pages" /> };
+export const ProductionStalledCheckpoints: Story = { render: () => <ProductionPanelFixture checkpoints="stalled" /> };

@@ -1,3 +1,5 @@
+import { resolveContributionPolicy } from "./_contributionPolicy";
+import { insertMediaSubmission, submissionAdmissionTimes } from "./_contributionCapacity";
 import { isAssetBackedPlacement } from "./_mediaSubmissionCleanup";
 import { assertLiveContributionToken } from "./_contributionAuth";
 import { publishedContributionDetail, contributionPlacementCommand, proposeContributionPlacement, contributionManageCommand } from "./_mediaContributionCommands";
@@ -199,17 +201,16 @@ export async function openSubmissionCountForUser(
   now: number,
 ) {
   const policy = await effectiveContributionPolicy(ctx.db, userId);
-  const groups = await Promise.all(
-    OPEN_SUBMISSION_STATUSES.map((status) =>
-      ctx.db
-        .query("profileMediaSubmissions")
-        .withIndex("by_submitterUserId_status_expiresAt", (query) =>
-          query.eq("submitterUserId", userId).eq("status", status).gt("expiresAt", now),
-        )
-        .take(policy.limits.openActor + 1),
-    ),
-  );
-  return groups.reduce((count, group) => count + group.length, 0);
+  const limit = policy.limits.openActor ?? 1000;
+  let count = 0;
+  for (const status of OPEN_SUBMISSION_STATUSES) {
+    count += (await ctx.db.query("profileMediaSubmissions")
+      .withIndex("by_submitterUserId_status_expiresAt", query =>
+        query.eq("submitterUserId", userId).eq("status", status).gt("expiresAt", now))
+      .take(limit - count)).length;
+    if (count >= limit) break;
+  }
+  return count;
 }
 
 export async function openSubmissionCountForProfile(
@@ -217,17 +218,17 @@ export async function openSubmissionCountForProfile(
   profileId: Id<"profiles">,
   now: number,
 ) {
-  const groups = await Promise.all(
-    OPEN_SUBMISSION_STATUSES.map((status) =>
-      ctx.db
-        .query("profileMediaSubmissions")
-        .withIndex("by_profileId_status_expiresAt", (query) =>
-          query.eq("profileId", profileId).eq("status", status).gt("expiresAt", now),
-        )
-        .take(11),
-    ),
-  );
-  return groups.reduce((count, group) => count + group.length, 0);
+  const policy = resolveContributionPolicy({});
+  const limit = Math.max(policy.ordinary.openTarget, policy.trusted.openTarget);
+  let count = 0;
+  for (const status of OPEN_SUBMISSION_STATUSES) {
+    count += (await ctx.db.query("profileMediaSubmissions")
+      .withIndex("by_profileId_status_expiresAt", query =>
+        query.eq("profileId", profileId).eq("status", status).gt("expiresAt", now))
+      .take(limit - count)).length;
+    if (count >= limit) break;
+  }
+  return count;
 }
 
 async function submissionRateLimit(
@@ -237,30 +238,18 @@ async function submissionRateLimit(
   now: number,
 ) {
   const policy = await effectiveContributionPolicy(ctx.db, userId);
-  const since = now - 24 * 60 * 60 * 1_000;
+  if (policy.tier === "superadmin") return null;
   const [recentForUser, recentForProfile] = await Promise.all([
-    ctx.db
-      .query("profileMediaSubmissions")
-      .withIndex("by_submitterUserId_createdAt", (query) =>
-        query.eq("submitterUserId", userId).gt("createdAt", since),
-      )
-      .order("desc")
-      .take(policy.limits.dailyActor + 1),
-    ctx.db
-      .query("profileMediaSubmissions")
-      .withIndex("by_profileId_createdAt", (query) =>
-        query.eq("profileId", profileId).gt("createdAt", since),
-      )
-      .order("desc")
-      .take(policy.limits.dailyTarget + 1),
+    submissionAdmissionTimes(ctx.db, "actor", userId, now),
+    submissionAdmissionTimes(ctx.db, "target", profileId, now),
   ]);
-  if (recentForUser.length >= policy.limits.dailyActor) {
+  if (policy.limits.dailyActor !== null && recentForUser.length >= policy.limits.dailyActor) {
     return "user_daily" as const;
   }
-  if (recentForProfile.length >= policy.limits.dailyTarget) {
+  if (policy.limits.dailyTarget !== null && recentForProfile.length >= policy.limits.dailyTarget) {
     return "profile_daily" as const;
   }
-  if (recentForUser.filter(row => row.createdAt > now - policy.limits.burstWindowMs).length >= policy.limits.burst) {
+  if (policy.limits.burst !== null && recentForUser.filter(createdAt => createdAt > now - policy.limits.burstWindowMs).length >= policy.limits.burst) {
     return "cooldown" as const;
   }
   return null;
@@ -438,13 +427,14 @@ export const createUploadIntent = mutation({
     }
     const sourceUrl = normalizeProfileAssetSourceUrl(args.sourceUrl);
     const now = Date.now();
-    if (
-      (await openSubmissionCountForUser(ctx, user._id, now)) >= (await effectiveContributionPolicy(ctx.db, user._id)).limits.openActor) {
-      throw new Error("You already have three media contributions awaiting a decision.");
+    const admissionPolicy = await effectiveContributionPolicy(ctx.db, user._id);
+    if (admissionPolicy.limits.openActor !== null &&
+      (await openSubmissionCountForUser(ctx, user._id, now)) >= admissionPolicy.limits.openActor) {
+      throw new Error(admissionPolicy.tier === "ordinary" ? "You already have three media contributions awaiting a decision." : `You already have ${admissionPolicy.limits.openActor} media contributions awaiting a decision.`);
     }
-    if (
-      (await openSubmissionCountForProfile(ctx, profile._id, now)) >= (await effectiveContributionPolicy(ctx.db, user._id)).limits.openTarget) {
-      throw new Error("This profile already has two media contributions awaiting a decision.");
+    if (admissionPolicy.limits.openTarget !== null &&
+      (await openSubmissionCountForProfile(ctx, profile._id, now)) >= admissionPolicy.limits.openTarget) {
+      throw new Error(admissionPolicy.tier === "ordinary" ? "This profile already has two media contributions awaiting a decision." : `This profile already has ${admissionPolicy.limits.openTarget} media contributions awaiting a decision.`);
     }
 
     await assertSubmissionRateLimits(ctx, user._id, profile._id, now);
@@ -460,7 +450,7 @@ export const createUploadIntent = mutation({
     const altText = sanitizeProfileAssetAltText(args.altText);
     const creditUrl = sanitizeProfileAssetCreditUrl(args.creditUrl);
     const contributorNote = sanitizeNote(args.contributorNote, 500);
-    const submissionId = await ctx.db.insert("profileMediaSubmissions", {
+    const submissionId = await insertMediaSubmission(ctx.db, {
       profileId: profile._id,
       targetProfileSlug: profile.slug,
       targetProfileDisplayName: profile.displayName,
@@ -669,12 +659,13 @@ export const prepareMcpMediaSubmission = internalMutation({
     if (!publicKitAvailable(eligible)) return await refuse("MCP_MEDIA_TARGET_UNAVAILABLE");
 
     const now = Date.now();
-    if (
-      (await openSubmissionCountForUser(ctx, actor._id, now)) >= (await effectiveContributionPolicy(ctx.db, actor._id)).limits.openActor) {
+    const admissionPolicy = await effectiveContributionPolicy(ctx.db, actor._id);
+    if (admissionPolicy.limits.openActor !== null &&
+      (await openSubmissionCountForUser(ctx, actor._id, now)) >= admissionPolicy.limits.openActor) {
       return await refuse("MCP_MEDIA_OPEN_USER_LIMIT");
     }
-    if (
-      (await openSubmissionCountForProfile(ctx, eligible._id, now)) >= (await effectiveContributionPolicy(ctx.db, actor._id)).limits.openTarget) {
+    if (admissionPolicy.limits.openTarget !== null &&
+      (await openSubmissionCountForProfile(ctx, eligible._id, now)) >= admissionPolicy.limits.openTarget) {
       return await refuse("MCP_MEDIA_OPEN_PROFILE_LIMIT");
     }
     const creationLimit = await submissionRateLimit(ctx, actor._id, eligible._id, now);
@@ -709,7 +700,7 @@ export const prepareMcpMediaSubmission = internalMutation({
     }
     const contributorNote = sanitizeNote(args.contributorNote, 500);
     const subject = mcpContributorSubject(actor._id);
-    const submissionId = await ctx.db.insert("profileMediaSubmissions", {
+    const submissionId = await insertMediaSubmission(ctx.db, {
       profileId: eligible._id,
       targetProfileSlug: eligible.slug,
       targetProfileDisplayName: eligible.displayName,
@@ -1533,6 +1524,8 @@ type BatchReviewCursor = {
   revisionIds: string[];
   submissionIds: string[] | null;
   sourceIsDone: boolean;
+  replacementCursor: string | null;
+  replacementDone: boolean;
 };
 function readBatchReviewIds(value: unknown, maximum: number): string[] {
   if (!Array.isArray(value) || value.length > maximum) throw new Error();
@@ -1544,23 +1537,25 @@ function readBatchReviewIds(value: unknown, maximum: number): string[] {
   return ids;
 }
 function readBatchReviewCursor(cursor: string | null): BatchReviewCursor {
-  if (cursor === null) return { nativeCursor: null, revisionIds: [], submissionIds: null, sourceIsDone: false };
+  if (cursor === null) return { nativeCursor: null, revisionIds: [], submissionIds: null, sourceIsDone: false, replacementCursor: null, replacementDone: false };
   try {
     const value: unknown = JSON.parse(cursor);
     if (typeof value !== "object" || value === null ||
-      !("kind" in value) || value.kind !== "batch_review_v2" ||
+      !("kind" in value) || value.kind !== "batch_review_v3" ||
       !("nativeCursor" in value) || !(value.nativeCursor === null || typeof value.nativeCursor === "string") ||
       !("revisionIds" in value) || !("submissionIds" in value) ||
       !("sourceIsDone" in value) || typeof value.sourceIsDone !== "boolean" ||
-      Object.keys(value).length !== 5) throw new Error();
+      !("replacementCursor" in value) || !(value.replacementCursor === null || typeof value.replacementCursor === "string") ||
+      !("replacementDone" in value) || typeof value.replacementDone !== "boolean" ||
+      Object.keys(value).length !== 7) throw new Error();
     const revisionIds = readBatchReviewIds(value.revisionIds, 40);
-    const submissionIds = value.submissionIds === null ? null : readBatchReviewIds(value.submissionIds, 11);
+    const submissionIds = value.submissionIds === null ? null : readBatchReviewIds(value.submissionIds, 41);
     if (submissionIds !== null && (!submissionIds.length || !revisionIds.length)) throw new Error();
-    return { nativeCursor: value.nativeCursor, revisionIds, submissionIds, sourceIsDone: value.sourceIsDone };
+    return { nativeCursor: value.nativeCursor, revisionIds, submissionIds, sourceIsDone: value.sourceIsDone, replacementCursor: value.replacementCursor, replacementDone: value.replacementDone };
   } catch { throw new Error("PAGE_CURSOR_INVALID"); }
 }
 function writeBatchReviewCursor(checkpoint: BatchReviewCursor) {
-  return JSON.stringify({ kind: "batch_review_v2", ...checkpoint });
+  return JSON.stringify({ kind: "batch_review_v3", ...checkpoint });
 }
 async function authorizedReviewPage(
   ctx: QueryCtx,
@@ -1627,23 +1622,27 @@ async function authorizedReviewPage(
           ...(end ? { endCursor: end.nativeCursor } : {}) });
     const pendingRevisions = [...revisions.page];
     let pendingRows = checkpoint.submissionIds;
+    let replacementCursor = checkpoint.replacementCursor;
+    let replacementDone = checkpoint.replacementDone;
+    let paginated = checkpoint.revisionIds.length === 0;
     const page = [];
     let reachedEnd = false;
     while (pendingRevisions.length) {
       const rev = pendingRevisions[0];
       if (page.length === args.paginationOpts.numItems) break;
-      if (end?.revisionIds[0] === rev._id && end.submissionIds === null) { reachedEnd = true; break; }
+      if (pendingRows === null && end?.revisionIds[0] === rev._id && end.submissionIds === null &&
+        end.replacementCursor === replacementCursor) { reachedEnd = true; break; }
       const attempt = await ctx.db.query("contributionItemAttempts")
         .withIndex("by_revision", q => q.eq("revisionId", rev._id)).unique();
       const source = attempt?.submissionId ? await ctx.db.get(attempt.submissionId) : null;
       if (!source || rev.actorUserId !== source.submitterUserId) {
-        pendingRevisions.shift(); pendingRows = null; continue;
+        pendingRevisions.shift(); pendingRows = null; replacementCursor = null; replacementDone = false; continue;
       }
       // Assignment provenance must be unique, just as in reviewerContext.
       const sourceAttempts = await ctx.db.query("contributionItemAttempts")
         .withIndex("by_submissionId", q => q.eq("submissionId", source._id)).take(2);
       if (sourceAttempts.length !== 1 || sourceAttempts[0].revisionId !== rev._id) {
-        pendingRevisions.shift(); pendingRows = null; continue;
+        pendingRevisions.shift(); pendingRows = null; replacementCursor = null; replacementDone = false; continue;
       }
       const candidate = source.approvedAssetId ? await ctx.db.get(source.approvedAssetId) : null;
       const inheritedEligible = source.status === "approved" && source.requestKind !== "identity_placement" &&
@@ -1661,15 +1660,25 @@ async function authorizedReviewPage(
       let rows;
       if (pendingRows !== null) rows = await loadRows(pendingRows);
       else {
-        const inherited = inheritedEligible
-          ? await ctx.db.query("profileMediaSubmissions")
+        // Convex permits one native pagination per query. Checkpoint the source
+        // page before starting a replacement page, and resume without truncation.
+        if (inheritedEligible && paginated) break;
+        if (inheritedEligible) {
+          const inherited = await ctx.db.query("profileMediaSubmissions")
             .withIndex("by_candidateAssetId_status_expiresAt", q => q.eq("candidateAssetId", candidate._id).eq("status", status).gt("expiresAt", Date.now()))
-            .take(11) : [];
-        // Open target capacity is ten; refuse unexpected overflow.
-        if (inherited.length > 10) throw new Error("Replacement review queue exceeds target capacity.");
-        rows = [source, ...inherited].filter(linked).sort((a, b) => a._id.localeCompare(b._id));
+            .paginate({ ...revisionOptions, cursor: replacementCursor, numItems: 40, maximumRowsRead,
+              ...(end?.revisionIds[0] === rev._id && end.replacementCursor !== null
+                ? { endCursor: end.replacementCursor } : {}) });
+          paginated = true;
+          replacementCursor = inherited.continueCursor;
+          replacementDone = inherited.isDone;
+          rows = [source, ...inherited.page].filter(linked).sort((a, b) => a._id.localeCompare(b._id));
+        } else {
+          replacementDone = true;
+          rows = [source];
+        }
       }
-      const endingRows = end?.revisionIds[0] === rev._id ? end.submissionIds : null;
+      const endingRows = end?.revisionIds[0] === rev._id && end.replacementCursor === replacementCursor ? end.submissionIds : null;
       if (endingRows !== null) await loadRows(endingRows);
       let processed = 0;
       for (const submission of rows) {
@@ -1688,21 +1697,26 @@ async function authorizedReviewPage(
       pendingRows = rows.slice(processed).map(row => row._id);
       if (reachedEnd) break;
       if (pendingRows.length) break;
-      pendingRevisions.shift(); pendingRows = null;
+      pendingRows = null;
+      if (inheritedEligible && !replacementDone) break;
+      pendingRevisions.shift(); replacementCursor = null; replacementDone = false;
       if (endingRows !== null) { reachedEnd = true; break; }
     }
     const next: BatchReviewCursor = reachedEnd && end ? end : {
       nativeCursor: revisions.continueCursor, sourceIsDone: revisions.isDone,
       revisionIds: pendingRevisions.map(rev => rev._id), submissionIds: pendingRows,
+      replacementCursor, replacementDone,
     };
     const paused = next.revisionIds.length > 0;
     const reachedNativeEnd = !paused && end?.revisionIds.length === 0 && next.nativeCursor === end.nativeCursor;
     return {
       ...writeScopedPagination({ ...revisions,
         isDone: reachedEnd || reachedNativeEnd || (!paused && revisions.isDone),
-        continueCursor: writeBatchReviewCursor(next),
+        continueCursor: (reachedEnd || reachedNativeEnd) && paginationOpts.endCursor != null
+          ? paginationOpts.endCursor : writeBatchReviewCursor(next),
         splitCursor: paused || !revisions.splitCursor ? null : writeBatchReviewCursor({
           nativeCursor: revisions.splitCursor, revisionIds: [], submissionIds: null, sourceIsDone: false,
+          replacementCursor: null, replacementDone: false,
         }),
         pageStatus: paused ? null : revisions.pageStatus,
       }, scope),

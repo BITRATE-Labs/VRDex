@@ -22,11 +22,10 @@ it("classifies contribution HTTP calls and challenges callbacks without requirin
     const cases = [
       ["vrdex_get_my_media_submission", {submissionId:"submission"}, "mcp:read", ["assets:contribute"]],
       ["vrdex_media_review_assignments", {}, "mcp:read", ["assets:review:read"]],
-      ...["capacity","capacity_requests","status","batch_get","batch_items"].map(suffix => ["vrdex_contribution_"+suffix,
+      ...["capacity","status","batch_get","batch_items"].map(suffix => ["vrdex_contribution_"+suffix,
         suffix.startsWith("batch") ? {batchId:"batch"} : {}, "mcp:read", ["assets:contribute","profile:contribute","assets:review:read"]]),
       ["vrdex_contribution_batch_create", {idempotencyKey:"new",label:"Collection"}, "mcp:write", ["assets:contribute","profile:contribute"]],
       ["vrdex_contribution_batch_archive", {batchId:"batch"}, "mcp:write", ["assets:contribute","profile:contribute"]],
-      ["vrdex_contribution_capacity_request", {key:"request",kind:"trusted_contributor",evidence:"https://example.test",reason:"collection"}, "mcp:write", ["assets:contribute","profile:contribute"]],
       ["vrdex_contribution_item_submit", {batchId:"batch",itemKey:"image",expectedRevision:1}, "mcp:write", ["assets:contribute","profile:contribute"]],
       ["vrdex_contribution_batch_append", {batchId:"batch",items:[media]}, "mcp:write", ["assets:contribute"]],
       ["vrdex_contribution_batch_append", {batchId:"batch",items:[links]}, "mcp:write", ["profile:contribute"]],

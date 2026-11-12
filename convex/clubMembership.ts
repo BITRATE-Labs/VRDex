@@ -1,6 +1,7 @@
+import { membershipActivityIdentities, membershipIdentity } from "./_membershipActivityIdentity";
 import { readCollectionSubject, readManagedIntegration, resolveGroupObservationPolicy } from "./_groupObservationPolicy";
 import { assertAutomaticOperationAllowed } from "./_communityTelemetry";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import {
   internalMutation,
@@ -27,6 +28,10 @@ const event = v.object({
   occurredAt: v.number(),
   targetUserId: v.optional(v.string()),
   targetDisplayName: v.optional(v.string()),
+    actorUserId: v.optional(v.string()),
+    actorDisplayName: v.optional(v.string()),
+    roleId: v.optional(v.string()),
+    roleName: v.optional(v.string()),
 });
 const scope = {
   integrationId: v.id("communityVrchatIntegrations"),
@@ -247,7 +252,6 @@ export const ingestBatch = internalMutation({
         !item.eventType ||
         item.eventType.length > 200 ||
         (item.targetUserId?.length ?? 0) > 200 ||
-        (item.targetDisplayName?.length ?? 0) > 200 ||
         !Number.isSafeInteger(item.occurredAt) ||
         item.occurredAt < scan.startAt ||
         item.occurredAt >= scan.endAt
@@ -271,8 +275,20 @@ export const ingestBatch = internalMutation({
           throw new Error("Conflicting immutable audit event.");
         continue;
       }
+      const cleanItem = { ...item };
+      for (const field of ["targetDisplayName", "actorDisplayName", "roleName"] as const) {
+        const name = item[field];
+        if (name !== undefined && (!name.trim() || name.length > 200 || /[\u0000-\u001f\u007f]/u.test(name))) delete cleanItem[field];
+      }
+      if (item.actorUserId !== undefined && !/^usr_[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(item.actorUserId)) delete cleanItem.actorUserId;
+      if (item.roleId !== undefined && !/^grol_[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(item.roleId)) delete cleanItem.roleId;
+      if (!cleanItem.actorUserId) delete cleanItem.actorDisplayName;
+      if (!["group.member.role.assign", "group.member.role.unassign"].includes(item.eventType)) {
+        delete cleanItem.roleId;
+        delete cleanItem.roleName;
+      }
       await ctx.db.insert("communityMembershipEvents", {
-        ...item,
+        ...cleanItem,
         integrationId: scan.integrationId,
         epochStartedAt: scan.epochStartedAt,
         groupId: scan.groupId,
@@ -507,9 +523,10 @@ export const listActivity = query({
     paginationOpts: paginationOptsValidator,
   },
   returns: v.object({
-    page: v.array(event),
+    page: v.array(v.object({ ...event.fields, targetIdentity: v.optional(membershipIdentity), actorIdentity: v.optional(membershipIdentity) })),
     isDone: v.boolean(),
     continueCursor: v.string(),
+    scopeUnavailable: v.optional(v.literal(true)),
   }),
   handler: async (ctx, args) => {
     checkedMembershipRange(args.startAt, args.endAt, 366 * DAY_MS);
@@ -520,37 +537,50 @@ export const listActivity = query({
     )
       throw new Error("Invalid membership page size.");
     const state = await readContext(ctx, args.communitySlug, true);
-    if (!state) return { page: [], isDone: true, continueCursor: "" };
-    const result = await ctx.db
-      .query("communityMembershipEvents")
-      .withIndex("by_verified_time", (q) =>
-        q
-          .eq("integrationId", state.integrationId)
-          .eq("epochStartedAt", state.epochStartedAt)
-          .eq("verified", true)
-          .gte("occurredAt", args.startAt)
-          .lt("occurredAt", args.endAt),
-      )
-      .order("desc")
-      .paginate(args.paginationOpts);
-    return {
-      isDone: result.isDone,
-      continueCursor: result.continueCursor,
-      page: result.page.map(
-        ({
-          auditId,
-          eventType,
-          occurredAt,
-          targetUserId,
-          targetDisplayName,
-        }) => ({
-          auditId,
-          eventType,
-          occurredAt,
-          ...(targetUserId ? { targetUserId } : {}),
-          ...(targetDisplayName ? { targetDisplayName } : {}),
-        }),
-      ),
-    };
+    if (!state) return { page: [], isDone: true, continueCursor: "", scopeUnavailable: true as const };
+    try {
+      const result = await ctx.db
+        .query("communityMembershipEvents")
+        .withIndex("by_verified_time", (q) =>
+          q
+            .eq("integrationId", state.integrationId)
+            .eq("epochStartedAt", state.epochStartedAt)
+            .eq("verified", true)
+            .gte("occurredAt", args.startAt)
+            .lt("occurredAt", args.endAt),
+        )
+        .order("desc")
+        .paginate(args.paginationOpts);
+      let identities: Awaited<ReturnType<typeof membershipActivityIdentities>> = new Map();
+      try {
+        identities = await membershipActivityIdentities(ctx, result.page.flatMap(row => [row.targetUserId, row.actorUserId].filter((id): id is string => !!id)));
+      } catch (error) {
+        console.error("Membership activity identity enrichment failed", error);
+      }
+      return {
+        isDone: result.isDone,
+        continueCursor: result.continueCursor,
+        page: result.page.map(row => ({
+          auditId: row.auditId,
+          eventType: row.eventType,
+          occurredAt: row.occurredAt,
+          ...(row.targetUserId ? { targetUserId: row.targetUserId } : {}),
+          ...(row.targetDisplayName ? { targetDisplayName: row.targetDisplayName } : {}),
+          ...(row.actorUserId ? { actorUserId: row.actorUserId } : {}),
+          ...(row.actorDisplayName ? { actorDisplayName: row.actorDisplayName } : {}),
+          ...(row.roleId ? { roleId: row.roleId } : {}),
+          ...(row.roleName ? { roleName: row.roleName } : {}),
+          ...(row.targetUserId && identities.has(row.targetUserId.toLowerCase()) ? { targetIdentity: identities.get(row.targetUserId.toLowerCase()) } : {}),
+          ...(row.actorUserId && identities.has(row.actorUserId.toLowerCase()) ? { actorIdentity: identities.get(row.actorUserId.toLowerCase()) } : {}),
+        })),
+      };
+    } catch (error) {
+      if ((error instanceof Error && error.message.includes("InvalidCursor")) ||
+          (error instanceof ConvexError && typeof error.data === "object" && error.data?.paginationError === "InvalidCursor")) {
+        throw new ConvexError({ code: "MEMBERSHIP_ACTIVITY_CURSOR_INVALID" });
+      }
+      console.error("Membership activity page failed", error);
+      throw new ConvexError({ code: "MEMBERSHIP_ACTIVITY_PAGE_FAILED" });
+    }
   },
 });

@@ -162,8 +162,30 @@ calling the internal function. Existing contribution scopes gain no review
 power. Own withdrawal is an internal actor command with a submitter ownership
 check and does not require review authority.
 
-This source change neither changes intake limits nor grants accounts new
-features. The separate contribution and media-kit switches still apply.
+Editing authority, publication authority, and capacity are separate. The standing
+`roles-v1` policy gives trusted contributors, media reviewers, and trusted
+publishers the same higher capacity. Capacity alone never grants review or
+publication authority. Superadmins can explicitly publish their own validated
+media on public unclaimed profiles. Independent review still refuses self-review.
+Routine enrichment, including admin approval, stops after a profile is claimed;
+its owner keeps the existing editing/review path. A future claimed-profile admin
+override requires a separate approval step and is not implemented here.
+
+Trusted limits are 1,000 contributions per rolling day, 1,000 open proposals,
+12 admissions per minute, 20 GiB reserved bytes, and four concurrent processing
+operations. Trusted target limits are 100 contributions per rolling day and
+20 open proposals. Ordinary limits remain unchanged. Superadmin contributor
+quotas are inapplicable, but shared deployment budgets, target processing/byte
+checks, validation, cleanup readiness, and intake pause remain enforced.
+
+Capacity responses represent inapplicable limits and remaining counts as `null`.
+Superadmin rolling/open usage counts are also `null`, avoiding an unbounded
+history scan. Byte and processing usage remain recorded. The `deployment` object reports
+effective shared byte/concurrency ceilings, aggregate usage including published
+bytes, and remaining shared capacity. Lower stored operational limits are honored. Temporary capacity
+request tools and batch allowance enforcement have been removed. Historical
+request rows remain inert audit data. The contribution and media-kit switches
+still apply. Optional collection organization is independent of routine uploads.
 MCP tools and the browser use these shared commands. Deployments, account grants,
 and publication operations remain separate.
 
@@ -441,3 +463,40 @@ missing dates remain null or unsupported events are omitted.
 
 [Acceptance and synthetic fixture boundaries](../testing/public-media-details-history.md)
 cover the joined website, REST and hosted MCP proof.
+
+Batch review cursors page inherited replacements independently from source
+revisions, with at most one native pagination per query. A continuation may yield
+an empty page while capturing the next source checkpoint. Callers must follow
+`isDone` and continuation cursors rather than treating an empty page as the end.
+The browser follows initial and later empty checkpoints automatically, with
+a limit of 40 consecutive empty continuations. MCP
+list calls traverse up to 40 empty checkpoints and preserve a resumable cursor
+if that bounded traversal is exhausted. Current cursors use `batch_review_v3`;
+stale earlier cursors require a fresh read.
+
+Previously admitted uploads may still finish into private candidate storage if
+media-kit intake is hidden or disabled after admission, as before. That does not
+publish the candidate. Claim changes or loss of public profile eligibility block
+completion; publication separately rechecks media-kit visibility and restrictions.
+
+## Pagination consumers and direct-publication audit
+
+The production consumers of `listForReview` are the browser media review panel
+and the registered hosted MCP adapter. Each follows `isDone` and continuation
+cursors, including empty filtered pages. `reviewPageRequestSchema` currently has
+only its definition, type export, and contract tests, with no REST or operator
+consumer. The browser preserves reactive subscriptions; the server adapter uses
+bounded sequential calls.
+
+The MCP adapter refreshes email verification and its attestation timestamp before
+each continuation query. After 40 empty continuations it returns the last cursor
+for another call. A non-advancing cursor returns an explicit `PAGE_CURSOR_INVALID`
+error together with the last successful result and cursor. Authorization failures
+remain failures.
+
+`publicationMethod: "trusted_publisher"` identifies the explicit direct-publication
+process for authorized publishers, including superadmins. Independent review uses
+`"independent_review"`. `publicationActorUserId` identifies the publishing account.
+To audit the authority used at publication time, inspect that account's retained
+`accountFeatureGrants` records and their grant, expiry, and revocation timestamps.
+The method field itself does not snapshot the granting feature.

@@ -5,8 +5,7 @@ import {
   contributionAuthorityArgs,
   authorizeContribution,
 } from "./_contributionAuth";
-import { effectiveContributionPolicy, localUploadModes, retainedBatchUsage } from "./_contributionCapacity";
-import { getAccountFeatureAccess } from "./_accountFeatures";
+import { SUBMISSION_JOURNAL_LIMITS, effectiveCapacityLimit, effectiveContributionPolicy, localUploadModes, retainedBatchUsage } from "./_contributionCapacity";
 import { readScopedCursor, writeScopedCursor } from "./_reviewCursor";
 import { resolveContributionPolicy } from "./_contributionPolicy";
 import { openSubmissionCountForUser } from "./profileMediaSubmissions";
@@ -18,8 +17,9 @@ export const get = internalQuery({
     const token = await authorizeContribution(ctx, args, false);
     const policy = await effectiveContributionPolicy(ctx.db, args.actorUserId);
     const uploadModes = localUploadModes();
-    const envelopes = await retainedBatchUsage(ctx.db, args.actorUserId, policy.limits.retainedBatches);
-    const open = await openSubmissionCountForUser(
+    // Discovery reports a lower bound; exact reconciliation uses paginated status reads.
+    const envelopes = await retainedBatchUsage(ctx.db, args.actorUserId, 100, 512 * 1024);
+    const open = policy.limits.openActor === null ? null : await openSubmissionCountForUser(
       ctx,
       args.actorUserId,
       Date.now(),
@@ -30,20 +30,23 @@ export const get = internalQuery({
       .unique();
     const limits = {
       ...policy.limits,
-      actorBytes: Math.min(
-        policy.limits.actorBytes,
-        usage?.byteLimit ?? policy.limits.actorBytes,
-      ),
-      actorProcessing: Math.min(
-        policy.limits.actorProcessing,
-        usage?.processingLimit ?? policy.limits.actorProcessing,
-      ),
+      actorBytes: effectiveCapacityLimit(policy.limits.actorBytes, usage?.byteLimit),
+      actorProcessing: effectiveCapacityLimit(policy.limits.actorProcessing, usage?.processingLimit),
     };
+    const [deploymentUsage, publishedUsage] = await Promise.all([
+      ctx.db.query("contributionCapacity").withIndex("by_scope", q => q.eq("scope", "deployment")).unique(),
+      ctx.db.query("contributionCapacity").withIndex("by_scope", q => q.eq("scope", "published")).unique(),
+    ]);
+    const deploymentBytes = Math.min(policy.deploymentBytes, deploymentUsage?.byteLimit ?? policy.deploymentBytes);
+    const deploymentConcurrency = Math.min(policy.deploymentProcessing, deploymentUsage?.processingLimit ?? policy.deploymentProcessing);
+    const usedDeploymentBytes = (deploymentUsage?.bytes ?? 0) + (publishedUsage?.bytes ?? 0);
     const manifest = await ctx.db
       .query("contributionManifestUsage")
       .withIndex("by_actor", (q) => q.eq("actorUserId", args.actorUserId))
       .unique();
-    const active = await ctx.db
+    const dailySampleLimit = Math.min(policy.limits.dailyActor ?? 0, 100);
+    const recordedTimes = usage?.submissionTimes?.filter(createdAt => createdAt > Date.now() - DAY);
+    const active = policy.limits.dailyActor === null ? null : recordedTimes?.map(createdAt => ({ createdAt })) ?? await ctx.db
       .query("profileMediaSubmissions")
       .withIndex("by_submitterUserId_createdAt", (q) =>
         q
@@ -51,25 +54,30 @@ export const get = internalQuery({
           .gt("createdAt", Date.now() - DAY),
       )
       .order("desc")
-      .take(policy.limits.dailyActor + 1);
-    const window = active.filter(
+      .take(dailySampleLimit + 1);
+    const creations24hIsLowerBound = active !== null && active.length >= (recordedTimes === undefined ? dailySampleLimit + 1 : SUBMISSION_JOURNAL_LIMITS.actor);
+    const window = (active ?? []).filter(
       (row) => row.createdAt > Date.now() - policy.limits.burstWindowMs,
     );
-    const retryAt =
-      active.length >= policy.limits.dailyActor
-        ? active[policy.limits.dailyActor - 1].createdAt + DAY
-        : window.length >= policy.limits.burst
-          ? window[policy.limits.burst - 1].createdAt +
-            policy.limits.burstWindowMs
-          : null;
+    const retryAt = active !== null && policy.limits.dailyActor !== null && active.length >= policy.limits.dailyActor
+      ? active[policy.limits.dailyActor - 1].createdAt + DAY
+      : policy.limits.burst !== null && window.length >= policy.limits.burst
+        ? window[policy.limits.burst - 1].createdAt + policy.limits.burstWindowMs : null;
     return {
       policyVersion: policy.version,
       tier: policy.tier,
       reservation: false,
       limits,
       deployment: {
-        bytes: policy.deploymentBytes,
-        concurrency: policy.deploymentProcessing,
+        bytes: deploymentBytes,
+        concurrency: deploymentConcurrency,
+        ...(policy.tier === "superadmin" ? {
+          usage: { bytes: usedDeploymentBytes, concurrency: deploymentUsage?.processing ?? 0 },
+          remaining: {
+            bytes: Math.max(0, deploymentBytes - usedDeploymentBytes),
+            concurrency: Math.max(0, deploymentConcurrency - (deploymentUsage?.processing ?? 0)),
+          },
+        } : {}),
         hostFetchesPerMinute: policy.hostFetchesPerMinute,
       },
       features: {
@@ -88,217 +96,20 @@ export const get = internalQuery({
         retainedBatchesIsLowerBound: envelopes.isLowerBound,
         retainedRevisions: manifest?.retainedRevisions ?? 0,
         retainedMetadataBytes: manifest?.retainedBytes ?? 0,
-        creations24h: active.length,
+        creations24h: active?.length ?? null,
+        creations24hIsLowerBound,
       },
       remaining: {
-        bytes: Math.max(0, limits.actorBytes - (usage?.bytes ?? 0)),
-        concurrency: Math.max(
+        bytes: limits.actorBytes === null ? null : Math.max(0, limits.actorBytes - (usage?.bytes ?? 0)),
+        concurrency: limits.actorProcessing === null ? null : Math.max(
           0,
           limits.actorProcessing - (usage?.processing ?? 0),
         ),
-        open: Math.max(0, policy.limits.openActor - open),
-        creations24h: Math.max(0, policy.limits.dailyActor - active.length),
+        open: policy.limits.openActor === null || open === null ? null : Math.max(0, policy.limits.openActor - open),
+        creations24h: policy.limits.dailyActor === null || active === null ? null : active.length >= policy.limits.dailyActor ? 0 : creations24hIsLowerBound ? null : policy.limits.dailyActor - active.length,
       },
       retryAt,
     };
-  },
-});
-export const request = internalMutation({
-  args: {
-    ...contributionAuthorityArgs,
-    key: v.string(),
-    kind: v.union(
-      v.literal("trusted_contributor"),
-      v.literal("batch_allowance"),
-    ),
-    evidence: v.string(),
-    reason: v.union(
-      v.literal("collection"),
-      v.literal("reconsideration"),
-      v.literal("temporary_batch"),
-    ),
-    batchId: v.optional(v.id("contributionBatches")),
-    rows: v.optional(v.number()),
-    bytes: v.optional(v.number()),
-    expiresAt: v.optional(v.number()),
-  },
-  returns: v.object({
-    requestId: v.id("contributionCapacityRequests"),
-    state: v.string(),
-  }),
-  handler: async (ctx, args) => {
-    await authorizeContribution(ctx, args, true, undefined, false);
-    if (
-      !args.key.trim() ||
-      args.key.length > 128 ||
-      !args.evidence.trim() ||
-      args.evidence.length > 2000
-    )
-      throw new Error("CAPACITY_REQUEST_INVALID");
-    const old = await ctx.db
-      .query("contributionCapacityRequests")
-      .withIndex("by_actor_key", (q) =>
-        q.eq("actorUserId", args.actorUserId).eq("key", args.key),
-      )
-      .unique();
-    if (old) {
-      if (
-        old.evidence !== args.evidence ||
-        old.kind !== args.kind ||
-        old.reason !== args.reason ||
-        old.batchId !== args.batchId ||
-        old.rows !== args.rows ||
-        old.bytes !== args.bytes ||
-        old.expiresAt !== args.expiresAt
-      )
-        throw new Error("CAPACITY_REQUEST_CONFLICT");
-      return { requestId: old._id, state: old.state };
-    }
-    if (args.kind === "batch_allowance") {
-      const batch = args.batchId ? await ctx.db.get(args.batchId) : null;
-      if (
-        !batch ||
-        batch.actorUserId !== args.actorUserId ||
-        batch.archived ||
-        !Number.isSafeInteger(args.rows) ||
-        args.rows! < 1 ||
-        args.rows! > 10000 ||
-        !Number.isSafeInteger(args.bytes) ||
-        args.bytes! < 1 ||
-        args.bytes! > 20 * 1024 ** 3 ||
-        !Number.isSafeInteger(args.expiresAt) ||
-        args.expiresAt! <= Date.now() ||
-        args.expiresAt! > Date.now() + 30 * DAY
-      )
-        throw new Error("CAPACITY_REQUEST_INVALID");
-    } else if (
-      args.batchId !== undefined ||
-      args.rows !== undefined ||
-      args.bytes !== undefined ||
-      args.expiresAt !== undefined
-    )
-      throw new Error("CAPACITY_REQUEST_INVALID");
-    const pendingTrust = await ctx.db
-      .query("contributionCapacityRequests")
-      .withIndex("by_actor_state_kind_expiresAt", (q) =>
-        q.eq("actorUserId", args.actorUserId).eq("state", "pending").eq("kind", "trusted_contributor"),
-      )
-      .take(20);
-    if (pendingTrust.length >= 20) throw new Error("CAPACITY_REQUEST_LIMIT");
-    const pendingAllowances = await ctx.db
-      .query("contributionCapacityRequests")
-      .withIndex("by_actor_state_kind_expiresAt", (q) =>
-        q.eq("actorUserId", args.actorUserId).eq("state", "pending")
-          .eq("kind", "batch_allowance").gt("expiresAt", Date.now()),
-      )
-      .take(20 - pendingTrust.length);
-    if (pendingTrust.length + pendingAllowances.length >= 20)
-      throw new Error("CAPACITY_REQUEST_LIMIT");
-    const {
-      actorUserId,
-      key,
-      kind,
-      evidence,
-      reason,
-      batchId,
-      rows,
-      bytes,
-      expiresAt,
-    } = args;
-    const requestId = await ctx.db.insert("contributionCapacityRequests", {
-      actorUserId,
-      key,
-      kind,
-      evidence,
-      reason,
-      batchId,
-      rows,
-      bytes,
-      expiresAt,
-      state: "pending",
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    });
-    return { requestId, state: "pending" };
-  },
-});
-export const requests = internalQuery({
-  args: {
-    ...contributionAuthorityArgs,
-    cursor: v.union(v.string(), v.null()),
-    limit: v.number(),
-  },
-  returns: v.any(),
-  handler: async (ctx, args) => {
-    await authorizeContribution(ctx, args, false);
-    if (!Number.isInteger(args.limit) || args.limit < 1 || args.limit > 40)
-      throw new Error("CAPACITY_PAGE_INVALID");
-    const binding = `requests:${args.actorUserId}`;
-    const page = await ctx.db
-      .query("contributionCapacityRequests")
-      .withIndex("by_actor_key", (q) => q.eq("actorUserId", args.actorUserId))
-      .paginate({
-        cursor: readScopedCursor(args.cursor, binding),
-        numItems: args.limit,
-      });
-    return {
-      ...page,
-      continueCursor: writeScopedCursor(page.continueCursor, binding),
-      page: page.page.map((r) => ({
-        requestId: r._id,
-        kind: r.kind,
-        state: r.state,
-        decisionReason: r.decisionReason,
-        expiresAt: r.expiresAt,
-      })),
-    };
-  },
-});
-// Internal operator boundary only. This does not accept an MCP-selected admin identity.
-export const decideRequest = internalMutation({
-  args: {
-    adminUserId: v.id("users"),
-    requestId: v.id("contributionCapacityRequests"),
-    decision: v.union(
-      v.literal("approved"),
-      v.literal("declined"),
-      v.literal("revoked"),
-    ),
-    reason: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    if (!(await getAccountFeatureAccess(ctx.db, args.adminUserId)).superAdmin)
-      throw new Error("CAPACITY_ADMIN_REQUIRED");
-    if (!args.reason.trim() || args.reason.length > 500)
-      throw new Error("CAPACITY_REASON_REQUIRED");
-    const request = await ctx.db.get(args.requestId);
-    if (!request) throw new Error("CAPACITY_REQUEST_UNAVAILABLE");
-    if (request.kind === "trusted_contributor" && args.decision === "approved")
-      throw new Error("USE_ACCOUNT_FEATURE_GRANT");
-    if (request.kind === "trusted_contributor" && args.decision === "revoked")
-      throw new Error("USE_ACCOUNT_FEATURE_REVOKE");
-    if (args.decision === "approved" && request.kind === "batch_allowance") {
-      if (request.state !== "pending" || !request.batchId ||
-        request.expiresAt === undefined || request.expiresAt <= Date.now())
-        throw new Error("CAPACITY_REQUEST_UNAVAILABLE");
-      const batch = await ctx.db.get(request.batchId);
-      if (!batch || batch.archived || batch.actorUserId !== request.actorUserId)
-        throw new Error("CAPACITY_REQUEST_UNAVAILABLE");
-      const active = await ctx.db.query("contributionCapacityRequests")
-        .withIndex("by_batch_state_expiresAt", q =>
-          q.eq("batchId", request.batchId).eq("state", "approved")
-            .gt("expiresAt", Date.now()))
-        .take(1);
-      if (active.length) throw new Error("CAPACITY_ALLOWANCE_CONFLICT");
-    }
-    await ctx.db.patch(request._id, {
-      state: args.decision,
-      decisionReason: args.reason,
-      decidedBy: args.adminUserId,
-      updatedAt: Date.now(),
-    });
-    return null;
   },
 });
 export const status = internalQuery({
