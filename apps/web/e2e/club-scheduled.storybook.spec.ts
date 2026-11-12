@@ -1,4 +1,43 @@
 import { expect, test } from "@playwright/test";
+test("mixed-case identity scheduled list edit and cancellation preserve payload and operation IDs @storybook-visual", async ({ page }) => {
+  const rawId = "USR_AaAaAaAa-AAAA-aaaa-AAAA-aAaAaAaAaAaA";
+  await page.goto("/iframe.html?id=clubs-scheduled--mixed-case-people&viewMode=story");
+  await expect(page.getByRole("link", { name: "Riley", exact: true })).toHaveCount(1);
+  await page.getByRole("button", { name: "Edit action", exact: true }).click();
+  const editor = page.locator("section").filter({ has: page.getByRole("button", { name: "Save action", exact: true }) }).last();
+  await expect(editor.getByRole("link", { name: "Riley", exact: true })).toBeVisible();
+  await expect(editor).toContainText(rawId);
+  await page.getByRole("button", { name: "Save action", exact: true }).click();
+  const edit = await page.evaluate(() => JSON.parse(document.documentElement.dataset.scheduledEdit!));
+  expect(edit.payload.targetUserId).toBe(rawId); expect(edit.operationId).toBe("Action-MiXeD"); expect(edit.expectedRevision).toBe(1);
+  await page.getByRole("button", { name: "Cancel action", exact: true }).click();
+  const confirmation = page.locator("section").filter({ has: page.getByRole("button", { name: "Confirm cancellation", exact: true }) }).last();
+  await expect(confirmation.getByRole("link", { name: "Riley", exact: true })).toBeVisible();
+  await expect(confirmation).toContainText(rawId);
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/bd4a-scheduled-cancel-${test.info().project.name}.png`, fullPage: true });
+  }
+  await page.getByRole("button", { name: "Confirm cancellation", exact: true }).click();
+  expect(await page.evaluate(() => JSON.parse(document.documentElement.dataset.scheduledCancel!))).toEqual({ operationId: "Action-MiXeD", expectedRevision: 2 });
+});
+
+for (const [story, count] of [["paged-people", 20], ["underfilled-people", 17]] as const) test(`identity admission keeps partial scheduled groups stable on ${story} @storybook-visual`, async ({ page }) => {
+  await page.goto(`/iframe.html?id=clubs-scheduled--${story}&viewMode=story`);
+  await page.getByRole("tab", { name: "Pending", exact: true }).click();
+  await expect(page.getByRole("link", { name: "Riley", exact: true })).toHaveCount(1);
+  const admissions = () => page.evaluate(() => JSON.parse(document.documentElement.dataset.operationAdmissions!) as string[][]);
+  const before = await admissions();
+  expect(before.at(-1)).toEqual(Array.from({ length: count }, (_, index) => `Action-MiXeD-${index}`));
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await expect(page.getByRole("link", { name: "Riley", exact: true })).toHaveCount(1);
+  await expect.poll(admissions).toEqual([...before, [`Action-MiXeD-${count + 5}`, `Action-MiXeD-${count + 6}`]]);
+  await page.getByRole("tab", { name: "History", exact: true }).click();
+  await expect.poll(async () => (await admissions()).at(-1)).toEqual(Array.from({ length: 5 }, (_, index) => `Action-MiXeD-${count + index}`));
+  const priorRestore = (await admissions()).length;
+  await page.getByRole("tab", { name: "Pending", exact: true }).click();
+  await expect.poll(async () => (await admissions()).length).toBe(priorRestore + 1);
+  expect((await admissions()).at(-1)).toEqual([...Array.from({ length: count }, (_, index) => `Action-MiXeD-${index}`), `Action-MiXeD-${count + 5}`, `Action-MiXeD-${count + 6}`]);
+});
 test("staff can edit a lower-case saved role against upper-case provider IDs @storybook-visual", async ({ page }) => {
   await page.goto("/iframe.html?id=clubs-scheduled--mixed-case-role-edit&viewMode=story");
   await page.getByRole("button", { name: "Edit action", exact: true }).first().click();

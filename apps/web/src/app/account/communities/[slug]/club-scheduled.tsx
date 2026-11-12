@@ -14,7 +14,7 @@ import {
   Textarea,
 } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
-import { ClubPerson, PeoplePending, useClubPeople } from "./club-person";
+import { findPersonIdentity, ClubPerson, PeoplePending, useOperationPeople, useClubPeople } from "./club-person";
 import { ClubNotifications } from "./club-notifications";
 import { useClubWorkspace } from "./club-workspace";
 import { metricTime } from "./club-chart";
@@ -353,7 +353,7 @@ function OperationEditor({
       <SectionTitle>
         Edit {operationLabels[payload.kind].toLowerCase()}
       </SectionTitle>
-      {"targetUserId" in payload ? <div className="mt-4"><ClubPerson userId={payload.targetUserId} identity={people.people.find(person => "targetUserId" in payload && person.userId === payload.targetUserId)} exactId /></div> : null}
+      {"targetUserId" in payload ? <div className="mt-4"><ClubPerson userId={payload.targetUserId} identity={findPersonIdentity(people.people, payload.targetUserId)} exactId /></div> : null}
       <form
         className="mt-5 grid gap-5"
         onSubmit={async (event) => {
@@ -551,7 +551,7 @@ export function ClubScheduled() {
         ? ["pending", "claimed", "submitted"].includes(operation.state)
         : !["pending", "claimed", "submitted"].includes(operation.state)),
   );
-  const people = useClubPeople(visible.length ? Array.from({ length: Math.ceil(visible.length / 25) }, (_, index) => ({ kind: "scheduled_operations" as const, operationIds: visible.slice(index * 25, index * 25 + 25).map(operation => operation.id) })) : null);
+  const people = useOperationPeople(visible.map(operation => operation.id));
   const autoPaging = useRef({
     communityId: workspace.community._id,
     view,
@@ -634,7 +634,7 @@ export function ClubScheduled() {
           <SectionTitle>Cancel action?</SectionTitle>
           <p className="mt-3">{operationLabels[confirmCancel.payload.kind]}</p>
           {"targetUserId" in confirmCancel.payload ? (
-            <div className="mt-3"><ClubPerson userId={confirmCancel.payload.targetUserId} identity={people.people.find(person => "targetUserId" in confirmCancel.payload && person.userId === confirmCancel.payload.targetUserId)} exactId /></div>
+            <div className="mt-3"><ClubPerson userId={confirmCancel.payload.targetUserId} identity={findPersonIdentity(people.people, confirmCancel.payload.targetUserId)} exactId /></div>
           ) : null}
           <p className="mt-3 text-sm">{metricTime(confirmCancel.dueAt)}</p>
           <p className="mt-1 text-sm">{workspace.community.displayName}</p>
@@ -682,7 +682,7 @@ export function ClubScheduled() {
                   <p className="mt-1 text-sm">{operation.payload.title}</p>
                 ) : null}
                 {"targetUserId" in operation.payload ? (
-                  <div className="mt-2"><ClubPerson userId={operation.payload.targetUserId} identity={people.people.find(person => "targetUserId" in operation.payload && person.userId === operation.payload.targetUserId)} visibleIds={visible.flatMap(item => "targetUserId" in item.payload ? [item.payload.targetUserId] : [])}><div><dt>Action ID</dt><dd className="break-all">{operation.id}</dd></div>{"roleId" in operation.payload ? <div><dt>Role ID</dt><dd className="break-all">{operation.payload.roleId}</dd></div> : null}</ClubPerson></div>
+                  <div className="mt-2"><ClubPerson userId={operation.payload.targetUserId} identity={findPersonIdentity(people.people, operation.payload.targetUserId)} visibleIds={visible.flatMap(item => "targetUserId" in item.payload ? [item.payload.targetUserId] : [])}><div><dt>Action ID</dt><dd className="break-all">{operation.id}</dd></div>{"roleId" in operation.payload ? <div><dt>Role ID</dt><dd className="break-all">{operation.payload.roleId}</dd></div> : null}</ClubPerson></div>
                 ) : null}
                 {"worldId" in operation.payload ? (
                   <p className="mt-1 break-all text-xs text-muted">

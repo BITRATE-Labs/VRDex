@@ -19,6 +19,7 @@ class PeopleClient extends ConvexReactClient {
   requestCount = 0;
   delay = 0;
   expiredResponses = false;
+  failSecond = false;
   returnExpired() { this.expiredResponses = true; }
   delayRequests() { this.delay = 500; }
   constructor(private readonly namePrecedence = false) { super("https://fixture.invalid"); }
@@ -31,6 +32,7 @@ class PeopleClient extends ConvexReactClient {
         if (getFunctionName(query) !== "clubPeople:readView") throw new Error("Unexpected people query");
         if (!this.cache.has(key)) {
           const viewId = String((args[0] as { viewId: string }).viewId);
+          if (this.failSecond && this.viewSources.get(viewId) === "second") throw new Error("Event unavailable");
           let view = this.people.read(viewId);
           if (this.namePrecedence) {
             const newerChunk = this.viewSources.get(viewId) === "first";
@@ -95,6 +97,7 @@ function Fixture({ chunked = false, namePrecedence = false }: { chunked?: boolea
     <button onClick={() => { client.delayRequests(); setAuthorized(true); }}>Restore workspace access</button>
     <button onClick={() => setActive(false)}>Close source</button>
     <button onClick={() => setChunks(2)}>Add chunk</button>
+    <button onClick={() => client.change(() => { client.failSecond = true; })}>Fail second chunk</button>
     {namePrecedence ? (["recorded", "public", "private", "profile"] as const).map(mode => <button key={mode} onClick={() => client.change(() => { client.nameMode = mode; })}>Use {mode} observations</button>) : null}
     <button onClick={() => setChunks(1)}>Remove last chunk</button>
     <button onClick={() => { client.returnExpired(); setViewer(value => value + 1); }}>Return expired grants</button>
@@ -112,3 +115,8 @@ export const Lifecycle: Story = {};
 export const ChunkedSources: Story = { args: { chunked: true } };
 
 export const NamePrecedence: Story = { args: { chunked: true, namePrecedence: true } };
+
+export const MixedCaseFallbacks: Story = { render: () => {
+  const ids = ["USR_AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA", "usr_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "usr_bbbbbbbb-bbbb-bbbb-bbbb-aaaaaaaaaaaa"];
+  return <main className="space-y-4 p-5">{ids.map(id => <ClubPerson key={id} userId={id} visibleIds={ids} exactId />)}</main>;
+} };

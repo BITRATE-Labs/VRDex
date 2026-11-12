@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { Field, Select } from "@/components/ui/field";
 import { ClubMembershipRecovery } from "./club-membership-recovery";
-import { PersonName, PersonVRChat, PeoplePending, accessiblePersonName, isVrchatUserId, personName, useClubPeople, type PersonIdentity } from "./club-person";
+import { findPersonIdentity, PersonName, PersonVRChat, PeoplePending, accessiblePersonName, isVrchatUserId, personName, useClubPeople, type PersonIdentity } from "./club-person";
 import { metricNumber, metricTime } from "./club-chart";
 
 export type MovementPoint = {
@@ -238,7 +238,7 @@ export function MembershipActivityView({
 }) {
   const visibleIds = events.flatMap(event => [event.targetUserId, event.actorUserId, event.targetIdentity?.vrchatUrl.split("/").at(-1), event.actorIdentity?.vrchatUrl.split("/").at(-1)]).filter(isVrchatUserId);
   const memberIds = [...new Set([...events.map(event => event.targetUserId).filter(isVrchatUserId).map(id => id.toLowerCase()), ...(targetUserId ? [targetUserId.toLowerCase()] : [])])];
-  const memberLabel = (id: string) => personName(id, people.find(person => person.userId?.toLowerCase() === id)?.displayName || events.find(event => event.targetUserId?.toLowerCase() === id)?.targetIdentity?.displayName || events.find(event => event.targetUserId?.toLowerCase() === id)?.targetDisplayName, memberIds);
+  const memberLabel = (id: string) => personName(id, findPersonIdentity(people, id)?.displayName || events.find(event => event.targetUserId?.toLowerCase() === id)?.targetIdentity?.displayName || events.find(event => event.targetUserId?.toLowerCase() === id)?.targetDisplayName, memberIds);
   return (
     <Card padding="lg" className="min-w-0">
       <SectionTitle>Membership activity</SectionTitle>
@@ -246,8 +246,8 @@ export function MembershipActivityView({
       <PeoplePending count={pendingCount} />
       <div className="mt-4 divide-y divide-border">
         {events.map((event) => {
-          const target: PersonIdentity | undefined = people.find(person => person.userId?.toLowerCase() === event.targetUserId?.toLowerCase()) ?? event.targetIdentity;
-          const actor: PersonIdentity | undefined = people.find(person => person.userId?.toLowerCase() === event.actorUserId?.toLowerCase()) ?? event.actorIdentity;
+          const target: PersonIdentity | undefined = findPersonIdentity(people, event.targetUserId) ?? event.targetIdentity;
+          const actor: PersonIdentity | undefined = findPersonIdentity(people, event.actorUserId) ?? event.actorIdentity;
           const targetId = event.targetUserId ?? target?.vrchatUrl?.split("/").at(-1);
           const userId = isVrchatUserId(targetId) ? targetId : undefined;
           const personSubject = userId !== undefined || event.eventType.startsWith("group.member.");

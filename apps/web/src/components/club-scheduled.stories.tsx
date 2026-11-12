@@ -70,6 +70,8 @@ class ScheduledFixtureClient extends ConvexReactClient {
     private readonly roleEdit = false,
     private readonly onRoleSubmitted: (roleId: string) => void = () => undefined,
     private readonly delayedActions?: { view: "pending" | "history"; pages: number },
+    private readonly mixedCaseUsers = false,
+    private readonly pagedPeople = 0,
   ) {
     super("https://fixture.invalid");
     if (immediate)
@@ -85,6 +87,8 @@ class ScheduledFixtureClient extends ConvexReactClient {
           roleId: "grol_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
         },
       });
+    if (mixedCaseUsers) Object.assign(this.jobs[0], { id: "Action-MiXeD", payload: { kind: "assign_role", targetUserId: "USR_AaAaAaAa-AAAA-aaaa-AAAA-aAaAaAaAaAaA", roleId: "grol_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" } });
+    if (pagedPeople) this.jobs = Array.from({ length: pagedPeople + 7 }, (_, index) => ({ ...this.jobs[0], id: `Action-MiXeD-${index}`, state: index >= pagedPeople && index < pagedPeople + 5 ? "succeeded" : "pending", payload: { ...this.jobs[0].payload, kind: "invite_member", targetUserId: `usr_00000000-0000-0000-0000-${String(index + 1).padStart(12, "0")}` } }));
   }
   simulateOtherEditor() {
     this.jobs = this.jobs.map((job, index) =>
@@ -114,12 +118,12 @@ class ScheduledFixtureClient extends ConvexReactClient {
       const waiting = this.delayedActions && pageIndex < this.delayedActions.pages;
       const pending = this.delayedActions?.view === "pending";
       result = {
-        page: this.delayedActions
+        page: this.pagedPeople ? cursor ? this.jobs.slice(this.pagedPeople + 5) : this.jobs.slice(0, this.pagedPeople + 5) : this.delayedActions
           ? waiting ? pageIndex === 0 ? this.jobs.slice(pending ? 2 : 0, pending ? 4 : 2) : []
             : this.jobs.slice(pending ? 0 : 2, pending ? 2 : 4)
           : this.jobs,
-        isDone: !waiting,
-        continueCursor: waiting ? `actions-${pageIndex + 1}` : "",
+        isDone: this.pagedPeople ? Boolean(cursor) : !waiting,
+        continueCursor: this.pagedPeople ? "next-people" : waiting ? `actions-${pageIndex + 1}` : "",
       };
     }
     else if (name === "clubProviderReads:context")
@@ -203,11 +207,17 @@ class ScheduledFixtureClient extends ConvexReactClient {
       return "fixture-role-read" as FunctionReturnType<Mutation>;
     if (name === "clubPeople:requestView") {
       const source = value.source as FunctionArgs<typeof import("@convex-generated-api").api.clubPeople.requestView>["source"];
-      const result = this.peopleFixture.request(source, this.roleEdit ? ["usr_00000000-0000-0000-0000-000000000001"] : []);
+      if (source.kind === "scheduled_operations") {
+        const admissions = JSON.parse(document.documentElement.dataset.operationAdmissions ?? "[]") as string[][];
+        admissions.push(source.operationIds); document.documentElement.dataset.operationAdmissions = JSON.stringify(admissions);
+        if (admissions.length > 1) await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      const result = this.peopleFixture.request(source, source.kind === "scheduled_operations" ? this.jobs.filter(job => source.operationIds.includes(job.id as Id<"clubOperations">)).flatMap(job => "targetUserId" in job.payload && typeof job.payload.targetUserId === "string" ? [job.payload.targetUserId] : []) : []);
       this.cache.clear();
       this.fixtureListeners.forEach(callback => callback());
       return result as FunctionReturnType<Mutation>;
     } else if (name === "clubOperations:edit") {
+      document.documentElement.dataset.scheduledEdit = JSON.stringify(value);
       if (this.roleEdit && typeof (value.payload as { roleId?: unknown }).roleId === "string")
         this.onRoleSubmitted((value.payload as { roleId: string }).roleId);
       const job = this.jobs.find((job) => job.id === value.operationId);
@@ -252,6 +262,8 @@ function ScheduledFixture({
   mutableEvent = false,
   roleEdit = false,
   delayedActions,
+  mixedCaseUsers = false,
+  pagedPeople = 0,
 }: {
   staff?: boolean;
   pagedNotifications?: boolean;
@@ -261,10 +273,12 @@ function ScheduledFixture({
   mutableEvent?: boolean;
   roleEdit?: boolean;
   delayedActions?: { view: "pending" | "history"; pages: number };
+  mixedCaseUsers?: boolean;
+  pagedPeople?: number;
 }) {
   const [submittedRoleId, setSubmittedRoleId] = useState("");
   const [client] = useState(
-    () => new ScheduledFixtureClient(pagedNotifications, immediate, clockAhead, roleEdit, setSubmittedRoleId, delayedActions),
+    () => new ScheduledFixtureClient(pagedNotifications, immediate, clockAhead, roleEdit, setSubmittedRoleId, delayedActions, mixedCaseUsers, pagedPeople),
   );
   const data: WorkspaceData = {
     community: {
@@ -348,3 +362,7 @@ export const MovedEvent: Story = {
 export const MixedCaseRoleEdit: Story = {
   render: () => <ScheduledFixture roleEdit />,
 };
+
+export const MixedCasePeople: Story = { render: () => <ScheduledFixture roleEdit mixedCaseUsers /> };
+export const PagedPeople: Story = { render: () => <ScheduledFixture pagedPeople={20} /> };
+export const UnderfilledPeople: Story = { render: () => <ScheduledFixture pagedPeople={17} /> };

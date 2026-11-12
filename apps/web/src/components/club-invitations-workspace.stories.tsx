@@ -55,7 +55,7 @@ class InvitationFixtureClient extends ConvexReactClient {
       dueAt: number;
     }[]
   >();
-  constructor(private emptyHistoryPages = 0, lateNames = false, private remappedRecipient = false) {
+  constructor(private emptyHistoryPages = 0, lateNames = false, private remappedRecipient = false, private mixedCaseUsers = false) {
     super("https://fixture.invalid");
     this.peopleFixture.resolved = !lateNames;
   }
@@ -253,7 +253,7 @@ class InvitationFixtureClient extends ConvexReactClient {
       this.outcomes.set(
         id,
         recipients.map((userId, index) => ({
-          userId: this.remappedRecipient && index === 1 ? "usr_33333333-3333-3333-3333-333333333333" : userId,
+          userId: this.remappedRecipient && index === 1 ? "usr_33333333-3333-3333-3333-333333333333" : this.mixedCaseUsers ? userId.toUpperCase() : userId,
           reviewedUserId: userId,
           operationId: `op-${index}`,
           state: index === 0 ? "submitted" : "pending",
@@ -263,6 +263,7 @@ class InvitationFixtureClient extends ConvexReactClient {
       );
       result = id;
     } else if (name === "clubInvitations:cancel") {
+      document.documentElement.dataset.invitationCancel = JSON.stringify(value);
       const id = String(value.batchId);
       this.outcomes.set(
         id,
@@ -276,8 +277,8 @@ class InvitationFixtureClient extends ConvexReactClient {
     return result as FunctionReturnType<Mutation>;
   }
 }
-function Workspace({ emptyHistoryPages = 0, lateNames = false, remappedRecipient = false }: { emptyHistoryPages?: number; lateNames?: boolean; remappedRecipient?: boolean }) {
-  const [client] = useState(() => new InvitationFixtureClient(emptyHistoryPages, lateNames, remappedRecipient));
+function Workspace({ emptyHistoryPages = 0, lateNames = false, remappedRecipient = false, mixedCaseUsers = false }: { emptyHistoryPages?: number; lateNames?: boolean; remappedRecipient?: boolean; mixedCaseUsers?: boolean }) {
+  const [client] = useState(() => new InvitationFixtureClient(emptyHistoryPages, lateNames, remappedRecipient, mixedCaseUsers));
   const data: WorkspaceData = {
     community: {
       _id: "club-one" as Id<"profiles">,
@@ -323,3 +324,5 @@ export const BoundedHistory: Story = { args: { emptyHistoryPages: 4 } };
 export const LateNames: Story = { render: () => <Workspace lateNames /> };
 
 export const RemappedRecipient: Story = { render: () => <Workspace remappedRecipient /> };
+
+export const MixedCasePeople: Story = { render: () => <Workspace mixedCaseUsers /> };

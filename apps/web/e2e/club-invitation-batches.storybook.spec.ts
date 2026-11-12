@@ -360,6 +360,27 @@ test("deleting a list requires the revision shown at confirmation @storybook-vis
   }
 });
 
+test("mixed-case identity invitation outcomes and cancellation retain stored IDs @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-invitations-workspace--mixed-case-people&viewMode=story");
+  await page.getByLabel("Saved list").selectOption("list-one");
+  await expect(page.getByRole("list", { name: "Select recipients" }).getByRole("link", { name: "Riley", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Review invitations", exact: true }).click();
+  const review = page.getByRole("list", { name: "Reviewed recipients" });
+  await expect(review.getByRole("link", { name: "Riley", exact: true })).toBeVisible();
+  await expect(review.getByRole("listitem")).toHaveCount(2);
+  await page.getByRole("button", { name: "Confirm invitations", exact: true }).click();
+  expect((await page.evaluate(() => JSON.parse(document.documentElement.dataset.invitationPayload!))).reviewedRecipients).toEqual([alice, bob]);
+  await page.getByRole("button", { name: "Cancel unsent invitations", exact: true }).click();
+  const confirmation = page.getByRole("dialog", { name: "Cancel unsent invitations", exact: true });
+  await expect(confirmation.getByText("Nova", { exact: true })).toBeVisible();
+  await expect(confirmation).toContainText(bob.toUpperCase());
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/bd4a-invitation-cancel-${test.info().project.name}.png`, fullPage: true });
+  }
+  await confirmation.getByRole("button", { name: "Confirm cancellation", exact: true }).click();
+  expect((await page.evaluate(() => JSON.parse(document.documentElement.dataset.invitationCancel!))).batchId).toBe("batch-1");
+});
+
 test("recipient review deduplicates user IDs regardless of hex case @storybook-visual", async ({ page }) => {
   const mixedCase = "usr_AaAaAaAa-bBbB-cCcC-dDdD-eEeEeEeEeEeE";
   await page.goto("/iframe.html?id=clubs-invitation-batches--composer&viewMode=story");

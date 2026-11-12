@@ -9,11 +9,16 @@ export class ClubPeopleFixture {
   denied = false;
   pendingAllowed = true;
   private views = new Map<string, FunctionReturnType<typeof api.clubPeople.readView>>();
+  private tickets = new Map<string, { viewId: Id<"clubPeopleViews">; expiresAt: number }>();
+  private generation = 0;
   request(source: FunctionArgs<typeof api.clubPeople.requestView>["source"], ids: string[], names: Map<string, string> = new Map()) {
-    const viewId = `people-${JSON.stringify(source)}` as Id<"clubPeopleViews">;
-    const expiresAt = Date.now() + 15 * 60_000;
+    const sourceKey = JSON.stringify(source), prior = this.tickets.get(sourceKey);
+    const viewId = prior && prior.expiresAt > Date.now() ? prior.viewId : `people-${++this.generation}-${sourceKey}` as Id<"clubPeopleViews">;
+    const expiresAt = prior && prior.expiresAt > Date.now() ? prior.expiresAt : Date.now() + 15 * 60_000;
+    this.tickets.set(sourceKey, { viewId, expiresAt });
+    const canonicalNames = new Map([...names].map(([id, name]) => [id.toLowerCase(), name]));
     this.views.set(viewId, {
-      people: [...new Set(ids)].map((userId, index) => ({ userId, displayName: names.get(userId) ?? ["Riley", "Nova", "Ash", "Morgan", "Eli"][index], ...(index === 0 ? { vrdexUrl: "/riley" } : {}), vrchatUrl: `https://vrchat.com/home/user/${userId}`, observedAt: Date.now(), source: "vrchat_private", status: "resolved" })),
+      people: [...new Set(ids.map(id => id.toLowerCase()))].map((userId, index) => ({ userId, displayName: canonicalNames.get(userId) ?? ["Riley", "Nova", "Ash", "Morgan", "Eli"][index], ...(index === 0 ? { vrdexUrl: "/riley" } : {}), vrchatUrl: `https://vrchat.com/home/user/${userId}`, observedAt: Date.now(), source: "vrchat_private", status: "resolved" })),
       pendingCount: 0,
       expiresAt,
     });

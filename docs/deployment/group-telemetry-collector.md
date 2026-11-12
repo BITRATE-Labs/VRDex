@@ -288,6 +288,10 @@ Workspace identities have a private integration/epoch-scoped queue separate from
 
 The invitation composer waits 300 ms after recipient edits before previewing the list and admitting name lookups. Review requires a settled, nonempty selection and still revalidates those exact IDs. The people hook retains each unchanged, unexpired source ticket only while that source remains active in the same viewer/community/integration scope. Loading another activity page admits only its new chunks; removing a source or changing access discards its ticket, and expiry renews only the affected active sources.
 
+Members' recent actions and scheduled-action views retain groups of continuously visible operation IDs when another page arrives, including filtered or underfilled pages. New visible IDs enter new groups of at most 25; hidden operations are never admitted to stabilize a group. A removed and later restored source needs fresh admission. A failed people query contributes no names or pending count, while other active, unexpired views remain usable. Viewer, community, access and epoch changes still discard every old ticket.
+
+Identity joins and fallback collision checks use canonical VRChat user-ID keys across activity, members, invitations and scheduled actions. This comparison does not change the original IDs displayed in confirmation or sent in action payloads, selected recipient counts, operation IDs or revisions.
+
 Failed recipient previews show the existing error or validation message and offer Retry without requiring an edit. Retry keeps the entered IDs, makes one new settled preview attempt, and leaves Review disabled until that current input succeeds. Changing the input cancels any older pending result; failures do not start an automatic request loop.
 
 When active sources name the same person differently, VRChat observations take precedence over recorded names, which take precedence over VRDex profile fallbacks. Within a source class, the latest observation wins. Loading an older activity page cannot replace a newer recorded name. Only currently authorized, unexpired source results participate.

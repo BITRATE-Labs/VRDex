@@ -45,8 +45,13 @@ class MembersFixtureClient extends ConvexReactClient {
     private readonly directoryReadFailure: boolean,
     private readonly mixedCaseRoles: boolean,
     private readonly collidingIds = false,
+    private readonly mixedCaseUsers = false,
+    private readonly pagedActions = 0,
   ) {
     super("https://fixture.invalid");
+    if (pagedActions) {
+      for (let index = 0; index < pagedActions + 7; index++) this.jobs.push({ id: `Action-MiXeD-${index}`, revision: 7, payload: index >= pagedActions && index < pagedActions + 5 ? { kind: "publish_post", title: "Hidden post", text: "", visibility: "group", sendNotification: false } : { kind: "invite_member", targetUserId: user(index + 1) }, schedule: { kind: "immediate" }, dueAt: Date.now(), state: "pending", actor: { tokenIdentifier: "fixture", subject: "fixture", issuer: "fixture" }, batchId: "paging", code: null });
+    }
     if (collidingIds) {
       this.peopleFixture.resolved = false;
       this.peopleFixture.pendingAllowed = false;
@@ -74,7 +79,7 @@ class MembersFixtureClient extends ConvexReactClient {
       };
     }
     else if (name === "clubOperations:list")
-      result = { page: this.jobs, isDone: true, continueCursor: "" };
+      result = this.pagedActions ? { page: (args.paginationOpts as { cursor?: string }).cursor ? this.jobs.slice(this.pagedActions + 5) : this.jobs.slice(0, this.pagedActions + 5), isDone: Boolean((args.paginationOpts as { cursor?: string }).cursor), continueCursor: "next-actions" } : { page: this.jobs, isDone: true, continueCursor: "" };
     else if (name === "clubProviderReads:get") {
       const params = this.requests.get(String(args.requestId));
       if (!params) throw new Error("Missing fixture request");
@@ -105,6 +110,7 @@ class MembersFixtureClient extends ConvexReactClient {
           roleIds: [djRole],
           joinedAt: "2026-08-01T18:00:00Z",
         }));
+      if (this.mixedCaseUsers && params.kind !== "roles") items = items.map(item => ({ ...item, id: item.id.toUpperCase(), userId: item.userId?.toUpperCase(), displayName: undefined }));
       if (this.collidingIds && params.kind !== "roles") items = items.map((item, index) => ({ ...item, ...(index === 1 ? { id: "usr_11111111-1111-1111-1111-111100000001", userId: "usr_11111111-1111-1111-1111-111100000001" } : {}), displayName: undefined }));
       if (params.kind === "search")
         items = items.filter((item) =>
@@ -163,7 +169,12 @@ class MembersFixtureClient extends ConvexReactClient {
     if (name === "clubPeople:requestView") {
       const source = value.source as FunctionArgs<typeof import("@convex-generated-api").api.clubPeople.requestView>["source"];
       const read = source.kind === "provider_read" ? this.result("clubProviderReads:get", { requestId: source.requestId }) as FunctionReturnType<typeof import("@convex-generated-api").api.clubProviderReads.get> : null;
-      result = this.peopleFixture.request(source, source.kind === "scheduled_operations" ? this.jobs.flatMap(job => { const payload = job.payload; return payload && typeof payload === "object" && "targetUserId" in payload && typeof payload.targetUserId === "string" ? [payload.targetUserId] : []; }) : read?.result?.items.map(item => item.userId ?? item.id) ?? [], new Map(read?.result?.items.flatMap(item => item.displayName ? [[item.userId ?? item.id, item.displayName]] : [])));
+      if (source.kind === "scheduled_operations") {
+        const admissions = JSON.parse(document.documentElement.dataset.operationAdmissions ?? "[]") as string[][];
+        admissions.push(source.operationIds); document.documentElement.dataset.operationAdmissions = JSON.stringify(admissions);
+        if (admissions.length > 1) await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      result = this.peopleFixture.request(source, source.kind === "scheduled_operations" ? this.jobs.filter(job => source.operationIds.includes(job.id as Id<"clubOperations">)).flatMap(job => { const payload = job.payload; return payload && typeof payload === "object" && "targetUserId" in payload && typeof payload.targetUserId === "string" ? [payload.targetUserId] : []; }) : read?.result?.items.map(item => item.userId ?? item.id) ?? [], new Map(read?.result?.items.flatMap(item => item.displayName ? [[item.userId ?? item.id, item.displayName]] : [])));
     } else if (name === "clubProviderReads:request") {
       if (
         this.staff &&
@@ -174,6 +185,7 @@ class MembersFixtureClient extends ConvexReactClient {
       this.requests.set(id, value.params as ProviderReadParams);
       result = id;
     } else if (name === "clubOperations:enqueue") {
+      document.documentElement.dataset.memberPayload = JSON.stringify(value);
       if ((value.schedule as {kind: string}).kind !== "immediate") throw new Error("Expected immediate schedule");
       const ids: string[] = [];
       for (const payload of value.payloads as Array<Record<string, unknown>>) {
@@ -212,6 +224,8 @@ function MembersFixture({
   permissionSwitch = false,
   mixedCaseRoles = false,
   collidingIds = false,
+  mixedCaseUsers = false,
+  pagedActions = 0,
 }: {
   staff?: boolean;
   readFailure?: boolean;
@@ -220,6 +234,8 @@ function MembersFixture({
   permissionSwitch?: boolean;
   mixedCaseRoles?: boolean;
   collidingIds?: boolean;
+  mixedCaseUsers?: boolean;
+  pagedActions?: number;
 }) {
   const [limited, setLimited] = useState(false);
   const actorPermissions = useMemo<WorkspaceData["actor"]["permissions"]>(
@@ -228,7 +244,7 @@ function MembersFixture({
       : []),
     [permissions, staff, limited],
   );
-  const [client] = useState(() => new MembersFixtureClient(staff, readFailure, actorPermissions, directoryReadFailure, mixedCaseRoles, collidingIds));
+  const [client] = useState(() => new MembersFixtureClient(staff, readFailure, actorPermissions, directoryReadFailure, mixedCaseRoles, collidingIds, mixedCaseUsers, pagedActions));
   useLayoutEffect(() => client.setPermissions(actorPermissions), [client, actorPermissions]);
   const data: WorkspaceData = {
     community: {
@@ -306,3 +322,7 @@ export const MixedRoleDirectoryUnavailable: Story = {
 };
 
 export const CollidingIds: Story = { render: () => <MembersFixture collidingIds /> };
+
+export const MixedCasePeople: Story = { render: () => <MembersFixture mixedCaseUsers /> };
+export const PagedPeople: Story = { render: () => <MembersFixture pagedActions={20} /> };
+export const UnderfilledPeople: Story = { render: () => <MembersFixture pagedActions={17} /> };

@@ -1,5 +1,30 @@
 import { test, expect } from "@playwright/test";
 
+test("mixed-case identity fallbacks compare canonical people and suffix collisions @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-people-controls--mixed-case-fallbacks&viewMode=story");
+  await expect(page.locator("bdi")).toHaveCount(3);
+  const names = await page.locator("bdi").allTextContents();
+  expect(names).toHaveLength(3);
+  expect(names[0]).toBe(names[1]); expect(names[0]).not.toBe(names[2]);
+  await expect(page.getByText("USR_AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA", { exact: true })).toBeVisible();
+});
+
+test("one failed chunk preserves successful active names and pending counts until global access loss @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-people-controls--chunked-sources&viewMode=story");
+  const people = page.getByRole("region", { name: "People", exact: true });
+  await page.getByRole("button", { name: "Add chunk", exact: true }).click();
+  await expect(people.getByRole("link", { name: "Riley", exact: true })).toHaveCount(2);
+  await page.getByRole("button", { name: "Fail second chunk", exact: true }).click();
+  await expect(people.getByRole("link", { name: "Riley", exact: true })).toHaveCount(1);
+  await page.getByRole("button", { name: "Delay names", exact: true }).click();
+  await expect(people.getByRole("status")).toHaveText("Updating names · 1");
+  await page.getByRole("button", { name: "Resolve names", exact: true }).click();
+  await expect(people.getByRole("link", { name: "Riley", exact: true })).toHaveCount(1);
+  await page.getByRole("button", { name: "Remove workspace access", exact: true }).click();
+  await expect(people.getByRole("link", { name: "Riley", exact: true })).toHaveCount(0);
+  await expect(people.getByRole("status")).toHaveCount(0);
+});
+
 for (const button of ["Change source", "Change viewer", "Change community", "Replace integration scope"]) {
   test(`people clear immediately on ${button} @storybook-visual`, async ({ page }) => {
     await page.goto("/iframe.html?id=clubs-people-controls--lifecycle&viewMode=story");

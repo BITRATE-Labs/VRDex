@@ -21,12 +21,35 @@ export function isVrchatUserId(userId: string | undefined): userId is string {
   return userId !== undefined && /^usr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
 }
 
+export const personKey = (userId: string) => isVrchatUserId(userId) ? userId.toLowerCase() : userId;
+export function findPersonIdentity<T extends PersonIdentity>(people: readonly T[], userId?: string): T | undefined {
+  return userId ? people.find(person => person.userId !== undefined && personKey(person.userId) === personKey(userId)) : undefined;
+}
+
 export function personName(userId?: string, name?: string, visibleIds: string[] = []) {
   if (name?.trim()) return name;
   if (!userId) return "Unknown member";
+  const key = personKey(userId);
   let length = 8;
-  while (length < userId.length && visibleIds.some(id => id !== userId && id.slice(-length) === userId.slice(-length))) length++;
-  return `Member ${userId.slice(-length)}`;
+  while (length < key.length && visibleIds.some(id => personKey(id) !== key && personKey(id).slice(-length) === key.slice(-length))) length++;
+  return `Member ${key.slice(-length)}`;
+}
+
+export function useOperationPeople(operationIds: Id<"clubOperations">[]) {
+  const ids = [...new Set(operationIds)];
+  const key = JSON.stringify(ids);
+  const [grouping, setGrouping] = useState<{ key: string; groups: Id<"clubOperations">[][] }>({ key: "", groups: [] });
+  let groups = grouping.groups;
+  if (grouping.key !== key) {
+    const visible = new Set(ids);
+    groups = groups.map(group => group.filter(id => visible.has(id))).filter(group => group.length > 0);
+    const retained = new Set(groups.flat());
+    const added = ids.filter(id => !retained.has(id));
+    // Freeze partial groups: filtered or underfilled pages must not re-admit old visible operations on append.
+    groups = [...groups, ...Array.from({ length: Math.ceil(added.length / 25) }, (_, index) => added.slice(index * 25, index * 25 + 25))];
+    setGrouping({ key, groups });
+  }
+  return useClubPeople(groups.length ? groups.map(operationIds => ({ kind: "scheduled_operations", operationIds })) : null);
 }
 
 export function useClubPeople(source: PeopleSource | PeopleSource[] | null) {
@@ -82,15 +105,16 @@ export function useClubPeople(source: PeopleSource | PeopleSource[] | null) {
   }, [current]);
   const people = new Map<string, PeopleView["people"][number]>();
   const pending = new Set<string>();
-  if (current && !Object.values(results).some(result => result instanceof Error)) {
-    for (const [viewId, result] of Object.entries(results)) if (result && !(result instanceof Error) && current.views.some(view => view.viewId === viewId && view.expiresAt > Date.now())) {
+  if (current) {
+    for (const [viewId, result] of Object.entries(results)) if (result && !(result instanceof Error) && result.expiresAt > Date.now() && current.views.some(view => view.viewId === viewId && view.expiresAt > Date.now())) {
       for (const person of result.people) {
-        const previous = people.get(person.userId);
+        const personId = personKey(person.userId);
+        const previous = people.get(personId);
         const priority = person.displayName && person.source ? nameSourcePriority[person.source] : 0;
         const previousPriority = previous?.displayName && previous.source ? nameSourcePriority[previous.source] : 0;
         if (!previous || priority > previousPriority ||
-            (priority === previousPriority && (person.observedAt ?? 0) > (previous.observedAt ?? 0))) people.set(person.userId, person);
-        if (result.pendingCount > 0 && person.status === "pending") pending.add(person.userId);
+            (priority === previousPriority && (person.observedAt ?? 0) > (previous.observedAt ?? 0))) people.set(personId, person);
+        if (result.pendingCount > 0 && person.status === "pending") pending.add(personId);
       }
     }
   }

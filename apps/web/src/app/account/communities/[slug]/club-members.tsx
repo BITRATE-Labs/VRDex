@@ -14,7 +14,7 @@ import {
   type ProviderItem,
   type ProviderReadParams,
 } from "./club-provider-read";
-import { ClubPerson, PeoplePending, accessiblePersonName, personName, useClubPeople } from "./club-person";
+import { findPersonIdentity, ClubPerson, PeoplePending, accessiblePersonName, personName, useOperationPeople, useClubPeople } from "./club-person";
 import { metricTime } from "./club-chart";
 
 type Payload = FunctionArgs<
@@ -166,7 +166,7 @@ function MembersContent({
     { initialNumItems: 25 },
   );
   const recentOperations = operations.results.filter(operation => operation.payload.kind in actionLabels);
-  const operationPeople = useClubPeople(recentOperations.length ? Array.from({ length: Math.ceil(recentOperations.length / 25) }, (_, index) => ({ kind: "scheduled_operations" as const, operationIds: recentOperations.slice(index * 25, index * 25 + 25).map(operation => operation.id) })) : null);
+  const operationPeople = useOperationPeople(recentOperations.map(operation => operation.id));
   const allowedRoles =
     roles.data?.items.filter(
       (role) => owner || permittedRoles.some(id => id.toLowerCase() === role.id.toLowerCase()),
@@ -276,7 +276,7 @@ function MembersContent({
           <ul className="mt-3 grid gap-1 text-sm">
             {review.targets.map((item) => (
               <li key={targetId(item)}>
-                <ClubPerson userId={targetId(item)} identity={people.people.find(person => person.userId === targetId(item))} recordedName={item.displayName} visibleIds={review.targets.map(targetId)} exactId />
+                <ClubPerson userId={targetId(item)} identity={findPersonIdentity(people.people, targetId(item))} recordedName={item.displayName} visibleIds={review.targets.map(targetId)} exactId />
               </li>
             ))}
           </ul>
@@ -317,7 +317,7 @@ function MembersContent({
         <Card padding="lg">
           <div className="flex items-center justify-between gap-3">
             <SectionTitle>
-              <bdi>{personName(targetId(detail), memberPeople.people.find(person => person.userId === targetId(detail))?.displayName || currentMember?.displayName)}</bdi>
+              <bdi>{personName(targetId(detail), findPersonIdentity(memberPeople.people, targetId(detail))?.displayName || currentMember?.displayName)}</bdi>
             </SectionTitle>
             <Button onClick={() => setDetail(null)}>Close detail</Button>
           </div>
@@ -582,7 +582,7 @@ function MembersContent({
                   (tab === "members" && can("assign_vrchat_roles"))) &&
                 !protectedIds.includes(targetId(item)) ? (
                   <CheckboxField
-                    aria-label={`Select ${accessiblePersonName(personName(targetId(item), people.people.find(person => person.userId === targetId(item))?.displayName || item.displayName, visibleIds))}`}
+                    aria-label={`Select ${accessiblePersonName(personName(targetId(item), findPersonIdentity(people.people, targetId(item))?.displayName || item.displayName, visibleIds))}`}
                     checked={selected.some(
                       (row) => targetId(row) === targetId(item),
                     )}
@@ -600,11 +600,11 @@ function MembersContent({
                   </CheckboxField>
                 ) : null}
                 <div className="min-w-0">
-                  <ClubPerson userId={targetId(item)} identity={people.people.find(person => person.userId === targetId(item))} recordedName={item.displayName} visibleIds={visibleIds} />
+                  <ClubPerson userId={targetId(item)} identity={findPersonIdentity(people.people, targetId(item))} recordedName={item.displayName} visibleIds={visibleIds} />
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                {can("view_members") ? <Button size="sm" onClick={() => setDetail(item)}>Manage member<span className="sr-only"> {accessiblePersonName(personName(targetId(item), people.people.find(person => person.userId === targetId(item))?.displayName || item.displayName, visibleIds))}</span></Button> : null}
+                {can("view_members") ? <Button size="sm" onClick={() => setDetail(item)}>Manage member<span className="sr-only"> {accessiblePersonName(personName(targetId(item), findPersonIdentity(people.people, targetId(item))?.displayName || item.displayName, visibleIds))}</span></Button> : null}
                 {tab === "requests" ? (
                   <>
                     {action("approve_request", "approve_join_requests", item)}
@@ -673,7 +673,7 @@ function MembersContent({
                     {actionLabels[operation.payload.kind]}
                   </p>
                   {"targetUserId" in operation.payload ? (
-                    <div className="mt-2"><ClubPerson userId={operation.payload.targetUserId} identity={operationPeople.people.find(person => "targetUserId" in operation.payload && person.userId === operation.payload.targetUserId)} visibleIds={recentOperations.flatMap(item => "targetUserId" in item.payload ? [item.payload.targetUserId] : [])} /></div>
+                    <div className="mt-2"><ClubPerson userId={operation.payload.targetUserId} identity={findPersonIdentity(operationPeople.people, operation.payload.targetUserId)} visibleIds={recentOperations.flatMap(item => "targetUserId" in item.payload ? [item.payload.targetUserId] : [])} /></div>
                   ) : null}
                 </div>
                 <span className="text-sm">{stateLabels[operation.state]}</span>

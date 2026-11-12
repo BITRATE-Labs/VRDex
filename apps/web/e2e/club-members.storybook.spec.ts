@@ -1,4 +1,35 @@
 import { expect, test } from "@playwright/test";
+test("mixed-case identity members keep names and original action payload IDs @storybook-visual", async ({ page }) => {
+  const rawId = "USR_00000000-0000-0000-0000-000000000001";
+  await page.goto("/iframe.html?id=clubs-members--mixed-case-people&viewMode=story");
+  await expect(page.getByRole("checkbox", { name: "Select Riley", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Manage member Riley", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Riley", exact: true })).toBeVisible();
+  await page.getByRole("checkbox", { name: "Select Riley", exact: true }).check();
+  await page.getByLabel("VRChat role", { exact: true }).selectOption("grol_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1");
+  await page.getByRole("button", { name: "Assign selected", exact: true }).click();
+  const review = page.locator("section").filter({ has: page.getByRole("heading", { name: "Review action", exact: true }) }).last();
+  await expect(review.getByRole("link", { name: "Riley", exact: true })).toBeVisible();
+  await expect(review).toContainText(rawId);
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/bd4a-member-review-${test.info().project.name}.png`, fullPage: true });
+  }
+  await page.getByRole("button", { name: "Confirm action", exact: true }).click();
+  expect(await page.evaluate(() => JSON.parse(document.documentElement.dataset.memberPayload!).payloads[0].targetUserId)).toBe(rawId);
+  const actions = page.locator("section").filter({ has: page.getByRole("heading", { name: "Recent actions", exact: true }) }).last();
+  await expect(actions.getByRole("link", { name: "Riley", exact: true })).toBeVisible();
+});
+
+for (const [story, count] of [["paged-people", 20], ["underfilled-people", 17]] as const) test(`identity admission keeps partial member groups stable on ${story} @storybook-visual`, async ({ page }) => {
+  await page.goto(`/iframe.html?id=clubs-members--${story}&viewMode=story`);
+  const actions = page.locator("section").filter({ has: page.getByRole("heading", { name: "Recent actions", exact: true }) }).last();
+  await expect(actions.getByRole("link", { name: "Riley", exact: true })).toHaveCount(1);
+  const admissions = () => page.evaluate(() => JSON.parse(document.documentElement.dataset.operationAdmissions!) as string[][]);
+  await expect.poll(admissions).toEqual([Array.from({ length: count }, (_, index) => `Action-MiXeD-${index}`)]);
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await expect(actions.getByRole("link", { name: "Riley", exact: true })).toHaveCount(1);
+  await expect.poll(admissions).toEqual([Array.from({ length: count }, (_, index) => `Action-MiXeD-${index}`), [`Action-MiXeD-${count + 5}`, `Action-MiXeD-${count + 6}`]]);
+});
 test("clearing member search restores the unfiltered directory @storybook-visual", async ({ page }) => {
   await page.goto("/iframe.html?id=clubs-members--owner&viewMode=story");
   await page.getByLabel("Search members").fill("Riley");

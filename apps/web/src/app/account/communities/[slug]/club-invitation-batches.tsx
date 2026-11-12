@@ -16,7 +16,7 @@ import { Notice } from "@/components/ui/notice";
 import { ClubAccessNotice, useClubWorkspace } from "./club-workspace";
 import { useClubProviderRead, type ProviderItem } from "./club-provider-read";
 import { metricTime } from "./club-chart";
-import { ClubPerson, PeoplePending, useClubPeople, type PersonIdentity } from "./club-person";
+import { findPersonIdentity, ClubPerson, PeoplePending, useClubPeople, type PersonIdentity } from "./club-person";
 import { operationReason } from "./club-operation-model";
 import type { Id } from "../../../../../../../convex/_generated/dataModel";
 
@@ -678,7 +678,7 @@ type RecipientSelectionProps = {
   onSelect: (userId: string, checked: boolean) => void;
 };
 function RecipientSelection({ ids, selected, onSelect, people = [] }: RecipientSelectionProps & { people?: PersonIdentity[] }) {
-  return <div className="grid gap-3"><p className="text-sm">Selected: {selected.length}</p><ul aria-label="Select recipients" className="max-h-96 divide-y divide-border overflow-y-auto">{ids.map(id => <li key={id} className="flex items-start gap-3 py-3"><CheckboxField aria-label={`Select recipient ${id}`} checked={selected.includes(id)} onChange={event => onSelect(id, event.target.checked)}>{""}</CheckboxField><ClubPerson userId={id} identity={people.find(person => person.userId === id)} visibleIds={ids} /></li>)}</ul></div>;
+  return <div className="grid gap-3"><p className="text-sm">Selected: {selected.length}</p><ul aria-label="Select recipients" className="max-h-96 divide-y divide-border overflow-y-auto">{ids.map(id => <li key={id} className="flex items-start gap-3 py-3"><CheckboxField aria-label={`Select recipient ${id}`} checked={selected.includes(id)} onChange={event => onSelect(id, event.target.checked)}>{""}</CheckboxField><ClubPerson userId={id} identity={findPersonIdentity(people, id)} visibleIds={ids} /></li>)}</ul></div>;
 }
 function SelectionPeople(props: RecipientSelectionProps) {
   const people = useClubPeople(props.destination ? { kind: "invitation_review", targetUserIds: props.ids, destination: props.destination } : null);
@@ -686,7 +686,7 @@ function SelectionPeople(props: RecipientSelectionProps) {
 }
 
 function ReviewedRecipients({ review, people = [], recipientEligibility }: { review: Review; people?: PersonIdentity[]; recipientEligibility?: (userId: string, destination: Enqueue["destination"]) => ReactNode }) {
-  return <ul aria-label="Reviewed recipients" className="max-h-96 overflow-y-auto divide-y divide-border">{review.reviewedRecipients.map(id => <li className="py-3" key={id}><ClubPerson userId={id} identity={people.find(person => person.userId === id)} visibleIds={review.reviewedRecipients} exactId />{recipientEligibility?.(id, review.destination)}</li>)}</ul>;
+  return <ul aria-label="Reviewed recipients" className="max-h-96 overflow-y-auto divide-y divide-border">{review.reviewedRecipients.map(id => <li className="py-3" key={id}><ClubPerson userId={id} identity={findPersonIdentity(people, id)} visibleIds={review.reviewedRecipients} exactId />{recipientEligibility?.(id, review.destination)}</li>)}</ul>;
 }
 function ReviewPeople({ review, communityProfileId }: { review: Review; communityProfileId: Id<"profiles"> }) {
   const people = useClubPeople({ kind: "invitation_review", targetUserIds: review.reviewedRecipients, destination: review.destination });
@@ -723,7 +723,7 @@ export function InvitationOutcomes({
             className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_10rem]"
           >
             <div>
-              <ClubPerson userId={item.userId} identity={people.find(person => person.userId === item.userId)} visibleIds={result.recipients.map(person => person.userId)}>
+              <ClubPerson userId={item.userId} identity={findPersonIdentity(people, item.userId)} visibleIds={result.recipients.map(person => person.userId)}>
                 {item.reviewedUserId !== item.userId ? <div><dt>Originally reviewed</dt><dd className="break-all">{item.reviewedUserId}</dd></div> : null}
               </ClubPerson>
               <p className="mt-1 text-xs text-muted">
@@ -760,7 +760,7 @@ export function InvitationOutcomes({
           className="rounded-control border border-border p-4"
         >
           <p>Cancel invitations that have not been submitted?</p>
-          <ul className="mt-3 grid gap-3">{result.recipients.filter(item => ["pending", "claimed"].includes(item.state)).map(item => <li key={item.operationId}><ClubPerson userId={item.userId} identity={people.find(person => person.userId === item.userId)} visibleIds={result.recipients.filter(person => ["pending", "claimed"].includes(person.state)).map(person => person.userId)} exactId />{item.reviewedUserId !== item.userId ? <p className="break-all text-xs">Originally reviewed: {item.reviewedUserId}</p> : null}</li>)}</ul>
+          <ul className="mt-3 grid gap-3">{result.recipients.filter(item => ["pending", "claimed"].includes(item.state)).map(item => <li key={item.operationId}><ClubPerson userId={item.userId} identity={findPersonIdentity(people, item.userId)} visibleIds={result.recipients.filter(person => ["pending", "claimed"].includes(person.state)).map(person => person.userId)} exactId />{item.reviewedUserId !== item.userId ? <p className="break-all text-xs">Originally reviewed: {item.reviewedUserId}</p> : null}</li>)}</ul>
           <div className="mt-3 flex gap-2">
             <Button
               disabled={busy}
