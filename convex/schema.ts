@@ -1969,6 +1969,10 @@ export default defineSchema({
     occurredAt: v.number(),
     targetUserId: v.optional(v.string()),
     targetDisplayName: v.optional(v.string()),
+    actorUserId: v.optional(v.string()),
+    actorDisplayName: v.optional(v.string()),
+    roleId: v.optional(v.string()),
+    roleName: v.optional(v.string()),
     receivedAt: v.number(),
     verified: v.boolean(),
   }).index("by_audit", ["integrationId", "epochStartedAt", "auditId"])
