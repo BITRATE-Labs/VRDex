@@ -194,7 +194,7 @@ export function EventOperatorControls({
     ? "Stopped"
     : ["ended", "error"].includes(session.status)
       ? session.status
-      : session.status === "starting" || session.status === "stopping"
+      : view.lifecycleFresh
         ? session.status
       : observationFresh
         ? session.status
@@ -310,10 +310,11 @@ export function EventOperatorControls({
     setChange(null);
   }
   function outputHealth(output:OperatorStatus["outputs"][number]) {
+    if (output.authorized === false) return "Unknown";
     if (view.offAir) return "Off air";
-    if (session?.status === "starting" || session?.status === "stopping") return session.status;
-    const fresh=observationFresh && output.authorized !== false && eventBroadcastObservationFresh({serverNow:status.serverNow,elapsedMs:elapsed,leaseExpiresAt:session?.leaseExpiresAt,observedAt:session?.outputHealthObservedAt,status:session?.status});
-    return fresh ? session?.outputHealth.find(row=>row.outputId===output.outputId)?.status ?? "Unknown" : "Unknown";
+    const fresh=eventBroadcastObservationFresh({serverNow:status.serverNow,elapsedMs:elapsed,leaseExpiresAt:session?.leaseExpiresAt,observedAt:session?.outputHealthObservedAt,status:session?.status});
+    const observed = fresh ? session?.outputHealth.find(row=>row.outputId===output.outputId) : undefined;
+    return observed?.status ?? (view.lifecycleFresh ? session?.status ?? "Unknown" : "Unknown");
   }
   const usableOutputs = status.outputs.filter(row => row.authorized !== false && ["ready", "active"].includes(row.state));
   const primaryOutputs = usableOutputs.filter(row=>!row.simulcastEnabled);

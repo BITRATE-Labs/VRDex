@@ -1,4 +1,4 @@
-import {readFile,writeFile,readdir} from "node:fs/promises";
+import {readFile,writeFile,readdir,mkdir} from "node:fs/promises";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 const mirror="https://mirrors.edge.kernel.org/ubuntu/";
@@ -7,6 +7,10 @@ async function readOptional(file) {
   catch(error) { if(error.code==="ENOENT") return null; throw error; }
 }
 export async function configureUbuntuMirror(root) {
+  await mkdir(path.join(root,"apt.conf.d"),{recursive:true});
+  // Bound a stalled mirror request so APT can reach the configured fallbacks.
+  await writeFile(path.join(root,"apt.conf.d/80vrdex-ci-timeouts"),
+    'Acquire::http::Timeout "15";\nAcquire::https::Timeout "15";\nAcquire::Retries "1";\n');
   const mirrorFile=path.join(root,"apt-mirrors.txt");
   const current=await readOptional(mirrorFile);
   if(current!==null) {

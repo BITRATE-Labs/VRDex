@@ -62,10 +62,14 @@ switch retains observation timestamps so provider results expire on the same
 available during probe failures. The host reader can prioritize a preview only
 when its canonical key belongs to that authorized/public roster.
 
-Starting and Stopping are lifecycle states and remain visible before a media
-observation arrives. Ended/error sessions display Off air and no observed mode,
-including while task cleanup still locks Start. Missing active sessions and stale
-live observations remain Unknown rather than inheriting another session's output.
+Starting and Stopping remain visible before a media observation arrives, bounded
+by the worker lease. Before lease acquisition, startup uses its persisted ready
+deadline and Stop uses its request time plus the existing 30-second grace period.
+Expired lifecycle evidence becomes Unknown. Fresh per-output health takes priority
+over the lifecycle label, and revoked destinations remain Unknown. Ended sessions
+display Off air and no observed mode while cleanup still locks Start; an error
+remains Unknown until output cleanup unlocks configuration. Missing active sessions
+and stale live observations never inherit another session's output.
 
 Diagnostics is collapsed and uses the existing control subscription. Server time
 plus browser monotonic elapsed time ages CPU and memory to Unknown at 30 seconds;

@@ -377,6 +377,9 @@ synthetic-media installation, prepare the same independent mirror through
 `.github/scripts/configure-ubuntu-mirror.mjs` before installing dependencies. These install
 steps have a ten-minute timeout for system dependencies and browser downloads. The helper logs the effective mirror list and
 retains Ubuntu package signature verification and the existing HTTPS fallbacks.
+Individual APT HTTP/HTTPS requests have a 15-second inactivity timeout and one
+retry, so an unresponsive preferred mirror cannot consume the whole install
+window before fallback. These settings apply only to CI's APT configuration.
 Runners without a mirror-list file explicitly report that their configured sources
 remain in use.
 Linux tests execute the helper against disposable missing, empty, unterminated and

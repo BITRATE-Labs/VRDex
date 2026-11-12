@@ -154,6 +154,58 @@ it("startup and stopping retain known lifecycle labels before output observation
   assert.match(html, /role="status">stopping<\/span>/);
   assert.doesNotMatch(html, />On air<\/span>/);
 });
+it("lifecycle labels expire with authority and unconfirmed errors do not claim Off air", async () => {
+  const { operatorFixture } = await import("../../apps/web/src/app/playwright/event-operator/fixture-state");
+  const { operatorViewState } = await import("../../apps/web/src/lib/event-operator-state");
+  const status = operatorFixture();
+  const session = status.sessions[0];
+  session.status = "starting";
+  session.programObservedAt = undefined;
+  session.observedOutputMs = undefined;
+  status.serverNow += 30_001;
+  assert.equal(operatorViewState(status,0).actual,"Unknown");
+  assert.equal(field(renderOperator(status),"Worker"),"Unknown");
+  session.status = "stopping";
+  assert.equal(field(renderOperator(status),"Worker"),"Unknown");
+  session.status = "error";
+  status.program.activeSessionId = undefined;
+  assert.equal(field(renderOperator(status),"Observed output"),"Unknown");
+  status.outputConfigurationLocked = false;
+  assert.equal(field(renderOperator(status),"Observed output"),"Off air");
+});
+it("stopping preserves fresh per-output health and never promotes revoked destinations", async () => {
+  const { operatorFixture } = await import("../../apps/web/src/app/playwright/event-operator/fixture-state");
+  const status = operatorFixture();
+  status.sessions[0].status = "stopping";
+  status.outputs[1].authorized = false;
+  const html = renderOperator(status);
+  assert.match(html, /<span>VRCDN<\/span><span>publishing<\/span>/);
+  assert.match(html, /<span>Twitch<\/span><span>Unknown<\/span>/);
+  status.sessions[0].outputHealthObservedAt = undefined;
+  assert.match(renderOperator(status), /<span>VRCDN<\/span><span>stopping<\/span>/);
+  status.sessions[0].status = "ended";
+  assert.match(renderOperator(status), /<span>Twitch<\/span><span>Unknown<\/span>/);
+});
+it("unleased lifecycle labels use the persisted ready deadline and bounded Stop request", async () => {
+  const { operatorFixture } = await import("../../apps/web/src/app/playwright/event-operator/fixture-state");
+  const { operatorViewState } = await import("../../apps/web/src/lib/event-operator-state");
+  const status = operatorFixture();
+  const session = status.sessions[0];
+  session.status = "starting";
+  session.leaseExpiresAt = undefined;
+  session.readyDeadlineAt = status.serverNow + 180_000;
+  session.programObservedAt = undefined;
+  assert.equal(operatorViewState(status,0).actual,"Starting");
+  assert.equal(operatorViewState(status,180_000).actual,"Unknown");
+  session.readyDeadlineAt = undefined;
+  assert.equal(operatorViewState(status,0).actual,"Unknown");
+  session.status = "stopping";
+  session.stopRequestedAt = status.serverNow;
+  assert.equal(operatorViewState(status,29_999).lifecycleFresh,true);
+  assert.equal(operatorViewState(status,30_000).lifecycleFresh,false);
+  session.leaseExpiresAt = status.serverNow - 1;
+  assert.equal(operatorViewState(status,0).lifecycleFresh,false);
+});
 it("actual encoded output and committed intent stay on Aurora while Nova prepares; Cut remains enabled", () => {
   const html = renderOperator(fixture());
   assert.match(html, />Preparing</);

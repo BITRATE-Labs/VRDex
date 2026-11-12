@@ -46,8 +46,16 @@ export function operatorViewState(
   const pending = session?.pendingOperation;
   const canStop = status.canControl && active && !stopPending;
   const canOperate = canStop && !session?.connectionTest;
-  const offAir = Boolean(session && ["ended", "error"].includes(session.status)) ||
+  const offAir = session?.status === "ended" ||
+    (session?.status === "error" && !status.outputConfigurationLocked) ||
     (!status.program?.activeSessionId && !status.outputConfigurationLocked);
+  const now = status.serverNow + elapsedMs;
+  const lifecycleDeadline = session?.leaseExpiresAt ??
+    (session?.status === "starting" ? session.readyDeadlineAt :
+      session?.stopRequestedAt === undefined ? undefined : session.stopRequestedAt + 30_000);
+  const lifecycleFresh = Boolean(session && ["starting", "stopping"].includes(session.status) &&
+    Number.isFinite(now) && elapsedMs >= 0 && lifecycleDeadline !== undefined &&
+    Number.isFinite(lifecycleDeadline) && lifecycleDeadline > now);
   const observedSource = encoded && session?.currentSourceId && session.observedSourceRevision !== undefined
     ? { sourceId: session.currentSourceId, revision: session.observedSourceRevision }
     : undefined;
@@ -55,12 +63,13 @@ export function operatorViewState(
     session,
     active,
     observationFresh,
+    lifecycleFresh,
     offAir,
     observedSource,
     pending,
     actual: encoded
       ? sourceLabel(session?.currentSourceId, session?.observedSourceRevision)
-      : offAir ? "Off air" : session?.status === "starting" ? "Starting" : "Unknown",
+      : offAir ? "Off air" : lifecycleFresh && session?.status === "starting" ? "Starting" : "Unknown",
     desired:
       intent?.kind === "manual"
         ? sourceLabel(intent.sourceId, intent.revision)
