@@ -620,3 +620,17 @@ it("known unavailable contribution returns the stable tool refusal", async () =>
   assert.equal(result.isError, true);
   assert.deepEqual(result.content, [{ type: "text", text: "Contribution unavailable." }]);
 });
+
+it("review list follows empty batch checkpoints before reporting the queue", async () => {
+  const cursors: unknown[] = [];
+  const handlers = createMcpMediaReviewHandlers(dependencies({ query: async (name, args) => {
+    assert.equal(name, "list");
+    const cursor = (args.paginationOpts as { cursor: unknown }).cursor;
+    cursors.push(cursor);
+    return cursor === null ? { page: [], continueCursor: "checkpoint", isDone: false }
+      : { page: [detail()], continueCursor: "done", isDone: true };
+  } }));
+  const result = await handlers.list({ batchId: "batch" });
+  assert.deepEqual(cursors, [null, "checkpoint"]);
+  assert.equal((result.structuredContent as { page: unknown[] }).page.length, 1);
+});

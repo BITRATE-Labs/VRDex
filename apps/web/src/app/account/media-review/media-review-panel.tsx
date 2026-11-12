@@ -8,7 +8,7 @@ import {
   type ReviewDetail,
   type CommandReceipt,
 } from "@vrdex/api-contracts";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import type { Id } from "../../../../../../convex/_generated/dataModel";
 import type { FunctionReturnType } from "convex/server";
@@ -537,6 +537,10 @@ export function MediaReviewPanel({
     reviewQueryArgs,
     { initialNumItems: 40 },
   );
+
+  useEffect(() => {
+    if (batchId && submissions.length === 0 && paginationStatus === "CanLoadMore") loadMore(40);
+  }, [batchId, submissions.length, paginationStatus, loadMore]);
 
   async function cleanDueFiles() {
     setCleanupStatus(null);

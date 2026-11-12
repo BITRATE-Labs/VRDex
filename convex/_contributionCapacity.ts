@@ -33,11 +33,11 @@ export function localUploadModes(env: Record<string, string | undefined> = proce
 }
 // Includes archived and legacy envelopes. A bounded read also handles rows created
 // before envelope admission existed, without an unbounded migration transaction.
-export async function retainedBatchUsage(db: DatabaseReader, actor: Id<"users">, limit: number) {
+export async function retainedBatchUsage(db: DatabaseReader, actor: Id<"users">, limit: number, maximumBytesRead = 8 * 1024 * 1024) {
   const page = await db.query("contributionBatches")
     .withIndex("by_actor_key", q => q.eq("actorUserId", actor)).paginate({
       cursor: null, numItems: limit + 1, maximumRowsRead: limit + 1,
-      maximumBytesRead: 8 * 1024 * 1024,
+      maximumBytesRead,
     });
   return { count: page.page.length, isLowerBound: !page.isDone || page.pageStatus === "SplitRequired" };
 }
@@ -50,6 +50,9 @@ export async function effectiveContributionPolicy(
   const tier = grants.superAdmin ? "superadmin" :
     grants.canContributeBulk || grants.canReviewMedia || grants.canPublishMedia ? "trusted" : "ordinary";
   return { ...policy, tier, limits: policy[tier] };
+}
+export function effectiveCapacityLimit(policyLimit: number | null, storedLimit?: number) {
+  return policyLimit === null ? storedLimit ?? null : Math.min(policyLimit, storedLimit ?? policyLimit);
 }
 export async function contributionChargeRefusal(
   db: DatabaseReader,
@@ -93,14 +96,14 @@ export async function contributionChargeRefusal(
             .withIndex("by_scope", (q) => q.eq("scope", "published"))
             .unique()
         : null;
+    const byteLimit = effectiveCapacityLimit(maxBytes, row?.byteLimit);
+    const processingLimit = effectiveCapacityLimit(maxProcessing, row?.processingLimit);
     if (
-      maxBytes !== null && (row?.bytes ?? 0) + (published?.bytes ?? 0) + bytes >
-      Math.min(row?.byteLimit ?? maxBytes, maxBytes)
+      byteLimit !== null && (row?.bytes ?? 0) + (published?.bytes ?? 0) + bytes > byteLimit
     )
       return `CONTRIBUTION_${category}_BYTES`;
     if (
-      maxProcessing !== null && (row?.processing ?? 0) + processing >
-      Math.min(row?.processingLimit ?? maxProcessing, maxProcessing)
+      processingLimit !== null && (row?.processing ?? 0) + processing > processingLimit
     )
       return `CONTRIBUTION_${category}_CONCURRENCY`;
   }

@@ -174,7 +174,7 @@ export function createMcpMediaReviewHandlers<TActor extends string>(
   return {
     async list(input: unknown): Promise<ToolResult> {
       const value = mediaReviewPageInputSchema.parse(input);
-      const result = await dependencies.query("list", {
+      const args = {
         ...(await attestation(dependencies)),
         ...(value.batchId === undefined ? {} : { batchId: value.batchId }),
         ...(value.profileId === undefined
@@ -182,8 +182,15 @@ export function createMcpMediaReviewHandlers<TActor extends string>(
           : { profileId: value.profileId }),
         ...(value.status === undefined ? {} : { status: value.status }),
         paginationOpts: { numItems: value.limit, cursor: value.cursor },
-      });
-      return jsonResult(mediaReviewListOutputSchema.parse(result));
+      };
+      let result = mediaReviewListOutputSchema.parse(await dependencies.query("list", args));
+      // Bound checkpoint traversal; a remaining continuation stays resumable.
+      for (let i = 0; value.batchId && i < 40 && !result.isDone && result.page.length === 0; i++) {
+        if (result.continueCursor === args.paginationOpts.cursor) throw new Error("PAGE_CURSOR_INVALID");
+        args.paginationOpts.cursor = result.continueCursor;
+        result = mediaReviewListOutputSchema.parse(await dependencies.query("list", args));
+      }
+      return jsonResult(result);
     },
 
     async get(input: unknown): Promise<ToolResult> {

@@ -246,3 +246,23 @@ Implementation decisions and limits:
 
 Source evidence: implementation commits `514eb77c2`, `5863577cd`, `5f79b8471`,
 and `d9d2cc5af`, based on `440f37c80aecb3d2b867592ef0470b3f7200df90`.
+
+### PR review follow-up
+
+- Capacity discovery reads at most 101 retained envelopes or 512 KiB and labels
+  incomplete totals as lower bounds. Open-status counting stops at the actor's
+  quota rather than reading that quota for every status.
+- A regression reproduced the discovery read-budget failure with 1,000 open
+  proposals carrying 4 KiB source URLs, 1 KiB source descriptions and 1 KiB
+  private reasons, plus 10,000 retained envelopes. The fixed query and clean
+  over-ceiling admission refusal pass with Convex's default transaction limits.
+  This fixture proves that workload, not every possible metadata combination
+  or hosted throughput. The existing 1,100-admission/completion load test also
+  passes with its explicit 2,000,000-byte transaction read budget.
+- Explicit stored operational byte and processing limits apply even when a
+  superadmin has no contributor quota. Shared deployment usage and remaining
+  figures are visible only to superadmins.
+- Browser and MCP review clients now follow empty source checkpoints. MCP
+  traversal is bounded to 40 continuations per call and remains resumable.
+- Ordinary-tier refusal sentences retain their previously approved wording.
+  Trusted-tier numerical substitutions follow the approved capacity pattern.

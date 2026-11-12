@@ -468,7 +468,10 @@ Batch review cursors page inherited replacements independently from source
 revisions, with at most one native pagination per query. A continuation may yield
 an empty page while capturing the next source checkpoint. Callers must follow
 `isDone` and continuation cursors rather than treating an empty page as the end.
-Current cursors use `batch_review_v3`; stale earlier cursors require a fresh read.
+The browser follows checkpoints automatically while its queue is empty. MCP
+list calls traverse up to 40 empty checkpoints and preserve a resumable cursor
+if that bounded traversal is exhausted. Current cursors use `batch_review_v3`;
+stale earlier cursors require a fresh read.
 
 Previously admitted uploads may still finish into private candidate storage if
 media-kit intake is hidden or disabled after admission, as before. That does not

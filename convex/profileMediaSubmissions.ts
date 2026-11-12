@@ -199,17 +199,16 @@ export async function openSubmissionCountForUser(
   now: number,
 ) {
   const policy = await effectiveContributionPolicy(ctx.db, userId);
-  const groups = await Promise.all(
-    OPEN_SUBMISSION_STATUSES.map((status) =>
-      ctx.db
-        .query("profileMediaSubmissions")
-        .withIndex("by_submitterUserId_status_expiresAt", (query) =>
-          query.eq("submitterUserId", userId).eq("status", status).gt("expiresAt", now),
-        )
-        .take((policy.limits.openActor ?? 1000) + 1),
-    ),
-  );
-  return groups.reduce((count, group) => count + group.length, 0);
+  const limit = policy.limits.openActor ?? 1000;
+  let count = 0;
+  for (const status of OPEN_SUBMISSION_STATUSES) {
+    count += (await ctx.db.query("profileMediaSubmissions")
+      .withIndex("by_submitterUserId_status_expiresAt", query =>
+        query.eq("submitterUserId", userId).eq("status", status).gt("expiresAt", now))
+      .take(limit - count)).length;
+    if (count >= limit) break;
+  }
+  return count;
 }
 
 export async function openSubmissionCountForProfile(
@@ -442,11 +441,11 @@ export const createUploadIntent = mutation({
     const admissionPolicy = await effectiveContributionPolicy(ctx.db, user._id);
     if (admissionPolicy.limits.openActor !== null &&
       (await openSubmissionCountForUser(ctx, user._id, now)) >= admissionPolicy.limits.openActor) {
-      throw new Error(`You already have ${admissionPolicy.limits.openActor} media contributions awaiting a decision.`);
+      throw new Error(admissionPolicy.tier === "ordinary" ? "You already have three media contributions awaiting a decision." : `You already have ${admissionPolicy.limits.openActor} media contributions awaiting a decision.`);
     }
     if (admissionPolicy.limits.openTarget !== null &&
       (await openSubmissionCountForProfile(ctx, profile._id, now)) >= admissionPolicy.limits.openTarget) {
-      throw new Error(`This profile already has ${admissionPolicy.limits.openTarget} media contributions awaiting a decision.`);
+      throw new Error(admissionPolicy.tier === "ordinary" ? "This profile already has two media contributions awaiting a decision." : `This profile already has ${admissionPolicy.limits.openTarget} media contributions awaiting a decision.`);
     }
 
     await assertSubmissionRateLimits(ctx, user._id, profile._id, now);

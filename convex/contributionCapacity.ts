@@ -5,7 +5,7 @@ import {
   contributionAuthorityArgs,
   authorizeContribution,
 } from "./_contributionAuth";
-import { effectiveContributionPolicy, localUploadModes, retainedBatchUsage } from "./_contributionCapacity";
+import { effectiveCapacityLimit, effectiveContributionPolicy, localUploadModes, retainedBatchUsage } from "./_contributionCapacity";
 import { readScopedCursor, writeScopedCursor } from "./_reviewCursor";
 import { resolveContributionPolicy } from "./_contributionPolicy";
 import { openSubmissionCountForUser } from "./profileMediaSubmissions";
@@ -17,7 +17,8 @@ export const get = internalQuery({
     const token = await authorizeContribution(ctx, args, false);
     const policy = await effectiveContributionPolicy(ctx.db, args.actorUserId);
     const uploadModes = localUploadModes();
-    const envelopes = await retainedBatchUsage(ctx.db, args.actorUserId, policy.limits.retainedBatches);
+    // Discovery reports a lower bound; exact reconciliation uses paginated status reads.
+    const envelopes = await retainedBatchUsage(ctx.db, args.actorUserId, 100, 512 * 1024);
     const open = policy.limits.openActor === null ? null : await openSubmissionCountForUser(
       ctx,
       args.actorUserId,
@@ -29,14 +30,8 @@ export const get = internalQuery({
       .unique();
     const limits = {
       ...policy.limits,
-      actorBytes: policy.limits.actorBytes === null ? null : Math.min(
-        policy.limits.actorBytes,
-        usage?.byteLimit ?? policy.limits.actorBytes,
-      ),
-      actorProcessing: policy.limits.actorProcessing === null ? null : Math.min(
-        policy.limits.actorProcessing,
-        usage?.processingLimit ?? policy.limits.actorProcessing,
-      ),
+      actorBytes: effectiveCapacityLimit(policy.limits.actorBytes, usage?.byteLimit),
+      actorProcessing: effectiveCapacityLimit(policy.limits.actorProcessing, usage?.processingLimit),
     };
     const [deploymentUsage, publishedUsage] = await Promise.all([
       ctx.db.query("contributionCapacity").withIndex("by_scope", q => q.eq("scope", "deployment")).unique(),
@@ -73,11 +68,13 @@ export const get = internalQuery({
       deployment: {
         bytes: deploymentBytes,
         concurrency: deploymentConcurrency,
-        usage: { bytes: usedDeploymentBytes, concurrency: deploymentUsage?.processing ?? 0 },
-        remaining: {
-          bytes: Math.max(0, deploymentBytes - usedDeploymentBytes),
-          concurrency: Math.max(0, deploymentConcurrency - (deploymentUsage?.processing ?? 0)),
-        },
+        ...(policy.tier === "superadmin" ? {
+          usage: { bytes: usedDeploymentBytes, concurrency: deploymentUsage?.processing ?? 0 },
+          remaining: {
+            bytes: Math.max(0, deploymentBytes - usedDeploymentBytes),
+            concurrency: Math.max(0, deploymentConcurrency - (deploymentUsage?.processing ?? 0)),
+          },
+        } : {}),
         hostFetchesPerMinute: policy.hostFetchesPerMinute,
       },
       features: {
