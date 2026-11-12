@@ -304,8 +304,12 @@ function MembershipActivityQuery({
   }])), [communitySlug, startAt, endAt, requests]);
   const pages: Record<string, Page | Error | undefined> = useQueries(queries);
   const [previousPages, setPreviousPages] = useState(pages);
+  const scopeUnavailable = Object.values(pages).some(page => page && !(page instanceof Error) && page.page.length === 0 && page.isDone && page.continueCursor === "");
   const errors = Object.values(pages).filter((page): page is Error => page instanceof Error);
-  const invalidCursor = errors.some(error => error instanceof ConvexError && typeof error.data === "object" && error.data?.code === "MEMBERSHIP_ACTIVITY_CURSOR_INVALID");
+  const invalidCursor = errors.some(error => error.message.includes("InvalidCursor") ||
+    (error instanceof ConvexError && typeof error.data === "object" &&
+      (error.data?.code === "MEMBERSHIP_ACTIVITY_CURSOR_INVALID" ||
+        (error.data?.isConvexSystemError === true && error.data?.paginationError === "InvalidCursor"))));
   // Only errors issued after authorization may keep previously authorized rows.
   const clearHistory = errors.some(error => !(error instanceof ConvexError && typeof error.data === "object" && error.data?.code === "MEMBERSHIP_ACTIVITY_PAGE_FAILED"));
   if (pages !== previousPages) {
@@ -314,7 +318,7 @@ function MembershipActivityQuery({
       setCursorResets(1);
       setRequests([{ cursor: null, id: requests[0].id + 1 }]);
       setCached({});
-    } else if (clearHistory) {
+    } else if (clearHistory || scopeUnavailable) {
       if (Object.keys(cached).length) setCached({});
       if (!invalidCursor && (requests.length > 1 || requests[0].endCursor !== undefined)) setRequests([{ cursor: null, id: requests[0].id + 1 }]);
     } else setCached(current => {
@@ -328,15 +332,14 @@ function MembershipActivityQuery({
   }
   const events: MembershipEvent[] = [];
   let lastPage: Page | undefined;
-  if (!clearHistory) for (let index = 0; index < requests.length; index++) {
+  if (!clearHistory && !scopeUnavailable) for (let index = 0; index < requests.length; index++) {
     const current = pages[index];
     const page = current instanceof Error || current === undefined ? cached[index] : current;
     if (!page) break;
     events.push(...page.page);
     lastPage = page;
-    if (page.isDone) break;
   }
-  const loading = errors.length === 0 && Object.values(pages).some(page => page === undefined);
+  const loading = !scopeUnavailable && errors.length === 0 && Object.values(pages).some(page => page === undefined);
   const canLoadMore = !loading && errors.length === 0 && lastPage !== undefined && !lastPage.isDone;
   const continueCursor = lastPage?.continueCursor;
   const loadMore = () => {
@@ -367,7 +370,6 @@ function MembershipActivityQuery({
       }
       setRequests(current => current.map((request, index) => pages[index] instanceof Error ? {
       ...request, id: request.id + 1,
-      ...(cached[index]?.continueCursor ? { endCursor: cached[index].continueCursor } : {}),
     } : request));
     }}>Retry</Button></Notice> : null}
     {!clearHistory && (events.length > 0 || errors.length === 0) ? <MembershipActivityView

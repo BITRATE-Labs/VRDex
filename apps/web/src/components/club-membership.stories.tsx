@@ -85,9 +85,15 @@ class MembershipFixtureClient extends ConvexReactClient {
   failAll = false;
   newest = false;
   invalidCursor = false;
+  cursorErrorShape: "wrapped" | "system" | "message" = "wrapped";
+  invalidateNativeCursor(shape: "system" | "message") { this.cursorErrorShape = shape; this.invalidateCursor(); }
   persistentCursorFailure = false;
   queryCount = 0;
-  rejectCursors() { this.invalidCursor = true; this.persistentCursorFailure = true; this.queryCount = 0; document.documentElement.dataset.membershipFixtureQueries = "0"; this.fixtureListeners.forEach(listener => listener()); }
+  pinnedPageIsDone = false;
+  unavailableAt: number | null = null;
+  setUnavailable(offset: number) { this.unavailableAt = offset; this.fixtureListeners.forEach(listener => listener()); }
+  completePinnedPages() { this.pinnedPageIsDone = true; this.fixtureListeners.forEach(listener => listener()); }
+  rejectCursors(shape: "wrapped" | "system" | "message" = "wrapped") { this.cursorErrorShape = shape; this.invalidCursor = true; this.persistentCursorFailure = true; this.queryCount = 0; document.documentElement.dataset.membershipFixtureQueries = "0"; this.fixtureListeners.forEach(listener => listener()); }
   failLoaded() { this.failAll = true; this.fixtureListeners.forEach(listener => listener()); }
   insertNewest() { this.newest = true; this.fixtureListeners.forEach(listener => listener()); }
   invalidateCursor() { this.invalidCursor = true; this.fixtureListeners.forEach(listener => listener()); }
@@ -109,19 +115,27 @@ class MembershipFixtureClient extends ConvexReactClient {
     const pageSize = pagination.numItems;
     if (pageSize !== 25) throw new Error("Restoration must preserve 25-row page boundaries");
     let observedNewest: boolean | undefined;
+    let observedPinnedDone: boolean | undefined;
     let value: FunctionReturnType<typeof import("@convex-generated-api").api.clubMembership.listActivity> | undefined;
+    const unavailable = { page: [], isDone: true, continueCursor: "" };
     return {
       onUpdate: callback => { this.fixtureListeners.add(callback); return () => this.fixtureListeners.delete(callback); },
       localQueryResult: () => {
         if (this.denied) throw new Error("You do not have access to this category.");
+        if (this.unavailableAt !== null) return offset === this.unavailableAt || ("id" in pagination && typeof pagination.id === "number" && pagination.id > 0) ? unavailable as FunctionReturnType<Query> : undefined;
         if ((this.failAll || (this.failed && offset >= 25)) && (!("id" in pagination) || pagination.id === 0)) throw new ConvexError({ code: "MEMBERSHIP_ACTIVITY_PAGE_FAILED" });
-        if (this.invalidCursor && offset >= 25 && (this.persistentCursorFailure || !("id" in pagination) || pagination.id === 0)) throw new ConvexError({ code: "MEMBERSHIP_ACTIVITY_CURSOR_INVALID" });
+        if (this.invalidCursor && offset >= 25 && (this.persistentCursorFailure || !("id" in pagination) || pagination.id === 0)) {
+          if (this.cursorErrorShape === "system") throw new ConvexError({ isConvexSystemError: true, paginationError: "InvalidCursor" });
+          if (this.cursorErrorShape === "message") throw new Error("InvalidCursor: query shape changed");
+          throw new ConvexError({ code: "MEMBERSHIP_ACTIVITY_CURSOR_INVALID" });
+        }
         if (this.paused && offset >= 75) return undefined;
-        if (observedNewest !== this.newest) {
+        if (observedNewest !== this.newest || observedPinnedDone !== this.pinnedPageIsDone) {
           observedNewest = this.newest;
+          observedPinnedDone = this.pinnedPageIsDone;
           const end = "endCursor" in pagination && typeof pagination.endCursor === "string" ? Number(pagination.endCursor) : Math.min(300, offset + pageSize - (this.newest && offset === 0 ? 1 : 0));
           const first = offset === 0 && this.newest ? -1 : offset;
-          value = { page: Array.from({ length: end - first }, (_, index) => ({ auditId: `fixture-${first + index}`, eventType: "group.member.join", occurredAt: start, targetDisplayName: `Fixture member ${first + index}` })), isDone: end === 300, continueCursor: String(end) };
+          value = { page: Array.from({ length: end - first }, (_, index) => ({ auditId: `fixture-${first + index}`, eventType: "group.member.join", occurredAt: start, targetDisplayName: `Fixture member ${first + index}` })), isDone: end === 300 || (this.pinnedPageIsDone && "endCursor" in pagination), continueCursor: String(end) };
         }
         return value as FunctionReturnType<Query>;
       },
@@ -145,6 +159,13 @@ function PaginationPreview({ initialFailure = false }: { initialFailure?: boolea
       <button onClick={() => client.insertNewest()}>Insert newest fixture event</button>
       <button onClick={() => client.invalidateCursor()}>Invalidate fixture cursors</button>
       <button onClick={() => client.rejectCursors()}>Reject fixture cursors persistently</button>
+      <button onClick={() => client.invalidateNativeCursor("system")}>Invalidate native system cursor</button>
+      <button onClick={() => client.invalidateNativeCursor("message")}>Invalidate native message cursor</button>
+      <button onClick={() => client.rejectCursors("system")}>Reject native system cursors persistently</button>
+      <button onClick={() => client.rejectCursors("message")}>Reject native message cursors persistently</button>
+      <button onClick={() => client.completePinnedPages()}>Complete pinned fixture pages</button>
+      <button onClick={() => client.setUnavailable(0)}>Make first fixture scope unavailable</button>
+      <button onClick={() => client.setUnavailable(25)}>Make later fixture scope unavailable</button>
     </div>
     {mounted ? <ClubMembershipActivity communitySlug="membership-fixture" startAt={start} endAt={start + 86400000} /> : null}
   </ConvexProvider>;

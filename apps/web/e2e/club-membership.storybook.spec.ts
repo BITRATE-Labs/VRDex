@@ -250,3 +250,52 @@ test("persistent membership cursor failures stop automatic restoration @storyboo
   expect(Number(await page.locator("html").getAttribute("data-membership-fixture-queries")) - automaticQueries).toBeLessThanOrEqual(16);
   expect(errors).toEqual([]);
 });
+
+for (const shape of ["system", "message"]) {
+  test(`native ${shape} membership cursor errors restart pagination @storybook-visual`, async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await page.goto("/iframe.html?id=clubs-membership--pagination-and-access&viewMode=story");
+    await expect(page.getByText("Fixture member 24", { exact: true }).first()).toBeVisible();
+    await page.getByRole("button", { name: "Load more activity" }).click();
+    await expect(page.getByText("Fixture member 49", { exact: true }).first()).toBeVisible();
+    await page.getByRole("button", { name: `Invalidate native ${shape} cursor` }).click();
+    await expect(page.getByText("Fixture member 49", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await page.getByRole("button", { name: "Load more activity" }).click();
+    await expect(page.getByText("Fixture member 49", { exact: true }).first()).toBeVisible();
+    await page.getByRole("button", { name: "Leave fixture" }).click();
+    await page.getByRole("button", { name: "Return to fixture" }).click();
+    await expect(page.getByText("Fixture member 49", { exact: true }).first()).toBeVisible();
+    await page.getByRole("button", { name: `Reject native ${shape} cursors persistently` }).click();
+    await expect(page.getByRole("alert")).toContainText("Unable to load activity.");
+    expect(Number(await page.locator("html").getAttribute("data-membership-fixture-queries"))).toBeLessThanOrEqual(16);
+    expect(errors).toEqual([]);
+  });
+}
+
+test("completed membership windows retain later pages and retry stays open-ended @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership--pagination-and-access&viewMode=story");
+  await expect(page.getByText("Fixture member 24", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Load more activity" }).click();
+  await expect(page.getByText("Fixture member 49", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Complete pinned fixture pages" }).click();
+  await expect(page.getByText("Fixture member 49", { exact: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Fail loaded fixture pages" }).click();
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await page.getByRole("button", { name: "Load more activity" }).click();
+  await expect(page.getByText("Fixture member 74", { exact: true }).first()).toBeVisible();
+});
+
+for (const scopePage of ["first", "later"]) {
+  test(`an unavailable ${scopePage} membership scope clears all cached history @storybook-visual`, async ({ page }) => {
+    await page.goto("/iframe.html?id=clubs-membership--pagination-and-access&viewMode=story");
+    await expect(page.getByText("Fixture member 24", { exact: true }).first()).toBeVisible();
+    await page.getByRole("button", { name: "Load more activity" }).click();
+    await expect(page.getByText("Fixture member 49", { exact: true }).first()).toBeVisible();
+    await page.getByRole("button", { name: `Make ${scopePage} fixture scope unavailable` }).click();
+    await expect(page.locator("p.font-medium")).toHaveCount(0);
+    await expect(page.getByText("No recorded membership events.")).toBeVisible();
+  });
+}
