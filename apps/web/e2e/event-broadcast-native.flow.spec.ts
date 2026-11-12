@@ -135,7 +135,12 @@ test('candidate browser, real Convex and packaged native worker settle Stop and 
       }
     }
   } finally {
-    await writeFile(info.outputPath('native-acceptance.json'),JSON.stringify({candidate:process.env.BROADCAST_CANDIDATE_HEAD,checkedOut:process.env.GITHUB_SHA,applicationBuildId,workerImage:image,nextMode:'production-build',environment:'isolated-local',differences:['development Clerk','local native RTMP receiver instead of VRCDN','Docker 4 CPU/4 GiB instead of qualified ECS 8 CPU/16 GiB','local enabled gate, no SSM/ECS admission APIs'],receipts},null,2));
-    for(const email of emails){const cleanup=await deleteClerkTestAccountByEmail(email);expect(cleanup.checked&&cleanup.failed===0).toBe(true);}
+    const cleanup=await Promise.allSettled(emails.map(deleteClerkTestAccountByEmail));
+    for(const result of cleanup){
+      expect.soft(result.status,'Clerk fixture cleanup').toBe('fulfilled');
+      if(result.status==='fulfilled')expect.soft(result.value.checked&&result.value.failed===0,'Clerk fixture cleanup').toBe(true);
+    }
+    const [receipt]=await Promise.allSettled([writeFile(info.outputPath('native-acceptance.json'),JSON.stringify({candidate:process.env.BROADCAST_CANDIDATE_HEAD,checkedOut:process.env.GITHUB_SHA,applicationBuildId,workerImage:image,nextMode:'production-build',environment:'isolated-local',differences:['development Clerk','local native RTMP receiver instead of VRCDN','Docker 4 CPU/4 GiB instead of qualified ECS 8 CPU/16 GiB','local enabled gate, no SSM/ECS admission APIs'],receipts},null,2))]);
+    expect.soft(receipt.status,'Native acceptance receipt').toBe('fulfilled');
   }
 });
