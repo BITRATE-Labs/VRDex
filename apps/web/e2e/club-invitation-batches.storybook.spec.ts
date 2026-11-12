@@ -518,3 +518,46 @@ test("recipient previews settle once and review cannot freeze stale selection @s
   await expect(confirmation).toContainText(bob);
   await expect(confirmation).not.toContainText(alice);
 });
+
+
+test("failed recipient previews retry unchanged text and freeze only the latest settled IDs @storybook-visual", async ({ page }) => {
+  await page.clock.install();
+  await page.goto("/iframe.html?id=clubs-invitation-batches--preview-retry&viewMode=story");
+  const input = page.getByLabel("VRChat user IDs");
+  const review = page.getByRole("button", { name: "Review invitations", exact: true });
+  await input.fill(alice);
+  await page.clock.runFor(350);
+  await expect(page.getByRole("alert")).toContainText("Unable to save invitations.");
+  await expect(review).toBeDisabled();
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/invitation-preview-retry-${test.info().project.name}.png`, fullPage: true });
+  }
+  await page.clock.fastForward(5000);
+  expect(await page.evaluate(() => Number(document.documentElement.dataset.composerPreviews))).toBe(1);
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(review).toBeDisabled();
+  await page.clock.runFor(350);
+  await expect(review).toBeEnabled();
+  await expect(input).toHaveValue(alice);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(await page.evaluate(() => Number(document.documentElement.dataset.composerPreviews))).toBe(2);
+  await input.fill(bob);
+  await expect(review).toBeDisabled();
+  await page.clock.runFor(350);
+  await review.click();
+  const confirmation = page.getByRole("region", { name: "Review invitations", exact: true });
+  await expect(confirmation).toContainText(bob);
+  await expect(confirmation).not.toContainText(alice);
+  await page.getByRole("button", { name: "Confirm invitations", exact: true }).click();
+  expect(await page.evaluate(() => JSON.parse(document.documentElement.dataset.composerReviewedIds!))).toEqual([bob]);
+});
+
+test("malformed recipient preview shows established validation without enabling review @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-invitation-batches--composer&viewMode=story");
+  await page.getByLabel("VRChat user IDs").fill("not-a-user-id");
+  await expect(page.getByRole("alert")).toContainText("Enter valid VRChat user IDs.");
+  await expect(page.getByRole("button", { name: "Review invitations", exact: true })).toBeDisabled();
+  await page.getByLabel("VRChat user IDs").fill(alice);
+  await expect(page.getByRole("button", { name: "Review invitations", exact: true })).toBeEnabled();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});

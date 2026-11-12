@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@convex-generated-api";
@@ -10,7 +10,8 @@ const bob = "usr_22222222-2222-2222-2222-222222222222";
 type List = FunctionReturnType<
   typeof api.clubInvitations.lists
 >["page"][number];
-function Fixture({ instanceOnly = false, mutableCreation = false, expiringInstance = false, omittedInstance = false, mutableClock = false, mutableList = false, mutableEvent = false }: { instanceOnly?: boolean; mutableCreation?: boolean; expiringInstance?: boolean; omittedInstance?: boolean; mutableClock?: boolean; mutableList?: boolean; mutableEvent?: boolean }) {
+function Fixture({ previewFailure = false, instanceOnly = false, mutableCreation = false, expiringInstance = false, omittedInstance = false, mutableClock = false, mutableList = false, mutableEvent = false }: { previewFailure?: boolean; instanceOnly?: boolean; mutableCreation?: boolean; expiringInstance?: boolean; omittedInstance?: boolean; mutableClock?: boolean; mutableList?: boolean; mutableEvent?: boolean }) {
+  const previewAttempts = useRef(0);
   const [lists, setLists] = useState<List[]>([
     {
       _id: "list-one" as Id<"clubRecipientLists">,
@@ -79,6 +80,8 @@ function Fixture({ instanceOnly = false, mutableCreation = false, expiringInstan
         ]}
         botUrl={`https://vrchat.com/home/user/${alice}`}
         onPreview={async (recipients) => {
+          document.documentElement.dataset.composerPreviews = String(++previewAttempts.current);
+          if (previewFailure && previewAttempts.current === 1) throw new Error("Unable to save invitations.");
           if (
             !recipients.length ||
             recipients.length > 100 ||
@@ -121,6 +124,7 @@ function Fixture({ instanceOnly = false, mutableCreation = false, expiringInstan
           setLists((prior) => prior.filter((list) => list._id !== id));
         }}
         onEnqueue={async (review) => {
+          document.documentElement.dataset.composerReviewedIds = JSON.stringify(review.reviewedRecipients);
           if (review.destination.kind === "scheduled_instance") {
             if (review.destination.creationRevision !== creationRevision)
               throw new Error("Instance creation is unavailable.");
@@ -196,3 +200,5 @@ export const OmittedInstance: Story = { args: { instanceOnly: true, omittedInsta
 export const ExpiringSchedule: Story = { args: { mutableClock: true } };
 export const ChangedList: Story = { args: { mutableList: true } };
 export const MovedEvent: Story = { args: { mutableEvent: true } };
+
+export const PreviewRetry: Story = { args: { previewFailure: true } };

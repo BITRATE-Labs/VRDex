@@ -106,16 +106,26 @@ export function InvitationComposer({
     [error, setError] = useState<string | null>(null),
     [notice, setNotice] = useState<string | null>(null);
   const [selection, setSelection] = useState<{ text: string; ids: string[]; selected: string[] } | null>(null);
+  const [previewAttempt, setPreviewAttempt] = useState(0);
+  const [previewError, setPreviewError] = useState<{ text: string; message: string } | null>(null);
   useEffect(() => {
     if (!text.trim()) return;
     let active = true;
     const timer = setTimeout(() => void onPreview(text.split(/[\s,;]+/).filter(Boolean)).then(result => {
-      if (active) setSelection({ text, ids: result.recipients, selected: result.recipients });
-    }).catch(() => { if (active) setSelection(null); }), 300);
+      if (active) {
+        setSelection({ text, ids: result.recipients, selected: result.recipients });
+        setPreviewError(null);
+      }
+    }).catch(cause => {
+      if (active) {
+        setSelection(null);
+        setPreviewError({ text, message: cause instanceof Error ? cause.message : "Unable to save invitations." });
+      }
+    }), 300);
     return () => { active = false; clearTimeout(timer); };
     // Preview depends on the entered IDs. Identity updates must not reset selection.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text]);
+  }, [text, previewAttempt]);
   const currentSelection = selection?.text === text ? selection : null;
   const selectedInstance = instances.find(item => item.id === instanceId);
   const selectedCreation = creations.find(item => item.id === creationId);
@@ -267,6 +277,13 @@ export function InvitationComposer({
           {error}
         </Notice>
       ) : null}
+      {previewError?.text === text ? <Notice variant="error" role="alert">
+        {previewError.message}
+        <Button className="ml-3" size="sm" variant="secondary" disabled={busy} onClick={() => {
+          setPreviewError(null);
+          setPreviewAttempt(attempt => attempt + 1);
+        }}>Retry</Button>
+      </Notice> : null}
       {notice ? <Notice role="status">{notice}</Notice> : null}
       {review ? (
         <Card padding="lg">

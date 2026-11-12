@@ -286,6 +286,8 @@ Workspace identities have a private integration/epoch-scoped queue separate from
 
 The invitation composer waits 300 ms after recipient edits before previewing the list and admitting name lookups. Review requires a settled, nonempty selection and still revalidates those exact IDs. The people hook retains each unchanged, unexpired source ticket only while that source remains active in the same viewer/community/integration scope. Loading another activity page admits only its new chunks; removing a source or changing access discards its ticket, and expiry renews only the affected active sources.
 
+Failed recipient previews show the existing error or validation message and offer Retry without requiring an edit. Retry keeps the entered IDs, makes one new settled preview attempt, and leaves Review disabled until that current input succeeds. Changing the input cancels any older pending result; failures do not start an automatic request loop.
+
 When active sources name the same person differently, VRChat observations take precedence over recorded names, which take precedence over VRDex profile fallbacks. Within a source class, the latest observation wins. Loading an older activity page cannot replace a newer recorded name. Only currently authorized, unexpired source results participate.
 
 | Variable | Scope and default | Owner and recreation |
