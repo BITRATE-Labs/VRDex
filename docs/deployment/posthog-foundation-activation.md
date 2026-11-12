@@ -27,11 +27,11 @@ This is a proposal, not an applied settings diff. Read the effective billing lim
 
 - Review exact public panel/policy copy. The policy draft still needs the concrete event-retention value and broader site-policy review.
 - Establish Limited's actual no-consent eligibility and provider reuse conditions. Synthetic payload stripping alone does not establish legal eligibility.
-- Provision an approved runtime management authorization route and implement/verify supported withdrawal deletion for account and guest Full identities. Current account requests are persisted as `blocked_authorization`; the guest withdrawal path and provider worker are incomplete. No provider deletion is claimed. The ingestion key and operator Executor connection do not supply runtime management authorization.
+- Verify that the existing Privacy request intake can receive and route an explicit analytics-deletion request for operator verification and handling. Ordinary Off must stop future collection without deleting history. No automatic deletion worker, guest receipt service or additional runtime management key is required for the preference control.
 - Verify account switching, delayed account preferences and failed-save retry against an isolated authenticated backend. Local guest browser checks and Convex unit tests do not prove hosted auth behavior.
 - Use an existing isolated staging target or proven staging-only recording restriction for synthetic public/private/form replay acceptance. Do not enable shared-project recording globally just to test it. Confirm masking, receipt and basic mobile/player responsiveness. This hosted check is pending.
 - Measure proxied ingest requests per Full session during the pilot. Browser event batching is intentionally disabled to keep consent-bound dispatch independent; sampling alone does not bound Vercel transfer cost.
-- Read `claimAnalytics.deliveryOperationalHealth.blockedDeletionCount` for a bounded aggregate of unfulfilled deletion requests. Do not sweep or deduplicate distinct consent-period identifiers before supported deletion has completed. A supported worker, backlog handling and completed-request retention are still activation dependencies.
+- Legacy `analyticsDeletionRequests` rows from the superseded automatic-Off design remain inert. They are not explicit deletion requests and must not be replayed against the provider. Keep them untouched until their operational cleanup is separately scoped.
 
 ## Rollback
 

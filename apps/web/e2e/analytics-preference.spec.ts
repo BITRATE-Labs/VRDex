@@ -8,6 +8,28 @@ test.beforeEach(async ({ context }) => {
   }));
 });
 
+test("guest Off stops collection without a deletion request or re-enablement dependency", async ({ page }) => {
+  let guestServerRequests = 0;
+  await page.route("**/api/analytics/**", (route) => {
+    guestServerRequests++;
+    return route.abort();
+  });
+  await page.goto("/search");
+  const panel = page.getByRole("region", { name: "Usage & privacy", exact: true });
+  await panel.getByRole("button", { name: "On", exact: true }).click();
+  await expect(panel).toHaveCount(0);
+  await page.getByRole("button", { name: "Usage & privacy", exact: true }).click();
+  await panel.getByRole("button", { name: "Off", exact: true }).click();
+  await expect(panel).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem("vrdex-analytics-choice"))).toBe("off");
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await page.getByRole("button", { name: "Usage & privacy", exact: true }).click();
+  await panel.getByRole("button", { name: "On", exact: true }).click();
+  await expect(panel).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem("vrdex-analytics-choice"))).toBe("on");
+  expect(guestServerRequests).toBe(0);
+});
+
 test("first offer is nonblocking; dismiss stays unset and footer reopens the choice", async ({ page }) => {
   await page.goto("/search");
   const panel = page.getByRole("region", { name: "Usage & privacy", exact: true });

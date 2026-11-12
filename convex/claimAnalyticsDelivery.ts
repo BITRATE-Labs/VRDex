@@ -37,7 +37,7 @@ export function posthogClaimEvent(row: Doc<"claimAnalyticsOutbox">) {
       deployment_category: row.deploymentCategory,
       journey_id: row.journeyId,
       $insert_id: row.eventKey,
-      $process_person_profile: false,
+      $process_person_profile: true,
       profile_type: row.profileType,
       method: row.method,
       entry_source: row.entrySource,

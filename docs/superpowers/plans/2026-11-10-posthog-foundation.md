@@ -54,7 +54,7 @@
 - [ ] Locate the real public privacy-policy source and its route. The existing `/privacy/suppression` is a redirect to a support request, not a policy. If no policy exists, include one minimal public policy page and matching docs in Task 5, with exact prose held for owner review.
 - [ ] Use a synthetic local browser and intercepted transport to prove a Limited payload contains only allowed events, route classes and bounded properties, no replay or persisted visitor identity, no IP/geolocation enrichment and no eventual account merge. Inspect generated SDK envelope fields as well as application properties. Confirm provider reuse/contract conditions for the intended default audience measurement from official sources.
 - [ ] Tighten Limited to independent aggregate counts if page-lifecycle correlation prevents eligibility. Do not add cookieless hashing or a new transport/framework as an unreviewed workaround. If the existing provider cannot meet the requirement, record the precise blocker before implementing a default that would violate the spec. Do not silently substitute Off or Full.
-- [ ] Discover the supported provider deletion operation and required authorization for consent withdrawal. Existing ingestion keys are not management credentials. Record an existing approved authorization route if available; if absent, mark provider deletion/activation as blocked without creating credentials or pretending deletion succeeded.
+- [ ] Confirm that explicit deletion requests use the existing Privacy request form and operator verification. Owner correction on November 11: Off does not request deletion. Do not add a deletion worker, guest receipt service or runtime management-key provisioning for the analytics control.
 - [ ] Save the payload/settings evidence with tokens and identifiers omitted; commit the evidence/docs only. Later tasks consume this verified SDK configuration.
 
 ## Task 2: Implement preference persistence and account identity
@@ -84,17 +84,17 @@
 - [ ] Verify receipt coverage of existing auth and temporal emitters with synthetic fixtures; repair demonstrated transport defects only. Add explicit environment configuration to Vercel/workflows and backend deployment definitions, with invalid/missing configuration failing closed for analytics only.
 - [ ] Run `node --import tsx --test tests/web/analytics-preference.test.ts tests/web/posthog.test.ts tests/web/session-replay-routes.test.ts` and the browser spec under the repo's existing fixture harness. Expect no duplicate pageviews or prohibited requests. Commit code, tests and env docs together.
 
-## Task 4: Make backend events and withdrawal honor the same choice
+## Task 4: Make backend events honor the same choice
 
-**Files:** Claim helper/outbox/delivery, schema, preference mutation; all user-event producer callers from Task 1. Extend `tests/backend/claim-analytics.test.ts` and preference tests. Create one internal provider-deletion action module only if no existing operation can be reused.
+**Files:** Claim helper/outbox/delivery, preference mutation; all user-event producer callers from Task 1. Extend `tests/backend/claim-analytics.test.ts` and preference tests. No provider-deletion action is part of this task.
 
 **Interfaces:** Extend claim analytics context with validated optional request restriction, preserving journey/source fields. Optional outbox context contains owner user ID for enforcement, original deployment category and preference revision. These internal IDs are never emitted. Account choice plus browser restriction must both allow Full before enqueue/delivery.
 
 - [ ] Write failing tests for absent/Off preference, browser Off with account On, nonauthenticated producers, legacy untagged queue rows, retries after revoked permission, and On to Off to On. The last case must permanently suppress old rows even though current choice is On again. Preserve duplicate insert-ID and original-timestamp assertions.
 - [ ] Run `node --conditions=import --import tsx --test tests/backend/analytics-preferences.test.ts tests/backend/claim-analytics.test.ts`; confirm new assertions fail.
 - [ ] Pass the validated browser restriction through existing claim/workflow request arguments and all callers. Enqueue optional user events only for authenticated eligible Full. Delivery rechecks owner preference revision. Skip legacy/ineligible rows terminally; retain authoritative application outcomes and existing lease/retry behavior.
-- [ ] On accepted Off save, invalidate pending telemetry and schedule the supported provider deletion for retained consent-based Full data. Reuse Convex scheduling and persisted job state with bounded retry; no general queue abstraction. Verify success only after provider acknowledgement. If authorization from Task 1 is unavailable, leave the action unenabled and report that activation dependency, not a successful deletion.
-- [ ] Test deletion idempotency, transient failure/retry and repeated Off saves. Keep identifier mapping long enough to complete a required deletion, without sending new optional events. A failed preference save still stops browser capture but does not falsely claim remote deletion.
+- [ ] On accepted Off save, invalidate pending telemetry without deleting historical analytics. Keep the account analytics ID stable across Off/On and allow immediate re-enablement. Keep legacy deletion-queue rows inert; they do not establish an explicit deletion request.
+- [ ] Test that Off creates no deletion request, repeated choices are idempotent, On can return immediately with the same account ID, and old queued events remain suppressed. A failed preference save still stops browser capture. Guest preferences must not depend on a receipt service or server deletion endpoint.
 - [ ] Run focused tests and backend typechecks; commit server callers, generated contract updates, tests and canonical claim analytics docs together.
 
 ## Task 5: Add the binary control and policy entry
@@ -120,7 +120,7 @@
 - [ ] Run `pnpm lint:web`, `pnpm typecheck:web`, `pnpm typecheck:backend`, `pnpm test:web`, `pnpm test:backend`, `pnpm verify:docs`, plus the targeted browser/visual checks above. Use the worktree guard normally. Expect zero unexpected failures; report pre-existing failures separately rather than masking them.
 - [ ] Self-review against the spec, apply unslop to prose, then obtain one whole-branch code review using the selected execution method. Triage all feedback before pushing follow-ups. Commit final fixes and push the implementation PR with the browser/visual labels.
 - [ ] If tasked with merge-ready delivery, wait at least 30 minutes from the latest commit timestamp, then refresh checks, comments, inline threads, formal reviews and sticky summaries for the exact head. Address valid feedback and repeat the post-window refresh after any new commit. Include the PR URL in readiness reporting.
-- [ ] Prepare a separate production settings diff: project, allowed Full sessions, sampling, unchanged retention, effective billing limit and rollback. Do not apply it. List remaining copy approval, Limited eligibility, provider deletion authorization and hosted acceptance only where actually unresolved.
+- [ ] Prepare a separate production settings diff: project, allowed Full sessions, sampling, unchanged retention, effective billing limit and rollback. Do not apply it. List remaining copy approval, Limited eligibility, explicit privacy-request handling and hosted acceptance only where actually unresolved.
 
 ## Self-review and handoff
 

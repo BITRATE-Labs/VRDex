@@ -2,7 +2,7 @@
 
 Implementation branch, November 10, 2026. Production activation is not authorized.
 
-The changeset adds the shared Off/On control, opaque account analytics identity, mode-aware browser capture, backend consent enforcement and production-only reporting filters. Limited is internal and its collection remains unenabled pending eligibility. Runtime provider deletion, hosted acceptance and exact public copy remain incomplete activation dependencies.
+The changeset adds the shared Off/On control, opaque account analytics identity, mode-aware browser capture, backend consent enforcement and production-only reporting filters. Limited is internal and its collection remains unenabled pending eligibility. Hosted acceptance and exact public copy remain incomplete activation dependencies.
 
 ## Verified boundaries
 
@@ -20,9 +20,21 @@ Limited's eligibility without prior consent and provider contractual reuse condi
 - Recent `event_intake_run` and `event_sync_apply` receipts have no emitter in this checkout. Their external owner remains unknown; this changeset does not invent one.
 - No public policy source exists. `/privacy/suppression` is a support redirect. A minimal `/privacy` policy draft is included for owner review.
 
-## Withdrawal
+## Tracking Off and explicit deletion
 
-Executor discovers `persons-bulk-delete`, accepting distinct IDs with `delete_events` and `delete_recordings`. It is irreversible and returns 202 for an asynchronous deletion request. No deletion was executed. Runtime backend management authorization is not established by the ingestion key or the operator's Executor connection. Activation requires a working supported backend authorization route and acknowledgement/retry evidence. No new credential is created by this changeset.
+The November 11 owner correction separates these actions. Off stops future optional collection without deleting retained analytics. Accounts keep their analytics UUID across Off/On changes and can re-enable immediately. Preference revisions still suppress old queued events. Deletion requires an explicit request through the existing Privacy request form and operator verification. The automatic deletion worker, guest receipt service and runtime key provisioning from the earlier follow-up were removed. No provider deletion was executed.
+
+Earlier withdrawal-worker acceptance is superseded and does not qualify this corrected behavior. Legacy queue rows are inert and must not be treated as explicit deletion requests. The schema remains compatible with the merged foundation; no stored records are deleted by this correction.
+
+Correction verification on November 11: 17 backend, 18 web and 44 desktop/mobile
+analytics/playback cases passed, plus two disabled-presentation cases. Web and
+backend types and Markdown checks passed. A fresh isolated Convex deployment
+also accepted Off followed immediately by On, retained the same account UUID,
+created no deletion request and rejected unauthenticated preference changes.
+That API check used a synthetic admin identity override, not Clerk login.
+Provider traffic was absent. Hosted authentication and the manual processing of
+an actual deletion request were not exercised. Desktop/mobile screenshots show
+the existing controls without layout changes.
 
 ## Evidence
 
@@ -34,7 +46,7 @@ Whole-branch review also reproduced a cross-account journey reuse and a token le
 
 The Account Privacy entry is available without a profile selection in the local fixture. This is not proof of hosted account switching, failed authenticated saves or cross-device propagation. Those remain acceptance dependencies.
 
-Focused Convex checks cover preference authorization, stable UUIDs within a consent period, UUID rotation after withdrawal, idempotent blocked deletion requests, legacy-row suppression, On/Off/On queue invalidation and bounded suppressed-row cleanup. Existing proof/claim tests preserve authoritative outcomes while explicitly distinguishing consented and legacy telemetry.
+Focused Convex checks cover preference authorization, stable account UUIDs across Off/On, no deletion requests from Off, immediate re-enablement, legacy-row suppression, On/Off/On queue invalidation and bounded suppressed-row cleanup. Existing proof/claim tests preserve authoritative outcomes while explicitly distinguishing consented and legacy telemetry.
 
 Terraform validates locally and its mocked-provider test checks production/Full filters on every existing trend plus journey-based milestone joins. No provider plan was applied. Executor's current project read confirms recording remains disabled and replay retention remains 30 days. Effective billing limits are not yet verified.
 
@@ -48,9 +60,9 @@ PR review found three additional gaps: proposed copy was not deployment-gated, b
 
 Further review fixes bind adopted guest choices to the first account, clear SDK persistence on withdrawal, pin the SDK exactly and verify the installed version. Granted lookup/temporal access now uses backend authorization consistently across analytics modes; the obsolete flag-refresh helper was removed. Batching remains deliberately disabled, with proxy request volume added to pilot acceptance.
 
-An unresolved or disabled browser mode no longer masquerades as an explicit Off action when continuing a claim. The first authenticated visit consumes a guest marker even when the account already has its own preference. Limited no longer calls the SDK's persistent consent opt-in; its browser regression checks every local/session storage entry and cookie, allowing only the application's offer-dismissal receipt. The existing internal delivery-health query exposes a bounded blocked-deletion count without identifiers. Unfulfilled requests retain each distinct analytics identifier rather than losing deletion targets through owner-level deduplication.
+An unresolved or disabled browser mode no longer masquerades as an explicit Off action when continuing a claim. The first authenticated visit consumes a guest marker even when the account already has its own preference. Limited no longer calls the SDK's persistent consent opt-in; its browser regression checks every local/session storage entry and cookie, allowing only the application's offer-dismissal receipt. The existing internal delivery-health query retains a bounded legacy blocked-deletion count without identifiers. Those legacy rows are inert, not verified deletion requests.
 
-Playback remains outside Convex's provisioning gate so auth reconciliation cannot unmount the persistent owner. A root-boundary regression protects that placement, and the synthetic browser lane includes existing retained-media/layout-transition tests. Analytics output directories are separate children of `test-results`, preserving public-smoke artifacts. The latency insight now excludes receipts without measured latency. Account withdrawal remains immediate; re-enabling within 60 seconds of withdrawal is rejected to bound deletion-request churn. Repeated same-choice saves remain idempotent.
+Playback remains outside Convex's provisioning gate so auth reconciliation cannot unmount the persistent owner. A root-boundary regression protects that placement, and the synthetic browser lane includes existing retained-media/layout-transition tests. Analytics output directories are separate children of `test-results`, preserving public-smoke artifacts. The latency insight now excludes receipts without measured latency. Off and re-enablement are immediate, and repeated same-choice saves remain idempotent.
 
 Follow-up local checks passed 46 backend cases, 12 preference/transport/root-boundary cases, 42 enabled analytics/playback browser cases and two disabled-gate cases. The browser configuration runs synthetic intercepted transport and separately tests disabled presentation/capture on desktop and mobile. Types, lint and Terraform validation/mocked reporting checks passed. Linux CI includes both configurations in the selected public-smoke lane. Original broad local results below precede these follow-ups; current Linux CI verifies the complete branch.
 
