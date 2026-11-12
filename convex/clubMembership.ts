@@ -6,8 +6,10 @@ import { readCollectionSubject, readManagedIntegration, resolveGroupObservationP
 import { assertAutomaticOperationAllowed } from "./_communityTelemetry";
 import { ConvexError, v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
+import { internal } from "./_generated/api";
 import {
   internalMutation,
+  internalQuery,
   query,
   type QueryCtx,
   type MutationCtx,
@@ -605,22 +607,37 @@ export const listActivity = query({
   },
 });
 
-/** Local derived projection only; each invocation is bounded to one exact current scope. */
+async function missingTargetIdentities(ctx: QueryCtx | MutationCtx, args: {
+  integrationId: Id<"communityVrchatIntegrations">; epochStartedAt: number; groupId: string;
+}) {
+  const integration = await ctx.db.get(args.integrationId);
+  if (!integration || integration.vrchatGroupId !== args.groupId ||
+      (integration.telemetryEpochStartedAt ?? integration.createdAt) !== args.epochStartedAt) {
+    throw new Error("Inactive membership projection scope.");
+  }
+  return ctx.db.query("communityMembershipEvents")
+    .withIndex("by_canonical_target_time", q => q.eq("integrationId", args.integrationId).eq("epochStartedAt", args.epochStartedAt).eq("canonicalTargetUserId", undefined));
+}
+
+/** Bounded completion probe for the same operator-authorized projection scope. */
+export const targetIdentityBackfillStatus = internalQuery({
+  args: scope,
+  returns: v.object({ complete: v.boolean() }),
+  handler: async (ctx, args) => ({ complete: await (await missingTargetIdentities(ctx, args)).first() === null }),
+});
+
+/** Local derived projection only; each scheduled page rechecks the exact current scope. */
 export const backfillTargetIdentities = internalMutation({
   args: scope,
   returns: v.object({ updated: v.number(), complete: v.boolean() }),
   handler: async (ctx, args) => {
-    const integration = await ctx.db.get(args.integrationId);
-    if (!integration || integration.vrchatGroupId !== args.groupId ||
-        (integration.telemetryEpochStartedAt ?? integration.createdAt) !== args.epochStartedAt) {
-      throw new Error("Inactive membership projection scope.");
-    }
-    const rows = await ctx.db.query("communityMembershipEvents")
-      .withIndex("by_canonical_target_time", q => q.eq("integrationId", args.integrationId).eq("epochStartedAt", args.epochStartedAt).eq("canonicalTargetUserId", undefined)).take(101);
+    const rows = await (await missingTargetIdentities(ctx, args)).take(101);
     for (const row of rows.slice(0, 100)) {
       if (row.groupId !== args.groupId) throw new Error("Membership projection scope mismatch.");
       await ctx.db.patch(row._id, { canonicalTargetUserId: row.targetUserId && validUserId(row.targetUserId) ? row.targetUserId.toLowerCase() : "" });
     }
-    return { updated: Math.min(rows.length, 100), complete: rows.length <= 100 };
+    const complete = rows.length <= 100;
+    if (!complete) await ctx.scheduler.runAfter(0, internal.clubMembership.backfillTargetIdentities, args);
+    return { updated: Math.min(rows.length, 100), complete };
   },
 });

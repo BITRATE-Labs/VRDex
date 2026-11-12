@@ -19,6 +19,9 @@ type Subject = NonNullable<ClubActor["subject"]>;
 type Target = { userId: string; source: PeopleReferenceSource; expiresAt: number; canLookup: boolean; displayName?: string; observedAt?: number };
 const epoch = (integration: Integration) => integration.telemetryEpochStartedAt ?? integration.createdAt;
 const pendingOperation = (operation: Doc<"clubOperations">) => ["pending", "claimed", "submitted"].includes(operation.state);
+// Leave room for hourly person checks, truncated-reference pruning and the ten-minute cron within one day.
+const referenceCheckAt = (source: PeopleReferenceSource, expiresAt: number, now: number) =>
+  Math.min(expiresAt, now + (source.kind === "audit" ? 12 : 1) * 60 * 60_000);
 
 async function scope(ctx: Ctx, communityProfileId: Id<"profiles">, integrationId?: Id<"communityVrchatIntegrations">, epochStartedAt?: number) {
   const integration = await readManagedIntegration(ctx.db, communityProfileId);
@@ -163,7 +166,7 @@ async function admit(ctx: MutationCtx, integration: Integration, target: Target,
   if (subject) await ctx.db.patch(person._id, { priority: 0, interestUntil: now + PEOPLE_VIEW_MS });
   const sourceKey = JSON.stringify([target.source, subject?.tokenIdentifier ?? null]);
   const prior = await ctx.db.query("clubPeopleReferences").withIndex("by_person_key", q => q.eq("personId", person._id).eq("sourceKey", sourceKey)).unique();
-  const data = { expiresAt: target.expiresAt, checkAt: Math.min(target.expiresAt, now + 60 * 60_000) };
+  const data = { expiresAt: target.expiresAt, checkAt: referenceCheckAt(target.source, target.expiresAt, now) };
   if (prior) await ctx.db.patch(prior._id, data);
   else await ctx.db.insert("clubPeopleReferences", { ...data, personId: person._id, integrationId: integration._id, source: target.source, sourceKey, ...(subject ? { subject } : {}) });
   if (target.canLookup && publicFreshUntil <= now && person.retryAt <= now && process.env.VRDEX_PEOPLE_RESOLUTION_ENABLED === "true" &&
@@ -173,6 +176,7 @@ async function admit(ctx: MutationCtx, integration: Integration, target: Target,
 }
 
 export async function admitVerifiedAudit(ctx: MutationCtx, integration: Integration, eventId: Id<"communityMembershipEvents">) {
+  if (process.env.VRDEX_PEOPLE_RESOLUTION_ENABLED !== "true") return;
   if (!integration.assignedCollectorAccountId || readCollectionSubject(integration).kind !== "managed") return;
   for (const target of await sourceTargets(ctx, integration, null, { kind: "audit", eventId }, Date.now())) await admit(ctx, integration, target);
 }
@@ -410,7 +414,7 @@ export const sweep = internalMutation({
         } catch { /* Expired source or authority. */ }
       }
       if (!valid) await ctx.db.delete(ref._id);
-      else await ctx.db.patch(ref._id, { checkAt: Math.min(ref.expiresAt, now + 60 * 60_000) });
+      else await ctx.db.patch(ref._id, { checkAt: referenceCheckAt(ref.source, ref.expiresAt, now) });
     }
     const people = await ctx.db.query("clubPeople").withIndex("by_checkAt", q => q.lte("checkAt", now)).take(10);
     for (const person of people) {

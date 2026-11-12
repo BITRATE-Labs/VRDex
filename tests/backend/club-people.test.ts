@@ -328,6 +328,7 @@ it("retention follows references, cancellation stops requests and abandoned gran
 
 it("verified new audit events admit private bounded work automatically", async () => {
   const s = await setup(), ids = await sources(s);
+  await ready(s);
   await s.t.run(async ctx => {
     const integration = await ctx.db.get(s.integrationId);
     await admitVerifiedAudit(ctx, integration!, ids.eventId);
@@ -336,6 +337,81 @@ it("verified new audit events admit private bounded work automatically", async (
   assert.equal((await s.t.run(ctx => ctx.db.query("clubPeople").collect())).length, 2);
   assert.equal((await s.t.run(ctx => ctx.db.query("clubPeopleReferences").collect())).length, 2);
   assert.equal((await s.t.run(ctx => ctx.db.query("profileLinkDestinationReferences").collect())).length, 0);
+});
+
+it("default-off audit admission leaves evidence intact and explicit views still serve cached names", async () => {
+  const s = await setup(), ids = await sources(s);
+  const original = await s.t.run(ctx => ctx.db.get(ids.eventId));
+  for (const flag of [undefined, "false", "TRUE"]) {
+    if (flag === undefined) delete process.env.VRDEX_PEOPLE_RESOLUTION_ENABLED;
+    else process.env.VRDEX_PEOPLE_RESOLUTION_ENABLED = flag;
+    await s.t.run(async ctx => admitVerifiedAudit(ctx, (await ctx.db.get(s.integrationId))!, ids.eventId));
+    assert.deepEqual(await s.t.run(ctx => ctx.db.query("clubPeople").collect()), []);
+    assert.deepEqual(await s.t.run(ctx => ctx.db.query("clubPeopleReferences").collect()), []);
+  }
+  assert.deepEqual(await s.t.run(ctx => ctx.db.get(ids.eventId)), original);
+  await s.t.run(ctx => ctx.db.insert("profileLinkDestinations", { key: `vrchat_user:${A}`, kind: "vrchat_user", locator: A, provider: "vrchat", status: "resolved", entityId: A, name: "Cached Mira", observedAt: Date.now() }));
+  const { viewId } = await s.owner.mutation(api.clubPeople.requestView, { communityProfileId: s.communityProfileId, source: { kind: "activity", auditIds: ["audit"] } });
+  const result = await s.owner.query(api.clubPeople.readView, { viewId });
+  assert.equal(result.people.find(person => person.userId === A)?.displayName, "Cached Mira");
+  assert.equal(result.pendingCount, 0);
+});
+
+it("audit reference maintenance is twelve-hourly while reads and claims reject invalid evidence immediately", async (test) => {
+  const now = 1800000000000, hour = 3600000;
+  test.mock.timers.enable({ apis: ["Date", "setTimeout"], now });
+  const s = await setup(), worker = await ready(s), ids = await sources(s);
+  await s.t.run(async ctx => admitVerifiedAudit(ctx, (await ctx.db.get(s.integrationId))!, ids.eventId));
+  const refs = () => s.t.run(ctx => ctx.db.query("clubPeopleReferences").collect());
+  assert.ok((await refs()).every(ref => ref.checkAt === now + 12 * hour));
+  test.mock.timers.tick(hour);
+  await s.t.mutation(internal.clubPeople.sweep, {});
+  assert.ok((await refs()).every(ref => ref.checkAt === now + 12 * hour));
+  test.mock.timers.tick(11 * hour);
+  await s.t.mutation(internal.clubPeople.sweep, {});
+  assert.ok((await refs()).every(ref => ref.checkAt === now + 24 * hour));
+  const { viewId } = await s.owner.mutation(api.clubPeople.requestView, { communityProfileId: s.communityProfileId, source: { kind: "activity", auditIds: ["audit"] } });
+  await s.t.run(async ctx => {
+    const integration = (await ctx.db.get(s.integrationId))!;
+    await ctx.db.patch(s.integrationId, { providerAuthority: { ...integration.providerAuthority!, receivedAt: Date.now(), authority: { ...s.snapshot.authority, observedAt: Date.now() } } });
+    await ctx.db.patch(ids.eventId, { verified: false });
+  });
+  await assert.rejects(s.owner.query(api.clubPeople.readView, { viewId }));
+  assert.deepEqual(await s.t.mutation(internal.clubPeople.claim, worker), { jobs: [] });
+  assert.ok((await refs()).every(ref => ref.checkAt > Date.now()));
+});
+
+it("unsupported names behind truncated audit references are pruned within a day including person and cron margins", async (test) => {
+  const now = 1800000000000, hour = 3600000, cron = 10 * 60000;
+  test.mock.timers.enable({ apis: ["Date", "setTimeout"], now });
+  const s = await setup(); await ready(s); await sources(s);
+  const events = await s.t.run(async ctx => {
+    const integration = (await ctx.db.get(s.integrationId))!;
+    const ids = [];
+    for (let n = 0; n < 105; n++) {
+      const id = await ctx.db.insert("communityMembershipEvents", { integrationId: s.integrationId, epochStartedAt: s.snapshot.epochStartedAt, groupId: "grp_test", auditId: `retention${n}`, eventType: "group.member.join", targetUserId: A, occurredAt: now, receivedAt: now, verified: true });
+      ids.push(id);
+      await admitVerifiedAudit(ctx, integration, id);
+    }
+    const person = (await ctx.db.query("clubPeople").first())!;
+    await ctx.db.patch(person._id, { displayName: "Unsupported Mira", observedAt: now });
+    return ids;
+  });
+  await s.t.run(async ctx => { for (const id of events) await ctx.db.patch(id, { verified: false }); });
+  test.mock.timers.tick(hour + cron);
+  await s.t.mutation(internal.clubPeople.sweep, {});
+  assert.equal((await s.t.run(ctx => ctx.db.query("clubPeople").first()))?.displayName, "Unsupported Mira");
+  test.mock.timers.tick(11 * hour);
+  await s.t.mutation(internal.clubPeople.sweep, {});
+  for (let page = 0; page < 3; page++) {
+    test.mock.timers.tick(1);
+    await s.t.finishInProgressScheduledFunctions();
+  }
+  test.mock.timers.tick(hour + cron);
+  await s.t.mutation(internal.clubPeople.sweep, {});
+  assert.ok(Date.now() - now < 24 * hour);
+  assert.deepEqual(await s.t.run(ctx => ctx.db.query("clubPeopleReferences").collect()), []);
+  assert.deepEqual(await s.t.run(ctx => ctx.db.query("clubPeople").collect()), []);
 });
 
 it("a viewed person outranks a historical audit backlog without resetting cache cooldowns", async () => {

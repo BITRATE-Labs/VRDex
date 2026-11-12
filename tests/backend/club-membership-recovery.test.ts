@@ -20,9 +20,16 @@ const mutation = (name: string) => makeFunctionReference<"mutation">(`clubMember
 const status = makeFunctionReference<"query">("clubMembershipRecovery:getRecoveryStatus");
 const activity = makeFunctionReference<"query">("clubMembership:listActivity");
 const backfill = makeFunctionReference<"mutation">("clubMembership:backfillTargetIdentities");
+const backfillStatus = makeFunctionReference<"query">("clubMembership:targetIdentityBackfillStatus");
 const authority = makeFunctionReference<"mutation">("clubConnection:recordAuthority");
 const A = "usr_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", B = "usr_bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 const R = "grol_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+async function finishProjectionPages(t: ReturnType<typeof convexTest>, tick: () => void) {
+  for (let page = 0; page < 3; page++) {
+    tick();
+    await t.finishInProgressScheduledFunctions();
+  }
+}
 async function setup(enabled = true) {
   process.env.CLERK_JWT_ISSUER_DOMAIN = "https://test.clerk.accounts.dev";
   if (enabled) process.env.VRDEX_MEMBERSHIP_RECOVERY_ENABLED = "true";
@@ -126,7 +133,8 @@ test("page caps and errors retain durable progress, while out-of-window and inve
   await s.owner.mutation(mutation("requestRecovery"), { communityProfileId: s.communityProfileId, resume: true });
   assert.equal(await s.claim(), null);
 });
-test("activity filters apply before pagination to legacy rows in the exact authorized epoch", async () => {
+test("activity filters apply before pagination to legacy rows in the exact authorized epoch", async (test) => {
+  test.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1800000000000 });
   const s = await setup();
   await s.t.run(async ctx => {
     for (let i = 0; i < 160; i++) await ctx.db.insert("communityMembershipEvents", { integrationId: s.integrationId, epochStartedAt: s.epochStartedAt, groupId: "grp_test", auditId: `row${i}`, eventType: i % 3 === 0 ? "group.member.leave" : "group.member.join", occurredAt: s.now - 1000 - i, targetUserId: i % 2 === 0 ? A : B, receivedAt: s.now, verified: true });
@@ -139,6 +147,7 @@ test("activity filters apply before pagination to legacy rows in the exact autho
   await assert.rejects(s.owner.query(activity, { ...args, paginationOpts: { numItems: 7, cursor: null } }), /MEMBERSHIP_ACTIVITY_INDEX_PENDING/);
   assert.deepEqual(await s.t.mutation(backfill, scope), { updated: 60, complete: true });
   assert.deepEqual(await s.t.mutation(backfill, scope), { updated: 0, complete: true });
+  await finishProjectionPages(s.t, () => test.mock.timers.tick(1));
   await assert.rejects(s.t.query(activity, { ...args, paginationOpts: { numItems: 7, cursor: null } }));
   let cursor: string | null = null; const ids = [];
   for (;;) {
@@ -194,6 +203,54 @@ test("target projection backfill is scope fenced and does not alter immutable ev
   assert.equal((await s.t.run(ctx => ctx.db.get(old)))?.canonicalTargetUserId, undefined);
   await s.t.run(ctx => ctx.db.patch(s.integrationId, { telemetryEpochStartedAt: s.now }));
   await assert.rejects(s.t.mutation(backfill, scope), /Inactive/);
+});
+
+test("one backfill start schedules exact bounded pages to completion and duplicate starts terminate", async (test) => {
+  test.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1800000000000 });
+  for (const duplicate of [false, true]) {
+    const s = await setup();
+    const scope = { integrationId: s.integrationId, epochStartedAt: s.epochStartedAt, groupId: "grp_test" };
+    for (let n = 0; n < 251; n++) await s.insertEvent({ auditId: `async${n}`, targetUserId: A.toUpperCase() });
+    const foreign = await s.insertEvent({ auditId: "old", epochStartedAt: s.epochStartedAt - 1 });
+    assert.deepEqual(await s.t.mutation(backfill, scope), { updated: 100, complete: false });
+    const jobs = await s.t.run(ctx => ctx.db.system.query("_scheduled_functions").collect());
+    assert.equal(jobs.length, 1);
+    assert.deepEqual(jobs[0].args, [scope]);
+    assert.deepEqual(await s.t.query(backfillStatus, scope), { complete: false });
+    if (duplicate) assert.deepEqual(await s.t.mutation(backfill, scope), { updated: 100, complete: false });
+    await finishProjectionPages(s.t, () => test.mock.timers.tick(1));
+    assert.deepEqual(await s.t.query(backfillStatus, scope), { complete: true });
+    assert.deepEqual(await s.t.mutation(backfill, scope), { updated: 0, complete: true });
+    const finished = await s.t.run(ctx => ctx.db.system.query("_scheduled_functions").collect());
+    assert.equal(finished.length, 2);
+    assert.ok(finished.every(job => job.state.kind === "success"));
+    const rows = await s.t.run(ctx => ctx.db.query("communityMembershipEvents").collect());
+    assert.equal(rows.filter(row => row.canonicalTargetUserId === A && row.targetUserId === A.toUpperCase()).length, 251);
+    assert.equal((await s.t.run(ctx => ctx.db.get(foreign)))?.canonicalTargetUserId, undefined);
+  }
+});
+
+test("backfill continuations stop on a changed epoch or group and reject foreign evidence atomically", async (test) => {
+  test.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1800000000000 });
+  for (const change of ["epoch", "group", "evidence"] as const) {
+    const s = await setup();
+    const scope = { integrationId: s.integrationId, epochStartedAt: s.epochStartedAt, groupId: "grp_test" };
+    const events = [];
+    for (let n = 0; n < 201; n++) events.push(await s.insertEvent({ auditId: `fenced${n}` }));
+    await s.t.mutation(backfill, scope);
+    assert.equal((await s.t.run(ctx => ctx.db.system.query("_scheduled_functions").collect())).length, 1);
+    await s.t.run(async ctx => {
+      if (change === "epoch") await ctx.db.patch(s.integrationId, { telemetryEpochStartedAt: s.now });
+      if (change === "group") await ctx.db.patch(s.integrationId, { vrchatGroupId: "grp_other" });
+      if (change === "evidence") await ctx.db.patch(events[101], { groupId: "grp_other" });
+    });
+    await finishProjectionPages(s.t, () => test.mock.timers.tick(1));
+    const jobs = await s.t.run(ctx => ctx.db.system.query("_scheduled_functions").collect());
+    assert.equal(jobs.length, 1); assert.equal(jobs[0].state.kind, "failed");
+    assert.equal((await s.t.run(ctx => ctx.db.query("communityMembershipEvents").collect())).filter(row => row.canonicalTargetUserId !== undefined).length, 100);
+    if (change !== "evidence") await assert.rejects(s.t.query(backfillStatus, scope), /Inactive/);
+    else assert.deepEqual(await s.t.query(backfillStatus, scope), { complete: false });
+  }
 });
 test("role observations update changed names immediately, throttle unchanged labels and retain deleted roles", async () => {
   const s = await setup(); await s.insertEvent({ roleId: R });
