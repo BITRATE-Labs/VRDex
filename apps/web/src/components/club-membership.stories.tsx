@@ -188,3 +188,11 @@ export const BidirectionalNames: Story = { render: () => <MembershipActivityView
   actorIdentity: { displayName: "\u202ESol", vrchatUrl: "https://vrchat.com/home/user/usr_00000000-0000-4000-8000-000000000002", vrdexUrl: "/sol" },
   roleName: "\u202EDJ",
 }]} /> };
+
+
+export const NonPersonActivity: Story = {
+  render: () => <MembershipActivityView events={[
+    { auditId: "settings", eventType: "group.update", occurredAt: start, targetUserId: "grp_00000000-0000-4000-8000-000000000001", targetDisplayName: "Old group name" },
+    { auditId: "unknown-subject", eventType: "future.group.event", occurredAt: start - 1000, targetUserId: "wrld_00000000-0000-4000-8000-000000000001" },
+  ]} />,
+};

@@ -389,3 +389,85 @@ for (const skew of [-3600000, 3600000]) {
     );
   });
 }
+
+
+test("identity review preserves exact targets while names resolve @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-invitations-workspace--owner&viewMode=story");
+  await page.getByLabel("Saved list").selectOption("list-one");
+  await page.getByRole("button", { name: "Review invitations", exact: true }).click();
+  const rows = page.getByRole("list", { name: "Reviewed recipients" }).getByRole("listitem");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first().getByRole("link", { name: "Riley", exact: true })).toHaveAttribute("href", "/riley");
+  await expect(rows.nth(1).getByText("Nova", { exact: true })).toBeVisible();
+  await expect(rows.nth(1).getByRole("link", { name: "Nova", exact: true })).toHaveCount(0);
+  await expect(rows.first()).toContainText(alice);
+  const provider = rows.first().getByRole("link", { name: /VRChat profile/ });
+  expect((await provider.boundingBox())!.height).toBeGreaterThanOrEqual(40);
+  await rows.first().getByText("Details", { exact: true }).click();
+  await expect(rows.first().locator("details")).toHaveAttribute("open", "");
+  await page.getByRole("button", { name: "Confirm invitations" }).click();
+  await expect(page.getByText("Submitted", { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+});
+
+
+test("late names preserve invitation payload and clear on denied views @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-invitations-workspace--late-names&viewMode=story");
+  await page.getByLabel("Saved list").selectOption("list-one");
+  await page.getByRole("button", { name: "Review invitations", exact: true }).click();
+  const review = page.getByRole("region", { name: "Review invitations" });
+  await expect(review.getByRole("status")).toHaveText("Updating names \u00b7 2");
+  await expect(review).toContainText(alice);
+  await expect(review).toContainText(bob);
+  await page.getByRole("button", { name: "Resolve names", exact: true }).click();
+  await expect(review.getByRole("link", { name: "Riley", exact: true })).toBeVisible();
+  await expect(review.getByRole("status")).toHaveCount(0);
+  await page.getByRole("button", { name: "Revoke people access", exact: true }).click();
+  await expect(review.getByRole("link", { name: "Riley", exact: true })).toHaveCount(0);
+  await expect(review).toContainText(alice);
+  await page.getByRole("button", { name: "Confirm invitations" }).click();
+  const payload = await page.evaluate(() => JSON.parse(document.documentElement.dataset.invitationPayload!));
+  expect(payload.reviewedRecipients).toEqual([alice, bob]);
+  expect(payload.destination).toEqual({ kind: "group" });
+  expect(payload.schedule).toEqual({ kind: "immediate" });
+  expect(payload.requestId).toEqual(expect.any(String));
+});
+
+
+test("recipient selection survives name updates and freezes only selected IDs @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-invitations-workspace--late-names&viewMode=story");
+  await page.getByLabel("Saved list").selectOption("list-one");
+  const selection = page.getByRole("list", { name: "Select recipients", exact: true });
+  await expect(selection.getByRole("checkbox")).toHaveCount(2);
+  await selection.getByRole("checkbox", { name: `Select recipient ${bob}`, exact: true }).uncheck();
+  await page.getByRole("button", { name: "Resolve names", exact: true }).click();
+  await expect(selection.getByRole("link", { name: "Riley", exact: true })).toBeVisible();
+  await expect(selection.getByRole("checkbox", { name: `Select recipient ${bob}`, exact: true })).not.toBeChecked();
+  await page.getByRole("button", { name: "Review invitations", exact: true }).click();
+  const review = page.getByRole("region", { name: "Review invitations" });
+  await expect(review.getByRole("listitem")).toHaveCount(1);
+  await expect(review).toContainText(alice);
+  await expect(review).not.toContainText(bob);
+  await page.screenshot({ path: `../../.cache/artifacts/invitation-identity-selection-${test.info().project.name}.png`, fullPage: true });
+  await page.getByRole("button", { name: "Confirm invitations" }).click();
+  const payload = await page.evaluate(() => JSON.parse(document.documentElement.dataset.invitationPayload!));
+  expect(payload.reviewedRecipients).toEqual([alice]);
+});
+
+
+test("cancelling a batch distinguishes effective and originally reviewed IDs @storybook-visual", async ({ page }) => {
+  const effective = "usr_33333333-3333-3333-3333-333333333333";
+  await page.goto("/iframe.html?id=clubs-invitations-workspace--remapped-recipient&viewMode=story");
+  await page.getByLabel("Saved list").selectOption("list-one");
+  await page.getByRole("button", { name: "Review invitations", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm invitations", exact: true }).click();
+  await page.getByRole("button", { name: "Cancel unsent invitations", exact: true }).click();
+  const confirmation = page.getByRole("dialog", { name: "Cancel unsent invitations", exact: true });
+  await expect(confirmation.getByText("Nova", { exact: true })).toBeVisible();
+  await expect(confirmation).toContainText(effective);
+  await expect(confirmation).toContainText(`Originally reviewed: ${bob}`);
+  await expect(confirmation).not.toContainText(alice);
+  await page.getByRole("button", { name: "Confirm cancellation", exact: true }).click();
+  await expect(page.getByText("Submitted", { exact: true })).toBeVisible();
+  await expect(page.getByText("Cancelled", { exact: true })).toBeVisible();
+});

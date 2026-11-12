@@ -17,6 +17,10 @@ export type WorkspaceData = NonNullable<
 >;
 const WorkspaceContext = createContext<WorkspaceData | null>(null);
 
+export function useOptionalClubWorkspace() {
+  return useContext(WorkspaceContext);
+}
+
 export function useClubWorkspace() {
   const workspace = useContext(WorkspaceContext);
   if (!workspace) throw new Error("Club workspace is unavailable.");

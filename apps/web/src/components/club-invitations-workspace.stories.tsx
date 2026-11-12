@@ -1,3 +1,4 @@
+import { ClubPeopleFixture } from "./club-people-fixture";
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import {
@@ -23,6 +24,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 const alice = "usr_11111111-1111-1111-1111-111111111111";
 const bob = "usr_22222222-2222-2222-2222-222222222222";
 class InvitationFixtureClient extends ConvexReactClient {
+  private readonly peopleFixture = new ClubPeopleFixture();
   private reads = new Map<string, Record<string, unknown>>();
   private cache = new Map<string, unknown>();
   private fixtureListeners = new Set<() => void>();
@@ -51,14 +53,26 @@ class InvitationFixtureClient extends ConvexReactClient {
       dueAt: number;
     }[]
   >();
-  constructor(private emptyHistoryPages = 0) {
+  constructor(private emptyHistoryPages = 0, lateNames = false, private remappedRecipient = false) {
     super("https://fixture.invalid");
+    this.peopleFixture.resolved = !lateNames;
+  }
+  resolveNames() {
+    this.peopleFixture.resolved = true;
+    this.cache.clear();
+    this.fixtureListeners.forEach(listener => listener());
+  }
+  revokePeople() {
+    this.peopleFixture.denied = true;
+    this.cache.clear();
+    this.fixtureListeners.forEach(listener => listener());
   }
   result(name: string, args: Record<string, unknown>) {
     const key = JSON.stringify([name, args]);
     if (this.cache.has(key)) return this.cache.get(key);
     let result: unknown;
-    if (name === "clubProviderReads:context")
+    if (name === "clubPeople:readView") result = this.peopleFixture.read(String(args.viewId));
+    else if (name === "clubProviderReads:context")
       result = {
         enabledFeatures: ["membership_management", "instances"],
         permittedProviderRoleIds: [],
@@ -192,7 +206,10 @@ class InvitationFixtureClient extends ConvexReactClient {
     const name = getFunctionName(mutation),
       value = args[0] as Record<string, unknown>;
     let result: unknown = null;
-    if (name === "clubProviderReads:request") {
+    if (name === "clubPeople:requestView") {
+      const source = value.source as FunctionArgs<typeof import("@convex-generated-api").api.clubPeople.requestView>["source"];
+      result = this.peopleFixture.request(source, source.kind === "invitation_review" ? source.targetUserIds : source.kind === "invitation_batch" ? (this.outcomes.get(source.batchId) ?? []).flatMap(item => [item.userId, item.reviewedUserId]) : []);
+    } else if (name === "clubProviderReads:request") {
       const params = value.params as Record<string, unknown>;
       const id = `read-${params.kind}-${params.userId ?? "instances"}`;
       this.reads.set(id, { ...params, observedAt: Date.now() });
@@ -217,6 +234,7 @@ class InvitationFixtureClient extends ConvexReactClient {
       this.lists = this.lists.filter((list) => list._id !== value.listId);
     }
     else if (name === "clubInvitations:enqueue") {
+      document.documentElement.dataset.invitationPayload = JSON.stringify(value);
       const recipients = value.reviewedRecipients as string[];
       const id = `batch-${this.batches.length + 1}`;
       this.batches = [
@@ -231,7 +249,7 @@ class InvitationFixtureClient extends ConvexReactClient {
       this.outcomes.set(
         id,
         recipients.map((userId, index) => ({
-          userId,
+          userId: this.remappedRecipient && index === 1 ? "usr_33333333-3333-3333-3333-333333333333" : userId,
           reviewedUserId: userId,
           operationId: `op-${index}`,
           state: index === 0 ? "submitted" : "pending",
@@ -254,8 +272,8 @@ class InvitationFixtureClient extends ConvexReactClient {
     return result as FunctionReturnType<Mutation>;
   }
 }
-function Workspace({ emptyHistoryPages = 0 }: { emptyHistoryPages?: number }) {
-  const [client] = useState(() => new InvitationFixtureClient(emptyHistoryPages));
+function Workspace({ emptyHistoryPages = 0, lateNames = false, remappedRecipient = false }: { emptyHistoryPages?: number; lateNames?: boolean; remappedRecipient?: boolean }) {
+  const [client] = useState(() => new InvitationFixtureClient(emptyHistoryPages, lateNames, remappedRecipient));
   const data: WorkspaceData = {
     community: {
       _id: "club-one" as Id<"profiles">,
@@ -275,6 +293,7 @@ function Workspace({ emptyHistoryPages = 0 }: { emptyHistoryPages?: number }) {
   };
   return (
     <ConvexProvider client={client}>
+      {lateNames ? <div className="flex gap-3 p-5"><button onClick={() => client.resolveNames()}>Resolve names</button><button onClick={() => client.revokePeople()}>Revoke people access</button></div> : null}
       <div className="mx-auto max-w-6xl p-5">
         <ClubWorkspaceView
           data={data}
@@ -296,3 +315,7 @@ type Story = StoryObj<typeof meta>;
 export const Owner: Story = {};
 export const AutoHistory: Story = { args: { emptyHistoryPages: 1 } };
 export const BoundedHistory: Story = { args: { emptyHistoryPages: 4 } };
+
+export const LateNames: Story = { render: () => <Workspace lateNames /> };
+
+export const RemappedRecipient: Story = { render: () => <Workspace remappedRecipient /> };

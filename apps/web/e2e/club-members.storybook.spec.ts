@@ -3,10 +3,10 @@ test("clearing member search restores the unfiltered directory @storybook-visual
   await page.goto("/iframe.html?id=clubs-members--owner&viewMode=story");
   await page.getByLabel("Search members").fill("Riley");
   await page.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Nova", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Manage member Nova", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Clear search", exact: true }).click();
   await expect(page.getByLabel("Search members")).toHaveValue("");
-  await expect(page.getByRole("button", { name: "Nova", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Manage member Nova", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Clear search", exact: true })).toHaveCount(0);
 });
 
@@ -32,20 +32,20 @@ test("member search, pagination and confirmed actions @storybook-visual", async 
 }) => {
   await page.goto("/iframe.html?id=clubs-members--owner&viewMode=story");
   await expect(
-    page.getByRole("button", { name: "Riley", exact: true }),
+    page.getByRole("button", { name: "Manage member Riley", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Next page" }).click();
   await expect(
-    page.getByRole("button", { name: "Morgan", exact: true }),
+    page.getByRole("button", { name: "Manage member Morgan", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Previous page" }).click();
-  await page.getByRole("button", { name: "Riley", exact: true }).click();
+  await page.getByRole("button", { name: "Manage member Riley", exact: true }).click();
   await expect(page.getByText("DJ", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close detail" }).click();
   await page.getByLabel("Search members").fill("Riley");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Nova", exact: true }),
+    page.getByRole("button", { name: "Manage member Nova", exact: true }),
   ).toHaveCount(0);
   await page.getByRole("button", { name: "Ban member", exact: true }).click();
   await expect(page.getByText("Review action", { exact: true })).toBeVisible();
@@ -100,7 +100,7 @@ test("failed provider reads offer refresh without inventing members @storybook-v
     page.getByRole("button", { name: "Refresh", exact: true }),
   ).toBeEnabled();
   await expect(
-    page.getByRole("button", { name: "Riley", exact: true }),
+    page.getByRole("button", { name: "Manage member Riley", exact: true }),
   ).toHaveCount(0);
 });
 

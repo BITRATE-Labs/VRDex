@@ -14,6 +14,7 @@ import {
   Textarea,
 } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
+import { ClubPerson, PeoplePending, useClubPeople } from "./club-person";
 import { ClubNotifications } from "./club-notifications";
 import { useClubWorkspace } from "./club-workspace";
 import { metricTime } from "./club-chart";
@@ -305,6 +306,7 @@ function OperationEditor({
   onClose: () => void;
 }) {
   const workspace = useClubWorkspace();
+  const people = useClubPeople({ kind: "scheduled_operations", operationIds: [operation.id] });
   const [payload, setPayload] = useState(operation.payload);
   const [expectedRevision] = useState(operation.revision);
   const [scheduleKind, setScheduleKind] = useState(operation.schedule.kind);
@@ -351,6 +353,7 @@ function OperationEditor({
       <SectionTitle>
         Edit {operationLabels[payload.kind].toLowerCase()}
       </SectionTitle>
+      {"targetUserId" in payload ? <div className="mt-4"><ClubPerson userId={payload.targetUserId} identity={people.people.find(person => "targetUserId" in payload && person.userId === payload.targetUserId)} exactId /></div> : null}
       <form
         className="mt-5 grid gap-5"
         onSubmit={async (event) => {
@@ -548,6 +551,7 @@ export function ClubScheduled() {
         ? ["pending", "claimed", "submitted"].includes(operation.state)
         : !["pending", "claimed", "submitted"].includes(operation.state)),
   );
+  const people = useClubPeople(visible.length ? Array.from({ length: Math.ceil(visible.length / 25) }, (_, index) => ({ kind: "scheduled_operations" as const, operationIds: visible.slice(index * 25, index * 25 + 25).map(operation => operation.id) })) : null);
   const autoPaging = useRef({
     communityId: workspace.community._id,
     view,
@@ -630,10 +634,11 @@ export function ClubScheduled() {
           <SectionTitle>Cancel action?</SectionTitle>
           <p className="mt-3">{operationLabels[confirmCancel.payload.kind]}</p>
           {"targetUserId" in confirmCancel.payload ? (
-            <p className="mt-2 break-all text-xs text-muted">
-              {confirmCancel.payload.targetUserId}
-            </p>
+            <div className="mt-3"><ClubPerson userId={confirmCancel.payload.targetUserId} identity={people.people.find(person => "targetUserId" in confirmCancel.payload && person.userId === confirmCancel.payload.targetUserId)} exactId /></div>
           ) : null}
+          <p className="mt-3 text-sm">{metricTime(confirmCancel.dueAt)}</p>
+          <p className="mt-1 text-sm">{workspace.community.displayName}</p>
+          {"roleId" in confirmCancel.payload ? <p className="mt-1 break-all text-xs">{confirmCancel.payload.roleId}</p> : null}
           <div className="mt-5 flex gap-3">
             <Button
               disabled={busy}
@@ -662,6 +667,7 @@ export function ClubScheduled() {
         </Card>
       ) : null}
       <Card padding="lg">
+        <PeoplePending count={people.pendingCount} />
         <div className="divide-y divide-border">
           {visible.map((operation) => (
             <div
@@ -676,9 +682,7 @@ export function ClubScheduled() {
                   <p className="mt-1 text-sm">{operation.payload.title}</p>
                 ) : null}
                 {"targetUserId" in operation.payload ? (
-                  <p className="mt-1 break-all text-xs text-muted">
-                    {operation.payload.targetUserId}
-                  </p>
+                  <div className="mt-2"><ClubPerson userId={operation.payload.targetUserId} identity={people.people.find(person => "targetUserId" in operation.payload && person.userId === operation.payload.targetUserId)} visibleIds={visible.flatMap(item => "targetUserId" in item.payload ? [item.payload.targetUserId] : [])}><div><dt>Action ID</dt><dd className="break-all">{operation.id}</dd></div>{"roleId" in operation.payload ? <div><dt>Role ID</dt><dd className="break-all">{operation.payload.roleId}</dd></div> : null}</ClubPerson></div>
                 ) : null}
                 {"worldId" in operation.payload ? (
                   <p className="mt-1 break-all text-xs text-muted">
@@ -692,9 +696,8 @@ export function ClubScheduled() {
                     start
                   </p>
                 ) : null}
-                <p className="mt-1 text-xs text-muted">
-                  {operation.actor.displayName ?? "Staff"}
-                </p>
+                <p className="mt-1 break-words text-xs text-muted"><bdi>{operation.actor.displayName ?? "Staff"}</bdi></p>
+                {!("targetUserId" in operation.payload) ? <details className="mt-2 text-xs text-muted"><summary className="w-fit cursor-pointer">Details</summary><p className="mt-2 break-all">{operation.id}</p>{"worldId" in operation.payload ? <p className="break-all">{operation.payload.worldId}</p> : null}</details> : null}
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <span className="text-sm">{statusLabels[operation.state]}</span>

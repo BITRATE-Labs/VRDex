@@ -1,3 +1,4 @@
+import { ClubPeopleFixture } from "./club-people-fixture";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { useState } from "react";
 import {
@@ -29,6 +30,7 @@ const subject = (token: string) => ({
   displayName: token === "fixture" ? "Riley" : "Morgan",
 });
 class ScheduledFixtureClient extends ConvexReactClient {
+  private readonly peopleFixture = new ClubPeopleFixture();
   private readonly fixtureListeners = new Set<() => void>();
   private readonly cache = new Map<string, unknown>();
   private eventStartAt = Date.now() + 86400_000;
@@ -105,7 +107,8 @@ class ScheduledFixtureClient extends ConvexReactClient {
     const key = name + JSON.stringify(args);
     if (this.cache.has(key)) return this.cache.get(key);
     let result: unknown;
-    if (name === "clubOperations:list") {
+    if (name === "clubPeople:readView") result = this.peopleFixture.read(String((args as {viewId: string}).viewId));
+    else if (name === "clubOperations:list") {
       const cursor = (args as { paginationOpts?: { cursor?: string } })?.paginationOpts?.cursor;
       const pageIndex = cursor ? Number(cursor.slice("actions-".length)) : 0;
       const waiting = this.delayedActions && pageIndex < this.delayedActions.pages;
@@ -198,7 +201,13 @@ class ScheduledFixtureClient extends ConvexReactClient {
     const value = args[0] as Record<string, unknown>;
     if (name === "clubProviderReads:request")
       return "fixture-role-read" as FunctionReturnType<Mutation>;
-    if (name === "clubOperations:edit") {
+    if (name === "clubPeople:requestView") {
+      const source = value.source as FunctionArgs<typeof import("@convex-generated-api").api.clubPeople.requestView>["source"];
+      const result = this.peopleFixture.request(source, this.roleEdit ? ["usr_00000000-0000-0000-0000-000000000001"] : []);
+      this.cache.clear();
+      this.fixtureListeners.forEach(callback => callback());
+      return result as FunctionReturnType<Mutation>;
+    } else if (name === "clubOperations:edit") {
       if (this.roleEdit && typeof (value.payload as { roleId?: unknown }).roleId === "string")
         this.onRoleSubmitted((value.payload as { roleId: string }).roleId);
       const job = this.jobs.find((job) => job.id === value.operationId);
@@ -217,8 +226,12 @@ class ScheduledFixtureClient extends ConvexReactClient {
         });
       }
     } else if (name === "clubOperations:cancel") {
+      document.documentElement.dataset.scheduledCancel = JSON.stringify(value);
       const job = this.jobs.find((job) => job.id === value.operationId);
-      if (job) job.state = "cancelled";
+      if (job) {
+        if (job.revision !== value.expectedRevision) throw new Error("Refresh to continue.");
+        job.state = "cancelled";
+      }
     } else if (name === "clubNotifications:markRead")
       this.notifications = this.notifications.map((item) => ({
         ...item,

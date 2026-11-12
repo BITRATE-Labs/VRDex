@@ -49,14 +49,18 @@ test("role activity separates people, roles and audit evidence @storybook-visual
   await page.goto("/iframe.html?id=clubs-membership--role-activity&viewMode=story");
   await expect(page.getByText("Assigned role: DJ", { exact: true })).toBeVisible();
   await expect(page.getByText("Removed role: Deputy", { exact: true })).toBeVisible();
-  await expect(page.getByText("Role unavailable", { exact: true })).toBeVisible();
+  await expect(page.getByText("Role unavailable", { exact: true })).toHaveCount(0);
+  const missingRole = page.locator("div.py-4").filter({ has: page.getByText("Echo", { exact: true }) });
+  await expect(missingRole.getByText("Role not recorded", { exact: true })).not.toBeVisible();
+  await missingRole.locator("summary").click();
+  await expect(missingRole.getByText("Role not recorded", { exact: true })).toBeVisible();
   await expect(page.getByText("Other activity", { exact: true })).toBeVisible();
   const mira = page.getByRole("link", { name: "Mira (VRChat profile, opens in a new tab)", exact: true });
   await expect(mira).toHaveAttribute("href", "https://vrchat.com/home/user/usr_00000000-0000-4000-8000-000000000001");
   await expect(mira).toHaveAttribute("target", "_blank");
-  await expect(page.getByRole("link", { name: "VRDex", exact: true })).toHaveCount(2);
-  await expect(page.getByRole("link", { name: "VRDex", exact: true }).first()).toHaveAttribute("href", "/mira");
-  await expect(page.getByRole("link", { name: "VRDex", exact: true }).nth(1)).toHaveAttribute("href", "/sol");
+  await expect(page.getByRole("link", { name: "VRDex", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Mira", exact: true })).toHaveAttribute("href", "/mira");
+  await expect(page.getByRole("link", { name: "Sol", exact: true })).toHaveAttribute("href", "/sol");
   await expect(page.locator("body")).not.toContainText("\uFFFD");
   await expect(page.getByRole("link", { name: "Sol (VRChat profile, opens in a new tab)", exact: true })).toBeVisible();
   await expect(page.getByText("group.member.role.assign", { exact: true }).first()).not.toBeVisible();
@@ -70,7 +74,7 @@ test("role activity separates people, roles and audit evidence @storybook-visual
   const actorRow = page.locator("div.py-4").filter({ has: page.getByText("Actor wrapping", { exact: true }) });
   const longActor = actorRow.getByRole("link", { name: `${"W".repeat(15)} (VRChat profile, opens in a new tab)`, exact: true });
   expect(await longActor.evaluate(link => {
-    const paragraph = link.closest("p");
+    const paragraph = link.parentElement;
     return paragraph !== null && paragraph.scrollWidth <= paragraph.clientWidth + 1;
   })).toBeTruthy();
   if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
@@ -231,7 +235,7 @@ test("membership names cannot reorder surrounding actions or links @storybook-vi
   await expect(names).toHaveCount(3);
   expect(await names.evaluateAll(elements => elements.map(element => getComputedStyle(element).unicodeBidi))).toEqual(["isolate", "isolate", "isolate"]);
   await expect(page.getByText("Assigned role: \u202EDJ", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "VRDex", exact: true })).toHaveCount(2);
+  await expect(page.getByRole("link", { name: "VRDex", exact: true })).toHaveCount(0);
   await expect(page.locator("summary")).toHaveAccessibleName("Details for Mira, bidi-names");
   await expect(page.getByRole("link", { name: "Mira (VRChat profile, opens in a new tab)", exact: true })).toBeVisible();
   if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
@@ -334,4 +338,26 @@ test("an exhausted empty membership window is not an unavailable scope @storyboo
   await expect(page.getByText("Fixture member 49", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Load more activity" }).click();
   await expect(page.getByText("Fixture member 74", { exact: true }).first()).toBeVisible();
+});
+
+
+test("activity names and details have independent destinations @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership--role-activity&viewMode=story");
+  await expect(page.getByRole("link", { name: "Mira", exact: true })).toHaveAttribute("href", "/mira");
+  await expect(page.getByRole("link", { name: "Sol", exact: true })).toHaveAttribute("href", "/sol");
+  const provider = page.getByRole("link", { name: "Mira (VRChat profile, opens in a new tab)" });
+  expect((await provider.boundingBox())!.height).toBeGreaterThanOrEqual(40);
+  await expect(page.getByText("Group activity", { exact: true })).toBeVisible();
+  await expect(page.locator("summary")).toHaveCount(6);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+});
+
+
+test("non-person activity uses its subject without inventing a person control @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership--non-person-activity&viewMode=story");
+  await expect(page.getByText("Group settings", { exact: true })).toBeVisible();
+  await expect(page.getByText("Group activity", { exact: true })).toBeVisible();
+  await expect(page.getByText("Unknown member", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link")).toHaveCount(0);
+  await expect(page.locator("summary")).toHaveCount(2);
 });

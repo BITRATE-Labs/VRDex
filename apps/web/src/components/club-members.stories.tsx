@@ -1,3 +1,4 @@
+import { ClubPeopleFixture } from "./club-people-fixture";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { useLayoutEffect, useMemo, useState } from "react";
 import {
@@ -32,6 +33,7 @@ const user = (index: number) =>
 const djRole = "grol_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1";
 const adminRole = "grol_00000000-0000-0000-0000-000000000002";
 class MembersFixtureClient extends ConvexReactClient {
+  private readonly peopleFixture = new ClubPeopleFixture();
   private readonly fixtureListeners = new Set<() => void>();
   private readonly cache = new Map<string, unknown>();
   private readonly requests = new Map<string, ProviderReadParams>();
@@ -52,7 +54,8 @@ class MembersFixtureClient extends ConvexReactClient {
     const key = JSON.stringify([name, args]);
     if (this.cache.has(key)) return this.cache.get(key);
     let result: unknown;
-    if (name === "clubProviderReads:context") {
+    if (name === "clubPeople:readView") result = this.peopleFixture.read(String(args.viewId));
+    else if (name === "clubProviderReads:context") {
       if (this.staff && this.permissions.length === 0)
         throw new Error("Unauthorized context read");
       result = {
@@ -151,7 +154,11 @@ class MembersFixtureClient extends ConvexReactClient {
     const value = args[0] as Record<string, unknown>;
     const name = getFunctionName(mutation);
     let result: unknown = null;
-    if (name === "clubProviderReads:request") {
+    if (name === "clubPeople:requestView") {
+      const source = value.source as FunctionArgs<typeof import("@convex-generated-api").api.clubPeople.requestView>["source"];
+      const read = source.kind === "provider_read" ? this.result("clubProviderReads:get", { requestId: source.requestId }) as FunctionReturnType<typeof import("@convex-generated-api").api.clubProviderReads.get> : null;
+      result = this.peopleFixture.request(source, source.kind === "scheduled_operations" ? this.jobs.flatMap(job => { const payload = job.payload; return payload && typeof payload === "object" && "targetUserId" in payload && typeof payload.targetUserId === "string" ? [payload.targetUserId] : []; }) : read?.result?.items.map(item => item.userId ?? item.id) ?? [], new Map(read?.result?.items.flatMap(item => item.displayName ? [[item.userId ?? item.id, item.displayName]] : [])));
+    } else if (name === "clubProviderReads:request") {
       if (
         this.staff &&
         !this.permissions.includes("view_members") &&
