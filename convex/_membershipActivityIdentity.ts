@@ -20,6 +20,8 @@ export async function membershipActivityIdentities(ctx: QueryCtx, ids: readonly 
     const id = normalizeVrchatTargetId(raw, "vrchat_user");
     if (!id || result.has(id)) continue;
     const identity: Infer<typeof membershipIdentity> = { vrchatUrl: `https://vrchat.com/home/user/${id}` };
+    // Pinned windows can grow beyond the requested page size.
+    if (result.size >= 200) { result.set(id, identity); continue; }
     const cached = await ctx.db.query("profileLinkDestinations").withIndex("by_key", q => q.eq("key", `vrchat_user:${id}`)).unique();
     if (cached?.status === "resolved" && cached.entityId?.toLowerCase() === id && cached.name?.trim() && cached.observedAt !== undefined && Number.isFinite(cached.observedAt) && cached.observedAt <= Date.now()) {
       identity.displayName = cached.name;

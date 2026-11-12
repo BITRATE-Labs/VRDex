@@ -242,9 +242,9 @@ export function MembershipActivityView({
                   {event.targetIdentity.vrdexUrl ? <Link href={event.targetIdentity.vrdexUrl} className="underline underline-offset-4">VRDex</Link> : null}
                 </div> : null}
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="break-words text-sm">{membershipEventLabel(event.eventType, event.roleName)}</p>
-                {event.actorUserId || event.actorDisplayName ? <p className="mt-1 text-xs text-muted">By <PersonName identity={event.actorIdentity} recordedName={event.actorDisplayName} />{event.actorIdentity?.vrdexUrl ? <> | <Link href={event.actorIdentity.vrdexUrl} className="underline">VRDex</Link></> : null}</p> : null}
+                {event.actorUserId || event.actorDisplayName ? <p className="mt-1 break-words text-xs text-muted">By <PersonName identity={event.actorIdentity} recordedName={event.actorDisplayName} />{event.actorIdentity?.vrdexUrl ? <> | <Link href={event.actorIdentity.vrdexUrl} className="underline">VRDex</Link></> : null}</p> : null}
                 {event.eventType.startsWith("group.member.role.") && !event.roleName ? <p className="mt-1 text-xs text-muted">Role unavailable</p> : null}
               </div>
               <time dateTime={new Date(event.occurredAt).toISOString()} className="text-xs text-muted sm:text-right">{metricTime(event.occurredAt)}</time>

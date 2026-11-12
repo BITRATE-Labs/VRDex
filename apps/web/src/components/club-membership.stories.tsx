@@ -76,6 +76,7 @@ export const RoleActivity: Story = {
     { auditId: "role-missing", eventType: "group.member.role.assign", occurredAt: start - 2000, targetDisplayName: "Echo" },
     { auditId: "long-name", eventType: "group.member.role.unassign", occurredAt: start - 2500, targetDisplayName: "A very long display name ".repeat(7), roleName: "A very long role name ".repeat(7) },
     { auditId: "unknown", eventType: "future.event", occurredAt: start - 3000 },
+    { auditId: "long-actor", eventType: "group.member.join", occurredAt: start - 3500, targetDisplayName: "Actor wrapping", actorUserId: "usr_00000000-0000-4000-8000-000000000004", actorIdentity: { displayName: "W".repeat(15), vrchatUrl: "https://vrchat.com/home/user/usr_00000000-0000-4000-8000-000000000004" } },
   ]} /></div>,
 };
 

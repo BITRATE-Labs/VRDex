@@ -115,3 +115,22 @@ it("deduplicates local lookups and stops optional profile work at the page budge
   assert.equal(entries[5][1].vrdexUrl, undefined);
   assert.ok(entries[5][1].vrchatUrl);
 });
+
+it("bounds all optional identity lookups when a pinned page expands", async () => {
+  const f = await fixture();
+  await f.t.run(async ctx => { await ctx.db.delete(f.linkId); await ctx.db.delete(f.cacheId); });
+  const ids = Array.from({ length: 1000 }, (_, index) => `usr_00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`);
+  const result = await f.t.run(async ctx => {
+    let queries = 0;
+    const db = new Proxy(ctx.db, { get(target, key) {
+      if (key === "query") return (table: Parameters<typeof target.query>[0]) => { queries++; return target.query(table); };
+      return Reflect.get(target, key);
+    } });
+    const identities = await membershipActivityIdentities({ ...ctx, db }, ids);
+    return { queries, identities: [...identities] };
+  });
+  assert.equal(result.queries, 400);
+  const identities = new Map(result.identities);
+  assert.equal(identities.size, 1000);
+  assert.deepEqual(identities.get(ids[999]), { vrchatUrl: `https://vrchat.com/home/user/${ids[999]}` });
+});

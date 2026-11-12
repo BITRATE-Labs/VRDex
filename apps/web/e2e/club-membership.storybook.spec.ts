@@ -67,7 +67,14 @@ test("role activity separates people, roles and audit evidence @storybook-visual
   await expect(page.getByText("Mira Moon", { exact: true })).toBeVisible();
   await expect(page.getByText("Old Sol", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+  const actorRow = page.locator("div.py-4").filter({ has: page.getByText("Actor wrapping", { exact: true }) });
+  const longActor = actorRow.getByRole("link", { name: `${"W".repeat(15)} (VRChat profile, opens in a new tab)`, exact: true });
+  expect(await longActor.evaluate(link => {
+    const paragraph = link.closest("p");
+    return paragraph !== null && paragraph.scrollWidth <= paragraph.clientWidth + 1;
+  })).toBeTruthy();
   if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await actorRow.screenshot({ path: path.resolve(process.cwd(), "../../.cache/artifacts", `membership-actor-wrap-${test.info().project.name}.png`) });
     await page.screenshot({ path: path.resolve(process.cwd(), "../../.cache/artifacts", `membership-roles-${test.info().project.name}.png`), fullPage: true });
   }
 });
