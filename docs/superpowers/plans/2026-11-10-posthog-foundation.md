@@ -124,6 +124,6 @@
 
 ## Self-review and handoff
 
-Every spec requirement maps to Tasks 1–6; no speculative PostHog products were added. Interface names and mode meanings are consistent. Limited eligibility, management authorization and exact public prose are real acceptance/deployment dependencies, not implemented facts. Native execution is recommended because these tasks share preference and lifecycle interfaces and one implementer can keep the changes smaller.
+Every spec requirement maps to Tasks 1–6; no speculative PostHog products were added. Interface names and mode meanings are consistent. Limited eligibility, hosted acceptance and exact public prose are real acceptance/deployment dependencies, not implemented facts. Native execution is recommended because these tasks share preference and lifecycle interfaces and one implementer can keep the changes smaller.
 
 BASIC approved this plan and native execution on November 10, 2026. Implementation evidence and remaining acceptance dependencies live in the [acceptance record](../../testing/posthog-foundation-acceptance.md). Production recording remains a separate approval.

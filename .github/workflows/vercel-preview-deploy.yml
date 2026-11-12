@@ -25,6 +25,11 @@ on:
         required: false
         default: false
         type: boolean
+      analytics_acceptance:
+        description: Enable synthetic analytics on this preview and require signed-in analytics coverage.
+        required: false
+        default: false
+        type: boolean
   workflow_call:
     inputs:
       pull_number:
@@ -46,6 +51,11 @@ on:
         type: boolean
       capture_screenshots:
         description: Capture review screenshots during browser acceptance.
+        required: false
+        default: false
+        type: boolean
+      analytics_acceptance:
+        description: Enable synthetic analytics and require signed-in analytics coverage.
         required: false
         default: false
         type: boolean
@@ -106,10 +116,15 @@ jobs:
         uses: actions/github-script@v9
         env:
           BROWSER_ACCEPTANCE: ${{ inputs.browser_acceptance }}
+          ANALYTICS_ACCEPTANCE: ${{ inputs.analytics_acceptance }}
           INPUT_HEAD_SHA: ${{ inputs.head_sha }}
           INPUT_PULL_NUMBER: ${{ inputs.pull_number }}
         with:
           script: |
+            if (process.env.ANALYTICS_ACCEPTANCE === "true" && process.env.BROWSER_ACCEPTANCE !== "true") {
+              core.setFailed("analytics_acceptance requires browser_acceptance.");
+              return;
+            }
             const raw = String(process.env.INPUT_PULL_NUMBER || "").trim();
             const pullNumber = Number(raw);
             if (!Number.isInteger(pullNumber) || pullNumber <= 0) {
@@ -288,6 +303,18 @@ jobs:
         run: |
           echo "NEXT_PUBLIC_CONVEX_URL=$CONVEX_PREVIEW_URL" >> "$GITHUB_ENV"
           echo "CONVEX_URL=$CONVEX_PREVIEW_URL" >> "$GITHUB_ENV"
+
+      - name: Configure synthetic analytics acceptance
+        if: inputs.analytics_acceptance
+        run: |
+          sed -i -E '/^NEXT_PUBLIC_POSTHOG_(FOUNDATION_ENABLED|LIMITED_ENABLED|KEY|DEPLOYMENT_CATEGORY)=/d' .vercel/.env.preview.local
+          printf '\n' >> .vercel/.env.preview.local
+          cat <<'ENV' | tee -a "$GITHUB_ENV" .vercel/.env.preview.local > /dev/null
+          NEXT_PUBLIC_POSTHOG_FOUNDATION_ENABLED=true
+          NEXT_PUBLIC_POSTHOG_LIMITED_ENABLED=false
+          NEXT_PUBLIC_POSTHOG_KEY=phc_synthetic_analytics_acceptance
+          NEXT_PUBLIC_POSTHOG_DEPLOYMENT_CATEGORY=preview
+          ENV
 
       - name: Build Vercel preview output
         env:
@@ -524,6 +551,7 @@ jobs:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.VRDEX_HOSTED_E2E_CLERK_PUBLISHABLE_KEY }}
       CLERK_SECRET_KEY: ${{ secrets.VRDEX_HOSTED_E2E_CLERK_SECRET_KEY }}
       VRDEX_E2E_RUN_ID: candidate-${{ needs.deploy-preview.outputs.pr_number }}-${{ github.run_id }}-${{ github.run_attempt }}
+      VRDEX_ANALYTICS_ACCEPTANCE: ${{ inputs.analytics_acceptance }}
     steps:
       - uses: actions/checkout@v6
         with:
