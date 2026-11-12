@@ -29,23 +29,6 @@ it("advertised profile input schemas omit legacy schema IDs while runtime valida
       return JSON.parse(body.split(/\\r?\\n/).find(line => line.startsWith("data: "))?.slice(6) ?? body);
     }
     const tools = (await rpc("tools/list", {})).result.tools;
-    function inspectSchema(schema, root) {
-      if (typeof schema === "boolean") return;
-      assert.equal(schema.id, undefined);
-      if (schema.$ref?.startsWith("#/")) {
-        let target = root;
-        for (const part of schema.$ref.slice(2).split("/")) target = target?.[decodeURIComponent(part).replaceAll("~1", "/").replaceAll("~0", "~")];
-        assert.notEqual(target, undefined, schema.$ref);
-      }
-      for (const key of ["$defs", "definitions", "dependentSchemas", "patternProperties", "properties"]) {
-        for (const child of Object.values(schema[key] ?? {})) inspectSchema(child, root);
-      }
-      for (const key of ["additionalProperties", "unevaluatedProperties", "propertyNames", "contains", "items", "not", "if", "then", "else", "allOf", "anyOf", "oneOf", "prefixItems"]) {
-        if (schema[key] === undefined) continue;
-        for (const child of Array.isArray(schema[key]) ? schema[key] : [schema[key]]) inspectSchema(child, root);
-      }
-    }
-    for (const tool of tools) inspectSchema(tool.inputSchema, tool.inputSchema);
     for (const name of ["vrdex_profile_submit", "vrdex_profile_update"]) {
       const schema = tools.find(tool => tool.name === name).inputSchema;
       assert.equal(schema.$defs.ApiProfileLinkInput.id, undefined, name);
@@ -3618,13 +3601,39 @@ it("filtered catalog preserves every descriptor emitted by the installed SDK", (
     import assert from "node:assert/strict";
     import {McpServer,createMcpHandler} from "./apps/web/node_modules/@modelcontextprotocol/server/dist/index.mjs";
     import {buildVrdexMcpServer,createVrdexMcpHandler} from "./apps/web/src/lib/server/vrdex-mcp.ts";
-    import {mcpJsonSchemaWithoutLegacyIds} from "./packages/api-contracts/src/mcp-json-schema.ts";
     const app=buildVrdexMcpServer(),sdk=new McpServer({name:"parity",version:"1"});
     // Use the SDK's original catalog generator as the independent transport oracle.
     for(const [name,tool] of Object.entries(app._registeredTools))sdk.registerTool(name,{title:tool.title,description:tool.description,inputSchema:tool.inputSchema,outputSchema:tool.outputSchema,annotations:tool.annotations,icons:tool.icons,execution:tool.execution,_meta:tool._meta},async()=>({content:[]}));
     const reference=createMcpHandler(()=>sdk,{legacy:"stateless"}),actual=createVrdexMcpHandler();
     async function list(handler){const response=await handler.fetch(new Request("https://app.example.test/mcp",{method:"POST",headers:{accept:"application/json, text/event-stream","content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:1,method:"tools/list",params:{}})}));const body=await response.text();return JSON.parse(body.split(/\\r?\\n/).find(line=>line.startsWith("data: "))?.slice(6)??body).result.tools;}
-    assert.deepEqual(await list(actual),(await list(reference)).filter(tool=>tool.name!=="vrdex_media_submission_declare").map(tool=>({...tool,inputSchema:mcpJsonSchemaWithoutLegacyIds(tool.inputSchema)})));
+    // Independent JSON Schema positions: the production cleaner is not the comparison oracle.
+    const maps = new Set(["$defs", "definitions", "dependentSchemas", "dependencies", "patternProperties", "properties"]);
+    const schemas = new Set(["additionalProperties", "unevaluatedProperties", "propertyNames", "contains", "items", "additionalItems", "unevaluatedItems", "not", "if", "then", "else", "contentSchema", "allOf", "anyOf", "oneOf", "prefixItems"]);
+    function assertInputSchema(observed, original, position = "schema") {
+      if (position === "data" || original === null || typeof original !== "object") {
+        assert.deepEqual(observed, original); return;
+      }
+      if (Array.isArray(original)) {
+        assert.ok(Array.isArray(observed)); assert.equal(observed.length, original.length);
+        original.forEach((value, index) => assertInputSchema(observed[index], value, position)); return;
+      }
+      const keys = Object.keys(original).filter(key => position !== "schema" || key !== "id");
+      assert.deepEqual(Object.keys(observed).sort(), [...keys].sort());
+      for (const key of keys) {
+        const next = position === "map" ? "schema" : maps.has(key) ? "map" : schemas.has(key) ? "schema" : "data";
+        assertInputSchema(observed[key], original[key], next);
+      }
+    }
+    // The oracle must reject constraint loss and data changes, not just leftover IDs.
+    assert.throws(() => assertInputSchema({type:"object"}, {type:"object",required:["id"]}));
+    assert.throws(() => assertInputSchema({default:{}}, {default:{id:"data"}}));
+    const observed = await list(actual), original = (await list(reference)).filter(tool => tool.name !== "vrdex_media_submission_declare");
+    assert.equal(observed.length, original.length);
+    original.forEach((tool, index) => {
+      const {inputSchema, ...metadata} = tool, {inputSchema: actualInput, ...actualMetadata} = observed[index];
+      assert.deepEqual(actualMetadata, metadata);
+      assertInputSchema(actualInput, inputSchema);
+    });
     await actual.close();await reference.close();await app.close();console.log("SDK descriptor parity passed");
   `);
   assert.match(output,/SDK descriptor parity passed/);
