@@ -6,6 +6,7 @@ import schemaModule from "../../convex/schema";
 import { recoverMembershipPage } from "../../workers/group-telemetry/membership-recovery.mjs";
 import { RequestBudget } from "../../workers/group-telemetry/runtime.mjs";
 import { VrchatProviderError } from "../../workers/group-telemetry/vrchat-client.mjs";
+import { ClubProvider } from "../../workers/group-telemetry/club-provider.mjs";
 const schema = (schemaModule as unknown as { default?: typeof schemaModule }).default ?? schemaModule;
 const modules = {
   "../../convex/clubMembershipRecovery.ts": () => import("../../convex/clubMembershipRecovery"),
@@ -194,6 +195,44 @@ test("invalid raw rows still exhaust the cumulative entry cap", async () => {
   await s.t.mutation(mutation("recordPage"), { ...s.worker, recoveryId, expectedRevision: job.revision, offset: 9998, sourceCount: 2, rawAuditIds: [], events: [], exhausted: false });
   const result = await s.owner.query(status, { communityProfileId: s.communityProfileId });
   assert.equal(result.state, "partial"); assert.equal(result.job.nextOffset, 10000); assert.equal(result.job.unmatched, 2);
+});
+for (const malformed of [null, 17, "invalid", false, []]) test(`non-object recovery row ${JSON.stringify(malformed)} consumes the final raw allowance`, async () => {
+  const s = await setup(), groupId = "grp_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+  await s.t.run(async ctx => {
+    const integration = await ctx.db.get(s.integrationId);
+    assert.ok(integration?.providerAuthority);
+    await ctx.db.patch(s.integrationId, { vrchatGroupId: groupId, providerAuthority: { ...integration.providerAuthority, authority: { ...integration.providerAuthority.authority, groupId } } });
+  });
+  const recoveryId = await s.request();
+  await s.t.run(ctx => ctx.db.patch(recoveryId, { nextOffset: 9999, pages: 99 }));
+  const requests: string[] = [];
+  const provider = { request: async (path: string) => { requests.push(path); return { results: [malformed], hasNext: true }; } };
+  const args = {
+    assignment: { integrationId: s.integrationId, fencingToken: 1, epochStartedAt: s.epochStartedAt, vrchatGroupId: groupId, enabledFeatures: ["analytics"] },
+    authority: { groupId, userId: A, observedAt: s.now, membershipStatus: "member", permissions: ["group-audit-view"] },
+    expectedUserId: A, clock: () => s.now, accountBudget: new RequestBudget(30), integrationBudget: new RequestBudget(30), provider,
+    control: { send: async (operation: string, body: Record<string, unknown>) => {
+      if (operation === "budget") return { granted: true };
+      const endpoint = ({ membership_recovery_claim: "claim", membership_recovery_check: "check", membership_recovery_page: "recordPage", membership_recovery_failure: "recordFailure" } as Record<string, string>)[operation];
+      assert.ok(endpoint);
+      return s.t.mutation(mutation(endpoint), { ...s.worker, ...body });
+    } },
+  };
+  assert.deepEqual(await recoverMembershipPage(args), { recovered: true });
+  const result = await s.owner.query(status, { communityProfileId: s.communityProfileId });
+  assert.equal(result.state, "partial"); assert.equal(result.job.nextOffset, 10000); assert.equal(result.job.pages, 100); assert.equal(result.job.unmatched, 1);
+  assert.equal(result.job.recovered, 0);
+  await s.owner.mutation(mutation("requestRecovery"), { communityProfileId: s.communityProfileId, resume: true, expectedRevision: result.job.revision });
+  assert.deepEqual(await recoverMembershipPage(args), { recovered: false });
+  assert.equal(requests.length, 1); assert.match(requests[0], /n=1&offset=9999/);
+  await assert.rejects(new ClubProvider({ client: provider, groupId, expectedUserId: A }).readPage("audit"), (error: { category?: string }) => error.category === "schema_drift");
+});
+test("recovery raw-page reader keeps foreign group validation fail-closed", async () => {
+  const provider = new ClubProvider({
+    client: { request: async () => ({ results: [null, { groupId: "grp_foreign" }], hasNext: false }) },
+    groupId: "grp_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", expectedUserId: A,
+  });
+  await assert.rejects(provider.readPage("audit_recovery"), (error: { category?: string }) => error.category === "provider_scope");
 });
 test("worker429 transport preserves maximum Retry-After and rejects a superseded lease", async () => {
   for (const [existingDelay, stale] of [[60_000, false], [240_000, false], [60_000, true]] as const) {

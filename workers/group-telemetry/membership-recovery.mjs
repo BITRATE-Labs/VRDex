@@ -22,11 +22,12 @@ export async function recoverMembershipPage({ assignment, authority, provider, c
   if (Math.floor(sentAt / 60_000) !== Math.floor(reservedAt / 60_000) ||
       !accountBudget.tryConsume(1, sentAt) || !integrationBudget.tryConsume(1, sentAt)) return { recovered: false };
   try {
-    const result = await new ClubProvider({ client: provider, groupId: scope.groupId, expectedUserId, clock }).readPage("audit", {
+    const result = await new ClubProvider({ client: provider, groupId: scope.groupId, expectedUserId, clock }).readPage("audit_recovery", {
       n: Math.min(100, 10000 - job.nextOffset), offset: job.nextOffset, startDate: new Date(job.startAt).toISOString(), endDate: new Date(job.endAt).toISOString(),
     });
     const idCounts = new Map(), candidates = [];
     for (const item of result.items) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
       if (typeof item.id === "string" && item.id && item.id.length <= 200) idCounts.set(item.id, (idCounts.get(item.id) ?? 0) + 1);
       try { candidates.push(...normalizeMembershipAuditPage([item], { groupId: scope.groupId, startAt: job.startAt, endAt: job.endAt })); }
       catch (error) { if (error?.category !== "schema_drift") throw error; }
