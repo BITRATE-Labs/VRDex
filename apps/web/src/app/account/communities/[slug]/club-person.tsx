@@ -35,20 +35,25 @@ export function personName(userId?: string, name?: string, visibleIds: string[] 
   return `Member ${key.slice(-length)}`;
 }
 
-export function useOperationPeople(operationIds: Id<"clubOperations">[]) {
-  const ids = [...new Set(operationIds)];
+export function usePeopleSourceGroups<T extends string>(visibleIds: T[]) {
+  const ids = [...new Set(visibleIds)];
   const key = JSON.stringify(ids);
-  const [grouping, setGrouping] = useState<{ key: string; groups: Id<"clubOperations">[][] }>({ key: "", groups: [] });
+  const [grouping, setGrouping] = useState<{ key: string; groups: T[][] }>({ key: "", groups: [] });
   let groups = grouping.groups;
   if (grouping.key !== key) {
     const visible = new Set(ids);
     groups = groups.map(group => group.filter(id => visible.has(id))).filter(group => group.length > 0);
     const retained = new Set(groups.flat());
     const added = ids.filter(id => !retained.has(id));
-    // Freeze partial groups: filtered or underfilled pages must not re-admit old visible operations on append.
+    // Freeze partial groups so new or reordered rows do not re-admit continuously visible IDs.
     groups = [...groups, ...Array.from({ length: Math.ceil(added.length / 25) }, (_, index) => added.slice(index * 25, index * 25 + 25))];
     setGrouping({ key, groups });
   }
+  return groups;
+}
+
+export function useOperationPeople(operationIds: Id<"clubOperations">[]) {
+  const groups = usePeopleSourceGroups(operationIds);
   return useClubPeople(groups.length ? groups.map(operationIds => ({ kind: "scheduled_operations", operationIds })) : null);
 }
 

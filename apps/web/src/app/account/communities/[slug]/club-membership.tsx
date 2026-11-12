@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { Field, Select } from "@/components/ui/field";
 import { ClubMembershipRecovery } from "./club-membership-recovery";
-import { findPersonIdentity, PersonName, PersonVRChat, PeoplePending, accessiblePersonName, isVrchatUserId, personName, useClubPeople, type PersonIdentity } from "./club-person";
+import { findPersonIdentity, PersonName, PersonVRChat, PeoplePending, accessiblePersonName, isVrchatUserId, personName, useClubPeople, usePeopleSourceGroups, type PersonIdentity } from "./club-person";
 import { metricNumber, metricTime } from "./club-chart";
 
 export type MovementPoint = {
@@ -303,7 +303,8 @@ export function MembershipActivityView({
   );
 }
 function AdmittedActivity(props: Parameters<typeof MembershipActivityView>[0]) {
-  const people = useClubPeople(props.events.length ? Array.from({ length: Math.ceil(props.events.length / 25) }, (_, index) => ({ kind: "activity" as const, auditIds: props.events.slice(index * 25, index * 25 + 25).map(event => event.auditId) })) : null);
+  const groups = usePeopleSourceGroups(props.events.map(event => event.auditId));
+  const people = useClubPeople(groups.length ? groups.map(auditIds => ({ kind: "activity", auditIds })) : null);
   return <MembershipActivityView {...props} people={people.people} pendingCount={people.pendingCount} />;
 }
 function MembershipActivityQuery({

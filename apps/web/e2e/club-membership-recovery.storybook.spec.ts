@@ -1,6 +1,53 @@
 import { test, expect } from "@playwright/test";
 const member = "usr_00000000-0000-4000-8000-000000000001";
 
+test("reactive activity preserves visible people grants on prepend append and reorder @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership-recovery--stable-sources&viewMode=story");
+  const rows = page.locator("div.py-4");
+  const sources = () => page.evaluate(() => JSON.parse(document.documentElement.dataset.peopleSources ?? "[]"));
+  await expect(rows).toHaveCount(25);
+  await expect(rows.first().getByText("Private Mira", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Load more activity", exact: true }).click();
+  await expect(rows).toHaveCount(50);
+  await expect(rows.last().getByText("Private Sol", { exact: true })).toBeVisible();
+  expect(await sources()).toEqual([0, 25].map(start => ({ kind: "activity", auditIds: Array.from({ length: 25 }, (_, index) => `filtered-${start + index}`) })));
+
+  await page.getByRole("button", { name: "Prepend event", exact: true }).click();
+  await expect(rows).toHaveCount(51);
+  // New admissions stay pending so an accidental loss of old tickets cannot hide behind a fast response.
+  await expect(rows.nth(1).getByText("Private Mira", { exact: true })).toBeVisible();
+  await expect(rows.last().getByText("Private Sol", { exact: true })).toBeVisible();
+  await expect.poll(sources).toHaveLength(3);
+  expect((await sources()).at(-1)).toEqual({ kind: "activity", auditIds: ["new-audit-ID"] });
+  await page.getByRole("heading", { name: "Membership activity", exact: true }).evaluate(element => element.scrollIntoView({ block: "start" }));
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/c888-reactive-activity-${test.info().project.name}.png` });
+  }
+  await page.getByRole("button", { name: "Release people admissions", exact: true }).click();
+  await page.getByRole("button", { name: "Reorder events", exact: true }).click();
+  await expect(rows.first().locator("summary")).toHaveAttribute("aria-label", "Details for Private Mira, filtered-24");
+  expect(await sources()).toHaveLength(3);
+  await page.getByRole("button", { name: "Reorder events", exact: true }).click();
+
+  await page.getByRole("button", { name: "Remove prepended event", exact: true }).click();
+  await expect(rows).toHaveCount(50);
+  expect(await sources()).toHaveLength(3);
+  await page.getByRole("button", { name: "Prepend event", exact: true }).click();
+  await expect(rows).toHaveCount(51);
+  await expect.poll(sources).toHaveLength(4);
+  expect((await sources()).at(-1)).toEqual({ kind: "activity", auditIds: ["new-audit-ID"] });
+  await expect(rows.nth(1).getByText("Private Mira", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Release people admissions", exact: true }).click();
+  await page.getByRole("button", { name: "Load more activity", exact: true }).click();
+  await expect(rows).toHaveCount(76);
+  await expect.poll(sources).toHaveLength(5);
+  expect((await sources()).at(-1)).toEqual({ kind: "activity", auditIds: Array.from({ length: 25 }, (_, index) => `filtered-${50 + index}`) });
+  await page.getByLabel("Member", { exact: true }).selectOption("usr_00000000-0000-4000-8000-000000000002");
+  await expect(rows).toHaveCount(25);
+  await expect.poll(sources).toHaveLength(6);
+  expect((await sources()).at(-1)).toEqual({ kind: "activity", auditIds: Array.from({ length: 25 }, (_, index) => `filtered-${index * 2 + 1}`) });
+});
+
 test("analytics sign-in returns to the exact filtered history @storybook-visual", async ({ page }) => {
   await page.goto("/iframe.html?id=clubs-workspace--signed-out-analytics&viewMode=story");
   const href = await page.getByRole("link", { name: "Sign in", exact: true }).getAttribute("href");
