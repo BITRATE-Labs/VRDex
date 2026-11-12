@@ -32,15 +32,7 @@ function evaluateVerification({ needs, artifacts }) {
   for (const job of CORE_JOBS) requireSuccess(job);
   if (browsers === true) {
     requireSuccess("build-storybook");
-    for (const job of BROWSER_JOBS) {
-      if (job !== "playwright-hosted-data-flow") requireSuccess(job, true);
-    }
-    const hosted = needs["playwright-hosted-data-flow"];
-    requireSuccess("playwright-hosted-data-flow");
-    if (hosted?.result === "success") {
-      if (hosted.outputs?.configured === "true") requireSuccess("playwright-hosted-data-flow", true);
-      else if (hosted.outputs?.configured !== "false") errors.push("playwright-hosted-data-flow configuration outcome is unknown.");
-    }
+    for (const job of BROWSER_JOBS) requireSuccess(job, true);
   } else if (browsers === false) {
     for (const job of [...BROWSER_JOBS, "build-storybook"]) requireSkip(job, "browsers");
   }

@@ -95,6 +95,8 @@ nonvisible placements expose an external link; they do not create a clipped embe
 ## Verification boundary
 
 Selected browser CI includes a separate candidate broadcast acceptance job. It
+has a 45-minute job bound and a 24-minute acceptance-step bound, leaving room for
+dependency installation, the image build and evidence upload. It
 starts a fresh local Convex deployment and a production build of the candidate Next app, authenticates
 through the retained Clerk development tenant, and drives the real operator route.
 A packaged worker build uses the production control loop, renderer, input manager,

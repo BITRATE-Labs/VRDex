@@ -88,6 +88,21 @@ test('gate requires native exit, independent stopped identity, strict receipt an
   assert.equal(fake.calls.at(-1)[0], 'container');
 });
 
+test('a cold Docker create can finish after five seconds without extending the native suite deadline', async () => {
+  const fake = dockerFixture();
+  let clock=0;
+  const result=await runGate({names,now:()=>clock,execute:async(command,args,options)=>{
+    if(args[0]==='create') {
+      clock+=15000;
+      if(options.timeoutMs<15000)return {code:143,signal:null,failure:'deadline',stdout:'',stderr:''};
+    }
+    if(args[0]==='start')assert.equal(options.timeoutMs,362000);
+    return fake.execute(command,args,options);
+  }});
+  assert.equal(result.passed,true);
+  assert.equal(result.cleanup,true);
+});
+
 test('native nonzero or timeout cannot be masked by a passing receipt or successful cleanup', async () => {
   assert.equal(typeof runGate, 'function');
   for (const patch of [{ code: 1 }, { code: 124 }, { code: null, signal: 'SIGKILL' }, { failure: 'deadline' }]) {

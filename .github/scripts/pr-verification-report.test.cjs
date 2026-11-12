@@ -3,13 +3,12 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { LEGACY_MARKERS, REPORT_MARKER, buildReport, updatePrVerificationReport } = require("./pr-verification-report.cjs");
 const coreJobs = ["lint-web", "verify-docs", "verify-api-mcp", "typecheck-web", "typecheck-backend", "verify-backend-local", "restream-local-checks", "build-web"];
-const browserJobs = ["playwright-public-smoke", "playwright-data-flow", "broadcast-native-acceptance", "playwright-public-preview", "storybook-component-preview"];
+const browserJobs = ["playwright-public-smoke", "playwright-data-flow", "broadcast-native-acceptance", "playwright-hosted-data-flow", "playwright-public-preview", "storybook-component-preview"];
 function fixture(browsers = true, visuals = true) {
   const needs = Object.fromEntries(coreJobs.map(job => [job, { result: "success" }]));
   needs["visual-selection"] = { result: "success", outputs: { browsers: String(browsers), visuals: String(visuals) } };
   needs["build-storybook"] = { result: browsers ? "success" : "skipped" };
   for (const job of browserJobs) needs[job] = { result: browsers ? "success" : "skipped" };
-  needs["playwright-hosted-data-flow"] = { result: browsers ? "success" : "skipped", outputs: browsers ? { configured: "false" } : {} };
   for (const job of ["playwright-image-diff", "storybook-image-diff"]) needs[job] = { result: visuals ? "success" : "skipped" };
   const artifacts = [...(browsers ? browserJobs : []), ...(visuals ? ["playwright-image-diff", "storybook-image-diff"] : [])].map((name, id) => ({ name, id, expired: false }));
   return { needs, artifacts, headSha: "0123456789abcdef", owner: "BASIC-BIT", repo: "VRDex", runId: 456 };
@@ -19,7 +18,7 @@ test("default report marks every browser and Storybook build NOT SELECTED withou
   const report = buildReport(fixture(false, false));
   assert.match(report, /All required checks and selected coverage passed/);
   assert.match(report, /Browsers selected for this run: no/);
-  for (const label of ["Storybook build", "Public route smoke", "Mutation data flow", "Hosted data flow", "Public route preview", "Storybook preview", "Public route image diff", "Storybook image diff"]) {
+  for (const label of ["Storybook build", "Public route smoke", "Mutation data flow", "Candidate preview acceptance", "Public route preview", "Storybook preview", "Public route image diff", "Storybook image diff"]) {
     assert.match(report, new RegExp(`${label} \\| NOT SELECTED \\| Not requested`));
   }
   assert.match(report, /Web build \| PASSED/);
@@ -33,7 +32,7 @@ test("browsers-only report keeps assertion success distinct from unselected capt
   assert.match(report, /Public route assertions only \| PASSED \| \[Open artifact\]/);
   assert.match(report, /Storybook assertions only \| PASSED/);
   assert.match(report, /Public route image diff \| NOT SELECTED/);
-  assert.match(report, /Hosted data flow \| SKIPPED \| Not configured/);
+  assert.match(report, /Candidate preview acceptance \| PASSED \|/);
   assert.doesNotMatch(report, /need attention|screenshots \| PASSED/);
 });
 

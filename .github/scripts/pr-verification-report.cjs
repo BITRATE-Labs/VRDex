@@ -33,8 +33,7 @@ const REPORT_ROWS = [
   {
     artifact: "playwright-hosted-data-flow",
     job: "playwright-hosted-data-flow",
-    label: "Hosted data flow",
-    optional: true,
+    label: "Candidate preview acceptance",
   },
   {
     artifact: "playwright-public-preview",
@@ -144,9 +143,7 @@ function buildReport({
   const rows = REPORT_ROWS.map((row) => {
     const job = needs[row.job] || {};
     const artifact = row.artifact ? artifactByName.get(row.artifact) : null;
-    const optionalWasSkipped =
-      row.optional && job.result === "success" && job.outputs?.configured === "false";
-    const result = optionalWasSkipped ? "skipped" : job.result || "unknown";
+    const result = job.result || "unknown";
 
     const expected = COMPARISON_JOBS.has(row.job) ? evaluation.visuals
       : BROWSER_JOBS.includes(row.job) || row.job === "build-storybook" ? evaluation.browsers : null;
@@ -159,7 +156,7 @@ function buildReport({
     if (artifact) {
       evidence = `[Open artifact](${artifactUrl({ artifact, owner, repo, runId })})`;
     } else if (result === "skipped") {
-      evidence = optionalWasSkipped ? "Not configured" : "Not generated (unexpected skip)";
+      evidence = "Not generated (unexpected skip)";
     }
 
     return `| ${escapeTableCell(label)} | ${resultLabel(result)} | ${evidence} |`;

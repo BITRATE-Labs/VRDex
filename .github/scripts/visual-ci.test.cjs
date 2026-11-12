@@ -3,14 +3,13 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { selectEvidence, evaluateVerification } = require("./visual-ci.cjs");
 const coreJobs = ["lint-web", "verify-docs", "verify-api-mcp", "typecheck-web", "typecheck-backend", "verify-backend-local", "restream-local-checks", "build-web"];
-const browserJobs = ["playwright-public-smoke", "playwright-data-flow", "broadcast-native-acceptance", "playwright-public-preview", "storybook-component-preview"];
+const browserJobs = ["playwright-public-smoke", "playwright-data-flow", "broadcast-native-acceptance", "playwright-hosted-data-flow", "playwright-public-preview", "storybook-component-preview"];
 const comparisons = ["playwright-image-diff", "storybook-image-diff"];
 function fixture({ browsers = false, visuals = false } = {}) {
   const needs = Object.fromEntries(coreJobs.map(job => [job, { result: "success" }]));
   needs["visual-selection"] = { result: "success", outputs: { browsers: String(browsers), visuals: String(visuals) } };
   needs["build-storybook"] = { result: browsers ? "success" : "skipped" };
   for (const job of browserJobs) needs[job] = { result: browsers ? "success" : "skipped" };
-  needs["playwright-hosted-data-flow"] = { result: browsers ? "success" : "skipped", outputs: browsers ? { configured: "false" } : {} };
   for (const job of comparisons) needs[job] = { result: visuals ? "success" : "skipped" };
   const artifacts = [...(browsers ? browserJobs : []), ...(visuals ? comparisons : [])].map(name => ({ name, id: name, expired: false }));
   return { needs, artifacts };
@@ -84,15 +83,10 @@ test("invalid or inconsistent selection is UNKNOWN and fails closed", () => {
   assert.match(evaluateVerification(input).errors.join(" "), /playwright-public-smoke.*artifact/);
 });
 
-test("hosted configuration is required only when browsers are selected", () => {
-  assert.deepEqual(evaluateVerification(fixture()).errors, []);
+test("selected candidate acceptance cannot pass without its artifact", () => {
   const input = fixture({ browsers: true });
-  delete input.needs["playwright-hosted-data-flow"].outputs.configured;
-  assert.match(evaluateVerification(input).errors.join(" "), /hosted/);
-  input.needs["playwright-hosted-data-flow"].outputs.configured = "true";
+  input.artifacts = input.artifacts.filter(a => a.name !== "playwright-hosted-data-flow");
   assert.match(evaluateVerification(input).errors.join(" "), /hosted.*artifact/);
-  input.artifacts.push({ name: "playwright-hosted-data-flow", id: 1 });
-  assert.deepEqual(evaluateVerification(input).errors, []);
 });
 
 const fs = require("node:fs");

@@ -5,7 +5,7 @@ import { parse } from 'yaml';
 
 test('every browser dependency install prepares mirrors within a bounded step', async () => {
   let installs = 0;
-  for (const file of ['baseline-checks.yml', 'deployed-health.yml', 'staging-deploy.yml']) {
+  for (const file of ['baseline-checks.yml', 'deployed-health.yml', 'staging-deploy.yml', 'vercel-preview-deploy.yml']) {
     const workflow = parse(await readFile(`.github/workflows/${file}`, 'utf8'), { uniqueKeys: true });
     for (const job of Object.values(workflow.jobs)) {
       for (const step of job.steps ?? []) {
