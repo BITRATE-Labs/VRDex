@@ -13,7 +13,7 @@ import {
   z,
 } from "@vrdex/api-contracts";
 import { createHash } from "node:crypto";
-import sharp from "sharp";
+import { validatedProfileAssetRaster } from "./profile-asset-validation";
 
 const MAX_STORED_CANDIDATE_BYTES = 12 * 1024 * 1024;
 const MAX_PREVIEW_BYTES = 4 * 1024 * 1024;
@@ -147,13 +147,10 @@ async function attestation<TActor extends string>(
 }
 
 async function rasterPreview(body: Uint8Array) {
-  // Re-decode the bounded source for each size, preserving aspect ratio and
-  // keeping lossless PNG output. Eight halvings bound CPU even for noisy input.
+  const pipeline = await validatedProfileAssetRaster(body);
+  // Eight halvings bound CPU while keeping aspect ratio and lossless PNG output.
   for (let edge = MAX_PREVIEW_EDGE; edge >= 16; edge = Math.floor(edge / 2)) {
-    const preview = await sharp(body, {
-      limitInputPixels: 16_777_216,
-      sequentialRead: true,
-    })
+    const preview = await pipeline.clone()
       .rotate()
       .resize({
         width: edge,

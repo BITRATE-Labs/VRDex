@@ -325,7 +325,7 @@ async function encodeDisplayRaster(body: Uint8Array) {
   throw new Error("Profile media assets must be 12 MB or smaller.");
 }
 
-async function prepareRaster(body: Uint8Array, mimeType: SafeProfileAsset["mimeType"]) {
+export async function validatedProfileAssetRaster(body: Uint8Array) {
   const pipeline = rasterPipeline(body);
   const metadata = await pipeline.metadata();
 
@@ -333,7 +333,11 @@ async function prepareRaster(body: Uint8Array, mimeType: SafeProfileAsset["mimeT
     throw new Error("Profile media must be one valid, still image.");
   }
   assertSourceDimensions(metadata.width, metadata.height);
+  return pipeline;
+}
 
+async function prepareRaster(body: Uint8Array, mimeType: SafeProfileAsset["mimeType"]) {
+  await validatedProfileAssetRaster(body);
   const sanitized = await encodeInOriginalRasterFormat(body, mimeType);
   const display = await encodeDisplayRaster(body);
 
