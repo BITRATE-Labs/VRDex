@@ -194,6 +194,8 @@ export function EventOperatorControls({
     ? "Stopped"
     : ["ended", "error"].includes(session.status)
       ? session.status
+      : view.lifecycleFresh
+        ? session.status
       : observationFresh
         ? session.status
         : "Unknown";
@@ -308,13 +310,16 @@ export function EventOperatorControls({
     setChange(null);
   }
   function outputHealth(output:OperatorStatus["outputs"][number]) {
-    const fresh=observationFresh && output.authorized !== false && eventBroadcastObservationFresh({serverNow:status.serverNow,elapsedMs:elapsed,leaseExpiresAt:session?.leaseExpiresAt,observedAt:session?.outputHealthObservedAt,status:session?.status});
-    return fresh ? session?.outputHealth.find(row=>row.outputId===output.outputId)?.status ?? "Unknown" : "Unknown";
+    if (output.authorized === false) return "Unknown";
+    if (view.offAir) return "Off air";
+    const fresh=eventBroadcastObservationFresh({serverNow:status.serverNow,elapsedMs:elapsed,leaseExpiresAt:session?.leaseExpiresAt,observedAt:session?.outputHealthObservedAt,status:session?.status});
+    const observed = fresh ? session?.outputHealth.find(row=>row.outputId===output.outputId) : undefined;
+    return observed?.status ?? (view.lifecycleFresh && output.outputId === session?.outputId ? session?.status ?? "Unknown" : "Unknown");
   }
   const usableOutputs = status.outputs.filter(row => row.authorized !== false && ["ready", "active"].includes(row.state));
   const primaryOutputs = usableOutputs.filter(row=>!row.simulcastEnabled);
   const readyOutputs = primaryOutputs.length ? primaryOutputs : usableOutputs;
-  const actualLabel = observationFresh ? status.sources.find(source=>source.sourceId===session?.currentSourceId)?.label ?? view.actual : "Unknown";
+  const actualLabel = view.observedSource ? status.sources.find(source=>source.sourceId===view.observedSource?.sourceId && source.revision===view.observedSource.revision)?.label ?? view.actual : view.actual;
   const selectedOutput = readyOutputs.length === 1 ? readyOutputs[0].key : outputKey;
   const destination = (active ? status.outputs.find(row=>row.outputId===status.program?.currentOutputId) : undefined) ?? status.outputs.find(row => row.key === selectedOutput) ?? status.outputs[0];
   const outputLink = destination?.playbackLinks.find(link=>link.platform === "standalone") ?? destination?.playbackLinks[0];
@@ -333,9 +338,9 @@ export function EventOperatorControls({
           </header>
           <div className="grid items-start gap-8 min-[850px]:grid-cols-[minmax(0,1fr)_310px]">
             <section className="min-w-0" aria-label="Broadcast output">
-              <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-semibold">Output</h2><span className="text-sm text-muted">{active || status.outputConfigurationLocked ? actualLabel : "Off air"}</span></div>
+              <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-semibold">Output</h2><span className="text-sm text-muted">{actualLabel}</span></div>
               {active && observationFresh && outputInput && outputLink ? <EventOperatorPreview source={{label:destination?.label ?? "Output",input:outputInput,publicUrl:outputLink.url}}/> : <div className="flex aspect-video flex-col items-center justify-center gap-3 rounded-control border border-border bg-[#070b12] text-white">
-                <Radio aria-hidden="true" className="size-10 text-accent"/><strong className="text-xl">{active ? actualLabel : "Starting soon"}</strong><span className="text-sm text-slate-400">{active ? workerStatus : title ?? status.eventTitle}</span>
+                <Radio aria-hidden="true" className="size-10 text-accent"/><strong className="text-xl">{session?.status === "error" ? "Error" : actualLabel}</strong><span className="text-sm text-slate-400">{active ? workerStatus : title ?? status.eventTitle}</span>
               </div>}
               <dl className="flex flex-wrap gap-8 border-b border-border py-4"><div><dt className="text-xs text-muted">On air</dt><dd className="mt-1 text-sm font-medium">{active ? actualLabel : "None"}</dd></div><div><dt className="text-xs text-muted">Up next</dt><dd className="mt-1 text-sm font-medium">{nextSource?.label ?? status.nextSlot?.displayLabel ?? "End of lineup"}</dd></div><div><dt className="text-xs text-muted">Switching</dt><dd className="mt-1 text-sm font-medium">{observationFresh ? session?.broadcastMode ?? "Unknown" : active ? "Unknown" : "Automatic"}</dd></div></dl>
               <div className="mt-4 flex flex-wrap gap-3">
@@ -397,7 +402,7 @@ export function EventOperatorControls({
                       ? "Command pending"
                       : ""}
           </p>
-          {onPrepare && <EventBroadcastQuickSwitch eventPath={status.eventPath} disabled={!status.canControl || stopBusy || session?.status === "stopping"} canTake={view.canTake} onPrepare={onPrepare} onTake={source => {
+          {onPrepare && <EventBroadcastQuickSwitch eventPath={status.eventPath} now={status.serverNow + elapsed} observedSource={view.observedSource} disabled={!status.canControl || stopBusy || session?.status === "stopping"} canTake={view.canTake} onPrepare={onPrepare} onTake={source => {
             if (!session) return;
             const expected = {expectedSessionId:session.sessionId,expectedIntentSequence:session.intentSequence ?? 0,expectedSourceRevision:source.revision};
             setChange({title:`Put ${source.label} on air?`,message:"This replaces the current output and pauses automatic switching.",label:`Put ${source.label} on air`,sessionId:session.sessionId,epoch:session.epoch,run:()=>submit(()=>onCommand("switch_source",source.key,expected))});
@@ -410,6 +415,7 @@ export function EventOperatorControls({
               canCancel: view.canCancel,
               pending: view.pending ?? null,
               now: status.serverNow + elapsed,
+              observedSource: view.observedSource,
             }}
             canControl={
               status.canControl && !stopBusy && session?.status !== "stopping"
@@ -461,7 +467,7 @@ export function EventOperatorControls({
             <div>
               <dt className="text-sm text-muted">Observed mode</dt>
               <dd>
-                {observationFresh
+                {view.offAir ? "None" : observationFresh
                   ? (session?.broadcastMode ?? "Unknown")
                   : "Unknown"}
               </dd>

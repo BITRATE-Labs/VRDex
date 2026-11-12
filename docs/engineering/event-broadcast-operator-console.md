@@ -51,9 +51,34 @@ Host and operator routes import the same process-shared status reader. It permit
 four concurrent probes, caches for 30 seconds and returns partial results within
 ten seconds without queueing unstarted work. Client refresh waits 30 seconds after
 completion, aborts on unmount, and has a 12-second fetch bound. Missing or older
-than 60-second provider observations display Unknown. Links and copy actions remain
+than 60-second provider observations display Not checked in the operator workspace
+(Unknown in the host view). Direct video has no provider liveness probe and is
+labeled Direct video rather than implying an unsuccessful check. Direct-video
+inputs do not occupy the four provider-probe slots. Fresh encoded
+output identifies the matching source ID and revision as On air in both the input
+row and Quick switch; a fresh offline/unavailable provider result still takes
+precedence so an input failure is not hidden by continued encoding. A local
+preview alone never establishes On air. Quick
+switch retains observation timestamps so provider results expire on the same
+60-second boundary. Links and copy actions remain
 available during probe failures. The host reader can prioritize a preview only
 when its canonical key belongs to that authorized/public roster.
+
+Starting and Stopping remain visible before a media observation arrives, bounded
+by the worker lease. Before lease acquisition, startup uses its persisted ready
+deadline and Stop uses its request time plus the existing 30-second grace period.
+Expired lifecycle evidence becomes Unknown. Fresh per-output health takes priority
+over the lifecycle label. Only the active primary destination can fall back to
+the session lifecycle, using the session's own output ID; a missing output ID,
+unobserved simulcast and revoked destinations stay Unknown. Ended sessions
+display Off air and no observed mode while cleanup still locks Start. The worker
+synchronously fences publication with `outputs.stopNow()` before acknowledging
+Stop as ended; process-stop confirmation and resource cleanup follow separately.
+Lease loss records error, which remains Unknown until output cleanup unlocks
+configuration. Missing active sessions
+and stale live observations never inherit another session's output.
+The failed-session placeholder says Error while its unconfirmed output stays
+Unknown; a never-started broadcast shows Off air.
 
 Diagnostics is collapsed and uses the existing control subscription. Server time
 plus browser monotonic elapsed time ages CPU and memory to Unknown at 30 seconds;

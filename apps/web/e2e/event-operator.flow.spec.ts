@@ -1,4 +1,6 @@
 import { devices, expect, test, type Page } from "@playwright/test";
+import { fixtureNow } from "../src/app/playwright/event-operator/fixture-state";
+import path from "node:path";
 // These routes use production components with explicit transport/authority fixtures.
 test.beforeEach(async ({page})=>{await page.route("**/operate/status?*",route=>route.fulfill({json:{}}));});
 async function confirm(page:Page,label:string){await expect(page.getByRole("dialog")).toBeVisible();await page.getByRole("dialog").getByRole("button",{name:label,exact:true}).click();}
@@ -30,8 +32,69 @@ test("failed commands, expired observations and revoked permissions never imply 
  await page.getByRole("button",{name:"Stale observation",exact:true}).click();await details(page);await expect(page.getByText("Observed output",{exact:true}).locator("..")).toContainText("Unknown");
  await page.getByRole("button",{name:"Revoke capability",exact:true}).click();await expect(page.getByRole("button",{name:"Stop",exact:true})).toBeDisabled();await expect(page.getByRole("button",{name:"Cut to slate",exact:true})).toBeDisabled();await expect(page.getByRole("link",{name:"Host view",exact:true})).toBeVisible();
 });
-test("stopped broadcast starts a chosen destination without claiming observed live output @flow @fixture",async({page})=>{
- await page.goto("/playwright/event-operator");await page.getByRole("button",{name:"End session",exact:true}).click();await expect(page.getByLabel("Primary output",{exact:true})).toHaveCount(0);await page.getByRole("button",{name:"Start",exact:true}).click();await expect(page.getByLabel("Started output")).toHaveText("primary");await details(page);await expect(page.getByText("Observed output",{exact:true}).locator("..")).toContainText("Unknown");
+test("stopped broadcast starts a chosen destination without claiming observed live output @flow @fixture",async({page},info)=>{
+ await page.goto("/playwright/event-operator");await page.getByRole("button",{name:"End session",exact:true}).click();await expect(page.getByLabel("Primary output",{exact:true})).toHaveCount(0);await page.getByRole("button",{name:"Start",exact:true}).click();await expect(page.getByLabel("Started output")).toHaveText("primary");await details(page);await expect(page.getByText("Observed output",{exact:true}).locator("..")).toContainText("Starting");
+ const health=page.getByRole("heading",{name:"Output health",exact:true}).locator("..");
+ await expect(health.getByText("Twitch",{exact:true}).locator("..")).toContainText("Unknown");
+ await expect(health.getByText("VRCDN",{exact:true}).locator("..")).toContainText("starting");
+ await page.screenshot({path:info.outputPath("operator-primary-starting.png"),fullPage:true});
+});
+
+test("direct video status follows fresh worker evidence and clears after Stop @flow @fixture",async({page},info)=>{
+ const statusRequests:string[][]=[];
+ await page.route("**/operate/status?*",route=>{
+  statusRequests.push((new URL(route.request().url()).searchParams.get("ids") ?? "").split(",").filter(Boolean));
+  return route.fulfill({json:{}});
+ });
+ const videoUrl="https://media.example.com/fixture.ts";
+ await page.route(videoUrl,route=>route.fulfill({contentType:"video/mp2t",path:path.resolve("e2e/fixtures/persistent-synthetic.mpegts"),headers:{"access-control-allow-origin":"*"}}));
+ await page.goto("/playwright/event-operator");
+ await expect.poll(()=>statusRequests.length).toBeGreaterThan(0);
+ const providerIds=new Set(statusRequests.flat());
+ await page.getByRole("textbox",{name:"Or paste a link",exact:true}).fill(videoUrl);
+ await page.getByRole("button",{name:"Check source",exact:true}).click();
+ const preview=page.getByRole("region",{name:"Quick switch preview",exact:true});
+ await expect(preview.getByRole("status")).toHaveText("Direct video");
+ await expect(preview.getByRole("status")).toHaveCSS("text-transform","none");
+ await preview.scrollIntoViewIfNeeded();
+ await expect.poll(()=>preview.locator("video").evaluate(node=>node instanceof HTMLVideoElement ? node.currentTime : 0)).toBeGreaterThan(0);
+ expect(statusRequests.flat().every(id=>providerIds.has(id))).toBe(true);
+ const take=preview.getByRole("button",{name:/^Put .* on air$/});
+ const label=await take.innerText();
+ await take.click();await confirm(page,label);
+ await expect(preview.getByRole("status")).toHaveText("On air");
+ await page.screenshot({path:info.outputPath("operator-direct-video-on-air.png"),fullPage:true});
+ await page.getByRole("button",{name:"Stale observation",exact:true}).click();
+ await expect(preview.getByRole("status")).toHaveText("Direct video");
+ await page.getByRole("button",{name:"End session",exact:true}).click();
+ await expect(page.getByRole("region",{name:"Broadcast output",exact:true})).toContainText("Off air");
+ await preview.getByRole("button",{name:"Close preview",exact:true}).click();
+ await page.screenshot({path:info.outputPath("operator-status-clarity.png"),fullPage:true});
+});
+
+test("Quick switch expires provider liveness instead of retaining an old Live label @flow @fixture",async({page})=>{
+ await page.clock.install();
+ await page.route("**/operate/status?*",route=>route.fulfill({json:{"vrcdn:aurora":{state:"live",observedAt:fixtureNow}}}));
+ await page.goto("/playwright/event-operator");
+ await page.getByRole("textbox",{name:"Or paste a link",exact:true}).fill("vrcdn:aurora");
+ await page.getByRole("button",{name:"Check source",exact:true}).click();
+ const preview=page.getByRole("region",{name:"Quick switch preview",exact:true});
+ await expect(preview.getByRole("status")).toHaveText("Live");
+ await page.clock.fastForward(60_001);
+ await expect(preview.getByRole("status")).toHaveText("Not checked");
+});
+
+test("an on-air input keeps its fresh provider failure visible @flow @fixture",async({page},info)=>{
+ await page.route("**/operate/status?*",route=>route.fulfill({json:{"vrcdn:aurora":{state:"offline",observedAt:fixtureNow}}}));
+ await page.goto("/playwright/event-operator");
+ const source=page.getByRole("article",{name:"Aurora",exact:true});
+ await expect(source.getByText("Offline",{exact:true})).toBeVisible();
+ await source.getByRole("button",{name:"Take Aurora",exact:true}).click();await confirm(page,"Put Aurora on air");
+ await details(page);
+ await expect(page.getByText("Observed output",{exact:true}).locator("..")).toContainText("Aurora");
+ await expect(source.getByText("Offline",{exact:true})).toBeVisible();
+ await expect(source.getByText("Offline",{exact:true})).toHaveCSS("text-transform","none");
+ await page.screenshot({path:info.outputPath("operator-offline-input.png"),fullPage:true});
 });
 test("replacing or removing live inputs requires confirmation and quality applies next start @flow @fixture",async({page})=>{
  await page.goto("/playwright/event-operator");await page.getByRole("button",{name:"Replace Custom",exact:true}).click();await page.getByLabel("Source label",{exact:true}).fill("Replacement");await page.getByLabel("Video or stream link",{exact:true}).fill("https://www.twitch.tv/replacement");await page.getByRole("button",{name:"Replace source",exact:true}).click();await expect(page.getByRole("article",{name:"Replacement",exact:true})).toHaveCount(0);await confirm(page,"Replace source");

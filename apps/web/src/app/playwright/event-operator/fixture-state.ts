@@ -93,6 +93,7 @@ export function operatorFixture(): FixtureStatus {
       programId: fixtureId("eventMediaPrograms", "program"),
       state: "hold",
       activeSessionId: sessionId,
+      currentOutputId: primary,
       publicLinkCount: 1,
       directFallbackLinkCount: 1,
       updatedAt: 1,
@@ -147,6 +148,7 @@ export function operatorFixture(): FixtureStatus {
     sessions: [
       {
         sessionId,
+        outputId: primary,
         resumeSource: undefined,
         connectionTest: undefined,
         status: "hold",
