@@ -1,5 +1,45 @@
 import { test, expect } from "@playwright/test";
 
+for (const skew of [-3_600_000, 3_600_000]) {
+  test(`people grants retain names pending status and renewal with browser skew ${skew} @storybook-visual`, async ({ page }) => {
+    await page.clock.install({ time: new Date(Date.now() + skew) });
+    await page.goto(`/iframe.html?id=clubs-people-controls--${skew > 0 ? "fast" : "slow"}-browser-clock&viewMode=story`);
+    const people = page.getByRole("region", { name: "People", exact: true });
+    const count = () => page.evaluate(() => Number(document.documentElement.dataset.peopleRequests));
+    await expect(people.getByText("Riley", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Add chunk", exact: true }).click();
+    await expect.poll(count).toBe(2);
+    await expect(people.getByText("Riley", { exact: true })).toHaveCount(2);
+    await page.getByRole("button", { name: "Delay names", exact: true }).click();
+    await expect(people.getByRole("status")).toContainText("2");
+    await page.clock.fastForward(14 * 60_000);
+    expect(await count()).toBe(2);
+    await expect(people.getByRole("status")).toContainText("2");
+    await page.getByRole("button", { name: "Resolve names", exact: true }).click();
+    await expect(people.getByText("Riley", { exact: true })).toHaveCount(2);
+    await page.getByRole("button", { name: "Remove last chunk", exact: true }).click();
+    await page.clock.fastForward(60_000 + 10);
+    await expect.poll(count).toBe(3);
+    await expect(people.getByText("Riley", { exact: true })).toBeVisible();
+    await expect(people.getByRole("status")).toHaveCount(0);
+  });
+}
+
+test("people grants that expire in transit cannot supply names or pending counts @storybook-visual", async ({ page }) => {
+  await page.clock.install();
+  await page.goto("/iframe.html?id=clubs-people-controls--lifecycle&viewMode=story");
+  const people = page.getByRole("region", { name: "People", exact: true });
+  await expect(people.getByText("Riley", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Hold grant delivery", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => Number(document.documentElement.dataset.peopleRequests))).toBe(2);
+  await expect(people.getByText("Riley", { exact: true })).toHaveCount(0);
+  await page.clock.fastForward(16 * 60_000);
+  await page.getByRole("button", { name: "Release grant delivery", exact: true }).click();
+  await expect(people.getByText("Riley", { exact: true })).toHaveCount(0);
+  await expect(people.getByRole("status")).toHaveCount(0);
+  await page.getByRole("button", { name: "Close source", exact: true }).click();
+});
+
 test("mixed-case identity fallbacks compare canonical people and suffix collisions @storybook-visual", async ({ page }) => {
   await page.goto("/iframe.html?id=clubs-people-controls--mixed-case-fallbacks&viewMode=story");
   await expect(page.locator("bdi")).toHaveCount(3);

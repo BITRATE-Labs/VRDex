@@ -194,7 +194,7 @@ export async function admitVerifiedAudit(ctx: MutationCtx, integration: Integrat
 
 export const requestView = mutation({
   args: { communityProfileId: v.id("profiles"), source: peopleSource },
-  returns: v.object({ viewId: v.id("clubPeopleViews"), expiresAt: v.number() }),
+  returns: v.object({ viewId: v.id("clubPeopleViews"), expiresAt: v.number(), serverNow: v.number() }),
   handler: async (ctx, args) => {
     const actor = await resolveClubActor(ctx, args.communityProfileId);
     if (!actor.subject || actor.kind === "none") throw new Error("Sign in required.");
@@ -205,13 +205,13 @@ export const requestView = mutation({
     const prior = await ctx.db.query("clubPeopleViews").withIndex("by_actor_scope_key", q => q.eq("subject.tokenIdentifier", actor.subject!.tokenIdentifier).eq("integrationId", integration._id).eq("sourceKey", sourceKey)).unique();
     if (prior && prior.expiresAt > Date.now() && prior.epochStartedAt === epoch(integration) && JSON.stringify(prior.source) === JSON.stringify(source)) {
       for (const target of await viewTargets(ctx, integration, actor, source, prior._id)) await admit(ctx, integration, target, actor.subject);
-      return { viewId: prior._id, expiresAt: prior.expiresAt };
+      return { viewId: prior._id, expiresAt: prior.expiresAt, serverNow: Date.now() };
     }
     if (prior) await ctx.db.delete(prior._id);
     const expiresAt = Date.now() + PEOPLE_VIEW_MS;
     const viewId = await ctx.db.insert("clubPeopleViews", { communityProfileId: args.communityProfileId, integrationId: integration._id, epochStartedAt: epoch(integration), subject: actor.subject, source, sourceKey, expiresAt });
     for (const target of await viewTargets(ctx, integration, actor, source, viewId)) await admit(ctx, integration, target, actor.subject);
-    return { viewId, expiresAt };
+    return { viewId, expiresAt, serverNow: Date.now() };
   },
 });
 

@@ -33,6 +33,12 @@ it("review admission is private, bounded, replaces the old grant and expires", a
   const args = { communityProfileId: s.communityProfileId, source: review() };
   await assert.rejects(s.t.mutation(api.clubPeople.requestView, args));
   const first = await s.owner.mutation(api.clubPeople.requestView, args);
+  assert.equal(first.serverNow, Date.now());
+  assert.equal(first.expiresAt - first.serverNow, 15 * 60_000);
+  test.mock.timers.tick(1000);
+  const retained = await s.owner.mutation(api.clubPeople.requestView, args);
+  assert.equal(retained.serverNow, Date.now());
+  assert.equal(retained.expiresAt, first.expiresAt);
   const second = await s.owner.mutation(api.clubPeople.requestView, { ...args, source: review([B]) });
   await assert.rejects(s.owner.query(api.clubPeople.readView, { viewId: first.viewId }));
   assert.deepEqual((await s.owner.query(api.clubPeople.readView, { viewId: second.viewId })).people.map(p => p.userId), [B]);

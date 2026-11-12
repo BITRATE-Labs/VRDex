@@ -24,13 +24,15 @@ class RecoveryClient extends ConvexReactClient {
   private job: Recovery["job"] = null;
   reads = 0;
   private hideMira = false;
-  private prepended = false;
+  private prepended = 0;
+  private readonly peopleSubscriptions = new Set<() => void>();
   private reversed = false;
   private holdPeople = false;
   private peopleWaiters: (() => void)[] = [];
   private peopleSources: FunctionArgs<typeof api.clubPeople.requestView>["source"][] = [];
-  prependEvent() { this.prepended = true; this.holdPeople = true; this.notify(); }
-  removePrepended() { this.prepended = false; this.notify(); }
+  prependEvent() { this.prepended = 1; this.holdPeople = true; this.notify(); }
+  prependNextEvent() { this.prepended++; this.notify(); }
+  removePrepended() { this.prepended = 0; this.notify(); }
   reorderEvents() { this.reversed = !this.reversed; this.notify(); }
   releasePeople() { this.holdPeople = false; this.peopleWaiters.splice(0).forEach(resolve => resolve()); }
   private indexPending = false;
@@ -49,7 +51,7 @@ class RecoveryClient extends ConvexReactClient {
   private notify() { this.cache.clear(); this.fixtureListeners.forEach(listener => listener()); }
   private events() {
     const events = Array.from({ length: 300 }, (_, index) => ({ auditId: `filtered-${index}`, eventType: ["group.member.join", "group.member.leave", "group.member.remove", "group.member.role.assign", "group.member.role.unassign"][index % 5]!, occurredAt: startAt + index * 1000, targetUserId: index % 2 === 0 ? (index % 3 === 0 ? mira.toUpperCase() : mira) : sol, targetDisplayName: this.stableSources ? undefined : index % 2 === 0 ? "Mira" : "Sol" }));
-    if (this.prepended) events.unshift({ auditId: "new-audit-ID", eventType: "group.member.join", occurredAt: endAt - 1000, targetUserId: mira, targetDisplayName: undefined });
+    for (let index = 0; index < this.prepended; index++) events.unshift({ auditId: index === 0 ? "new-audit-ID" : `new-audit-${index + 1}`, eventType: "group.member.join", occurredAt: endAt - 1000 + index, targetUserId: mira, targetDisplayName: undefined });
     return events.filter(event => !this.hideMira || event.targetUserId.toLowerCase() !== mira);
   }
   private result(name: string, value: Record<string, unknown>) {
@@ -76,7 +78,12 @@ class RecoveryClient extends ConvexReactClient {
     return result;
   }
   override watchQuery<Query extends FunctionReference<"query">>(query: Query, ...args: ArgsAndOptions<Query, WatchQueryOptions>): Watch<FunctionReturnType<Query>> {
-    return { onUpdate: callback => { this.fixtureListeners.add(callback); return () => this.fixtureListeners.delete(callback); }, localQueryResult: () => this.result(getFunctionName(query), args[0] ?? {}) as FunctionReturnType<Query>, journal: () => undefined };
+    return { onUpdate: callback => {
+      this.fixtureListeners.add(callback);
+      if (getFunctionName(query) === "clubPeople:readView") this.peopleSubscriptions.add(callback);
+      document.documentElement.dataset.peopleActiveViews = String(this.peopleSubscriptions.size);
+      return () => { this.fixtureListeners.delete(callback); this.peopleSubscriptions.delete(callback); document.documentElement.dataset.peopleActiveViews = String(this.peopleSubscriptions.size); };
+    }, localQueryResult: () => this.result(getFunctionName(query), args[0] ?? {}) as FunctionReturnType<Query>, journal: () => undefined };
   }
   override async mutation<Mutation extends FunctionReference<"mutation">>(mutation: Mutation, ...args: ArgsAndOptions<Mutation, MutationOptions<FunctionArgs<Mutation>>>): Promise<FunctionReturnType<Mutation>> {
     const name = getFunctionName(mutation), value = args[0] as Record<string, unknown>;
@@ -123,7 +130,7 @@ function Fixture({ enabled = true, staff = false, initial, filters = false, stab
   useSearchParams.mockReturnValue(url.searchParams as ReturnType<typeof useSearchParams>);
   getRouter().push.mockImplementation(next => setHref(next));
   const workspace: WorkspaceData = { community: { _id: "fixture-club" as Id<"profiles">, slug: "afterhours", displayName: "Afterhours" }, actor: { kind: staff ? "staff" : "owner", roleIds: [], permissions: [] }, roles: [], assignments: [], hasMoreAssignments: false, actionLog: [], visibility: null, integration: null, connectionState: "active", readableCategories: ["individual_membership_history"], eventConnectorsEnabled: false };
-  return <ConvexProvider client={client}><main className="mx-auto max-w-5xl p-5">{stableSources ? <><button onClick={() => client.prependEvent()}>Prepend event</button><button onClick={() => client.removePrepended()}>Remove prepended event</button><button onClick={() => client.reorderEvents()}>Reorder events</button><button onClick={() => client.releasePeople()}>Release people admissions</button></> : null}<button onClick={() => client.setIndexPending(true)}>Pause fixture index</button><button onClick={() => client.setIndexPending(false)}>Complete fixture index</button><button onClick={() => client.progress()}>Advance recovery</button><button onClick={() => client.hideSelected()}>Hide selected member</button><button onClick={() => client.failNext()}>Fail next recovery action</button><output aria-label="Fixture location">{href}</output><ClubWorkspaceView data={workspace} pathname={url.pathname}>{filters ? <FilteredActivity /> : <ClubMembershipRecovery />}</ClubWorkspaceView></main></ConvexProvider>;
+  return <ConvexProvider client={client}><main className="mx-auto max-w-5xl p-5">{stableSources ? <><button onClick={() => client.prependEvent()}>Prepend event</button><button onClick={() => client.prependNextEvent()}>Prepend next event</button><button onClick={() => client.removePrepended()}>Remove prepended event</button><button onClick={() => client.reorderEvents()}>Reorder events</button><button onClick={() => client.releasePeople()}>Release people admissions</button></> : null}<button onClick={() => client.setIndexPending(true)}>Pause fixture index</button><button onClick={() => client.setIndexPending(false)}>Complete fixture index</button><button onClick={() => client.progress()}>Advance recovery</button><button onClick={() => client.hideSelected()}>Hide selected member</button><button onClick={() => client.failNext()}>Fail next recovery action</button><output aria-label="Fixture location">{href}</output><ClubWorkspaceView data={workspace} pathname={url.pathname}>{filters ? <FilteredActivity /> : <ClubMembershipRecovery />}</ClubWorkspaceView></main></ConvexProvider>;
 }
 const meta = { title: "Clubs/Membership recovery", component: Fixture, parameters: { layout: "fullscreen", nextjs: { appDirectory: true } } } satisfies Meta<typeof Fixture>;
 export default meta;

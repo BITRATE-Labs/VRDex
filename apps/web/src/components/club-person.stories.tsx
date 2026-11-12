@@ -11,7 +11,7 @@ import { ClubPeopleFixture } from "./club-people-fixture";
 const first = "usr_00000000-0000-0000-0000-000000000001";
 const second = "usr_11111111-1111-1111-1111-111100000001";
 class PeopleClient extends ConvexReactClient {
-  readonly people = new ClubPeopleFixture();
+  readonly people: ClubPeopleFixture;
   private readonly fixtureListeners = new Set<() => void>();
   private cache = new Map<string, unknown>();
   nameMode: "recorded" | "public" | "private" | "profile" = "recorded";
@@ -20,9 +20,13 @@ class PeopleClient extends ConvexReactClient {
   delay = 0;
   expiredResponses = false;
   failSecond = false;
+  private holdDelivery = false;
+  private deliveries: (() => void)[] = [];
+  holdDeliveries() { this.holdDelivery = true; }
+  releaseDeliveries() { this.holdDelivery = false; this.deliveries.splice(0).forEach(resolve => resolve()); }
   returnExpired() { this.expiredResponses = true; }
   delayRequests() { this.delay = 500; }
-  constructor(private readonly namePrecedence = false) { super("https://fixture.invalid"); }
+  constructor(private readonly namePrecedence = false, serverOffset = 0) { super("https://fixture.invalid"); this.people = new ClubPeopleFixture(serverOffset); }
   change(change: () => void) { change(); this.cache.clear(); this.fixtureListeners.forEach(listener => listener()); }
   override watchQuery<Query extends FunctionReference<"query">>(query: Query, ...args: ArgsAndOptions<Query, WatchQueryOptions>): Watch<FunctionReturnType<Query>> {
     const key = JSON.stringify(args[0]);
@@ -59,6 +63,7 @@ class PeopleClient extends ConvexReactClient {
     if (this.delay) await new Promise(resolve => setTimeout(resolve, this.delay));
     if (this.people.denied) throw new Error("Access revoked");
     const view = this.people.request(input.source, input.source.kind === "invitation_review" ? input.source.targetUserIds : input.source.kind === "activity" ? [input.source.auditIds[0] === "first" ? first : second] : []);
+    if (this.holdDelivery) await new Promise<void>(resolve => this.deliveries.push(resolve));
     if (input.source.kind === "activity") this.viewSources.set(view.viewId, input.source.auditIds[0]);
     return { ...view, ...(this.expiredResponses ? { expiresAt: Date.now() - 1 } : {}) } as FunctionReturnType<Mutation>;
   }
@@ -68,9 +73,9 @@ function PeopleList({ alternate, active, chunks }: { alternate: boolean; active:
   const people = useClubPeople(active ? chunks ? ["first", "second"].slice(0, chunks).map(auditId => ({ kind: "activity" as const, auditIds: [auditId] })) : { kind: "invitation_review", targetUserIds: ids, destination: { kind: "group" } } : null);
   return <section aria-label="People"><PeoplePending count={people.pendingCount} /><ul className="grid gap-5">{ids.map(userId => <li key={userId}><ClubPerson userId={userId} identity={people.people.find(person => person.userId === userId)} visibleIds={ids} /></li>)}</ul></section>;
 }
-function Fixture({ chunked = false, namePrecedence = false }: { chunked?: boolean; namePrecedence?: boolean }) {
+function Fixture({ chunked = false, namePrecedence = false, serverOffset = 0 }: { chunked?: boolean; namePrecedence?: boolean; serverOffset?: number }) {
   const [chunks, setChunks] = useState(1);
-  const [client] = useState(() => new PeopleClient(namePrecedence));
+  const [client] = useState(() => new PeopleClient(namePrecedence, serverOffset));
   const [alternate, setAlternate] = useState(false);
   const [viewer, setViewer] = useState(0);
   const [epoch, setEpoch] = useState(0);
@@ -101,6 +106,8 @@ function Fixture({ chunked = false, namePrecedence = false }: { chunked?: boolea
     {namePrecedence ? (["recorded", "public", "private", "profile"] as const).map(mode => <button key={mode} onClick={() => client.change(() => { client.nameMode = mode; })}>Use {mode} observations</button>) : null}
     <button onClick={() => setChunks(1)}>Remove last chunk</button>
     <button onClick={() => { client.returnExpired(); setViewer(value => value + 1); }}>Return expired grants</button>
+    <button onClick={() => { client.holdDeliveries(); setViewer(value => value + 1); }}>Hold grant delivery</button>
+    <button onClick={() => client.releaseDeliveries()}>Release grant delivery</button>
     <button onClick={() => { client.delayRequests(); setAlternate(value => !value); }}>Change source</button>
     <button onClick={() => { client.delayRequests(); setCommunity(value => value + 1); }}>Change community</button>
     <button onClick={() => { client.delayRequests(); setViewer(value => value + 1); }}>Change viewer</button>
@@ -113,6 +120,8 @@ type Story = StoryObj<typeof meta>;
 export const Lifecycle: Story = {};
 
 export const ChunkedSources: Story = { args: { chunked: true } };
+export const FastBrowserClock: Story = { args: { chunked: true, serverOffset: -3_600_000 } };
+export const SlowBrowserClock: Story = { args: { chunked: true, serverOffset: 3_600_000 } };
 
 export const NamePrecedence: Story = { args: { chunked: true, namePrecedence: true } };
 

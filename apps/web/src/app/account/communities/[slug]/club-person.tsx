@@ -47,6 +47,8 @@ export function usePeopleSourceGroups<T extends string>(visibleIds: T[]) {
     const added = ids.filter(id => !retained.has(id));
     // Freeze partial groups so new or reordered rows do not re-admit continuously visible IDs.
     groups = [...groups, ...Array.from({ length: Math.ceil(added.length / 25) }, (_, index) => added.slice(index * 25, index * 25 + 25))];
+    // Compact occasionally to bound subscriptions on long-open reactive pages.
+    if (groups.length > Math.max(8, 2 * Math.ceil(ids.length / 25))) groups = Array.from({ length: Math.ceil(ids.length / 25) }, (_, index) => ids.slice(index * 25, index * 25 + 25));
     setGrouping({ key, groups });
   }
   return groups;
@@ -56,6 +58,8 @@ export function useOperationPeople(operationIds: Id<"clubOperations">[]) {
   const groups = usePeopleSourceGroups(operationIds);
   return useClubPeople(groups.length ? groups.map(operationIds => ({ kind: "scheduled_operations", operationIds })) : null);
 }
+
+const activeTicket = (view: { deadline: number }) => view.deadline > performance.now();
 
 export function useClubPeople(source: PeopleSource | PeopleSource[] | null) {
   const workspace = useOptionalClubWorkspace();
@@ -67,26 +71,31 @@ export function useClubPeople(source: PeopleSource | PeopleSource[] | null) {
   const sourceKeys = sources.map(item => JSON.stringify(item));
   const key = JSON.stringify([scopeKey, sourceKeys]);
   const request = useMutation(api.clubPeople.requestView);
-  const [ticket, setTicket] = useState<{ key: string; scopeKey: string; views: { sourceKey: string; viewId: Id<"clubPeopleViews">; expiresAt: number }[] } | null>(null);
+  const [ticket, setTicket] = useState<{ key: string; scopeKey: string; views: { sourceKey: string; viewId: Id<"clubPeopleViews">; expiresAt: number; deadline: number }[] } | null>(null);
   const [previousKey, setPreviousKey] = useState(key);
   if (previousKey !== key) {
     setPreviousKey(key);
     // Retain only continuously active sources within the same authority scope.
-    setTicket(previous => previous?.scopeKey === scopeKey ? { ...previous, key, views: previous.views.filter(view => sourceKeys.includes(view.sourceKey) && view.expiresAt > Date.now()) } : null);
+    setTicket(previous => previous?.scopeKey === scopeKey ? { ...previous, key, views: previous.views.filter(view => sourceKeys.includes(view.sourceKey) && activeTicket(view)) } : null);
   }
   const current = ticket?.key === key && source !== null ? ticket : null;
   const [renewal, setRenewal] = useState(0);
   useEffect(() => {
     if (!communityProfileId || !sources.length || workspace?.actor.kind === "none") return;
-    const missing = sources.filter((_, index) => !current?.views.some(view => view.sourceKey === sourceKeys[index] && view.expiresAt > Date.now()));
+    const missing = sources.filter((_, index) => !current?.views.some(view => view.sourceKey === sourceKeys[index] && activeTicket(view)));
     if (!missing.length) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const admit = async (attempt: number) => {
       try {
-        const views = await Promise.all(missing.map(async item => ({ sourceKey: JSON.stringify(item), ...await request({ communityProfileId, source: item }) })));
-        if (views.some(view => view.expiresAt <= Date.now())) throw new Error("Expired people view");
-        if (active && views.length) setTicket(previous => ({ key, scopeKey, views: [...(previous?.key === key ? previous.views.filter(view => view.expiresAt > Date.now()) : []), ...views] }));
+        const views = await Promise.all(missing.map(async item => {
+          const startedAt = performance.now();
+          const view = await request({ communityProfileId, source: item });
+          // Charge the whole round trip so delayed responses cannot extend server authority.
+          return { sourceKey: JSON.stringify(item), ...view, deadline: startedAt + (view.expiresAt - view.serverNow) };
+        }));
+        if (views.some(view => !Number.isFinite(view.deadline) || !activeTicket(view))) throw new Error("Expired people view");
+        if (active && views.length) setTicket(previous => ({ key, scopeKey, views: [...(previous?.key === key ? previous.views.filter(activeTicket) : []), ...views] }));
       } catch {
         if (!active) return;
         if (attempt < 2) timer = setTimeout(() => void admit(attempt + 1), 1000 * (attempt + 1));
@@ -101,17 +110,17 @@ export function useClubPeople(source: PeopleSource | PeopleSource[] | null) {
   const results: Record<string, PeopleView | Error | undefined> = useQueries(queries);
   useEffect(() => {
     if (!current?.views.length) return;
-    const expiresAt = Math.min(...current.views.map(view => view.expiresAt));
+    const deadline = Math.min(...current.views.map(view => view.deadline));
     const timer = setTimeout(() => {
-      setTicket(previous => previous ? { ...previous, views: previous.views.filter(view => view.expiresAt > Date.now()) } : null);
+      setTicket(previous => previous ? { ...previous, views: previous.views.filter(activeTicket) } : null);
       setRenewal(value => value + 1);
-    }, Math.max(0, expiresAt - Date.now()));
+    }, Math.max(0, Math.ceil(deadline - performance.now())));
     return () => clearTimeout(timer);
   }, [current]);
   const people = new Map<string, PeopleView["people"][number]>();
   const pending = new Set<string>();
   if (current) {
-    for (const [viewId, result] of Object.entries(results)) if (result && !(result instanceof Error) && result.expiresAt > Date.now() && current.views.some(view => view.viewId === viewId && view.expiresAt > Date.now())) {
+    for (const [viewId, result] of Object.entries(results)) if (result && !(result instanceof Error) && current.views.some(view => view.viewId === viewId && view.expiresAt === result.expiresAt && activeTicket(view))) {
       for (const person of result.people) {
         const personId = personKey(person.userId);
         const previous = people.get(personId);

@@ -32,11 +32,12 @@ export type MovementPoint = {
 export type MembershipFilters = Pick<FunctionArgs<typeof api.clubMembership.listActivity>, "targetUserId" | "eventType">;
 type ActivityFilterControls = MembershipFilters & { onFilterChange?: (filters: MembershipFilters) => void };
 const activityOptions = { "group.member.join": "Joined", "group.member.leave": "Left", "group.member.remove": "Removed", "group.member.role.assign": "Role assigned", "group.member.role.unassign": "Role removed" };
+const nonPersonSubjects: Record<string, string> = { "group.update": "Group settings", "group.post.create": "Group post", "group.instance.create": "Group instance", "group.role.create": "Group role", "group.role.update": "Group role", "group.role.delete": "Group role" };
 export type MembershipEvent = FunctionReturnType<typeof api.clubMembership.listActivity>["page"][number];
 export function membershipEventLabel(type: string, roleName?: string) {
   if (type === "group.member.role.assign") return roleName ? <>Assigned role: <bdi>{roleName}</bdi></> : "Role assigned";
   if (type === "group.member.role.unassign") return roleName ? <>Removed role: <bdi>{roleName}</bdi></> : "Role removed";
-  return ({ "group.member.join": "Joined", "group.member.leave": "Left", "group.member.remove": "Removed" } as Record<string, string>)[type] ?? "Other activity";
+  return Object.hasOwn(activityOptions, type) ? activityOptions[type as keyof typeof activityOptions] : "Other activity";
 }
 export function MembershipMovementView({
   points,
@@ -242,7 +243,7 @@ export function MembershipActivityView({
   return (
     <Card padding="lg" className="min-w-0">
       <SectionTitle>Membership activity</SectionTitle>
-      {onFilterChange ? <div className="mt-4 flex flex-wrap items-end gap-3"><Field className="min-w-0 basis-full sm:flex-1 sm:basis-0">Member<Select aria-label="Member" value={targetUserId?.toLowerCase() ?? ""} onChange={event => onFilterChange({ targetUserId: event.target.value || undefined, eventType })}><option value="">All members</option>{memberIds.map(id => <option key={id} value={id}>{accessiblePersonName(memberLabel(id))}</option>)}</Select></Field><Field className="min-w-0 basis-full sm:flex-1 sm:basis-0">Activity<Select aria-label="Activity" value={eventType ?? ""} onChange={event => onFilterChange({ targetUserId, eventType: event.target.value || undefined })}><option value="">All activity</option>{Object.entries(activityOptions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}{eventType && !(eventType in activityOptions) ? <option value={eventType}>{eventType}</option> : null}</Select></Field>{targetUserId || eventType ? <Button onClick={() => onFilterChange({})}>Clear filters</Button> : null}</div> : null}
+      {onFilterChange ? <div className="mt-4 flex flex-wrap items-end gap-3"><Field className="min-w-0 basis-full sm:flex-1 sm:basis-0">Member<Select aria-label="Member" value={targetUserId?.toLowerCase() ?? ""} onChange={event => onFilterChange({ targetUserId: event.target.value || undefined, eventType })}><option value="">All members</option>{memberIds.map(id => <option key={id} value={id}>{accessiblePersonName(memberLabel(id))}</option>)}</Select></Field><Field className="min-w-0 basis-full sm:flex-1 sm:basis-0">Activity<Select aria-label="Activity" value={eventType ?? ""} onChange={event => onFilterChange({ targetUserId, eventType: event.target.value || undefined })}><option value="">All activity</option>{Object.entries(activityOptions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}{eventType && !Object.hasOwn(activityOptions, eventType) ? <option value={eventType}>{eventType}</option> : null}</Select></Field>{targetUserId || eventType ? <Button onClick={() => onFilterChange({})}>Clear filters</Button> : null}</div> : null}
       <PeoplePending count={pendingCount} />
       <div className="mt-4 divide-y divide-border">
         {events.map((event) => {
@@ -252,7 +253,7 @@ export function MembershipActivityView({
           const userId = isVrchatUserId(targetId) ? targetId : undefined;
           const personSubject = userId !== undefined || event.eventType.startsWith("group.member.");
           const actorId = event.actorUserId ?? actor?.vrchatUrl?.split("/").at(-1);
-          const nonPersonSubject = ({ "group.update": "Group settings", "group.post.create": "Group post", "group.instance.create": "Group instance", "group.role.create": "Group role", "group.role.update": "Group role", "group.role.delete": "Group role" } as Record<string, string>)[event.eventType] ?? "Group activity";
+          const nonPersonSubject = Object.hasOwn(nonPersonSubjects, event.eventType) ? nonPersonSubjects[event.eventType] : "Group activity";
           const subject = personSubject ? personName(userId, target?.displayName || event.targetDisplayName, visibleIds) : nonPersonSubject;
           return <div key={event.auditId} className="py-4">
             <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_12rem]">

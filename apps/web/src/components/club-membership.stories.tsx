@@ -197,6 +197,10 @@ export const NonPersonActivity: Story = {
   ]} />,
 };
 
+export const PrototypeEventTypes: Story = {
+  render: () => <MembershipActivityView events={["constructor", "toString", "valueOf", "hasOwnProperty", "__proto__"].map(eventType => ({ auditId: eventType, eventType, occurredAt: start }))} />,
+};
+
 
 export const ProfileNameFallback: Story = {
   render: () => <MembershipActivityView events={[{ auditId: "profile-names", eventType: "group.member.role.assign", occurredAt: start, targetUserId: "usr_00000000-0000-4000-8000-000000000001", actorUserId: "usr_00000000-0000-4000-8000-000000000002", roleName: "DJ" }]} people={[

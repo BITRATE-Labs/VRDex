@@ -1,6 +1,43 @@
 import { test, expect } from "@playwright/test";
 const member = "usr_00000000-0000-4000-8000-000000000001";
 
+test("sustained reactive prepends bound active people subscriptions without dropping visible history @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership-recovery--stable-sources&viewMode=story");
+  const rows = page.locator("div.py-4");
+  await expect(rows).toHaveCount(25);
+  await page.getByRole("button", { name: "Load more activity", exact: true }).click();
+  await expect(rows).toHaveCount(50);
+  const views = () => page.evaluate(() => Number(document.documentElement.dataset.peopleActiveViews));
+  await expect.poll(views).toBe(2);
+  for (let count = 1; count <= 60; count++) {
+    await page.getByRole("button", { name: "Prepend next event", exact: true }).click();
+    await expect(rows).toHaveCount(50 + count);
+    await expect(rows.first().getByText("Private Mira", { exact: true })).toBeVisible();
+    expect(await views()).toBeLessThanOrEqual(Math.max(8, 2 * Math.ceil((50 + count) / 25)));
+  }
+  for (let count = 1; count <= 6; count++) {
+    await page.getByRole("button", { name: "Load more activity", exact: true }).click();
+    await expect(rows).toHaveCount(110 + count * 25);
+  }
+  expect(await views()).toBeLessThanOrEqual(2 * Math.ceil(260 / 25));
+  await expect(rows.last().getByText("Private Sol", { exact: true })).toBeVisible();
+});
+
+test("prototype-key event types retain readable activity labels and exact Details @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership--prototype-event-types&viewMode=story");
+  const rows = page.locator("div.py-4");
+  await expect(rows).toHaveCount(5);
+  for (const [index, type] of ["constructor", "toString", "valueOf", "hasOwnProperty", "__proto__"].entries()) {
+    await expect(rows.nth(index).getByText("Group activity", { exact: true })).toBeVisible();
+    await expect(rows.nth(index).getByText("Other activity", { exact: true })).toBeVisible();
+    await rows.nth(index).getByLabel(`Details for Group activity, ${type}`, { exact: true }).click();
+    await expect(rows.nth(index).getByText(type, { exact: true })).toHaveCount(2);
+  }
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/4c7-prototype-activity-${test.info().project.name}.png`, fullPage: true });
+  }
+});
+
 test("reactive activity preserves visible people grants on prepend append and reorder @storybook-visual", async ({ page }) => {
   await page.goto("/iframe.html?id=clubs-membership-recovery--stable-sources&viewMode=story");
   const rows = page.locator("div.py-4");
