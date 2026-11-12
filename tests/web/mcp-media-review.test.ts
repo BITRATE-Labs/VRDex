@@ -671,3 +671,153 @@ it("keeps a resumable cursor after bounded empty checkpoint traversal", async ()
   assert.equal(result.structuredContent?.continueCursor, "41");
   assert.equal(result.structuredContent?.isDone, false);
 });
+
+it("previews a validated 4167-square stored candidate within output bounds", async () => {
+  const source = await sharp({
+    create: { width: 4167, height: 4167, channels: 4, background: "#663399" },
+  }).png().toBuffer();
+  const prepared = await validateAndPrepareProfileAsset(source, "image/png");
+  assert.equal(prepared.download.width, 4167);
+  assert.equal(prepared.download.height, 4167);
+  const d = detail();
+  d.candidate.contentSha256 = prepared.download.contentSha256;
+  const handlers = createMcpMediaReviewHandlers(dependencies({
+    query: async (name) => name === "candidate"
+      ? { storageKey: "large-candidate", mimeType: "image/png", profileDisplayName: "Fixture" }
+      : d,
+    readStoredObject: async () => ({ body: prepared.download.body, contentType: "image/png" }),
+    mutate: async () => { throw new Error("Preview must not mutate"); },
+  }));
+  const result = await handlers.preview({ submissionId: "submission-1", expectedReviewVersion: version });
+  assert.equal(result.isError, undefined, JSON.stringify(result));
+  const image = result.content[0];
+  assert.ok(image?.type === "image");
+  const bytes = Buffer.from(image.data, "base64");
+  const metadata = await sharp(bytes).metadata();
+  assert.equal(metadata.format, "png");
+  assert.equal(metadata.width, 2048);
+  assert.equal(metadata.height, 2048);
+  assert.ok(bytes.byteLength <= 4 * 1024 * 1024);
+});
+
+it("refuses stored previews outside upload dimensions or still-image policy", async () => {
+  const oversizedSide = await sharp({
+    create: { width: 8193, height: 1, channels: 3, background: "red" },
+  }).png().toBuffer();
+  const oversizedPixels = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="8193" height="8193"><rect width="8193" height="8193" fill="red"/></svg>');
+  const animated = await sharp(Buffer.from([255, 0, 0, 255, 0, 0, 0, 0, 255, 0, 0, 255]), {
+    raw: { width: 2, height: 2, channels: 3, pageHeight: 1 },
+  }).gif().toBuffer();
+  assert.equal((await sharp(animated).metadata()).pages, 2);
+  for (const [body, mimeType] of [
+    [oversizedSide, "image/png"],
+    [oversizedPixels, "image/svg+xml"],
+    [animated, "image/gif"],
+  ] as const) {
+    const d = detail();
+    d.candidate.contentSha256 = createHash("sha256").update(body).digest("hex");
+    const handlers = createMcpMediaReviewHandlers(dependencies({
+      query: async (name) => name === "candidate"
+        ? { storageKey: "invalid-candidate", mimeType, profileDisplayName: "Fixture" }
+        : d,
+      readStoredObject: async () => ({ body, contentType: mimeType }),
+    }));
+    const result = await handlers.preview({ submissionId: "submission-1", expectedReviewVersion: version });
+    assert.equal(result.isError, true);
+    assert.equal(result.content[0]?.type, "text");
+    assert.match(JSON.stringify(result), /could not be rendered safely/);
+  }
+});
+
+it("preserves remote current first-frame and wide-artwork previews with the original pixel budget", async () => {
+  const wide = await sharp({
+    create: { width: 10000, height: 1, channels: 3, background: "red" },
+  }).png().toBuffer();
+  const gif = await sharp(Buffer.from([255, 0, 0, 255, 0, 0, 0, 0, 255, 0, 0, 255]), {
+    raw: { width: 2, height: 2, channels: 3, pageHeight: 1 },
+  }).gif().toBuffer();
+  const animated = await sharp(gif, { animated: true }).webp().toBuffer();
+  assert.equal((await sharp(animated).metadata()).pages, 2);
+  const excessivePixels = await sharp({
+    create: { width: 4167, height: 4167, channels: 3, background: "red" },
+  }).png().toBuffer();
+  for (const [body, accepted] of [[wide, true], [animated, true], [excessivePixels, false]] as const) {
+    const handlers = createMcpMediaReviewHandlers(dependencies({
+      query: async (name) => name === "current"
+        ? { profileDisplayName: "Fixture", reviewVersion: version, sourceKind: "legacy", sourceUrl: "https://current.example/image" }
+        : detail({ currentImage: { kind: "legacy", url: "https://current.example/image" } }),
+      readRemoteImage: async () => ({ body, contentType: "image/png" }),
+      readStoredObject: async () => { throw new Error("Remote preview must not read stored candidates"); },
+    }));
+    const result = await handlers.preview({ submissionId: "submission-1", expectedReviewVersion: version, target: "current" });
+    assert.equal(result.isError, accepted ? undefined : true);
+    if (accepted) {
+      const image = result.content[0];
+      assert.ok(image?.type === "image");
+      const bytes = Buffer.from(image.data, "base64");
+      assert.ok(bytes.byteLength <= 4 * 1024 * 1024);
+      const metadata = await sharp(bytes).metadata();
+      assert.equal(metadata.format, "png");
+      assert.ok(metadata.width && metadata.width <= 2048);
+      assert.ok(metadata.height && metadata.height <= 2048);
+    }
+  }
+});
+
+it("preserves RGBA pixels through the bounded raw preview raster", async () => {
+  const body = await sharp({
+    create: { width: 4, height: 4, channels: 4, background: { r: 120, g: 30, b: 200, alpha: 0.25 } },
+  }).png().toBuffer();
+  const prepared = await validateAndPrepareProfileAsset(body, "image/png");
+  const d = detail();
+  d.candidate.contentSha256 = prepared.download.contentSha256;
+  const handlers = createMcpMediaReviewHandlers(dependencies({
+    query: async (name) => name === "candidate"
+      ? { storageKey: "transparent-candidate", mimeType: "image/png", profileDisplayName: "Fixture" }
+      : d,
+    readStoredObject: async () => ({ body: prepared.download.body, contentType: "image/png" }),
+  }));
+  const result = await handlers.preview({ submissionId: "submission-1", expectedReviewVersion: version });
+  const image = result.content[0];
+  assert.ok(image?.type === "image");
+  assert.deepEqual(
+    await sharp(Buffer.from(image.data, "base64")).ensureAlpha().raw().toBuffer(),
+    await sharp(prepared.download.body).ensureAlpha().raw().toBuffer(),
+  );
+});
+
+it("preserves resized 16-bit and grayscale-alpha stored PNG previews", async () => {
+  const original = sharp({
+    create: { width: 2200, height: 2200, channels: 4, background: { r: 120, g: 30, b: 200, alpha: 0.25 } },
+  });
+  const png16 = await original.clone().toColourspace("rgb16").png().toBuffer();
+  const grayscale = await original.clone().toColourspace("b-w").png().toBuffer();
+  assert.equal((await sharp(png16).metadata()).depth, "ushort");
+  assert.equal((await sharp(grayscale).metadata()).channels, 2);
+  for (const source of [png16, grayscale]) {
+    const prepared = await validateAndPrepareProfileAsset(source, "image/png");
+    for (const body of [source, prepared.download.body]) {
+      const d = detail();
+      d.candidate.contentSha256 = createHash("sha256").update(body).digest("hex");
+      const handlers = createMcpMediaReviewHandlers(dependencies({
+        query: async name => name === "candidate"
+          ? { storageKey: "synthetic-colour-candidate", mimeType: "image/png", profileDisplayName: "Fixture" }
+          : d,
+        readStoredObject: async () => ({ body, contentType: "image/png" }),
+      }));
+      const result = await handlers.preview({ submissionId: "submission-1", expectedReviewVersion: version });
+      const image = result.content[0];
+      assert.ok(image?.type === "image");
+      const preview = Buffer.from(image.data, "base64");
+      const directPng = await sharp(body).rotate()
+        .resize({ width: 2048, height: 2048, fit: "inside", withoutEnlargement: true })
+        .png({ compressionLevel: 9 }).toBuffer();
+      assert.equal((await sharp(preview).metadata()).width, 2048);
+      assert.ok(preview.byteLength <= 4 * 1024 * 1024);
+      assert.deepEqual(
+        await sharp(preview).ensureAlpha().raw().toBuffer(),
+        await sharp(directPng).ensureAlpha().raw().toBuffer(),
+      );
+    }
+  }
+});

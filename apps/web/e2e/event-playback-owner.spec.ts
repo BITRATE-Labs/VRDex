@@ -210,3 +210,18 @@ for(const width of [399,400])test(`operator Twitch fallback uses real available 
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  await page.screenshot({path:info.outputPath(`task8-twitch-fallback-${width}.png`)});
 });
+
+test("watch clock stays stable between subscription ticks @flow @fixture", async ({ page }) => {
+  await page.setViewportSize({ width: 400, height: 800 });
+  await page.addInitScript(() => {
+    let now = Date.now();
+    Date.now = () => ++now;
+  });
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.route("https://player.twitch.tv/js/embed/v1.js", route => route.abort());
+  await page.goto("/playwright/event-playback");
+  await page.getByRole("button", { name: "Operator preview", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Preview Operator preview" })).toBeVisible();
+  expect(errors).toEqual([]);
+});

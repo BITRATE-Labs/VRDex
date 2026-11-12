@@ -55,6 +55,12 @@ remain unchanged; the helper returns copies and performs no backfill.
 
 ## Following policy
 
+Schedule-gated watch surfaces, lineup players and inline controls use the same
+clock hook. Each instance caches its own rendered timestamp. It starts as null
+on mount, including server rendering and hydration, then refreshes on the
+queued initial subscription tick, every minute and on visibility changes. Reading the timestamp never samples a new clock value during rendering;
+timers and listeners are removed when the hook unmounts.
+
 Wall time selects schedule candidates. Monotonic `performance.now()` timestamps
 measure audio progress and failure intervals. The two clock domains are never
 subtracted. Current playback retains its source across schedule boundaries.
