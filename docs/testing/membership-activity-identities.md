@@ -6,7 +6,7 @@ This implements the [approved design](../superpowers/specs/2026-11-11-membership
 
 Authorized activity queries resolve latest locally cached VRChat names and unique visible verified VRDex profiles using exact provider IDs. Future role events preserve validated role and actor fields. Event-recorded evidence remains separate from cached names. Rows show readable actions, role names and staff attribution, profile links and keyboard-operated details. Missing history stays unresolved.
 
-Query errors clear named history through the existing error boundary. Retry remounts it. Count-only session storage restores up to 250 previously loaded rows in the original 25-row pages, preserving the identity lookup budget per page. Further rows remain available through Load more. Filters remain in the existing analytics URL.
+Recoverable page errors preserve loaded rows and open details. Live page subscriptions remain active, so permission loss clears history immediately. Errors are recoverable only when the backend explicitly marks a failure after authorization; unknown or access failures clear history. Retry refreshes failed pages while retaining their boundaries, and invalid cursors restart pagination. Count-only session storage retains a bounded high-water mark and restores up to 250 rows in the original 25-row pages. Further rows remain available through Load more. Filters remain in the existing analytics URL.
 
 ## Independent review and fixes
 
@@ -18,11 +18,13 @@ PR review also corrected replay target-ID casing, synchronized generated API dec
 
 A further review pass found that role-name retention depended on a valid role ID and malformed optional ingest strings could reject a whole page. Both regressions failed before the fixes. Role fields now validate independently, and invalid optional name/actor/role strings are omitted while core audit validation, immutable conflicts and scan verification remain enforced.
 
+The recovery review corrected transient errors clearing history and interrupted restoration shrinking the saved count. Independent review then found cursor invalidation and retry-boundary cases. Regressions now cover new events during retry, invalid cursors, permission loss during a transient failure, and denial followed by Retry and restored access. No blocking findings remain from that review.
+
 ## Local evidence
 
 - Worker suite: 270 passed after the replay-casing and independent role-name regressions.
-- Focused membership, identity, proof-verification and automatic-statistics backend suite: 69 passed after PR review fixes, including malformed optional evidence, empty legacy names and an exact public response shape.
-- Storybook desktop/mobile assertions: 8 passed, including role labels, actor/target links, accessible details, bounded pagination restoration and access-loss/retry using real hooks with synthetic transport.
+- Focused membership, identity, proof-verification and automatic-statistics backend suite: 70 passed after PR review fixes, including post-authorization error classification, malformed optional evidence, empty legacy names and an exact public response shape.
+- Storybook desktop/mobile assertions: 18 passed, including role labels, actor/target links, accessible details, bounded restoration, transient recovery, cursor changes and access-loss/retry using real hooks with synthetic transport. The local run used four workers.
 - Repository backend and web type-check scripts passed with the isolated checkout's frozen-lockfile dependencies.
 - Focused frontend lint and whitespace checks passed.
 
@@ -36,4 +38,4 @@ No historical replay, general resolver, migration, production write, merge or de
 
 ## Broader suite limits
 
-The full backend and web unit suites were also attempted. They reported failures in the unmodified VRCDN CBR-envelope, renderer transition-anchor and profile-statistics protocol tests, then did not terminate promptly. Those broad runs were interrupted; no full-suite green result is claimed. The 67 focused backend tests and six membership browser checks were rerun successfully using the isolated locked dependencies afterward. These unrelated failures need their owning workstreams' diagnosis before any whole-repository readiness claim.
+The full backend and web unit suites were also attempted locally. They reported failures in the unmodified VRCDN CBR-envelope, renderer transition-anchor and profile-statistics protocol tests, then did not terminate promptly. Those local runs were interrupted. The focused backend and browser checks listed above passed using isolated locked dependencies. The PR's exact-head CI record supplies remote full-suite evidence; these local attempts alone do not establish whole-repository readiness.

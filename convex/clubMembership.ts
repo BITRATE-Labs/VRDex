@@ -1,7 +1,7 @@
 import { membershipActivityIdentities, membershipIdentity } from "./_membershipActivityIdentity";
 import { readCollectionSubject, readManagedIntegration, resolveGroupObservationPolicy } from "./_groupObservationPolicy";
 import { assertAutomaticOperationAllowed } from "./_communityTelemetry";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import {
   internalMutation,
@@ -532,35 +532,43 @@ export const listActivity = query({
       throw new Error("Invalid membership page size.");
     const state = await readContext(ctx, args.communitySlug, true);
     if (!state) return { page: [], isDone: true, continueCursor: "" };
-    const result = await ctx.db
-      .query("communityMembershipEvents")
-      .withIndex("by_verified_time", (q) =>
-        q
-          .eq("integrationId", state.integrationId)
-          .eq("epochStartedAt", state.epochStartedAt)
-          .eq("verified", true)
-          .gte("occurredAt", args.startAt)
-          .lt("occurredAt", args.endAt),
-      )
-      .order("desc")
-      .paginate(args.paginationOpts);
-    const identities = await membershipActivityIdentities(ctx, result.page.flatMap(row => [row.targetUserId, row.actorUserId].filter((id): id is string => !!id)));
-    return {
-      isDone: result.isDone,
-      continueCursor: result.continueCursor,
-      page: result.page.map(row => ({
-        auditId: row.auditId,
-        eventType: row.eventType,
-        occurredAt: row.occurredAt,
-        ...(row.targetUserId ? { targetUserId: row.targetUserId } : {}),
-        ...(row.targetDisplayName ? { targetDisplayName: row.targetDisplayName } : {}),
-        ...(row.actorUserId ? { actorUserId: row.actorUserId } : {}),
-        ...(row.actorDisplayName ? { actorDisplayName: row.actorDisplayName } : {}),
-        ...(row.roleId ? { roleId: row.roleId } : {}),
-        ...(row.roleName ? { roleName: row.roleName } : {}),
-        ...(row.targetUserId && identities.has(row.targetUserId.toLowerCase()) ? { targetIdentity: identities.get(row.targetUserId.toLowerCase()) } : {}),
-        ...(row.actorUserId && identities.has(row.actorUserId.toLowerCase()) ? { actorIdentity: identities.get(row.actorUserId.toLowerCase()) } : {}),
-      })),
-    };
+    try {
+      const result = await ctx.db
+        .query("communityMembershipEvents")
+        .withIndex("by_verified_time", (q) =>
+          q
+            .eq("integrationId", state.integrationId)
+            .eq("epochStartedAt", state.epochStartedAt)
+            .eq("verified", true)
+            .gte("occurredAt", args.startAt)
+            .lt("occurredAt", args.endAt),
+        )
+        .order("desc")
+        .paginate(args.paginationOpts);
+      const identities = await membershipActivityIdentities(ctx, result.page.flatMap(row => [row.targetUserId, row.actorUserId].filter((id): id is string => !!id)));
+      return {
+        isDone: result.isDone,
+        continueCursor: result.continueCursor,
+        page: result.page.map(row => ({
+          auditId: row.auditId,
+          eventType: row.eventType,
+          occurredAt: row.occurredAt,
+          ...(row.targetUserId ? { targetUserId: row.targetUserId } : {}),
+          ...(row.targetDisplayName ? { targetDisplayName: row.targetDisplayName } : {}),
+          ...(row.actorUserId ? { actorUserId: row.actorUserId } : {}),
+          ...(row.actorDisplayName ? { actorDisplayName: row.actorDisplayName } : {}),
+          ...(row.roleId ? { roleId: row.roleId } : {}),
+          ...(row.roleName ? { roleName: row.roleName } : {}),
+          ...(row.targetUserId && identities.has(row.targetUserId.toLowerCase()) ? { targetIdentity: identities.get(row.targetUserId.toLowerCase()) } : {}),
+          ...(row.actorUserId && identities.has(row.actorUserId.toLowerCase()) ? { actorIdentity: identities.get(row.actorUserId.toLowerCase()) } : {}),
+        })),
+      };
+    } catch (error) {
+      if ((error instanceof Error && error.message.includes("InvalidCursor")) ||
+          (error instanceof ConvexError && typeof error.data === "object" && error.data?.paginationError === "InvalidCursor")) {
+        throw new ConvexError({ code: "MEMBERSHIP_ACTIVITY_CURSOR_INVALID" });
+      }
+      throw new ConvexError({ code: "MEMBERSHIP_ACTIVITY_PAGE_FAILED" });
+    }
   },
 });

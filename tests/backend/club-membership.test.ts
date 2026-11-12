@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { it } from "node:test";
 import { convexTest } from "convex-test";
 import { makeFunctionReference } from "convex/server";
+import { ConvexError } from "convex/values";
 import schemaModule from "../../convex/schema";
 const schema =
   (schemaModule as unknown as { default?: typeof schemaModule }).default ??
@@ -655,4 +656,16 @@ it("drops malformed optional evidence without stalling verified audit scans", as
       assert.deepEqual(result.page, [{ auditId: item.auditId, eventType: item.eventType, occurredAt: item.occurredAt }], `${field}: ${JSON.stringify(value)}`);
     }
   }
+});
+
+it("marks only failures after activity authorization as recoverable", async () => {
+  const { t, owner, integrationId } = await setup();
+  const targetUserId = "usr_00000000-0000-4000-8000-000000000001";
+  await t.run(async ctx => {
+    await ctx.db.insert("communityMembershipEvents", { integrationId, epochStartedAt: start, groupId: "grp_test", auditId: "projection-error", eventType: "group.member.join", occurredAt: start + 1, targetUserId, receivedAt: start + 2, verified: true });
+    for (let n = 0; n < 2; n++) await ctx.db.insert("profileLinkDestinations", { key: `vrchat_user:${targetUserId}`, locator: targetUserId, kind: "vrchat_user", provider: "vrchat", status: "resolved" });
+  });
+  const args = { communitySlug: "club", startAt: start, endAt: end, paginationOpts: { numItems: 25, cursor: null } };
+  await assert.rejects(owner.query(activity, args), error => error instanceof ConvexError && error.data.code === "MEMBERSHIP_ACTIVITY_PAGE_FAILED");
+  await assert.rejects(t.query(activity, args), /access/);
 });

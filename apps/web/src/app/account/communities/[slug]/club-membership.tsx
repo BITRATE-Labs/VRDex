@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { FunctionReturnType } from "convex/server";
 import { ClubErrorBoundary } from "./club-workspace";
-import { useQueries, usePaginatedQuery } from "convex/react";
+import { useQueries } from "convex/react";
+import { ConvexError } from "convex/values";
 import { api } from "@convex-generated-api";
 import {
   Bar,
@@ -293,33 +294,73 @@ function MembershipActivityQuery({
       return Number.isSafeInteger(count) && count > 25 ? Math.min(250, count) : 25;
     } catch { return 25; }
   });
-  const query = usePaginatedQuery(
-    api.clubMembership.listActivity,
-    { communitySlug, startAt, endAt },
-    { initialNumItems: 25 },
-  );
-  const { status, results, loadMore } = query;
-  useEffect(() => {
-    if (status === "CanLoadMore" && results.length < restoreCount) {
-      // Keep the same page boundaries and identity budget when restoring history.
-      loadMore(25);
-    }
-  }, [status, results.length, loadMore, restoreCount]);
-  useEffect(() => {
-    if (query.results.length > 0) {
-      try { sessionStorage.setItem(storageKey, String(Math.min(250, query.results.length))); } catch { /* Storage is optional. */ }
-    }
-  }, [storageKey, query.results.length]);
-  return (
-    <MembershipActivityView
-      events={query.results}
-      loading={
-        query.status === "LoadingFirstPage" || query.status === "LoadingMore"
+  type Page = FunctionReturnType<typeof api.clubMembership.listActivity>;
+  const [requests, setRequests] = useState<{ cursor: string | null; id: number; endCursor?: string }[]>([{ cursor: null, id: 0 }]);
+  const [cached, setCached] = useState<Record<string, Page>>({});
+  const queries = useMemo(() => Object.fromEntries(requests.map((pagination, index) => [index, {
+    query: api.clubMembership.listActivity,
+    args: { communitySlug, startAt, endAt, paginationOpts: { ...pagination, numItems: 25 } },
+  }])), [communitySlug, startAt, endAt, requests]);
+  const pages: Record<string, Page | Error | undefined> = useQueries(queries);
+  const [previousPages, setPreviousPages] = useState(pages);
+  const errors = Object.values(pages).filter((page): page is Error => page instanceof Error);
+  const invalidCursor = errors.some(error => error instanceof ConvexError && typeof error.data === "object" && error.data?.code === "MEMBERSHIP_ACTIVITY_CURSOR_INVALID");
+  // Only errors issued after authorization may keep previously authorized rows.
+  const clearHistory = errors.some(error => !(error instanceof ConvexError && typeof error.data === "object" && error.data?.code === "MEMBERSHIP_ACTIVITY_PAGE_FAILED"));
+  if (pages !== previousPages) {
+    setPreviousPages(pages);
+    if (invalidCursor) {
+      setRequests([{ cursor: null, id: requests[0].id + 1 }]);
+      setCached({});
+    } else if (clearHistory) {
+      if (Object.keys(cached).length) setCached({});
+      if (requests.length > 1 || requests[0].endCursor !== undefined) setRequests([{ cursor: null, id: requests[0].id + 1 }]);
+    } else setCached(current => {
+      const next = { ...current };
+      let changed = false;
+      for (const [key, page] of Object.entries(pages)) {
+        if (page && !(page instanceof Error) && page !== current[key]) { next[key] = page; changed = true; }
       }
-      canLoadMore={query.status === "CanLoadMore"}
-      onLoadMore={() => query.loadMore(25)}
-    />
-  );
+      return changed ? next : current;
+    });
+  }
+  const events: MembershipEvent[] = [];
+  let lastPage: Page | undefined;
+  if (!clearHistory) for (let index = 0; index < requests.length; index++) {
+    const current = pages[index];
+    const page = current instanceof Error || current === undefined ? cached[index] : current;
+    if (!page) break;
+    events.push(...page.page);
+    lastPage = page;
+    if (page.isDone) break;
+  }
+  const loading = errors.length === 0 && Object.values(pages).some(page => page === undefined);
+  const canLoadMore = !loading && errors.length === 0 && lastPage !== undefined && !lastPage.isDone;
+  const continueCursor = lastPage?.continueCursor;
+  if (canLoadMore && events.length < restoreCount && continueCursor !== undefined) {
+    setRequests([...requests, { cursor: continueCursor, id: requests[0].id }]);
+  }
+  useEffect(() => {
+    if (events.length > 0) {
+      try {
+        const stored = Number(sessionStorage.getItem(storageKey));
+        const previous = Number.isSafeInteger(stored) && stored > 25 ? stored : 25;
+        sessionStorage.setItem(storageKey, String(Math.min(250, Math.max(previous, restoreCount, events.length))));
+      } catch { /* Storage is optional. */ }
+    }
+  }, [storageKey, events.length, restoreCount]);
+  return <>
+    {errors.length > 0 ? <Notice variant="error" role="alert">Unable to load activity.<Button className="ml-3" size="sm" variant="secondary" onClick={() => setRequests(current => current.map((request, index) => pages[index] instanceof Error ? {
+      ...request, id: request.id + 1,
+      ...(cached[index]?.continueCursor ? { endCursor: cached[index].continueCursor } : {}),
+    } : request))}>Retry</Button></Notice> : null}
+    {!clearHistory ? <MembershipActivityView
+      events={events}
+      loading={loading}
+      canLoadMore={canLoadMore}
+      onLoadMore={() => { if (continueCursor !== undefined) setRequests(current => [...current, { cursor: continueCursor, id: current[0].id }]); }}
+    /> : null}
+  </>;
 }
 
 export function ClubMembershipActivity(props: { communitySlug: string; startAt: number; endAt: number }) {
