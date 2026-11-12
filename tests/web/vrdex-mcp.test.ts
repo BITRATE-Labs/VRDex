@@ -29,6 +29,23 @@ it("advertised profile input schemas omit legacy schema IDs while runtime valida
       return JSON.parse(body.split(/\\r?\\n/).find(line => line.startsWith("data: "))?.slice(6) ?? body);
     }
     const tools = (await rpc("tools/list", {})).result.tools;
+    function inspectSchema(schema, root) {
+      if (typeof schema === "boolean") return;
+      assert.equal(schema.id, undefined);
+      if (schema.$ref?.startsWith("#/")) {
+        let target = root;
+        for (const part of schema.$ref.slice(2).split("/")) target = target?.[decodeURIComponent(part).replaceAll("~1", "/").replaceAll("~0", "~")];
+        assert.notEqual(target, undefined, schema.$ref);
+      }
+      for (const key of ["$defs", "definitions", "dependentSchemas", "patternProperties", "properties"]) {
+        for (const child of Object.values(schema[key] ?? {})) inspectSchema(child, root);
+      }
+      for (const key of ["additionalProperties", "unevaluatedProperties", "propertyNames", "contains", "items", "not", "if", "then", "else", "allOf", "anyOf", "oneOf", "prefixItems"]) {
+        if (schema[key] === undefined) continue;
+        for (const child of Array.isArray(schema[key]) ? schema[key] : [schema[key]]) inspectSchema(child, root);
+      }
+    }
+    for (const tool of tools) inspectSchema(tool.inputSchema, tool.inputSchema);
     for (const name of ["vrdex_profile_submit", "vrdex_profile_update"]) {
       const schema = tools.find(tool => tool.name === name).inputSchema;
       assert.equal(schema.$defs.ApiProfileLinkInput.id, undefined, name);

@@ -350,6 +350,20 @@ describe("@vrdex/api-contracts", () => {
     assert.equal(source.$defs.Child.id, "Child");
   });
 
+  it("preserves schema data values and cleans keyword-named property schemas", () => {
+    const data = { id: "data-id", properties: { id: "nested-data-id" } };
+    const source = {
+      id: "Root", type: "object", default: data, const: data, enum: [data], examples: [data],
+      properties: { properties: { id: "KeywordProperty", type: "object", properties: { id: { type: "string" } } } },
+      allOf: [{ id: "Intersection", additionalProperties: { id: "Value", type: "string" } }],
+    };
+    assert.deepEqual(mcpJsonSchemaWithoutLegacyIds(source), {
+      type: "object", default: data, const: data, enum: [data], examples: [data],
+      properties: { properties: { type: "object", properties: { id: { type: "string" } } } },
+      allOf: [{ additionalProperties: { type: "string" } }],
+    });
+  });
+
   it("parses event creation contracts", () => {
     ApiEventCreateRequestSchema.parse({
       title: "Club Night",
