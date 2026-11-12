@@ -32,6 +32,13 @@ it("round-trips a normalized 4096-character source and refuses encoded oversize 
     else assert.equal((await f.actor.mutation(api.profileMediaSubmissions.manageContribution, args)).code, "invalid_metadata");
     assert.deepEqual(await f.detail(), current);
   }
+  const expandedCredit = "https://credit.example/" + "界".repeat(800);
+  assert.ok(expandedCredit.length < 2048 && new URL(expandedCredit).href.length > 2048);
+  assert.equal((await f.actor.mutation(api.profileMediaSubmissions.manageContribution, {
+    submissionId: f.intent.submissionId, expectedContributionVersion: current.contributionVersion,
+    idempotencyKey: "credit-encoded-oversize", action: "update_metadata", metadata: { creditUrl: expandedCredit },
+  })).code, "invalid_metadata");
+  assert.deepEqual(await f.detail(), current);
   await occupyFallback(f);
   const fresh = await f.detail();
   const proposal = await f.actor.mutation(api.profileMediaSubmissions.proposePlacement, {
@@ -40,6 +47,23 @@ it("round-trips a normalized 4096-character source and refuses encoded oversize 
   const review = await f.t.withIdentity(f.s.moderatorIdentity).query(api.profileMediaSubmissions.reviewDetail, { submissionId: proposal.resourceId! });
   assert.ok(review);
   assert.equal(reviewDetailSchema.parse(review).candidate.sourceUrl, exact);
+});
+
+it("refuses copying oversized legacy metadata into a replacement proposal", async () => {
+  const f = await fixture();
+  await occupyFallback(f);
+  await f.t.run(async ctx => {
+    const source = (await ctx.db.get(f.intent.submissionId))!;
+    await ctx.db.patch(source.approvedAssetId!, { creditUrl: "https://credit.example/" + "%E7%95%8C".repeat(800) });
+  });
+  const detail = await f.detail();
+  assert.equal(detail.canProposePlacement, false);
+  const receipt = await f.actor.mutation(api.profileMediaSubmissions.proposePlacement, {
+    submissionId: f.intent.submissionId, expectedContributionVersion: detail.contributionVersion,
+    idempotencyKey: "legacy-metadata-boundary",
+  });
+  assert.equal(receipt.operationState, "refused");
+  assert.equal(receipt.code, "invalid_metadata");
 });
 
 it("corrects own approved kit metadata without publisher authority and keeps evidence immutable", async () => {

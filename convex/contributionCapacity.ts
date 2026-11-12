@@ -5,7 +5,7 @@ import {
   contributionAuthorityArgs,
   authorizeContribution,
 } from "./_contributionAuth";
-import { effectiveCapacityLimit, effectiveContributionPolicy, localUploadModes, retainedBatchUsage } from "./_contributionCapacity";
+import { SUBMISSION_JOURNAL_LIMITS, effectiveCapacityLimit, effectiveContributionPolicy, localUploadModes, retainedBatchUsage } from "./_contributionCapacity";
 import { readScopedCursor, writeScopedCursor } from "./_reviewCursor";
 import { resolveContributionPolicy } from "./_contributionPolicy";
 import { openSubmissionCountForUser } from "./profileMediaSubmissions";
@@ -55,7 +55,7 @@ export const get = internalQuery({
       )
       .order("desc")
       .take(dailySampleLimit + 1);
-    const creations24hIsLowerBound = active !== null && active.length >= (recordedTimes === undefined ? dailySampleLimit + 1 : 1000);
+    const creations24hIsLowerBound = active !== null && active.length >= (recordedTimes === undefined ? dailySampleLimit + 1 : SUBMISSION_JOURNAL_LIMITS.actor);
     const window = (active ?? []).filter(
       (row) => row.createdAt > Date.now() - policy.limits.burstWindowMs,
     );

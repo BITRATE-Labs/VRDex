@@ -393,6 +393,9 @@ export function sanitizeProfileAssetCreditUrl(value: string | undefined): string
     if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
       throw new Error("Credit links must use HTTP or HTTPS without embedded credentials.");
     }
+    if (url.href.length > PROFILE_ASSET_CREDIT_URL_MAX_LENGTH) {
+      throw new Error(`Credit links must be ${PROFILE_ASSET_CREDIT_URL_MAX_LENGTH} characters or fewer.`);
+    }
     return url.href;
   } catch (error) {
     if (error instanceof Error && error.message.includes("Credit links")) {

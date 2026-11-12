@@ -9,6 +9,11 @@ import {
   validateProfileAssetByteSize,
 } from "./_profileAssets";
 
+const journalPolicy = resolveContributionPolicy({});
+export const SUBMISSION_JOURNAL_LIMITS = {
+  actor: Math.max(journalPolicy.ordinary.dailyActor, journalPolicy.trusted.dailyActor),
+  target: Math.max(journalPolicy.ordinary.dailyTarget, journalPolicy.trusted.dailyTarget),
+};
 // Accounting validation defaults. Admission uses the current role policy.
 export const CONTRIBUTION_CAPACITY = {
   actorProcessing: 3,
@@ -286,12 +291,12 @@ export async function submissionAdmissionTimes(db: DatabaseReader, scope: "actor
   const row = await db.query("contributionCapacity").withIndex("by_scope", q => q.eq("scope", `${scope}:${id}`)).unique();
   if (row?.submissionTimes !== undefined) return row.submissionTimes.filter(time => time > now - 86400000);
   const legacy = scope === "actor"
-    ? await db.query("profileMediaSubmissions").withIndex("by_submitterUserId_createdAt", q => q.eq("submitterUserId", id as Id<"users">).gt("createdAt", now - 86400000)).order("desc").take(1000)
-    : await db.query("profileMediaSubmissions").withIndex("by_profileId_createdAt", q => q.eq("profileId", id as Id<"profiles">).gt("createdAt", now - 86400000)).order("desc").take(100);
+    ? await db.query("profileMediaSubmissions").withIndex("by_submitterUserId_createdAt", q => q.eq("submitterUserId", id as Id<"users">).gt("createdAt", now - 86400000)).order("desc").take(SUBMISSION_JOURNAL_LIMITS.actor)
+    : await db.query("profileMediaSubmissions").withIndex("by_profileId_createdAt", q => q.eq("profileId", id as Id<"profiles">).gt("createdAt", now - 86400000)).order("desc").take(SUBMISSION_JOURNAL_LIMITS.target);
   return legacy.map(row => row.createdAt);
 }
 export async function insertMediaSubmission(db: DatabaseWriter, submission: Omit<Doc<"profileMediaSubmissions">, "_id" | "_creationTime">) {
-  for (const [scope, id, limit] of [["actor", submission.submitterUserId, 1000], ["target", submission.profileId, 100]] as const) {
+  for (const [scope, id, limit] of [["actor", submission.submitterUserId, SUBMISSION_JOURNAL_LIMITS.actor], ["target", submission.profileId, SUBMISSION_JOURNAL_LIMITS.target]] as const) {
     const row = await db.query("contributionCapacity").withIndex("by_scope", q => q.eq("scope", `${scope}:${id}`)).unique();
     const times = await submissionAdmissionTimes(db, scope, id, submission.createdAt);
     const submissionTimes = [submission.createdAt, ...times].sort((a, b) => b - a).slice(0, limit);

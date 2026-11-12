@@ -1,3 +1,4 @@
+import { resolveContributionPolicy } from "./_contributionPolicy";
 import { insertMediaSubmission, submissionAdmissionTimes } from "./_contributionCapacity";
 import { isAssetBackedPlacement } from "./_mediaSubmissionCleanup";
 import { assertLiveContributionToken } from "./_contributionAuth";
@@ -217,17 +218,17 @@ export async function openSubmissionCountForProfile(
   profileId: Id<"profiles">,
   now: number,
 ) {
-  const groups = await Promise.all(
-    OPEN_SUBMISSION_STATUSES.map((status) =>
-      ctx.db
-        .query("profileMediaSubmissions")
-        .withIndex("by_profileId_status_expiresAt", (query) =>
-          query.eq("profileId", profileId).eq("status", status).gt("expiresAt", now),
-        )
-        .take(21),
-    ),
-  );
-  return groups.reduce((count, group) => count + group.length, 0);
+  const policy = resolveContributionPolicy({});
+  const limit = Math.max(policy.ordinary.openTarget, policy.trusted.openTarget);
+  let count = 0;
+  for (const status of OPEN_SUBMISSION_STATUSES) {
+    count += (await ctx.db.query("profileMediaSubmissions")
+      .withIndex("by_profileId_status_expiresAt", query =>
+        query.eq("profileId", profileId).eq("status", status).gt("expiresAt", now))
+      .take(limit - count)).length;
+    if (count >= limit) break;
+  }
+  return count;
 }
 
 async function submissionRateLimit(

@@ -315,3 +315,27 @@ Saved assigned-review windows now pass their captured replacement end cursor int
 native pagination and return the original ending cursor. A 55-item regression
 changes a proposal's status between reads and verifies that replay does not pull
 a later item across the saved boundary.
+
+### Maximum metadata budget verification
+
+Convex documents a 16 MiB transaction read limit and 32,000 scanned documents in
+its [transaction limits](https://docs.convex.dev/production/state/limits#transactions).
+The pinned convex-test defaults use the same limits. The review's 8 MiB platform
+limit was incorrect, but extending the regression found a real crossing when a
+crowded target's status groups were scanned after a near-full actor queue.
+
+Both actor and target open counts now stop at their aggregate quota across all
+open statuses. The stress test uses policy-derived queue sizes, maximum-length
+UTF-8 metadata, and a crowded mixed-status target. It verifies a clean target-limit
+refusal, successful admission after that queue is decided, and correct daily
+remaining capacity and retry time under the full transaction budget.
+
+Credit URLs now obey the existing 2,048-character contract after URL encoding.
+Copying a legacy asset into a new placement proposal also reuses metadata and URL
+validators. Oversized legacy metadata cannot expand the new open queue, and the
+capability reports that refusal before a new proposal is attempted.
+
+Journal caps derive from the largest applicable standing policy quota. An invariant
+test covers every role, preventing later policy tuning from making the quota
+comparison unreachable. All 3,291 portable backend tests pass with the same four
+Windows exclusions. Both typechecks and isolated local Convex compile/health pass.

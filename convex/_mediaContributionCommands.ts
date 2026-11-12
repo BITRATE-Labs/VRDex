@@ -12,7 +12,7 @@ import { effectiveContributionPolicy } from "./_contributionCapacity";
 import { assertSubmissionRateLimits, openSubmissionCountForUser, openSubmissionCountForProfile } from "./profileMediaSubmissions";
 import {
   contributionCommandBaseSchema, contributionPlacementCommandSchema,
-  contributionManageCommandSchema,
+  contributionManageCommandSchema, contributionMetadataPatchSchema,
   type ContributionCommandBase, type ContributionPlacementCommand,
   type ContributionManageCommand,
   type PublishedContributionDetail, type CommandReceipt,
@@ -51,7 +51,13 @@ async function contributionState(ctx: QueryCtx | MutationCtx, submissionId: stri
   const ownKitOnly = submissionsEnabled &&
     publicKitAvailable(profile) && kitVisible && !restrictions.some(Boolean) && asset.state === "active" &&
     !protectedSelection;
-  return { submission, profile, asset, placement, snapshot, current, publisher, submissionsEnabled, newPlacementAvailable, publicUnclaimed, restrictions, ownSelection, kitVisible, ownKitOnly, protectedSelection,
+  let copyMetadataValid = contributionMetadataPatchSchema.safeParse({ label: asset.label, altText: asset.altText,
+    credit: asset.credit, creditUrl: asset.creditUrl, sourceUrl: asset.sourceUrl, sourceDescription: asset.sourceDescription }).success;
+  if (copyMetadataValid) {
+    try { sanitizeProfileAssetCreditUrl(asset.creditUrl); normalizeProfileAssetSourceUrl(asset.sourceUrl); }
+    catch { copyMetadataValid = false; }
+  }
+  return { submission, profile, asset, copyMetadataValid, placement, snapshot, current, publisher, submissionsEnabled, newPlacementAvailable, publicUnclaimed, restrictions, ownSelection, kitVisible, ownKitOnly, protectedSelection,
     version: await hash({ asset, source: submission, placement: current, assetPlacements, picture: snapshot.currentImage, restrictions, publicUnclaimed, revision: snapshot.reviewVersion }) };
 }
 
@@ -65,7 +71,7 @@ export async function publishedContributionDetail(ctx: QueryCtx | MutationCtx, s
       creditUrl: metadata.creditUrl, sourceUrl: metadata.sourceUrl, sourceDescription: metadata.sourceDescription },
     canSelectPrimary: s.newPlacementAvailable && s.publisher && !s.snapshot.identityOccupied,
     canClearPrimary: s.submissionsEnabled && s.publisher && s.ownSelection,
-    canProposePlacement: s.newPlacementAvailable && s.publicUnclaimed && !s.restrictions.some(Boolean) && !s.ownSelection && s.snapshot.currentImage !== null,
+    canProposePlacement: s.copyMetadataValid && s.newPlacementAvailable && s.publicUnclaimed && !s.restrictions.some(Boolean) && !s.ownSelection && s.snapshot.currentImage !== null,
     canEditMetadata: s.ownKitOnly, canRemove: s.ownKitOnly && s.submission.legalHoldAt === undefined,
   };
 }
@@ -87,6 +93,7 @@ async function command(ctx: MutationCtx, input: ContributionCommandBase | Contri
     !proposal && !s.publisher ? "publisher_required" : s.version !== args.expectedContributionVersion ? "contribution_changed" :
     (proposal || selecting) && !s.newPlacementAvailable ? "target_unavailable" :
     proposal && s.snapshot.currentImage === null ? "primary_empty" :
+    proposal && !s.copyMetadataValid ? "invalid_metadata" :
     !proposal && selecting && s.snapshot.identityOccupied ? "primary_occupied" :
     !proposal && !selecting && !s.ownSelection ? "selection_changed" : undefined;
   if (!code && proposal) {
