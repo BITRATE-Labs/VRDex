@@ -31,6 +31,7 @@ import {
   McpDocumentFetchResponseSchema,
   McpDocumentSearchResponseSchema,
   mcpOutputJsonSchemaForZodSchema,
+  mcpJsonSchemaWithoutLegacyIds,
   PublicActiveWorldSchema,
   PublicEventSchema,
   PublicProfileSchema,
@@ -335,6 +336,18 @@ describe("@vrdex/api-contracts", () => {
         }).properties ?? {}
       ).id,
     );
+  });
+
+  it("cleans input schema metadata without removing named id fields or changing references", () => {
+    const source = {
+      type: "object", id: "Root", properties: { id: { type: "string" }, child: { $ref: "#/$defs/Child" } },
+      $defs: { Child: { type: "object", id: "Child", properties: { id: { type: "string" } } } },
+    };
+    assert.deepEqual(mcpJsonSchemaWithoutLegacyIds(source), {
+      type: "object", properties: { id: { type: "string" }, child: { $ref: "#/$defs/Child" } },
+      $defs: { Child: { type: "object", properties: { id: { type: "string" } } } },
+    });
+    assert.equal(source.$defs.Child.id, "Child");
   });
 
   it("parses event creation contracts", () => {

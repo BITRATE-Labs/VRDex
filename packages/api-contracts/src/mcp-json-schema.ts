@@ -24,17 +24,19 @@ function stripLegacySchemaIds(value: unknown, insideNamedSchemaMap = false): unk
   );
 }
 
+export function mcpJsonSchemaWithoutLegacyIds(schema: McpJsonSchema): McpJsonSchema {
+  const jsonSchema = stripLegacySchemaIds(schema);
+  if (!isJsonObject(jsonSchema)) {
+    throw new Error("MCP schema generation expected a JSON Schema object.");
+  }
+  return jsonSchema;
+}
+
 export function mcpOutputJsonSchemaForZodSchema(schema: z.ZodType): McpJsonSchema {
-  const jsonSchema = stripLegacySchemaIds(
+  return mcpJsonSchemaWithoutLegacyIds(
     z.toJSONSchema(schema, {
       io: "output",
       target: "draft-2020-12",
     }),
   );
-
-  if (!isJsonObject(jsonSchema)) {
-    throw new Error("MCP output schema generation expected a JSON Schema object.");
-  }
-
-  return jsonSchema;
 }

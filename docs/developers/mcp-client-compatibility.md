@@ -59,6 +59,13 @@ Source-backed client requirements from the current docs pass:
 - do not publish client-specific setup snippets unless that client's current
   docs or a manual smoke confirms the config shape
 
+Hosted `tools/list` input schemas remove legacy schema-level `id` metadata
+through the shared API-contract schema cleaner. Named data fields called `id`
+and local `$defs` references are preserved. Some validators otherwise treat the
+legacy metadata as a new reference base and reject profile submit/update
+schemas before making a request. Tool calls still validate against the original
+Zod schemas, including required idempotency keys and update timestamps.
+
 ## Launch Readiness Policy
 
 Current recommendation: launch on representative client and protocol coverage,
