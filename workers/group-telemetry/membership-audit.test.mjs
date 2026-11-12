@@ -39,3 +39,13 @@ test("preserves target casing so old audit evidence remains replay compatible", 
   const [event] = normalizeMembershipAuditPage([{ ...row, targetId }], scope);
   assert.equal(event.targetUserId, targetId);
 });
+
+test("role names survive missing or malformed optional role IDs", () => {
+  for (const eventType of ["group.member.role.assign", "group.member.role.unassign"]) {
+    for (const roleId of [undefined, "invalid"]) {
+      const [event] = normalizeMembershipAuditPage([{ ...row, eventType, data: { roleId, roleName: "Deputy" } }], scope);
+      assert.equal(event.roleName, "Deputy");
+      assert.equal(event.roleId, undefined);
+    }
+  }
+});

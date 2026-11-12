@@ -16,11 +16,12 @@ The reviewer also found an actor-link separator encoded outside UTF-8. An actor-
 
 PR review also corrected replay target-ID casing, synchronized generated API declarations, bounded count restoration, preserved 25-row page boundaries on return, restored an explicit response allowlist, added descriptive accessible link/disclosure names, and honored the screenshot capture opt-out. The page verification budget remains bounded and fails closed; restoring history now uses the same pages as loading it initially.
 
+A further review pass found that role-name retention depended on a valid role ID and malformed optional ingest strings could reject a whole page. Both regressions failed before the fixes. Role fields now validate independently, and invalid optional name/actor/role strings are omitted while core audit validation, immutable conflicts and scan verification remain enforced.
+
 ## Local evidence
 
-- Worker suite: 269 passed after the replay-casing regression fix.
-- Focused membership, identity, proof-verification and automatic-statistics backend suite: 67 passed after review fixes and rebase.
-- Latest membership/identity regression run: 16 passed, including empty legacy names and an exact public response shape.
+- Worker suite: 270 passed after the replay-casing and independent role-name regressions.
+- Focused membership, identity, proof-verification and automatic-statistics backend suite: 69 passed after PR review fixes, including malformed optional evidence, empty legacy names and an exact public response shape.
 - Storybook desktop/mobile assertions: 8 passed, including role labels, actor/target links, accessible details, bounded pagination restoration and access-loss/retry using real hooks with synthetic transport.
 - Repository backend and web type-check scripts passed with the isolated checkout's frozen-lockfile dependencies.
 - Focused frontend lint and whitespace checks passed.

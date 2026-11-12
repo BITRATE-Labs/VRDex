@@ -252,9 +252,6 @@ export const ingestBatch = internalMutation({
         !item.eventType ||
         item.eventType.length > 200 ||
         (item.targetUserId?.length ?? 0) > 200 ||
-        [item.targetDisplayName, item.actorDisplayName, item.roleName].some(name => name !== undefined && (!name.trim() || name.length > 200 || /[\u0000-\u001f\u007f]/u.test(name))) ||
-        (item.actorUserId !== undefined && !/^usr_[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(item.actorUserId)) ||
-        (item.roleId !== undefined && !/^grol_[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(item.roleId)) ||
         !Number.isSafeInteger(item.occurredAt) ||
         item.occurredAt < scan.startAt ||
         item.occurredAt >= scan.endAt
@@ -278,8 +275,15 @@ export const ingestBatch = internalMutation({
           throw new Error("Conflicting immutable audit event.");
         continue;
       }
+      const cleanItem = { ...item };
+      for (const field of ["targetDisplayName", "actorDisplayName", "roleName"] as const) {
+        const name = item[field];
+        if (name !== undefined && (!name.trim() || name.length > 200 || /[\u0000-\u001f\u007f]/u.test(name))) delete cleanItem[field];
+      }
+      if (item.actorUserId !== undefined && !/^usr_[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(item.actorUserId)) delete cleanItem.actorUserId;
+      if (item.roleId !== undefined && !/^grol_[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(item.roleId)) delete cleanItem.roleId;
       await ctx.db.insert("communityMembershipEvents", {
-        ...item,
+        ...cleanItem,
         integrationId: scan.integrationId,
         epochStartedAt: scan.epochStartedAt,
         groupId: scan.groupId,

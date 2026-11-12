@@ -23,8 +23,8 @@ export function normalizeMembershipAuditPage(items, { groupId, startAt, endAt })
     }
     if (["group.member.role.assign", "group.member.role.unassign"].includes(item.eventType)) {
       const data = item.data;
-      if (data && typeof data === "object" && typeof data.roleId === "string" && roleId.test(data.roleId)) {
-        event.roleId = data.roleId.toLowerCase();
+      if (data && typeof data === "object") {
+        if (typeof data.roleId === "string" && roleId.test(data.roleId)) event.roleId = data.roleId.toLowerCase();
         const roleName = name(data.roleName);
         if (roleName) event.roleName = roleName;
       }

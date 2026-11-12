@@ -640,3 +640,19 @@ it("projects only public activity fields and omits empty legacy names", async ()
   const result = await owner.query(activity, { communitySlug: "club", startAt: start, endAt: end, paginationOpts: { numItems: 25, cursor: null } });
   assert.deepEqual(result.page, [{ auditId: "legacy-empty", eventType: "group.member.join", occurredAt: start + 1 }]);
 });
+
+it("drops malformed optional evidence without stalling verified audit scans", async () => {
+  for (const field of ["targetDisplayName", "actorDisplayName", "roleName", "actorUserId", "roleId"] as const) {
+    const invalidValues = field.endsWith("Name") ? [" ", "x".repeat(201), "bad\u0000name"] : ["invalid"];
+    for (const value of invalidValues) {
+      const { t, owner } = await setup();
+      const scanId = await t.mutation(begin, { startAt: start, endAt: end });
+      const item = { auditId: "optional-drift", eventType: "group.member.role.assign", occurredAt: start + 1, [field]: value };
+      await t.mutation(ingest, { scanId, pageNumber: 0, phase: "collect", rawAuditIds: [item.auditId], events: [item], exhausted: true });
+      await t.mutation(ingest, { scanId, pageNumber: 0, phase: "verify", rawAuditIds: [item.auditId], events: [item], exhausted: true });
+      await finishScan(t, scanId);
+      const result = await owner.query(activity, { communitySlug: "club", startAt: start, endAt: end, paginationOpts: { numItems: 25, cursor: null } });
+      assert.deepEqual(result.page, [{ auditId: item.auditId, eventType: item.eventType, occurredAt: item.occurredAt }], `${field}: ${JSON.stringify(value)}`);
+    }
+  }
+});
