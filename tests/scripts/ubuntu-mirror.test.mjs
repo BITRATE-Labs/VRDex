@@ -25,3 +25,24 @@ test("Ubuntu mirror prep handles direct and mirror-list sources without changing
     assert.equal(await readFile(path.join(root,"sources.list.d/custom.list"),"utf8"),"deb https://example.invalid/packages stable main\n");
   } finally { assert.ok(root.startsWith(path.join(tmpdir(),"vrdex-apt-"))); await rm(root,{recursive:true,force:true}); }
 });
+
+test("Ubuntu mirror lists handle absence, empty files, missing final newlines and duplicates", async () => {
+  const root=await mkdtemp(path.join(tmpdir(),"vrdex-apt-"));
+  const file=path.join(root,"apt-mirrors.txt");
+  const preferred="https://mirrors.edge.kernel.org/ubuntu/\tpriority:1";
+  const fallback="https://archive.ubuntu.com/ubuntu/";
+  try {
+    await configureUbuntuMirror(root);
+    await assert.rejects(readFile(file),{code:"ENOENT"});
+    for(const initial of ["",fallback,`https://azure.archive.ubuntu.com/ubuntu/\n${fallback}\n`,`${preferred}\n${preferred}\n`]) {
+      await writeFile(file,initial);
+      await configureUbuntuMirror(root);
+      const first=await readFile(file,"utf8");
+      assert.equal(first.split("\n").filter(line=>line===preferred).length,1);
+      assert.doesNotMatch(first,/azure\.archive/);
+      if(initial.split("\n").some(line=>line===fallback))assert.ok(first.split("\n").some(line=>line===fallback));
+      await configureUbuntuMirror(root);
+      assert.equal(await readFile(file,"utf8"),first);
+    }
+  } finally {await rm(root,{recursive:true,force:true});}
+});

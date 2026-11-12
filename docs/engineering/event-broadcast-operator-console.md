@@ -23,6 +23,10 @@ its confirmation. Return to auto remains available in schedule gaps; the resulti
 automatic slate is valid. Start retains admission, output reservation, and terminal
 cleanup restrictions. Every live state change has a captured-target confirmation. Next preserves automatic/manual mode, and its persisted lineup cursor survives worker recovery and temporary custom takeovers. Hold validates the captured current source. Resume re-prepares the last actually observed source. No UI path bypasses the measured allocation map.
 
+A Stop arriving during a progress report supersedes that report without accepting
+new output evidence. Lease and owner checks still apply, and the worker can claim
+and acknowledge Stop on its next tick instead of reporting an authority failure.
+
 A requested Stop closes publication immediately, then the worker claims and
 acknowledges that Stop before its bounded control tick completes. A stopped
 configuration alone does not prove a failed Stop. Event cancellation or authority
@@ -89,6 +93,36 @@ are available through the player; audibility still requires foreground ownership
 nonvisible placements expose an external link; they do not create a clipped embed.
 
 ## Verification boundary
+
+Selected browser CI includes a separate candidate broadcast acceptance job. It
+has a 45-minute job bound and a 24-minute acceptance-step bound, leaving room for
+dependency installation, the image build and evidence upload. It
+starts a fresh local Convex deployment and a production build of the candidate Next app, authenticates
+through the retained Clerk development tenant, and drives the real operator route.
+A packaged worker build uses the production control loop, renderer, input manager,
+and output sender against a local native RTMP receiver. There are no intercepted
+application requests or synthetic control replies in this job.
+
+The normal case switches a public video through Quick switch, pauses a real worker
+observation, requests Stop through its confirmation, then releases the observation.
+Acceptance requires a superseded report, a succeeded Stop command, an ended session,
+physical worker/receiver exit, and independently decoded video/audio from the capture.
+The confirmation is prepared before pausing; the fixture waits for Stop to persist
+before releasing the observation. The production three-second request
+deadline remains enforced, and recorded pause time must stay within it. Receiver
+DNS must resolve exclusively to loopback before publication. The published test
+community option is restricted to local deployments; normal fixtures remain private.
+Cancelled-event and revoked-output cases require the report to remain fenced and
+publication to stop. All cases use disposable local data and delete their Clerk test
+account. The CI report fails on a missing job, artifact or executed test.
+
+This environment uses a development identity tenant, a local receiver instead of
+VRCDN, and Docker with 4 CPU/4 GiB instead of the qualified ECS 8 CPU/16 GiB.
+Its enabled gate and process lifecycle are local. Backend admission mutations are
+real, but their task references describe fixture processes. This does not exercise
+AWS SSM, ECS process APIs, cloud IAM or live provider credentials. It proves the candidate
+browser/backend/native control path; retained cloud/provider/capacity evidence
+and a separate deployed smoke remain distinct. It creates no new AWS resources.
 
 Pure view, route, editor persistence, foreground and fake SDK tests exercise source
 contracts without services. Guarded browser fixtures exercise production components

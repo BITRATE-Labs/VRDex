@@ -537,11 +537,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Verify candidate identity before mutations
         run: node scripts/candidate-preview-acceptance.mjs preflight
-      - name: Configure Ubuntu package mirror
-        run: sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
       - name: Install Chromium
         working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 10
+        run: |
+          sudo "$(command -v node)" "${{ github.workspace }}/.github/scripts/configure-ubuntu-mirror.mjs"
+          pnpm exec playwright install --with-deps chromium
       - name: Profile mutation, public readback and owned cleanup
         working-directory: apps/web
         env:

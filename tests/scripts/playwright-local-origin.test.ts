@@ -29,3 +29,14 @@ test("an explicit hosted target keeps its origin and starts no local servers", (
   ], { env: { ...process.env, PLAYWRIGHT_BASE_URL: "https://staging.example.test" }, encoding: "utf8" });
   assert.deepEqual(JSON.parse(output), { origin: "https://staging.example.test", servers: 0 });
 });
+
+test('native broadcast acceptance serves a fresh production build and refuses reused or hosted targets',()=>{
+  const env={...process.env,BROADCAST_NATIVE_ACCEPTANCE:'true',PLAYWRIGHT_BASE_URL:'',PLAYWRIGHT_REUSE_SERVER:'false',PLAYWRIGHT_REUSE_CONVEX:'false',PLAYWRIGHT_SKIP_WEBSERVERS:'false',PLAYWRIGHT_SKIP_CONVEX_DEV:'false'};
+  const script='import config from "./apps/web/playwright.config.mjs"; const web=config.webServer.find(s=>s.url); console.log(JSON.stringify({command:web.command,timeout:web.timeout}));';
+  const output=JSON.parse(execFileSync(process.execPath,['--input-type=module','-e',script],{env,encoding:'utf8'}));
+  assert.match(output.command,/ build && .* start --hostname localhost/);
+  assert.doesNotMatch(output.command,/ dev /);
+  assert.equal(output.timeout,600000);
+  for(const extra of [{PLAYWRIGHT_REUSE_SERVER:'true'},{PLAYWRIGHT_BASE_URL:'https://staging.example.test'}])
+    assert.throws(()=>execFileSync(process.execPath,['--input-type=module','-e',script],{env:{...env,...extra},stdio:'pipe'}),/Native broadcast acceptance requires fresh local services/);
+});

@@ -29,6 +29,7 @@ const REPORT_ROWS = [
     job: "playwright-data-flow",
     label: "Mutation data flow",
   },
+  { artifact: "broadcast-native-acceptance", job: "broadcast-native-acceptance", label: "Candidate broadcast acceptance" },
   {
     artifact: "playwright-hosted-data-flow",
     job: "playwright-hosted-data-flow",

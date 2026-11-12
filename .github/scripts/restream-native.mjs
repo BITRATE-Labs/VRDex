@@ -118,7 +118,7 @@ function successful(result) {
 }
 
 export async function runGate({ execute = boundedCommand, names, signal, now = () => performance.now(),bindingProducer } = {}) {
-  const deadline = now() + 400000;
+  const deadline = now() + 420000;
   const token = randomUUID();
   const name = `vrdex-native-${token}`; // Identity exists before even an uncertain create.
   const report = { passed: false, nativeExit: null, nativeSignal: null, cleanup: false, image: null, counts: null, versions: null, errors: [], negativeDiagnostic: { receipt: 'unavailable' } };
@@ -152,7 +152,7 @@ export async function runGate({ execute = boundedCommand, names, signal, now = (
       'result=$?\ncat /tmp/event-capacity-ci-native/receipt.json\nexit "$result"'];
     if(bindingProducer)createArguments=await bindingProducer.prepare({image:report.image,originalArguments:createArguments,invoke,deadline,signal});
     createAttempted = true;
-    id = successful(await invoke(createArguments));bindingProducer?.created(id);
+    id = successful(await invoke(createArguments, 30000));bindingProducer?.created(id);
     assert.match(id, ID);
     const attached = await invoke(['start', '--attach', id], 362000);
     bindingProducer?.attached(attached);
@@ -208,8 +208,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const controller = new AbortController();
   const cancel = () => controller.abort();
   process.on('SIGINT', cancel); process.on('SIGTERM', cancel);
-  // Independent of CLI promises: final backstop is below the seven-minute step.
-  const absolute = setTimeout(() => { console.error('Native CI absolute deadline; cleanup unconfirmed'); process.exit(1); }, 400000);
+  // Independent of CLI promises: final backstop is below the eight-minute step.
+  const absolute = setTimeout(() => { console.error('Native CI absolute deadline; cleanup unconfirmed'); process.exit(1); }, 420000);
   try {
     const names = JSON.parse(await readFile(new URL('./restream-native-names.json', import.meta.url)));
     const report = await runGate({ names, signal: controller.signal,bindingProducer:createCiNativeProducer() });

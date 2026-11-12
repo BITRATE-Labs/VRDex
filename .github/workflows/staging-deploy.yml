@@ -363,7 +363,10 @@ jobs:
       - name: Install Playwright Chromium
         if: steps.gate.outputs.enabled == 'true'
         working-directory: apps/web
-        run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 10
+        run: |
+          sudo "$(command -v node)" "${{ github.workspace }}/.github/scripts/configure-ubuntu-mirror.mjs"
+          pnpm exec playwright install --with-deps chromium
 
       - name: Run hosted staging data-flow health
         if: steps.gate.outputs.enabled == 'true'

@@ -369,7 +369,17 @@ The API/MCP, backend and restream host prerequisite steps give the
 over the runner's Canonical mirrors to reduce reliance on Canonical DNS.
 The runner's HTTPS fallbacks and Ubuntu package-signature verification remain in place.
 Installation keeps its five-minute bound. The native transport gate still uses its packaged runtime.
-Playwright browser and synthetic-media installation use the runner's default mirrors.
+Docker container creation has a 30-second startup bound within a seven-minute outer
+deadline and an eight-minute CI step. This preserves the native suite's full allowance.
+Playwright browser installs in baseline, deployed-health, and staging workflows, plus
+synthetic-media installation, prepare the same independent mirror through
+`.github/scripts/configure-ubuntu-mirror.mjs` before installing dependencies. These install
+steps have a ten-minute timeout for system dependencies and browser downloads. The helper logs the effective mirror list and
+retains Ubuntu package signature verification and the existing HTTPS fallbacks.
+Runners without a mirror-list file explicitly report that their configured sources
+remain in use.
+Linux tests execute the helper against disposable missing, empty, unterminated and
+repeated mirror lists, including preservation of existing fallbacks.
 
 Default PR CI runs lint, types, unit tests, docs, API/MCP checks, the existing backend/restream checks, and the web build. Browser suites and the Storybook build are opt-in.
 

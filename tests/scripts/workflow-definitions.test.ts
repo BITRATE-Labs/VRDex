@@ -192,7 +192,7 @@ describe("optional browser and visual evidence contract", () => {
     assert.equal(workflow.on.workflow_dispatch, undefined);
     assert.equal(workflow.jobs["visual-selection"].outputs.browsers, "${{ steps.selection.outputs.browsers }}");
     assert.equal(workflow.jobs["visual-selection"].outputs.visuals, "${{ steps.selection.outputs.visuals }}");
-    for (const name of ["playwright-public-smoke", "playwright-data-flow", "playwright-hosted-data-flow", "playwright-public-preview", "storybook-component-preview", "build-storybook"]) {
+    for (const name of ["playwright-public-smoke", "playwright-data-flow", "broadcast-native-acceptance", "playwright-hosted-data-flow", "playwright-public-preview", "storybook-component-preview", "build-storybook"]) {
       const job = workflow.jobs[name];
       assert.ok(job.needs.includes("visual-selection"), name);
       assert.ok(job.if.includes("needs.visual-selection.outputs.browsers == 'true'"), name);
@@ -248,7 +248,7 @@ describe("optional browser and visual evidence contract", () => {
     assert.equal(evidenceUpload.with["retention-days"], 7);
     const mirror = steps.findIndex((step: { run?: string }) => step.run?.includes("configure-ubuntu-mirror.mjs"));
     const chromium = steps.findIndex((step: { name?: string }) => step.name === "Install Chromium");
-    assert.ok(mirror >= 0 && chromium > mirror, "Preserve main's signed-mirror prerequisite in the reused browser job");
+    assert.ok(mirror >= 0 && chromium >= mirror, "Preserve main's signed-mirror prerequisite before browser installation");
     const preflight = steps.findIndex((step: { run?: string }) => step.run?.includes("candidate-preview-acceptance.mjs preflight"));
     const mutation = steps.findIndex((step: { run?: string }) => step.run?.includes("profile-submission.flow.spec.ts"));
     const report = steps.findIndex((step: { run?: string }) => step.run?.includes("candidate-preview-acceptance.mjs report"));
@@ -285,7 +285,7 @@ describe("optional browser and visual evidence contract", () => {
     assert.ok(upload.with.path.includes(claim.env.PLAYWRIGHT_HTML_REPORT_DIR));
   });
   it("keeps existing functional diagnostic captures independent of review selection", () => {
-    for (const name of ["playwright-public-smoke", "playwright-data-flow", "playwright-hosted-data-flow"]) {
+    for (const name of ["playwright-public-smoke", "playwright-data-flow", "broadcast-native-acceptance", "playwright-hosted-data-flow"]) {
       assert.equal(workflow.jobs[name].env?.PLAYWRIGHT_CAPTURE_SCREENSHOTS, undefined, name);
     }
   });

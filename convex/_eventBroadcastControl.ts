@@ -439,7 +439,7 @@ export async function cancelControlOperation(
 export async function controlFence(
   db: DatabaseReader,
   args: ControlRequest,
-  allowTerminal = false,
+  allowStopping = false,
 ): Promise<
   | {
       session: Session;
@@ -464,9 +464,10 @@ export async function controlFence(
   ]);
   if (!event || !program || program.activeSessionId !== s._id)
     return { result: { kind: "fenced", reason: "lease" } };
-  if (!allowTerminal && (stopped(s) || event.eventStatus !== "scheduled"))
+  const pendingStop = allowStopping && s.stopRequestedAt !== undefined && s.status === "stopping";
+  if ((stopped(s) && !pendingStop) || event.eventStatus !== "scheduled")
     return { result: { kind: "fenced", reason: "stopped" } };
-  if (!allowTerminal && s.outputId) {
+  if (s.outputId) {
     const output = await db.get(s.outputId);
     if (
       !output ||

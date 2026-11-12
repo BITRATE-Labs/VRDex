@@ -32,4 +32,5 @@ export async function configureUbuntuMirror(root) {
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
   await configureUbuntuMirror("/etc/apt");
   console.log("Ubuntu mirror configured; signature and suite settings retained.");
+  console.log(await readOptional("/etc/apt/apt-mirrors.txt") ?? "No mirror list; configured source files remain in use.");
 }

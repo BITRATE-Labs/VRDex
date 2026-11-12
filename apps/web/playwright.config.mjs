@@ -15,6 +15,13 @@ const reuseNextServer = process.env.PLAYWRIGHT_REUSE_SERVER === "true";
 const reuseConvexServer = process.env.PLAYWRIGHT_REUSE_CONVEX === "true";
 const skipWebServers = process.env.PLAYWRIGHT_SKIP_WEBSERVERS === "true" || Boolean(hostedBaseURL);
 const skipConvexServer = skipWebServers || process.env.PLAYWRIGHT_SKIP_CONVEX_DEV === "true";
+const nativeBroadcastAcceptance = process.env.BROADCAST_NATIVE_ACCEPTANCE === "true";
+if (nativeBroadcastAcceptance && (skipWebServers || skipConvexServer || reuseNextServer || reuseConvexServer))
+  throw new Error("Native broadcast acceptance requires fresh local services.");
+const nextRunner = "node ../../scripts/run-next-with-convex-local-admin.mjs";
+const nextServerCommand = nativeBroadcastAcceptance
+  ? `${nextRunner} build && ${nextRunner} start --hostname localhost --port ${port}`
+  : `${nextRunner} dev --webpack --hostname localhost --port ${port}`;
 const recordVideo = process.env.PLAYWRIGHT_RECORD_VIDEO === "true";
 const e2eHelpersEnabled = process.env.VRDEX_ENABLE_E2E_HELPERS ?? (hostedBaseURL ? undefined : "true");
 const localApiCredentialEnv = hostedBaseURL
@@ -147,11 +154,11 @@ export default defineConfig({
       ? []
       : [
           {
-            command: `node ../../scripts/sync-convex-local-env.mjs && node ../../scripts/run-next-with-convex-local-admin.mjs dev --webpack --hostname localhost --port ${port}`,
+            command: `node ../../scripts/sync-convex-local-env.mjs && ${nextServerCommand}`,
             cwd: configDir,
             url: baseURL,
             reuseExistingServer: reuseNextServer,
-            timeout: 300_000,
+            timeout: nativeBroadcastAcceptance ? 600_000 : 300_000,
             env: sharedEnv,
           },
         ]),
