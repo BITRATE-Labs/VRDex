@@ -90,7 +90,11 @@ export const stopRecovery = mutation({
     await requireOwner(ctx, job.communityProfileId);
     if (job.state === "stopped" || job.state === "complete") return null;
     if (args.expectedRevision !== undefined && args.expectedRevision !== job.revision) throw new Error("Membership recovery changed.");
-    await ctx.db.patch(job._id, { state: "stopped", revision: job.revision + 1, workerId: undefined, fencingToken: undefined, credentialGeneration: undefined, updatedAt: Date.now() });
+    // Preserve one authenticated claim for its late failure response, without retaining checkpoint authority.
+    const interruptedAttempt = job.state === "running" && job.workerId !== undefined && job.fencingToken !== undefined && job.credentialGeneration !== undefined
+      ? { revision: job.revision, workerId: job.workerId, fencingToken: job.fencingToken, credentialGeneration: job.credentialGeneration }
+      : job.interruptedAttempt;
+    await ctx.db.patch(job._id, { state: "stopped", revision: job.revision + 1, interruptedAttempt, workerId: undefined, fencingToken: undefined, credentialGeneration: undefined, updatedAt: Date.now() });
     return null;
   },
 });
@@ -119,14 +123,24 @@ export const claim = internalMutation({
   },
 });
 const leasedArgs = { ...workerArgs.fields, recoveryId: v.id("communityMembershipRecoveries"), expectedRevision: v.number() };
-async function currentJob(ctx: MutationCtx, args: WorkerArgs & { recoveryId: Id<"communityMembershipRecoveries">; expectedRevision: number }) {
-  if (!recoveryEnabled()) return null;
-  const integration = await authorize(ctx, args);
+type LeasedArgs = WorkerArgs & { recoveryId: Id<"communityMembershipRecoveries">; expectedRevision: number };
+async function authenticatedAttempt(ctx: MutationCtx, args: LeasedArgs, requireAuditAuthority = false) {
+  await authorizeWorker(ctx, args);
+  const integration = await active(ctx, args);
+  if (requireAuditAuthority) await currentAuditAuthority(ctx, integration);
   const job = await ctx.db.get(args.recoveryId);
   const account = await ctx.db.get(args.collectorAccountId);
-  return job && job.integrationId === args.integrationId && job.communityProfileId === integration.communityProfileId && job.epochStartedAt === args.epochStartedAt && job.groupId === args.groupId &&
-    job.state === "running" && job.revision === args.expectedRevision && job.workerId === args.workerId && job.fencingToken === args.fencingToken && job.credentialGeneration === account?.credentialGeneration &&
-    job.startAt >= args.epochStartedAt && job.endAt <= Date.now() ? job : null;
+  if (!job || !account || job.integrationId !== args.integrationId || job.communityProfileId !== integration.communityProfileId || job.epochStartedAt !== args.epochStartedAt || job.groupId !== args.groupId ||
+      job.startAt < args.epochStartedAt || job.endAt > Date.now()) return null;
+  const matches = (attempt: { revision: number; workerId?: string; fencingToken?: number; credentialGeneration?: number } | undefined) =>
+    attempt?.revision === args.expectedRevision && attempt.workerId === args.workerId && attempt.fencingToken === args.fencingToken && attempt.credentialGeneration === account.credentialGeneration;
+  return (job.state === "running" && matches(job)) || matches(job.interruptedAttempt) ? { job, integration, account } : null;
+}
+async function currentJob(ctx: MutationCtx, args: LeasedArgs) {
+  if (!recoveryEnabled()) return null;
+  const attempt = await authenticatedAttempt(ctx, args, true);
+  if (!attempt || attempt.job.state !== "running" || attempt.job.revision !== args.expectedRevision) return null;
+  return attempt.job;
 }
 export const check = internalMutation({
   args: leasedArgs, returns: v.object({ current: v.boolean() }),
@@ -169,17 +183,25 @@ export const recordPage = internalMutation({
 export const recordFailure = internalMutation({
   args: { ...leasedArgs, rateLimited: v.optional(v.boolean()), retryAfterMs: v.optional(v.number()) }, returns: v.null(),
   handler: async (ctx, args) => {
-    const job = await currentJob(ctx, args);
-    if (job) {
-      const now = Date.now();
-      if (args.rateLimited) {
-        const retryAfterMs = args.retryAfterMs ?? 60_000;
-        if (!Number.isFinite(retryAfterMs) || retryAfterMs < 0 || !Number.isSafeInteger(Math.ceil(now + retryAfterMs))) throw new Error("Invalid retry interval.");
-        const account = await ctx.db.get(args.collectorAccountId);
-        if (account) await ctx.db.patch(account._id, { cooldownUntil: Math.max(account.cooldownUntil ?? 0, now + Math.max(retryAfterMs, 1000)), updatedAt: now });
-      }
-      await ctx.db.patch(job._id, { state: "partial", revision: job.revision + 1, updatedAt: now });
+    const attempt = await authenticatedAttempt(ctx, args);
+    if (!attempt) return null;
+    const { job, integration, account } = attempt, now = Date.now();
+    if (args.rateLimited) {
+      const retryAfterMs = args.retryAfterMs ?? 60_000;
+      if (!Number.isFinite(retryAfterMs) || retryAfterMs < 0 || !Number.isSafeInteger(Math.ceil(now + retryAfterMs))) throw new Error("Invalid retry interval.");
+      await ctx.db.patch(account._id, { cooldownUntil: Math.max(account.cooldownUntil ?? 0, now + Math.max(retryAfterMs, 1000)), updatedAt: now });
     }
+    let canAdvance = recoveryEnabled() && job.state === "running" && job.revision === args.expectedRevision;
+    if (canAdvance) {
+      try { await currentAuditAuthority(ctx, integration); }
+      catch { canAdvance = false; }
+    }
+    // Consume only this attempt: a replay cannot extend cooldown, and a resumed checkpoint stays untouched.
+    await ctx.db.patch(job._id, {
+      ...(canAdvance ? { state: "partial" as const, revision: job.revision + 1, updatedAt: now } : {}),
+      ...(job.revision === args.expectedRevision ? { workerId: undefined, fencingToken: undefined, credentialGeneration: undefined } : {}),
+      ...(job.interruptedAttempt?.revision === args.expectedRevision ? { interruptedAttempt: undefined } : {}),
+    });
     return null;
   },
 });

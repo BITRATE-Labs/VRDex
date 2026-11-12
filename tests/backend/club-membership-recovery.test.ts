@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 import { convexTest } from "convex-test";
 import { makeFunctionReference } from "convex/server";
 import schemaModule from "../../convex/schema";
+import httpModule from "../../convex/http";
 import { recoverMembershipPage } from "../../workers/group-telemetry/membership-recovery.mjs";
 import { RequestBudget } from "../../workers/group-telemetry/runtime.mjs";
 import { VrchatProviderError } from "../../workers/group-telemetry/vrchat-client.mjs";
@@ -14,6 +16,7 @@ const modules = {
   "../../convex/clubMembership.ts": () => import("../../convex/clubMembership"),
   "../../convex/clubConnection.ts": () => import("../../convex/clubConnection"),
   "../../convex/clubPeople.ts": () => import("../../convex/clubPeople"),
+  "../../convex/communityTelemetry.ts": () => import("../../convex/communityTelemetry"),
   "../../convex/_generated/api.ts": () => import("../../convex/_generated/api"),
 };
 const mutation = (name: string) => makeFunctionReference<"mutation">(`clubMembershipRecovery:${name}`);
@@ -298,6 +301,148 @@ test("in-flight429 extends shared cooldown by MAX while cooldown blocks new reco
   const cooldown = await s.t.run(ctx => ctx.db.get(s.collectorAccountId).then(account => account?.cooldownUntil));
   assert.ok(cooldown! >= s.now + 120_000);
   assert.equal((await s.owner.query(status, { communityProfileId: s.communityProfileId })).state, "partial");
+});
+for (const interruption of ["stop", "disabled"] as const) test(`${interruption} preserves an authenticated in-flight429 cooldown without advancing or exposing its checkpoint`, async (test) => {
+  test.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1800000000000 });
+  for (const priorDelay of [60_000, 240_000]) {
+    const s = await setup(); const recoveryId = await s.request(); const job = await s.claim();
+    const attempt = { ...s.worker, recoveryId, expectedRevision: job.revision };
+    assert.equal((await s.t.mutation(mutation("check"), attempt)).current, true);
+    if (interruption === "stop") await s.owner.mutation(mutation("stopRecovery"), { recoveryId });
+    else delete process.env.VRDEX_MEMBERSHIP_RECOVERY_ENABLED;
+    const before = await s.owner.query(status, { communityProfileId: s.communityProfileId });
+    assert.equal("interruptedAttempt" in before.job, false);
+    await s.t.run(ctx => ctx.db.patch(s.collectorAccountId, { cooldownUntil: Date.now() + priorDelay }));
+    const expectedCooldown = Date.now() + Math.max(priorDelay, 120_000);
+    await s.t.mutation(mutation("recordFailure"), { ...attempt, rateLimited: true, retryAfterMs: 120_000 });
+    assert.equal((await s.t.run(ctx => ctx.db.get(s.collectorAccountId)))?.cooldownUntil, expectedCooldown);
+    assert.deepEqual(await s.owner.query(status, { communityProfileId: s.communityProfileId }), before);
+    assert.equal((await page(s, job, [])).accepted, false);
+    assert.equal((await s.t.mutation(mutation("check"), attempt)).current, false);
+    assert.equal(await s.claim(), null);
+    assert.deepEqual(await s.t.run(ctx => ctx.db.query("communityMembershipEvidence").collect()), []);
+    test.mock.timers.tick(1000);
+    await s.t.mutation(mutation("recordFailure"), { ...attempt, rateLimited: true, retryAfterMs: 600_000 });
+    assert.equal((await s.t.run(ctx => ctx.db.get(s.collectorAccountId)))?.cooldownUntil, expectedCooldown, "consumed response cannot extend cooldown again");
+  }
+});
+
+test("interrupted attempts still require exact credentials, live lease, scope and attempt revision", async () => {
+  for (const reason of ["key", "generation", "lease", "expired", "epoch", "group", "revision", "unclaimed"]) {
+    const s = await setup(); const recoveryId = await s.request(); const job = await s.claim();
+    await s.owner.mutation(mutation("stopRecovery"), { recoveryId });
+    const attempt = { ...s.worker, recoveryId, expectedRevision: job.revision };
+    await s.t.run(async ctx => {
+      if (reason === "key") await ctx.db.patch(s.collectorAccountId, { workerKeyHash: "replacement" });
+      if (reason === "generation") {
+        await ctx.db.patch(s.collectorAccountId, { credentialGeneration: 2 });
+        const integration = (await ctx.db.get(s.integrationId))!;
+        await ctx.db.patch(s.integrationId, { providerAuthority: { ...integration.providerAuthority!, credentialGeneration: 2 } });
+      }
+      if (reason === "lease") await ctx.db.patch(s.leaseId, { fencingToken: 2 });
+      if (reason === "expired") await ctx.db.patch(s.leaseId, { expiresAt: Date.now() });
+      if (reason === "epoch") await ctx.db.patch(s.integrationId, { telemetryEpochStartedAt: s.now });
+      if (reason === "group") await ctx.db.patch(s.integrationId, { vrchatGroupId: "grp_other" });
+      if (reason === "revision") attempt.expectedRevision++;
+      if (reason === "unclaimed") {
+        const original = (await ctx.db.get(recoveryId))!;
+        const { _id, _creationTime, ...data } = original;
+        attempt.recoveryId = await ctx.db.insert("communityMembershipRecoveries", { ...data, state: "pending", interruptedAttempt: undefined });
+      }
+    });
+    const result = s.t.mutation(mutation("recordFailure"), { ...attempt, rateLimited: true, retryAfterMs: 120_000 });
+    if (["key", "lease", "expired", "epoch", "group"].includes(reason)) await assert.rejects(result);
+    else await result;
+    assert.equal((await s.t.run(ctx => ctx.db.get(s.collectorAccountId)))?.cooldownUntil, undefined, reason);
+    assert.equal((await s.t.run(ctx => ctx.db.get(recoveryId)))?.state, "stopped");
+  }
+});
+test("issued requests retain cooldown after audit authority expires or is revoked without advancing recovery", async (test) => {
+  test.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1800000000000 });
+  for (const change of ["expired", "revoked"]) {
+    const s = await setup(); const recoveryId = await s.request(); const job = await s.claim();
+    if (change === "expired") test.mock.timers.tick(61_000);
+    else await s.t.run(async ctx => {
+      const integration = (await ctx.db.get(s.integrationId))!;
+      await ctx.db.patch(s.integrationId, { providerAuthority: { ...integration.providerAuthority!, authority: { ...integration.providerAuthority!.authority, permissions: [] } } });
+    });
+    const before = await s.owner.query(status, { communityProfileId: s.communityProfileId });
+    await s.t.mutation(mutation("recordFailure"), { ...s.worker, recoveryId, expectedRevision: job.revision, rateLimited: true, retryAfterMs: 120_000 });
+    assert.equal((await s.t.run(ctx => ctx.db.get(s.collectorAccountId)))?.cooldownUntil, Date.now() + 120_000);
+    assert.deepEqual(await s.owner.query(status, { communityProfileId: s.communityProfileId }), before);
+    assert.equal((await s.t.run(ctx => ctx.db.get(recoveryId)))?.state, "running");
+    await assert.rejects(s.claim());
+    assert.deepEqual(await s.t.run(ctx => ctx.db.query("communityMembershipEvidence").collect()), []);
+  }
+});
+test("a stopped attempt arriving after owner resume changes only shared cooldown and consumes its retained proof", async () => {
+  const s = await setup(); const recoveryId = await s.request(); const job = await s.claim();
+  await s.owner.mutation(mutation("stopRecovery"), { recoveryId });
+  await s.owner.mutation(mutation("requestRecovery"), { communityProfileId: s.communityProfileId, resume: true });
+  const before = await s.owner.query(status, { communityProfileId: s.communityProfileId });
+  const attempt = { ...s.worker, recoveryId, expectedRevision: job.revision, rateLimited: true, retryAfterMs: 120_000 };
+  await s.t.mutation(mutation("recordFailure"), attempt);
+  assert.ok((await s.t.run(ctx => ctx.db.get(s.collectorAccountId)))!.cooldownUntil! >= s.now + 120_000);
+  assert.deepEqual(await s.owner.query(status, { communityProfileId: s.communityProfileId }), before);
+  assert.equal((await s.t.run(ctx => ctx.db.get(recoveryId)))?.interruptedAttempt, undefined);
+  assert.equal(await s.claim(), null);
+});
+test("a completed checkpoint revision is not proof of another issued request", async () => {
+  const s = await setup(); const recoveryId = await s.request(); const job = await s.claim();
+  await page(s, job, []);
+  const completed = (await s.t.run(ctx => ctx.db.get(recoveryId)))!;
+  await s.t.mutation(mutation("recordFailure"), { ...s.worker, recoveryId, expectedRevision: completed.revision, rateLimited: true, retryAfterMs: 120_000 });
+  assert.equal((await s.t.run(ctx => ctx.db.get(s.collectorAccountId)))?.cooldownUntil, undefined);
+});
+
+for (const interruption of ["stop", "disabled"] as const) test(`worker/control HTTP preserves late429 after ${interruption} and performs no next GET`, async (test) => {
+  test.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1800000000000 });
+  for (const priorDelay of [60_000, 240_000]) {
+    const s = await setup();
+    const groupId = "grp_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", key = "recovery-http-worker-key-long-enough-for-test";
+    await s.t.run(async ctx => {
+      await ctx.db.patch(s.collectorAccountId, { workerKeyHash: createHash("sha256").update(key).digest("hex") });
+      const integration = (await ctx.db.get(s.integrationId))!;
+      await ctx.db.patch(s.integrationId, { vrchatGroupId: groupId, providerAuthority: { ...integration.providerAuthority!, authority: { ...integration.providerAuthority!.authority, groupId } } });
+    });
+    const recoveryId = await s.request();
+    const router = (httpModule as unknown as { default?: typeof httpModule }).default ?? httpModule;
+    const [handler] = router.lookup("/telemetry/worker", "POST")!;
+    const action = handler as unknown as { _handler: (ctx: unknown, request: Request) => Promise<Response> };
+    const operations: string[] = []; let gets = 0;
+    const error = new VrchatProviderError("limited", { status: 429, category: "rate_limit", retryAfterMs: 120_000 });
+    const args = {
+      assignment: { integrationId: s.integrationId, fencingToken: 1, epochStartedAt: s.epochStartedAt, vrchatGroupId: groupId, enabledFeatures: ["analytics"] },
+      authority: { groupId, userId: A, observedAt: s.now, membershipStatus: "member", permissions: ["group-audit-view"] },
+      expectedUserId: A, clock: () => Date.now(), accountBudget: new RequestBudget(30), integrationBudget: new RequestBudget(30),
+      provider: { request: async () => {
+        gets++;
+        if (interruption === "stop") await s.owner.mutation(mutation("stopRecovery"), { recoveryId });
+        else delete process.env.VRDEX_MEMBERSHIP_RECOVERY_ENABLED;
+        await s.t.run(ctx => ctx.db.patch(s.collectorAccountId, { cooldownUntil: Date.now() + priorDelay }));
+        throw error;
+      } },
+      control: { send: async (operation: string, body: Record<string, unknown>) => {
+        operations.push(operation);
+        if (operation === "budget") return { granted: true };
+        const response = await action._handler({ runQuery: s.t.query, runMutation: s.t.mutation }, new Request("https://test/telemetry/worker", {
+          method: "POST", headers: { authorization: `Bearer ${key}`, "x-vrdex-collector-account": s.collectorAccountId },
+          body: JSON.stringify({ operation, workerId: "worker", vrchatUserId: A, ...body }),
+        }));
+        assert.equal(response.status, 200, operation);
+        return response.json();
+      } },
+    };
+    await assert.rejects(recoverMembershipPage(args), e => e === error);
+    assert.equal(operations.at(-1), "membership_recovery_failure");
+    assert.equal((await s.t.run(ctx => ctx.db.get(s.collectorAccountId)))?.cooldownUntil, s.now + Math.max(priorDelay, 120_000));
+    const job = (await s.t.run(ctx => ctx.db.get(recoveryId)))!;
+    assert.equal(job.state, interruption === "stop" ? "stopped" : "running");
+    assert.equal(job.nextOffset, 0); assert.equal(job.pages, 0); assert.equal(job.recovered, 0);
+    assert.deepEqual(await recoverMembershipPage(args), { recovered: false });
+    assert.equal(gets, 1);
+    assert.deepEqual(await s.t.run(ctx => ctx.db.query("communityMembershipEvidence").collect()), []);
+  }
 });
 test("invalid raw rows still exhaust the cumulative entry cap", async () => {
   const s = await setup(); const recoveryId = await s.request(); const job = await s.claim();

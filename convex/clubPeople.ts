@@ -22,6 +22,9 @@ const pendingOperation = (operation: Doc<"clubOperations">) => ["pending", "clai
 // Leave room for hourly person checks, truncated-reference pruning and the ten-minute cron within one day.
 const referenceCheckAt = (source: PeopleReferenceSource, expiresAt: number, now: number) =>
   Math.min(expiresAt, now + (source.kind === "audit" ? 12 : 1) * 60 * 60_000);
+// Legacy viewer references have no last-view timestamp; conservatively bound them from creation.
+const referenceExpiresAt = (ref: Doc<"clubPeopleReferences">) => ref.source.kind === "audit" && ref.subject && ref.expiresAt === Number.MAX_SAFE_INTEGER
+  ? ref._creationTime + 30 * PEOPLE_DAY_MS : ref.expiresAt;
 
 async function scope(ctx: Ctx, communityProfileId: Id<"profiles">, integrationId?: Id<"communityVrchatIntegrations">, epochStartedAt?: number) {
   const integration = await readManagedIntegration(ctx.db, communityProfileId);
@@ -140,10 +143,18 @@ async function viewTargets(ctx: Ctx, integration: Integration, actor: ClubActor,
       break;
     case "provider_read": refs.push({ kind: "read", requestId: source.requestId }); break;
   }
-  return (await Promise.all(refs.map(ref => sourceTargets(ctx, integration, actor, ref, now)))).flat();
+  return (await Promise.all(refs.map(async ref => {
+    if (ref.kind !== "operation") return sourceTargets(ctx, integration, actor, ref, now);
+    try { return await sourceTargets(ctx, integration, actor, ref, now); }
+    catch { return []; } // A denied stored operation cannot authorize names or hide allowed neighbors.
+  }))).flat();
 }
 async function admit(ctx: MutationCtx, integration: Integration, target: Target, subject?: Subject) {
   const now = Date.now();
+  if (target.source.kind === "audit" && subject) {
+    if (process.env.VRDEX_PEOPLE_RESOLUTION_ENABLED !== "true") return;
+    target = { ...target, expiresAt: Math.min(target.expiresAt, now + 30 * PEOPLE_DAY_MS) };
+  }
   const publicCache = await ctx.db.query("profileLinkDestinations").withIndex("by_key", q => q.eq("key", `vrchat_user:${target.userId}`)).unique();
   const publicFreshUntil = publicCache?.status === "resolved" && publicCache.entityId?.toLowerCase() === target.userId && validPersonName(publicCache.name) &&
     publicCache.observedAt !== undefined && publicCache.observedAt <= now ? publicCache.observedAt + PEOPLE_DAY_MS : 0;
@@ -267,7 +278,7 @@ async function validReferences(ctx: Ctx, person: Doc<"clubPeople">, forWork: boo
   // A truncated scan proves neither authority nor absence; the sweeper prunes references independently.
   const refs = await ctx.db.query("clubPeopleReferences").withIndex("by_person_key", q => q.eq("personId", person._id)).take(101);
   for (const ref of refs.slice(0, 100)) {
-    if (ref.expiresAt <= Date.now()) continue;
+    if (referenceExpiresAt(ref) <= Date.now()) continue;
     try {
       const actor = ref.subject ? await resolveClubSubject(ctx.db, integration.communityProfileId, ref.subject) : null;
       const entries = await sourceTargets(ctx, integration, actor, ref.source, Date.now());
@@ -403,10 +414,11 @@ export const sweep = internalMutation({
     for (const view of views) await ctx.db.delete(view._id);
     const refs = await ctx.db.query("clubPeopleReferences").withIndex("by_checkAt", q => q.lte("checkAt", now)).take(50);
     for (const ref of refs) {
+      const expiresAt = referenceExpiresAt(ref);
       const person = await ctx.db.get(ref.personId);
       const integration = person && await ctx.db.get(person.integrationId);
       let valid = false;
-      if (ref.expiresAt > now && integration?.communityProfileId && person) {
+      if (expiresAt > now && integration?.communityProfileId && person) {
         try {
           await scope(ctx, integration.communityProfileId, integration._id, person.epochStartedAt);
           const actor = ref.subject ? await resolveClubSubject(ctx.db, integration.communityProfileId, ref.subject) : null;
@@ -414,7 +426,7 @@ export const sweep = internalMutation({
         } catch { /* Expired source or authority. */ }
       }
       if (!valid) await ctx.db.delete(ref._id);
-      else await ctx.db.patch(ref._id, { checkAt: referenceCheckAt(ref.source, ref.expiresAt, now) });
+      else await ctx.db.patch(ref._id, { expiresAt, checkAt: referenceCheckAt(ref.source, expiresAt, now) });
     }
     const people = await ctx.db.query("clubPeople").withIndex("by_checkAt", q => q.lte("checkAt", now)).take(10);
     for (const person of people) {

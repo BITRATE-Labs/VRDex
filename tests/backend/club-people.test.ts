@@ -212,7 +212,13 @@ it("every source derives only its exact authorized targets and rejects stale, fo
   await s.t.run(ctx => ctx.db.patch(ids.eventId, { verified: false }));
   await assert.rejects(s.owner.mutation(api.clubPeople.requestView, { communityProfileId: s.communityProfileId, source: cases[0].source }));
   await s.t.run(ctx => ctx.db.patch(s.integrationId, { telemetryEpochStartedAt: Date.now() + 1 }));
-  for (const { source } of cases) await assert.rejects(s.owner.mutation(api.clubPeople.requestView, { communityProfileId: s.communityProfileId, source }));
+  for (const { source } of cases) {
+    const request = s.owner.mutation(api.clubPeople.requestView, { communityProfileId: s.communityProfileId, source });
+    if (source.kind === "scheduled_operations" || source.kind === "invitation_batch") {
+      const { viewId } = await request;
+      assert.deepEqual((await s.owner.query(api.clubPeople.readView, { viewId })).people, []);
+    } else await assert.rejects(request);
+  }
 });
 
 it("review requires destination permission, exact destination scope and bounded IDs", async () => {
@@ -355,6 +361,146 @@ it("default-off audit admission leaves evidence intact and explicit views still 
   const result = await s.owner.query(api.clubPeople.readView, { viewId });
   assert.equal(result.people.find(person => person.userId === A)?.displayName, "Cached Mira");
   assert.equal(result.pendingCount, 0);
+  assert.deepEqual(await s.t.run(ctx => ctx.db.query("clubPeople").collect()), []);
+  assert.deepEqual(await s.t.run(ctx => ctx.db.query("clubPeopleReferences").collect()), []);
+});
+
+it("viewer audit references expire thirty days after the latest authorized view and leave evidence intact", async (test) => {
+  const now = 1800000000000, day = 86400000;
+  test.mock.timers.enable({ apis: ["Date", "setTimeout"], now });
+  const s = await setup(); await ready(s); const ids = await sources(s);
+  const original = await s.t.run(ctx => ctx.db.get(ids.eventId));
+  const args = { communityProfileId: s.communityProfileId, source: { kind: "activity" as const, auditIds: ["audit"] } };
+  await s.owner.mutation(api.clubPeople.requestView, args);
+  const refs = () => s.t.run(ctx => ctx.db.query("clubPeopleReferences").collect());
+  assert.ok((await refs()).every(ref => ref.subject && ref.expiresAt === now + 30 * day));
+  test.mock.timers.tick(29 * day);
+  await s.owner.mutation(api.clubPeople.requestView, args);
+  assert.ok((await refs()).every(ref => ref.expiresAt === Date.now() + 30 * day));
+  test.mock.timers.tick(30 * day + 70 * 60000);
+  await s.t.mutation(internal.clubPeople.sweep, {});
+  assert.deepEqual(await refs(), []);
+  assert.deepEqual(await s.t.run(ctx => ctx.db.query("clubPeople").collect()), []);
+  assert.deepEqual(await s.t.run(ctx => ctx.db.get(ids.eventId)), original);
+});
+
+it("automatic audit references retain collection policy while viewer grants expire", async (test) => {
+  const now = 1800000000000, day = 86400000;
+  test.mock.timers.enable({ apis: ["Date", "setTimeout"], now });
+  const s = await setup(); await ready(s); const ids = await sources(s);
+  await s.t.run(async ctx => admitVerifiedAudit(ctx, (await ctx.db.get(s.integrationId))!, ids.eventId));
+  const args = { communityProfileId: s.communityProfileId, source: { kind: "activity" as const, auditIds: ["audit"] } };
+  await s.owner.mutation(api.clubPeople.requestView, args);
+  assert.equal((await s.t.run(ctx => ctx.db.query("clubPeopleReferences").collect())).length, 4);
+  test.mock.timers.tick(30 * day + 70 * 60000);
+  await s.t.mutation(internal.clubPeople.sweep, {});
+  const refs = await s.t.run(ctx => ctx.db.query("clubPeopleReferences").collect());
+  assert.equal(refs.length, 2);
+  assert.ok(refs.every(ref => !ref.subject && ref.expiresAt === Number.MAX_SAFE_INTEGER));
+  assert.equal((await s.t.run(ctx => ctx.db.query("clubPeople").collect())).length, 2);
+  await s.t.run(async ctx => {
+    const person = (await ctx.db.query("clubPeople").withIndex("by_scope_user", q => q.eq("integrationId", s.integrationId).eq("epochStartedAt", s.snapshot.epochStartedAt).eq("userId", A)).unique())!;
+    await ctx.db.patch(person._id, { displayName: "Retained Mira", observedAt: Date.now() });
+  });
+  delete process.env.VRDEX_PEOPLE_RESOLUTION_ENABLED;
+  const { viewId } = await s.owner.mutation(api.clubPeople.requestView, args);
+  assert.equal((await s.owner.query(api.clubPeople.readView, { viewId })).people.find(person => person.userId === A)?.displayName, "Retained Mira");
+  assert.deepEqual(await s.t.run(ctx => ctx.db.query("clubPeopleReferences").collect()), refs);
+});
+
+it("legacy permanent viewer references are bounded without converting them to actor-free policy", async (test) => {
+  const now = 1800000000000, day = 86400000;
+  test.mock.timers.enable({ apis: ["Date", "setTimeout"], now });
+  const s = await setup(); await ready(s); await sources(s);
+  await s.owner.mutation(api.clubPeople.requestView, { communityProfileId: s.communityProfileId, source: { kind: "activity", auditIds: ["audit"] } });
+  await s.t.run(async ctx => {
+    for (const ref of await ctx.db.query("clubPeopleReferences").collect()) await ctx.db.patch(ref._id, { expiresAt: Number.MAX_SAFE_INTEGER, checkAt: now });
+  });
+  delete process.env.VRDEX_PEOPLE_RESOLUTION_ENABLED;
+  await s.t.mutation(internal.clubPeople.sweep, {});
+  const refs = await s.t.run(ctx => ctx.db.query("clubPeopleReferences").collect());
+  assert.ok(refs.every(ref => ref.subject && ref.expiresAt === ref._creationTime + 30 * day));
+  test.mock.timers.tick(30 * day + 70 * 60000);
+  await s.t.mutation(internal.clubPeople.sweep, {});
+  assert.deepEqual(await s.t.run(ctx => ctx.db.query("clubPeopleReferences").collect()), []);
+  assert.deepEqual(await s.t.run(ctx => ctx.db.query("clubPeople").collect()), []);
+});
+
+async function mixedOperations() {
+  const s = await setup(), worker = await ready(s), ids = await sources(s);
+  const rows = await s.t.run(async ctx => {
+    const original = (await ctx.db.get(ids.operationId))!;
+    const { _id, _creationTime, ...data } = original;
+    const instanceId = await ctx.db.insert("clubOperations", { ...data, requestId: "instance", payload: { kind: "invite_to_instance", targetUserId: B, worldId: "wrld_11111111-1111-1111-1111-111111111111", instanceId: "123~group(grp_test)" } });
+    const foreignId = await ctx.db.insert("clubOperations", { ...data, requestId: "foreign", epochStartedAt: s.snapshot.epochStartedAt - 1, payload: { kind: "invite_member", targetUserId: "usr_33333333-3333-3333-3333-333333333333" } });
+    const missingId = await ctx.db.insert("clubOperations", { ...data, requestId: "missing" });
+    await ctx.db.delete(missingId);
+    return { instanceId, foreignId, missingId };
+  });
+  return { ...s, worker, ...ids, ...rows };
+}
+
+it("mixed stored operation and batch sources retain only allowed names and provider work", async () => {
+  for (const kind of ["scheduled_operations", "invitation_batch"] as const) {
+    const s = await mixedOperations();
+    await s.t.run(async ctx => {
+      await ctx.db.patch(s.integrationId, { enabledFeatures: ["membership_management"] });
+      await ctx.db.patch(s.batchId, { operationIds: [s.operationId, s.instanceId, s.foreignId, s.missingId], recipients: [A, B, B, B] });
+      await ctx.db.insert("profileLinkDestinations", { key: `vrchat_user:${B}`, kind: "vrchat_user", locator: B, provider: "vrchat", status: "resolved", entityId: B, name: "Must not leak", observedAt: Date.now() });
+    });
+    const source = kind === "scheduled_operations" ? { kind, operationIds: [s.operationId, s.instanceId, s.foreignId, s.missingId] } : { kind, batchId: s.batchId };
+    const { viewId } = await s.owner.mutation(api.clubPeople.requestView, { communityProfileId: s.communityProfileId, source });
+    assert.deepEqual((await s.owner.query(api.clubPeople.readView, { viewId })).people.map(person => person.userId), [A]);
+    assert.deepEqual((await s.t.run(ctx => ctx.db.query("clubPeople").collect())).map(person => person.userId), [A]);
+    assert.equal((await s.t.run(ctx => ctx.db.query("clubPeopleReferences").collect())).length, 1);
+    assert.equal((await s.t.mutation(internal.clubPeople.claim, s.worker)).jobs[0].userId, A);
+  }
+});
+
+it("all missing or foreign stored operations expose no identities and create no provider work", async () => {
+  const s = await mixedOperations();
+  const { viewId } = await s.owner.mutation(api.clubPeople.requestView, { communityProfileId: s.communityProfileId, source: { kind: "scheduled_operations", operationIds: [s.foreignId, s.missingId] } });
+  assert.deepEqual((await s.owner.query(api.clubPeople.readView, { viewId })).people, []);
+  assert.deepEqual(await s.t.run(ctx => ctx.db.query("clubPeople").collect()), []);
+  assert.deepEqual(await s.t.run(ctx => ctx.db.query("clubPeopleReferences").collect()), []);
+  assert.deepEqual(await s.t.mutation(internal.clubPeople.claim, s.worker), { jobs: [] });
+});
+
+it("stored operation names react to feature and role loss without relaxing raw review or batch authorization", async () => {
+  const s = await mixedOperations();
+  const identity = { subject: "staff", issuer: "https://test.clerk.accounts.dev", tokenIdentifier: "https://test.clerk.accounts.dev|staff" };
+  const authorityId = await s.t.run(async ctx => {
+    await ctx.db.insert("users", { clerkUserId: "staff" });
+    await ctx.db.patch(s.roleId, { permissions: ["manage_integrations", "invite_group_members", "manage_instances"] });
+    return ctx.db.insert("communityAuthorities", { communityProfileId: s.communityProfileId, subject: identity, subjectTokenIdentifier: identity.tokenIdentifier, roleId: s.roleId, roleKey: "staff", roleLabel: "Staff", state: "active", grantedAt: Date.now(), updatedAt: Date.now() });
+  });
+  const staff = s.t.withIdentity(identity), args = { communityProfileId: s.communityProfileId, source: { kind: "scheduled_operations" as const, operationIds: [s.operationId, s.instanceId] } };
+  const { viewId } = await staff.mutation(api.clubPeople.requestView, args);
+  const read = async () => (await staff.query(api.clubPeople.readView, { viewId })).people.map(person => person.userId).sort();
+  assert.deepEqual(await read(), [A, B]);
+  await s.t.run(ctx => ctx.db.patch(s.integrationId, { enabledFeatures: ["membership_management"] }));
+  assert.deepEqual(await read(), [A]);
+  await s.t.run(async ctx => {
+    await ctx.db.patch(s.integrationId, { enabledFeatures: ["membership_management", "instances"] });
+    await ctx.db.patch(s.roleId, { permissions: ["manage_integrations", "invite_group_members"] });
+  });
+  assert.deepEqual(await read(), [A]);
+  await s.t.run(ctx => ctx.db.patch(s.roleId, { permissions: ["manage_integrations"] }));
+  assert.deepEqual(await read(), []);
+  assert.deepEqual(await s.t.mutation(internal.clubPeople.claim, s.worker), { jobs: [] });
+  await assert.rejects(staff.mutation(api.clubPeople.requestView, { communityProfileId: s.communityProfileId, source: review() }));
+  await s.t.run(ctx => ctx.db.patch(s.batchId, { operationIds: [], recipients: [A] }));
+  await assert.rejects(staff.mutation(api.clubPeople.requestView, { communityProfileId: s.communityProfileId, source: { kind: "invitation_batch", batchId: s.batchId } }));
+  await s.t.run(async ctx => {
+    const profile = (await ctx.db.get(s.communityProfileId))!;
+    const { _id, _creationTime, ...data } = profile;
+    const foreignProfileId = await ctx.db.insert("profiles", { ...data, slug: "foreign-club" });
+    await ctx.db.patch(s.batchId, { communityProfileId: foreignProfileId, operationIds: [s.operationId], recipients: [A] });
+  });
+  await assert.rejects(staff.mutation(api.clubPeople.requestView, { communityProfileId: s.communityProfileId, source: { kind: "invitation_batch", batchId: s.batchId } }));
+  await s.t.run(ctx => ctx.db.patch(authorityId, { state: "revoked" }));
+  await assert.rejects(staff.query(api.clubPeople.readView, { viewId }));
+  await assert.rejects(staff.mutation(api.clubPeople.requestView, args));
 });
 
 it("audit reference maintenance is twelve-hourly while reads and claims reject invalid evidence immediately", async (test) => {

@@ -9,6 +9,7 @@ export const membershipRecoveryTables = {
     state: recoveryState, revision: v.number(), startAt: v.number(), endAt: v.number(),
     nextOffset: v.number(), pages: v.number(), recovered: v.number(), conflicts: v.number(), unmatched: v.number(),
     workerId: v.optional(v.string()), fencingToken: v.optional(v.number()), credentialGeneration: v.optional(v.number()),
+    interruptedAttempt: v.optional(v.object({ revision: v.number(), workerId: v.string(), fencingToken: v.number(), credentialGeneration: v.number() })),
     createdAt: v.number(), updatedAt: v.number(),
   }).index("by_scope", ["integrationId", "epochStartedAt"]).index("by_checkAt", ["checkAt"]),
   communityMembershipEvidence: defineTable({
