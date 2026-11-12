@@ -30,11 +30,11 @@ limit for either product. These fields do not establish an effective spending
 ceiling. No billing setting was changed. Keep proxy request volume visible;
 recording sample rate alone does not bound analytics or Vercel costs.
 
-Signed-in analytics acceptance is being added to the existing isolated preview
-workflow. Its selected run uses a fake ingestion key and intercepted transport.
-Hosted analytics results remain pending until the exact-head report contains
-both device passes; a workflow definition or general account-suite pass is not
-that evidence.
+Signed-in analytics acceptance uses the existing isolated preview workflow,
+a fake ingestion key and intercepted transport. See
+[PR 460](https://github.com/BITRATE-Labs/VRDex/pull/460) for execution results.
+Require the exact-head report to contain both named device passes; a workflow
+definition or general account-suite pass is not that evidence.
 
 ## Proposed production change
 

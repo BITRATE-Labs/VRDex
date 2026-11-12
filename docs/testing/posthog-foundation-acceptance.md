@@ -47,8 +47,10 @@ On persistence, reload continuity, immediate browser Off while offline,
 reconnect/save recovery, re-enablement with the same account ID and isolation
 after a real sign-out/sign-in to a second disposable account.
 
-The coverage report rejects a selected run without those named passes. This
-hosted analytics result is currently pending. Live provider ingestion/replay,
+The coverage report rejects a selected run without those named passes. See
+[PR 460](https://github.com/BITRATE-Labs/VRDex/pull/460) for exact-head execution
+results and desktop/mobile capture evidence. A workflow definition or a general
+account-suite pass does not establish this coverage. Live provider ingestion/replay,
 production activation and actual support-request delivery are not qualified by
 the synthetic transport check.
 
@@ -58,7 +60,7 @@ The first beacon-based fix was rejected during whole-branch review because repla
 
 Whole-branch review also reproduced a cross-account journey reuse and a token leak in SDK-generated previous-page metadata. Regression tests now check caller/authoritative workflow ownership and sanitize previous-page/session-entry URL properties. A real Off-mode ordinary-grant lookup check covers both single and bulk results, including the fetch gates.
 
-The Account Privacy entry is available without a profile selection in the local fixture. This is not proof of hosted account switching, failed authenticated saves or cross-device propagation. Those remain acceptance dependencies.
+The Account Privacy entry is available without a profile selection in the local fixture. That local fixture alone does not establish hosted account switching, failed authenticated saves or cross-device propagation. Hosted evidence is tracked separately above.
 
 Focused Convex checks cover preference authorization, stable account UUIDs across Off/On, no deletion requests from Off, immediate re-enablement, legacy-row suppression, On/Off/On queue invalidation and bounded suppressed-row cleanup. Existing proof/claim tests preserve authoritative outcomes while explicitly distinguishing consented and legacy telemetry.
 

@@ -441,33 +441,13 @@ test.describe("account surfaces @visual @flow @account-visual", () => {
       });
       const panel = page.getByRole("region", { name: "Usage & privacy", exact: true });
       const openChoices = async () => {
+        await expect(page.getByRole("heading", { name: "No owned profiles yet", exact: true })).toBeVisible(hostedExpectOptions);
         if (!await panel.isVisible()) await page.getByRole("button", { name: "Usage & privacy", exact: true }).first().click();
         await expect(panel).toBeVisible(hostedExpectOptions);
       };
       try {
         await page.goto("/account/privacy");
         await openChoices();
-        const authDiagnostics = await page.evaluate(async ({ backend, subject }) => {
-          if (!("Clerk" in window) || typeof window.Clerk !== "object" || !window.Clerk
-            || !("session" in window.Clerk)) return { clerkLoaded: false };
-          const session = window.Clerk.session;
-          if (!session || typeof session !== "object" || !("getToken" in session)
-            || typeof session.getToken !== "function") return { sessionAvailable: false };
-          const token: unknown = await session.getToken({ template: "convex" });
-          if (typeof token !== "string") return { tokenAvailable: false };
-          const response = await fetch(`${backend}/api/query`, { method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ path: "accounts:viewer", args: {}, format: "json" }),
-          });
-          const result: unknown = await response.json();
-          if (!result || typeof result !== "object" || !("value" in result) || !result.value
-            || typeof result.value !== "object" || !("user" in result.value) || !result.value.user
-            || typeof result.value.user !== "object") return { status: response.status, viewerAvailable: false };
-          return { status: response.status, viewerAvailable: true,
-            hasAuthSubject: "analyticsAuthSubject" in result.value.user,
-            subjectMatches: "analyticsAuthSubject" in result.value.user && result.value.user.analyticsAuthSubject === subject };
-        }, { backend: process.env.CANDIDATE_CONVEX_URL, subject: account?.clerkUserId });
-        await testInfo.attach("analytics-auth-diagnostics", { body: JSON.stringify(authDiagnostics), contentType: "application/json" });
         await expect(panel.getByRole("button", { name: "On", exact: true })).toBeEnabled(hostedExpectOptions);
         await panel.getByRole("button", { name: "On", exact: true }).click();
         await expect(panel).toHaveCount(0, hostedExpectOptions);
