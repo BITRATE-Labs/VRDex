@@ -51,10 +51,12 @@ test('selected analytics acceptance cannot pass without its desktop and mobile r
       VRDEX_ANALYTICS_ACCEPTANCE: String(selected), CANDIDATE_TEST_IDENTITY: JSON.stringify(identity) },
   });
   assert.equal(run(false).status, 0);
+  assert.equal(JSON.parse(readFileSync(path.join(artifacts, 'candidate-report.json'))).analyticsAcceptance, false);
   assert.notEqual(run(true).status, 0, 'missing analytics results must fail the selected lane');
   accountTitles.push('signed-in analytics preserves identity, retries offline and separates accounts');
   save('account', namedReport(accountTitles));
   assert.equal(run(true).status, 0);
+  assert.equal(JSON.parse(readFileSync(path.join(artifacts, 'candidate-report.json'))).analyticsAcceptance, true);
   assert.equal(JSON.parse(readFileSync(path.join(artifacts, 'candidate-report.json'))).coverage.account, 14);
 });
 test('coverage requires actual named passes in each expected device, rejecting empty, skipped and failed reports', () => {

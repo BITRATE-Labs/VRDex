@@ -23,7 +23,7 @@ export default function PrivacyPolicyPage() {
         <p>Usage events remain until deletion or their configured retention period expires. Analytics choices do not remove records needed to operate your account, manage profiles and events, process payments or protect the service.</p>
       </section>
       <section className="space-y-3"><h2 className="text-xl font-semibold">Privacy requests</h2>
-        <p>For access, correction, deletion or other privacy requests, <Link href="/support?topic=owner_opt_out" className="underline underline-offset-4">contact VRDex</Link>.</p>
+        <p>For access, correction, deletion or other privacy requests, <Link href="/support?topic=feedback" className="underline underline-offset-4">contact VRDex</Link>.</p>
       </section>
     </article>
   </PageContainer></PageShell>;

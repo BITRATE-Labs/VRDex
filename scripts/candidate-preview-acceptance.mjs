@@ -57,7 +57,7 @@ async function main() {
     backend: env.CANDIDATE_CONVEX_URL ?? "",
     clerkKey: env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "",
   });
-  const evidence = { previewName: env.CANDIDATE_PREVIEW_NAME, head: env.CANDIDATE_HEAD_SHA, deployment: target.origin, ...identity, observedAt: new Date().toISOString() };
+  const evidence = { previewName: env.CANDIDATE_PREVIEW_NAME, head: env.CANDIDATE_HEAD_SHA, deployment: target.origin, ...identity, analyticsAcceptance: env.VRDEX_ANALYTICS_ACCEPTANCE === "true", observedAt: new Date().toISOString() };
   if (process.argv[2] === "report") {
     const read = name => JSON.parse(readFileSync(`apps/web/playwright-artifacts/${name}.json`, "utf8"));
     evidence.coverage = {

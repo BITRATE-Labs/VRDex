@@ -196,11 +196,14 @@ signed-in account suite intercepts PostHog transport and verifies persisted
 Off/On, offline-save recovery, stable account identity after reload and a
 different identity after switching accounts. Required desktop/mobile results
 are checked in `candidate-account.json`; missing or skipped results fail the
-selected lane. The existing disposable-account cleanup is also used for the
-second test identity.
+selected lane. `candidate-report.json` records `analyticsAcceptance` explicitly.
+Both disposable accounts are drained in `afterEach`, including when the test
+body times out, before their Clerk identities are deleted.
 
 This is auth/backend and SDK transport acceptance. It neither changes production
 settings nor establishes live PostHog ingestion or replay receipt.
+The link-only preview includes the draft panel and privacy page for review;
+production copy approval remains separate.
 
 ## Web environment
 
