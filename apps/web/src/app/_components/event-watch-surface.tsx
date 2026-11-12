@@ -4,7 +4,7 @@ import { ForegroundWatchEmbed, ForegroundWatchVideo } from "./foreground-watch-e
 import type { PlaybackRequest } from "@/lib/event-playback-owner";
 import { useEventPlayback } from "./event-playback-provider";
 import { EventPlaybackInline } from "./event-playback-inline";
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -88,20 +88,14 @@ function getServerHostname() {
   return undefined;
 }
 
-function getBrowserNow() {
-  return Date.now();
-}
-
-function getServerNow() {
-  return null;
-}
-
 function useBrowserHostname() {
   return useSyncExternalStore(subscribeToLocation, getBrowserHostname, getServerHostname);
 }
 
 export function useCurrentTimestamp() {
-  return useSyncExternalStore(subscribeToNow, getBrowserNow, getServerNow);
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => subscribeToNow(() => setNow(Date.now())), []);
+  return now;
 }
 
 function parseHttpsUrl(url: string): URL | null {
