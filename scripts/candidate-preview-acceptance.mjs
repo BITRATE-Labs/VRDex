@@ -66,7 +66,9 @@ async function main() {
         "a Clerk session resolves to a verified Convex identity and clears on sign-out @auth-session-staging",
         "a signed-out browser is sent to sign-in with its return path @auth-session-staging",
       ], ["desktop-chromium", "mobile-chromium"]),
-      account: checkCoverage(read("candidate-account"), ["account overview", "account privacy", "managed events", "media contributions", "media review access", "developer tokens"], ["desktop-chromium", "mobile-chromium"]),
+      account: checkCoverage(read("candidate-account"), ["account overview", "account privacy", "managed events", "media contributions", "media review access", "developer tokens",
+        ...(env.VRDEX_ANALYTICS_ACCEPTANCE === "true" ? ["signed-in analytics preserves identity, retries offline and separates accounts"] : []),
+      ], ["desktop-chromium", "mobile-chromium"]),
     };
   } else {
     assert.equal(process.argv[2], "preflight", "Expected preflight or report");

@@ -8,6 +8,24 @@ Implementation approval covers code and review. Production recording and provide
 
 Executor read project 447783, VRDex Analytics, on November 11, 2026 UTC. Replay remains disabled. Recording retention is 30 days. Project console/performance collection is enabled, while the new browser configuration explicitly disables console content and performance collection. No real recording contents were read.
 
+After PR 454 merged, the production web identity endpoint reports the merged
+source with matching browser/server backend bindings. The merge's backend
+deployment job also passed. `/privacy` still returns 404 while foundation
+activation is disabled.
+
+The current `events-retention-get` read confirms no custom project or
+organization window, an 84-month grandfathered default and an 84-month plan
+maximum. It also reports no currently applied query window or scheduled
+deletion, `default_period_deletes=false`, and a first pass on March 3, 2027.
+These are distinct fields; the plan maximum alone is not proof of active
+deletion. No retention setting was changed. See [PostHog's retention guide](https://posthog.com/docs/data/events-retention).
+
+Signed-in analytics acceptance is being added to the existing isolated preview
+workflow. Its selected run uses a fake ingestion key and intercepted transport.
+Hosted analytics results remain pending until the exact-head report contains
+both device passes; a workflow definition or general account-suite pass is not
+that evidence.
+
 ## Proposed production change
 
 | Setting | Current | Proposed after acceptance |
@@ -36,3 +54,10 @@ This is a proposal, not an applied settings diff. Read the effective billing lim
 ## Rollback
 
 Disable project recording first on masking or performance failure. Leave application authorization and optional-capture preferences intact. Disable interim collection independently if its acceptance changes. Do not erase consent history or revive terminally suppressed telemetry during rollback.
+
+## Verification reference
+
+- Merged source: `ee72d709c40651fef57f532464e9ddf218fb9495`.
+- [Backend deployment run](https://github.com/BITRATE-Labs/VRDex/actions/runs/43133906640).
+- [Public web deployment identity](https://vrdex.net/api/deployment).
+- PostHog project 447783, read through Executor on November 11, 2026.

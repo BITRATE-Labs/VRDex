@@ -38,6 +38,20 @@ the existing controls without layout changes.
 
 ## Evidence
 
+### Hosted signed-in analytics
+
+The optional `analytics_acceptance` preview run adds one required account case
+on desktop and mobile. It checks an actual development Clerk session and the
+same-branch Convex backend while intercepting PostHog transport. The case covers
+On persistence, reload continuity, immediate browser Off while offline,
+reconnect/save recovery, re-enablement with the same account ID and isolation
+after a real sign-out/sign-in to a second disposable account.
+
+The coverage report rejects a selected run without those named passes. This
+hosted analytics result is currently pending. Live provider ingestion/replay,
+production activation and actual support-request delivery are not qualified by
+the synthetic transport check.
+
 Synthetic browser acceptance intercepts all PostHog transport with a fake key. Desktop and mobile checks cover independent Limited envelopes, absence of SDK visitor IDs in local/session storage, Off silence, Full navigation, opaque guest continuity across reload, cross-tab withdrawal and a delayed flag/recording configuration response after Off. A 503 regression verifies retired captures do not retry after Off/On. Normal fetch transport handles an actual synthetic snapshot payload larger than 64 KB. Active-session and server outbox retries remain available.
 
 The first beacon-based fix was rejected during whole-branch review because replay buffers can exceed browser beacon quotas. The final guard uses the installed SDK's exported internal `_send_request` method, verified at runtime, and fails closed for unvalidated SDK versions. No SDK dependency upgrade or new transport framework was added. This internal-hook dependency must be revalidated on upgrade.
