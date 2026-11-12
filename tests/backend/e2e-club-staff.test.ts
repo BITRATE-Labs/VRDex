@@ -128,6 +128,34 @@ it("requires disposable ownership and exact run provenance for expiry and cleanu
   assert.ok(await t.mutation(ref("lookup"), { ...base, runId: "foreign" }));
 });
 
+it("isolates the host event fixture and refuses cleanup of unrelated events", async () => {
+  enable();
+  const t = convexTest({ schema, modules });
+  await t.run(ctx => ctx.db.insert("users", { clerkUserId: "user_test", email: "host+clerk_test@e2e.vrdex.net" }));
+  const base = { secret: "test-only-secret", runId: "host" };
+  const fixture = await t.mutation(ref("seed"), { ...base, ownerClerkUserId: "user_test" });
+  const args = { ...base, profileId: fixture.profileId };
+  process.env.CONVEX_CLOUD_URL = "https://scrupulous-corgi-247.convex.cloud";
+  await assert.rejects(t.mutation(ref("seedHostEvent"), args), /local/);
+  process.env.CONVEX_CLOUD_URL = "http://127.0.0.1:13210";
+  const event = await t.mutation(ref("seedHostEvent"), args);
+  await assert.rejects(t.mutation(ref("cleanup"), args), /unrelated activity/);
+  await t.run(ctx => ctx.db.patch(event.eventId, { sourceLabel: "foreign" }));
+  await assert.rejects(t.mutation(ref("cleanupHostEvent"), args), /Exact/);
+  assert.ok(await t.run(ctx => ctx.db.get(event.eventId)));
+  await t.run(ctx => ctx.db.patch(event.eventId, { sourceLabel: "e2e-host:host" }));
+  const lineupId = await t.run(ctx => ctx.db.insert("eventLineupEntries", {
+    eventId: event.eventId, clientKey: "foreign", performerLabel: "Unrelated", position: 0, updatedAt: Date.now(),
+  }));
+  await assert.rejects(t.mutation(ref("cleanupHostEvent"), args), /unrelated activity/);
+  assert.ok(await t.run(ctx => ctx.db.get(lineupId)));
+  await t.run(ctx => ctx.db.delete(lineupId));
+  await t.mutation(ref("cleanupHostEvent"), args);
+  await t.mutation(ref("cleanupHostEvent"), args);
+  await t.mutation(ref("cleanup"), args);
+  assert.equal(await t.run(ctx => ctx.db.get(event.eventId)), null);
+});
+
 it("isolates synthetic analytics behind local opt-in and preserves unexpected rows", async () => {
   enable();
   const t = convexTest({ schema, modules });

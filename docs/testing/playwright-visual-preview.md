@@ -287,6 +287,7 @@ It also requires Clerk credentials in the runner, which are repository settings 
 These must be the **development** instance backing the hosted target, not production. `clerkSetup()` rejects a production secret key outright, and `apps/web/scripts/check-vercel-env.mjs` already requires `pk_test`/`sk_test` on every non-production Vercel build, so the correct pair is the one the target itself runs on.
 
 The `Playwright Data Flow` job also runs the dated-connection claim regression
+and the host-only staff grant/revocation flow
 against the current PR's local Next and Convex servers for same-repository PRs.
 It runs before the broad flow suite so that the auth startup and test receive
 the available job budget. Local Next and Playwright both use `localhost`; Next
@@ -298,7 +299,7 @@ It reuses those development keys and repository variable
 production publishable key or mismatched issuer; the step rejects a missing or
 production secret key. The local environment sync applies the explicit issuer
 override supported by `convex/auth.config.ts`. No hosted backend is changed.
-This step requires exactly one passing, non-skipped test in its separate JSON
+This step requires exactly two passing, non-skipped tests in its separate JSON
 report and retains separate browser artifacts. Forks receive no keys.
 
 The hosted copy of this regression uses the existing deployment revision check.

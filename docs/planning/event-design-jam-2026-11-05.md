@@ -4,7 +4,7 @@
 
 The accepted UI is integrated on `codex/public-ui-integration` in a native managed worktree. The original jam branch remains the immutable visual reference. Current-main analytics consent, broadcast behavior and past-24-hour timeline retention are preserved. Real provider image retrieval remains deferred.
 
-Draft [PR #457](https://github.com/BITRATE-Labs/VRDex/pull/457) carries the integration with `ci:browsers` and `ci:visuals` selected. Local verification and PR evidence are recorded in the final appendix. Real Clerk signed-in host grant/revocation proof is still unavailable, so the PR must remain draft.
+[PR #457](https://github.com/BITRATE-Labs/VRDex/pull/457) carries the integration with `ci:browsers` and `ci:visuals` selected. BASIC requested publication and iteration to merge-ready after merging #456. Its exact-candidate setup is integrated, and the current-branch signed-in lane now includes the host grant/revocation flow. Publication is not merge readiness: that test and the latest-head checks must pass before readiness is reported. Local verification and PR evidence are recorded in the final appendix.
 
 ## Accepted checkpoint, November 11
 

@@ -39,6 +39,8 @@ export async function POST(request: NextRequest) {
       "cleanup",
       "seedAnalytics",
       "cleanupAnalytics",
+      "seedHostEvent",
+      "cleanupHostEvent",
     ].includes(body.op) ||
     typeof body.runId !== "string" ||
     !/^[a-z0-9-]{1,48}$/.test(body.runId)

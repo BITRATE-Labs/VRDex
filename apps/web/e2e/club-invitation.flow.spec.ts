@@ -59,7 +59,7 @@ test("@flow @club-invitations real invitation sign-in, acceptance and denials", 
     !enabled,
     "Set VRDEX_E2E_CLUB_INVITATIONS=true with the documented disposable Clerk test setup.",
   );
-  test.setTimeout(180_000);
+  test.setTimeout(240_000);
   const auth = clerkTestAuthAvailability();
   if (!auth.available) throw new Error(auth.reason);
   const convexUrl =
@@ -72,6 +72,9 @@ test("@flow @club-invitations real invitation sign-in, acceptance and denials", 
       "Base URL, matching Convex URL and E2E browser token are required.",
     );
   const target = new URL(convexUrl);
+  if (process.env.VRDEX_E2E_HOST_ACCESS === "true" &&
+      (target.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(target.hostname)))
+    throw new Error("Host access acceptance requires local Convex.");
   if (
     !(
       target.origin === "https://scrupulous-corgi-247.convex.cloud" ||
@@ -109,7 +112,11 @@ test("@flow @club-invitations real invitation sign-in, acceptance and denials", 
     try {
       // Recover even when the seed response was lost after the transaction committed.
       fixture ??= await helper("lookup");
-      if (fixture) await helper("cleanup", { profileId: fixture.profileId });
+      if (fixture) {
+        if (process.env.VRDEX_E2E_HOST_ACCESS === "true")
+          await helper("cleanupHostEvent", { profileId: fixture.profileId });
+        await helper("cleanup", { profileId: fixture.profileId });
+      }
       for (const email of emails) {
         if (provisioned.has(email)) {
           const response = await cleanupClerkTestAccountData(
@@ -249,4 +256,49 @@ test("@flow @club-invitations real invitation sign-in, acceptance and denials", 
       }),
     ).rejects.toThrow(/no longer valid/);
   }
+
+  if (process.env.VRDEX_E2E_HOST_ACCESS !== "true") return;
+  // Use the real role editor and invitation controls to replace event management with hosting only.
+  await ownerPage.goto(`${root}/staff`);
+  await ownerPage.getByRole("button", { name: "Revoke", exact: true }).click();
+  await expect(ownerPage.getByText("Assignment revoked.", { exact: true })).toBeVisible();
+  await ownerPage.getByRole("button", { name: "Create role", exact: true }).click();
+  await ownerPage.getByLabel("Role name", { exact: true }).fill("Host only");
+  await ownerPage.getByLabel("Host events", { exact: true }).check();
+  await ownerPage.getByRole("button", { name: "Save role", exact: true }).click();
+  await expect(ownerPage.getByText("Role saved.", { exact: true })).toBeVisible();
+  await ownerPage.getByLabel("Host only", { exact: true }).check();
+  await ownerPage.getByRole("button", { name: "Create invite link", exact: true }).click();
+  const hostInvitePath = new URL(await ownerPage.getByLabel("Invite link", { exact: true }).inputValue()).pathname;
+  await recipientPage.goto(hostInvitePath);
+  await recipientPage.getByRole("button", { name: "Accept invitation", exact: true }).click();
+  await expect.poll(() => new URL(recipientPage.url()).pathname === root).toBe(true);
+  const hostWorkspace = await acceptedClient.query(workspaceQuery, club);
+  expect(hostWorkspace.actor.permissions).toEqual(["host_events"]);
+  const hostClient = await sessionClient(recipientPage, convexUrl);
+  const hostEvent = await helper("seedHostEvent", { profileId: fixture!.profileId });
+  const eventPath = `/${fixture!.slug}/events/${hostEvent.slug}`;
+  await ownerPage.goto(eventPath);
+  await expect(ownerPage.getByRole("link", { name: "Host view", exact: true })).toBeVisible();
+  await recipientPage.goto(eventPath);
+  await recipientPage.getByRole("link", { name: "Host view", exact: true }).click();
+  await expect(recipientPage.getByRole("heading", { name: "Host view", exact: true })).toBeVisible();
+  expect((await recipientPage.request.get(`${eventPath}/host/status`)).status()).toBe(200);
+  await expect(hostClient.mutation(makeFunctionReference<"mutation">("events:updateCommunityEvent"), {
+    currentSlug: hostEvent.slug, title: "Denied edit",
+  })).rejects.toThrow(/permission|access|manage/i);
+  await expect(hostClient.mutation(makeFunctionReference<"mutation">("events:configureEventBroadcastPolicy"), {
+    currentSlug: hostEvent.slug, policy: { maxOverrunMs: 0 },
+  })).rejects.toThrow(/permission|access|manage/i);
+  await ownerPage.goto(`${root}/staff`);
+  await ownerPage.getByRole("button", { name: "Revoke", exact: true }).click();
+  await expect(ownerPage.getByText("Assignment revoked.", { exact: true })).toBeVisible();
+  await expect(recipientPage.getByRole("heading", { name: "Host view", exact: true })).toHaveCount(0);
+  expect((await recipientPage.request.get(`${eventPath}/host`)).status()).toBe(404);
+  expect((await recipientPage.request.get(`${eventPath}/host/status`)).status()).toBe(404);
+  await recipientPage.goto(eventPath);
+  await expect(recipientPage.getByRole("link", { name: "Host view", exact: true })).toHaveCount(0);
+  expect(await hostClient.query(makeFunctionReference<"query">("events:getHostAccess"), {
+    slug: hostEvent.slug, communitySlug: fixture!.slug,
+  })).toBe(false);
 });

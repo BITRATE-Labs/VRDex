@@ -114,6 +114,49 @@ export const lookup = internalMutation({
   },
 });
 
+function hostFixtureGuard(secret: string) {
+  guard(secret);
+  const target = new URL(process.env.CONVEX_CLOUD_URL!);
+  if (target.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(target.hostname))
+    throw new Error("Host fixture requires local Convex.");
+}
+
+export const seedHostEvent = internalMutation({
+  args: { secret: v.string(), runId: v.string(), profileId: v.id("profiles") },
+  handler: async (ctx, args) => {
+    hostFixtureGuard(args.secret);
+    await fixture(ctx, args.runId, args.profileId);
+    const slug = `e2e-host-${args.runId}`;
+    if (await ctx.db.query("events").withIndex("by_slug", q => q.eq("slug", slug)).unique())
+      throw new Error("Host fixture already exists.");
+    await ctx.db.patch(args.profileId, { publicationState: "published", publicSurfacingState: "public" });
+    const now = Date.now();
+    const eventId = await ctx.db.insert("events", {
+      slug, title: "Host access fixture", sortTitle: "host access fixture", communityProfileId: args.profileId,
+      startAt: now, endAt: now + 3_600_000, scheduleKind: "timed", eventStatus: "scheduled",
+      publicationState: "published", sourceType: "community", sourceLabel: `e2e-host:${args.runId}`, updatedAt: now,
+    });
+    return { eventId, slug };
+  },
+});
+
+export const cleanupHostEvent = internalMutation({
+  args: { secret: v.string(), runId: v.string(), profileId: v.id("profiles") },
+  handler: async (ctx, args) => {
+    hostFixtureGuard(args.secret);
+    await fixture(ctx, args.runId, args.profileId);
+    const event = await ctx.db.query("events").withIndex("by_slug", q => q.eq("slug", `e2e-host-${args.runId}`)).unique();
+    if (!event) return null;
+    if (event.communityProfileId !== args.profileId || event.sourceLabel !== `e2e-host:${args.runId}`)
+      throw new Error("Exact host fixture required.");
+    if (await ctx.db.query("eventSlots").withIndex("by_eventId", q => q.eq("eventId", event._id)).first() ||
+        await ctx.db.query("eventLineupEntries").withIndex("by_eventId_position", q => q.eq("eventId", event._id)).first())
+      throw new Error("Host fixture has unrelated activity.");
+    await ctx.db.delete(event._id);
+    return null;
+  },
+});
+
 function analyticsGuard(secret: string) {
   guard(secret);
   const target = new URL(process.env.CONVEX_CLOUD_URL!);

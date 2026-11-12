@@ -279,7 +279,10 @@ describe("optional browser and visual evidence contract", () => {
     assert.ok(claim.run.includes("check-clerk-issuer-match.mjs"));
     assert.ok(claim.run.includes("auth-claim.flow.spec.ts"));
     assert.ok(steps.indexOf(claim) < steps.findIndex((step: { id?: string }) => step.id === "flow"), "Run narrow auth before the broad suite consumes the job budget");
-    assert.ok(claim.run.includes("stats.expected !== 1") && claim.run.includes("stats.skipped !== 0"), "Skipped coverage must fail");
+    assert.ok(claim.run.includes("stats.expected !== 2") && claim.run.includes("stats.skipped !== 0"), "Skipped coverage must fail");
+    assert.ok(claim.run.includes("club-invitation.flow.spec.ts"));
+    assert.equal(claim.env.VRDEX_E2E_CLUB_INVITATIONS, "true");
+    assert.equal(claim.env.VRDEX_E2E_HOST_ACCESS, "true");
     const upload = steps.find((step: { id?: string }) => step.id === "upload");
     assert.ok(upload.with.path.includes(claim.env.PLAYWRIGHT_OUTPUT_DIR));
     assert.ok(upload.with.path.includes(claim.env.PLAYWRIGHT_HTML_REPORT_DIR));
