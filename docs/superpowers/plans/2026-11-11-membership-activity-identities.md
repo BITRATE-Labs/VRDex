@@ -86,4 +86,4 @@ Implementation completion means the approved component is backed by tested proje
 
 ## Execution result
 
-Implemented with independent whole-change review. See [verification and release limits](../../testing/membership-activity-identities.md). Remaining checkboxes include live authenticated navigation and remote exact-head checks; local type/lint and synthetic pagination/access checks passed. Publication is awaiting approval.
+Implemented with independent whole-change review. See [verification and release limits](../../testing/membership-activity-identities.md). Remaining checkboxes include live authenticated navigation and remote exact-head checks; local type/lint and synthetic pagination/access checks passed. BASIC authorized PR publication and iteration until merge-ready.

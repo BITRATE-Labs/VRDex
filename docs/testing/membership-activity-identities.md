@@ -28,7 +28,7 @@ Desktop/mobile screenshots received VLM review: readable role context, visible k
 
 Actual authenticated sign-in return, live VRChat role payloads and provider navigation were not exercised. Field semantics come from the pinned community specification cited by the worker and deployment guide. Storybook data is synthetic.
 
-No historical replay, general resolver, migration, production write, merge or deployment was performed. Comparable workspace screens remain follow-up work. Remote publication was rejected by automatic approval review because explicit authorization for that external publication was not established. The reviewed branch remains local pending that approval.
+No historical replay, general resolver, migration, production write, merge or deployment was performed. Comparable workspace screens remain follow-up work. Merge and deployment remain separately gated.
 
 ## Broader suite limits
 
