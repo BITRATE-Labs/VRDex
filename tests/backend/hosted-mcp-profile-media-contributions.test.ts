@@ -164,6 +164,11 @@ describe("hosted MCP profile media contributions", () => {
       for (const row of await ctx.db.query("profileMediaSubmissions").collect()) {
         await ctx.db.patch(row._id, { createdAt: Date.now() - 60_000 });
       }
+      for (const ledger of await ctx.db.query("contributionCapacity").collect()) {
+        if (ledger.submissionTimes) await ctx.db.patch(ledger._id, {
+          submissionTimes: ledger.submissionTimes.map(() => Date.now() - 60_000),
+        });
+      }
     });
     const secondClient = await seeded.t.mutation(
       internal.profileMediaSubmissions.prepareMcpMediaSubmission,
@@ -674,6 +679,11 @@ describe("hosted MCP profile media contributions", () => {
     await seeded.t.run(async (ctx) => {
       for (const row of await ctx.db.query("profileMediaSubmissions").collect()) {
         await ctx.db.patch(row._id, { createdAt: Date.now() - 60_000 });
+      }
+      for (const ledger of await ctx.db.query("contributionCapacity").collect()) {
+        if (ledger.submissionTimes) await ctx.db.patch(ledger._id, {
+          submissionTimes: ledger.submissionTimes.map(() => Date.now() - 60_000),
+        });
       }
     });
     const resumeInput = {

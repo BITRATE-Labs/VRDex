@@ -1,3 +1,4 @@
+import { insertMediaSubmission } from "./_contributionCapacity";
 import { publicationRestrictions } from "./_trustedPublication";
 import { ConvexError } from "convex/values";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -101,7 +102,7 @@ async function command(ctx: MutationCtx, input: ContributionCommandBase | Contri
   const receipt: CommandReceipt = { operationId: !proposal && selecting ? `contribution-primary:${crypto.randomUUID()}` : crypto.randomUUID(), operationState: code ? "refused" : "committed", resourceId: s.submission._id, ...(code ? { code } : {}) };
   if (!code) {
     const now = Date.now();
-    if (proposal) receipt.resourceId = await ctx.db.insert("profileMediaSubmissions", {
+    if (proposal) receipt.resourceId = await insertMediaSubmission(ctx.db, {
       requestKind: "identity_placement", candidateAssetId: s.asset._id, profileId: s.profile._id,
       targetProfileSlug: s.profile.slug, targetProfileDisplayName: s.profile.displayName,
       submitterUserId: actor.user._id, submitter: actor.subject, requestedPlacement: s.placement,

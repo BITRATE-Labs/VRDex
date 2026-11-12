@@ -1,3 +1,4 @@
+import { insertMediaSubmission, submissionAdmissionTimes } from "./_contributionCapacity";
 import { isAssetBackedPlacement } from "./_mediaSubmissionCleanup";
 import { assertLiveContributionToken } from "./_contributionAuth";
 import { publishedContributionDetail, contributionPlacementCommand, proposeContributionPlacement, contributionManageCommand } from "./_mediaContributionCommands";
@@ -237,22 +238,9 @@ async function submissionRateLimit(
 ) {
   const policy = await effectiveContributionPolicy(ctx.db, userId);
   if (policy.tier === "superadmin") return null;
-  const since = now - 24 * 60 * 60 * 1_000;
   const [recentForUser, recentForProfile] = await Promise.all([
-    ctx.db
-      .query("profileMediaSubmissions")
-      .withIndex("by_submitterUserId_createdAt", (query) =>
-        query.eq("submitterUserId", userId).gt("createdAt", since),
-      )
-      .order("desc")
-      .take((policy.limits.dailyActor ?? 0) + 1),
-    ctx.db
-      .query("profileMediaSubmissions")
-      .withIndex("by_profileId_createdAt", (query) =>
-        query.eq("profileId", profileId).gt("createdAt", since),
-      )
-      .order("desc")
-      .take((policy.limits.dailyTarget ?? 0) + 1),
+    submissionAdmissionTimes(ctx.db, "actor", userId, now),
+    submissionAdmissionTimes(ctx.db, "target", profileId, now),
   ]);
   if (policy.limits.dailyActor !== null && recentForUser.length >= policy.limits.dailyActor) {
     return "user_daily" as const;
@@ -260,7 +248,7 @@ async function submissionRateLimit(
   if (policy.limits.dailyTarget !== null && recentForProfile.length >= policy.limits.dailyTarget) {
     return "profile_daily" as const;
   }
-  if (policy.limits.burst !== null && recentForUser.filter(row => row.createdAt > now - policy.limits.burstWindowMs).length >= policy.limits.burst) {
+  if (policy.limits.burst !== null && recentForUser.filter(createdAt => createdAt > now - policy.limits.burstWindowMs).length >= policy.limits.burst) {
     return "cooldown" as const;
   }
   return null;
@@ -461,7 +449,7 @@ export const createUploadIntent = mutation({
     const altText = sanitizeProfileAssetAltText(args.altText);
     const creditUrl = sanitizeProfileAssetCreditUrl(args.creditUrl);
     const contributorNote = sanitizeNote(args.contributorNote, 500);
-    const submissionId = await ctx.db.insert("profileMediaSubmissions", {
+    const submissionId = await insertMediaSubmission(ctx.db, {
       profileId: profile._id,
       targetProfileSlug: profile.slug,
       targetProfileDisplayName: profile.displayName,
@@ -711,7 +699,7 @@ export const prepareMcpMediaSubmission = internalMutation({
     }
     const contributorNote = sanitizeNote(args.contributorNote, 500);
     const subject = mcpContributorSubject(actor._id);
-    const submissionId = await ctx.db.insert("profileMediaSubmissions", {
+    const submissionId = await insertMediaSubmission(ctx.db, {
       profileId: eligible._id,
       targetProfileSlug: eligible.slug,
       targetProfileDisplayName: eligible.displayName,
@@ -1677,7 +1665,9 @@ async function authorizedReviewPage(
         if (inheritedEligible) {
           const inherited = await ctx.db.query("profileMediaSubmissions")
             .withIndex("by_candidateAssetId_status_expiresAt", q => q.eq("candidateAssetId", candidate._id).eq("status", status).gt("expiresAt", Date.now()))
-            .paginate({ ...revisionOptions, cursor: replacementCursor, numItems: 40, maximumRowsRead });
+            .paginate({ ...revisionOptions, cursor: replacementCursor, numItems: 40, maximumRowsRead,
+              ...(end?.revisionIds[0] === rev._id && end.replacementCursor !== null
+                ? { endCursor: end.replacementCursor } : {}) });
           paginated = true;
           replacementCursor = inherited.continueCursor;
           replacementDone = inherited.isDone;
@@ -1721,7 +1711,8 @@ async function authorizedReviewPage(
     return {
       ...writeScopedPagination({ ...revisions,
         isDone: reachedEnd || reachedNativeEnd || (!paused && revisions.isDone),
-        continueCursor: writeBatchReviewCursor(next),
+        continueCursor: (reachedEnd || reachedNativeEnd) && paginationOpts.endCursor != null
+          ? paginationOpts.endCursor : writeBatchReviewCursor(next),
         splitCursor: paused || !revisions.splitCursor ? null : writeBatchReviewCursor({
           nativeCursor: revisions.splitCursor, revisionIds: [], submissionIds: null, sourceIsDone: false,
           replacementCursor: null, replacementDone: false,

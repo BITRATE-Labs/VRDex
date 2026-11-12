@@ -1,3 +1,4 @@
+import type { Id } from "../../convex/_generated/dataModel";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import assert from "node:assert/strict";
 import { it } from "node:test";
@@ -211,6 +212,18 @@ it("keeps legacy rejection of an existing-asset proposal and real upload-backed 
   })).status, "approved");
 });
 
+async function retimeSubmission(t: ReturnType<typeof convexTest>, submissionId: Id<"profileMediaSubmissions">, createdAt: number) {
+  await t.run(async ctx => {
+    const submission = (await ctx.db.get(submissionId))!;
+    await ctx.db.patch(submissionId, { createdAt });
+    for (const scope of [`actor:${submission.submitterUserId}`, `target:${submission.profileId}`]) {
+      const ledger = await ctx.db.query("contributionCapacity").withIndex("by_scope", q => q.eq("scope", scope)).unique();
+      if (ledger?.submissionTimes) await ctx.db.patch(ledger._id, {
+        submissionTimes: ledger.submissionTimes.map(time => time === submission.createdAt ? createdAt : time),
+      });
+    }
+  });
+}
 async function fixture(profileType: "person" | "community" = "person", independentlyApproved = false) {
   const t = convexTest({ schema, modules });
   const s = await seed(t, profileType);
@@ -229,7 +242,7 @@ async function fixture(profileType: "person" | "community" = "person", independe
     submissionId: intent.submissionId, expectedReviewVersion: pending.reviewVersion, idempotencyKey: "publish",
     ...(independentlyApproved ? { decision: "approve", privateReason: "Independently reviewed" } : {}),
   })).operationState, "committed");
-  await t.run(ctx => ctx.db.patch(intent.submissionId, { createdAt: Date.now() - 60_000 }));
+  await retimeSubmission(t, intent.submissionId, Date.now() - 60_000);
   const detail = () => actor.query(api.profileMediaSubmissions.contributionDetail, { submissionId: intent.submissionId });
   const place = async (action: "select_primary" | "clear_primary", idempotencyKey = crypto.randomUUID()) => {
     const d = await detail();
@@ -728,11 +741,11 @@ async function contributionAttestation(f: Awaited<ReturnType<typeof fixture>>) {
 }
 it("ordinary MCP proposal boundary retains its upload cooldown and admits a fresh key after the unchanged window", async () => {
   const f = await fixture("person", true); await occupyFallback(f); const attestation = await contributionAttestation(f);
-  await f.t.run(ctx => ctx.db.patch(f.intent.submissionId, { createdAt: Date.now() }));
+  await retimeSubmission(f.t, f.intent.submissionId, Date.now());
   const d = await f.detail(); const args = { submissionId: f.intent.submissionId, expectedContributionVersion: d.contributionVersion, idempotencyKey: "cooldown", ...attestation };
   const refused = await f.t.mutation(internal.profileMediaSubmissions.proposePlacementForMcpActor, args);
   assert.equal(refused.code, "proposal_rate_limited"); assert.equal(refused.operationState, "refused");
-  await f.t.run(ctx => ctx.db.patch(f.intent.submissionId, { createdAt: Date.now() - 31_000 }));
+  await retimeSubmission(f.t, f.intent.submissionId, Date.now() - 31_000);
   assert.deepEqual(await f.t.mutation(internal.profileMediaSubmissions.proposePlacementForMcpActor, args), refused);
   const fresh = await f.detail();
   assert.equal((await f.t.mutation(internal.profileMediaSubmissions.proposePlacementForMcpActor, { ...args, expectedContributionVersion: fresh.contributionVersion, idempotencyKey: "after-cooldown" })).operationState, "committed");

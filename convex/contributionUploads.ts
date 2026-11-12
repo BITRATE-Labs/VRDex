@@ -1,3 +1,4 @@
+import { insertMediaSubmission } from "./_contributionCapacity";
 import {
   validateBatchMedia,
   linkBatchMedia,
@@ -431,7 +432,7 @@ export const begin = internalMutation({
     const submissionId =
       request.mode === "owner"
         ? undefined
-        : await ctx.db.insert("profileMediaSubmissions", {
+        : await insertMediaSubmission(ctx.db, {
             profileId: profile._id,
             targetProfileSlug: profile.slug,
             targetProfileDisplayName: profile.displayName,

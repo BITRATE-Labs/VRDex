@@ -45,7 +45,8 @@ export const get = internalQuery({
       .withIndex("by_actor", (q) => q.eq("actorUserId", args.actorUserId))
       .unique();
     const dailySampleLimit = Math.min(policy.limits.dailyActor ?? 0, 100);
-    const active = policy.limits.dailyActor === null ? null : await ctx.db
+    const recordedTimes = usage?.submissionTimes?.filter(createdAt => createdAt > Date.now() - DAY);
+    const active = policy.limits.dailyActor === null ? null : recordedTimes?.map(createdAt => ({ createdAt })) ?? await ctx.db
       .query("profileMediaSubmissions")
       .withIndex("by_submitterUserId_createdAt", (q) =>
         q
@@ -54,7 +55,7 @@ export const get = internalQuery({
       )
       .order("desc")
       .take(dailySampleLimit + 1);
-    const creations24hIsLowerBound = active !== null && active.length > dailySampleLimit;
+    const creations24hIsLowerBound = active !== null && active.length >= (recordedTimes === undefined ? dailySampleLimit + 1 : 1000);
     const window = (active ?? []).filter(
       (row) => row.createdAt > Date.now() - policy.limits.burstWindowMs,
     );

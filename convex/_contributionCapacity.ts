@@ -280,3 +280,23 @@ export async function transferPublishedCharge(
     publishedBytes: bytes,
   });
 }
+
+// Compact rolling admission history shares the existing actor/target ledgers.
+export async function submissionAdmissionTimes(db: DatabaseReader, scope: "actor" | "target", id: Id<"users"> | Id<"profiles">, now: number) {
+  const row = await db.query("contributionCapacity").withIndex("by_scope", q => q.eq("scope", `${scope}:${id}`)).unique();
+  if (row?.submissionTimes !== undefined) return row.submissionTimes.filter(time => time > now - 86400000);
+  const legacy = scope === "actor"
+    ? await db.query("profileMediaSubmissions").withIndex("by_submitterUserId_createdAt", q => q.eq("submitterUserId", id as Id<"users">).gt("createdAt", now - 86400000)).order("desc").take(1000)
+    : await db.query("profileMediaSubmissions").withIndex("by_profileId_createdAt", q => q.eq("profileId", id as Id<"profiles">).gt("createdAt", now - 86400000)).order("desc").take(100);
+  return legacy.map(row => row.createdAt);
+}
+export async function insertMediaSubmission(db: DatabaseWriter, submission: Omit<Doc<"profileMediaSubmissions">, "_id" | "_creationTime">) {
+  for (const [scope, id, limit] of [["actor", submission.submitterUserId, 1000], ["target", submission.profileId, 100]] as const) {
+    const row = await db.query("contributionCapacity").withIndex("by_scope", q => q.eq("scope", `${scope}:${id}`)).unique();
+    const times = await submissionAdmissionTimes(db, scope, id, submission.createdAt);
+    const submissionTimes = [submission.createdAt, ...times].sort((a, b) => b - a).slice(0, limit);
+    if (row) await db.patch(row._id, { submissionTimes });
+    else await db.insert("contributionCapacity", { scope: `${scope}:${id}`, bytes: 0, processing: 0, submissionTimes });
+  }
+  return db.insert("profileMediaSubmissions", submission);
+}

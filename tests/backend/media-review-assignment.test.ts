@@ -1248,5 +1248,13 @@ for (const count of [20, 55]) {
       next = split.continueCursor;
     }
     assert.deepEqual(window, parent.page.map(row => row.submissionId));
+    if (count === 55) {
+      await f.t.run(ctx => ctx.db.patch(parent.page[0].submissionId, { status: "rejected" }));
+      const replay = await f.actor.query(api.profileMediaSubmissions.listForReview, {
+        batchId: f.batchId, paginationOpts: { cursor: start, endCursor: parent.continueCursor, numItems: 10 },
+      });
+      assert.deepEqual(replay.page.map(row => row.submissionId), parent.page.slice(1).map(row => row.submissionId));
+      assert.equal(replay.continueCursor, parent.continueCursor);
+    }
   });
 }

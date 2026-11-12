@@ -288,3 +288,30 @@ The browser now follows an empty page after manual pagination even if earlier
 rows are visible or the page is already cached. Consecutive empty continuations
 stop after 40 requests. Four production-component browser assertions pass across
 desktop and mobile for initial/later checkpoints and bounded subscriptions.
+
+### Admission journal and replay boundary follow-up
+
+Actor and target capacity ledgers now retain the latest 1,000 and 100 admission
+timestamps, respectively. Every production submission creation updates these
+bounded arrays in the same transaction. Replay does not create another timestamp.
+First creation reads the bounded legacy rolling history when the field is absent.
+Existing byte/processing updates preserve it. No new table or background job is
+needed.
+
+Admission reads the compact histories for rolling-day and burst checks, avoiding
+a second scan of full submission metadata. Tracked capacity discovery uses those
+timestamps for daily remaining capacity and retry time. The bounded lower-bound
+sample remains only for legacy ledgers without recorded timestamps.
+
+A regression reproduces refusal below both quotas with 999 older pending proposals
+and 999 recently decided submissions containing large source and credit URLs and
+notes. Admission now succeeds within Convex's default transaction limits. Discovery
+then reports 1,000 daily creations, zero remaining, and the correct daily retry time.
+The broad portable backend suite passes 3,289 tests with the same four documented
+Windows exclusions, and all 59 hosted MCP module tests pass. Backend/web typechecks
+and isolated local Convex compilation/health also pass.
+
+Saved assigned-review windows now pass their captured replacement end cursor into
+native pagination and return the original ending cursor. A 55-item regression
+changes a proposal's status between reads and verifies that replay does not pull
+a later item across the saved boundary.
