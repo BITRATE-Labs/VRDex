@@ -127,6 +127,9 @@ it("source availability distinguishes direct video, provider checks and fresh en
   const now = status.serverNow;
   const observed = operatorViewState(status, 0).observedSource;
   assert.equal(operatorSourceAvailability(source, undefined, now, observed), "On air");
+  assert.equal(operatorSourceAvailability(source, {state:"offline",observedAt:now}, now, observed), "offline");
+  assert.equal(operatorSourceAvailability(source, {state:"unavailable",observedAt:now}, now, observed), "unavailable");
+  assert.equal(operatorSourceAvailability(source, {state:"offline",observedAt:now-60_001}, now, observed), "On air");
   assert.equal(operatorSourceAvailability({...source, revision:source.revision + 1}, undefined, now, observed), "Not checked");
   assert.equal(operatorSourceAvailability(source, undefined, now, operatorViewState(status, 15_000).observedSource), "Not checked");
   assert.equal(operatorSourceAvailability(source, {state:"live",observedAt:now}, now), "live");
@@ -170,8 +173,17 @@ it("lifecycle labels expire with authority and unconfirmed errors do not claim O
   session.status = "error";
   status.program.activeSessionId = undefined;
   assert.equal(field(renderOperator(status),"Observed output"),"Unknown");
+  assert.match(renderOperator(status), /<strong[^>]*>Error<\/strong>/);
   status.outputConfigurationLocked = false;
   assert.equal(field(renderOperator(status),"Observed output"),"Off air");
+});
+it("a never-started output is Off air rather than Unknown", async () => {
+  const { operatorFixture } = await import("../../apps/web/src/app/playwright/event-operator/fixture-state");
+  const status = operatorFixture();
+  status.sessions = [];
+  status.program.activeSessionId = undefined;
+  status.outputConfigurationLocked = false;
+  assert.match(renderOperator(status), /<strong[^>]*>Off air<\/strong>/);
 });
 it("stopping preserves fresh per-output health and never promotes revoked destinations", async () => {
   const { operatorFixture } = await import("../../apps/web/src/app/playwright/event-operator/fixture-state");

@@ -56,7 +56,9 @@ than 60-second provider observations display Not checked in the operator workspa
 labeled Direct video rather than implying an unsuccessful check. Direct-video
 inputs do not occupy the four provider-probe slots. Fresh encoded
 output identifies the matching source ID and revision as On air in both the input
-row and Quick switch; a local preview alone never establishes that state. Quick
+row and Quick switch; a fresh offline/unavailable provider result still takes
+precedence so an input failure is not hidden by continued encoding. A local
+preview alone never establishes On air. Quick
 switch retains observation timestamps so provider results expire on the same
 60-second boundary. Links and copy actions remain
 available during probe failures. The host reader can prioritize a preview only
@@ -70,6 +72,8 @@ over the lifecycle label, and revoked destinations remain Unknown. Ended session
 display Off air and no observed mode while cleanup still locks Start; an error
 remains Unknown until output cleanup unlocks configuration. Missing active sessions
 and stale live observations never inherit another session's output.
+The failed-session placeholder says Error while its unconfirmed output stays
+Unknown; a never-started broadcast shows Off air.
 
 Diagnostics is collapsed and uses the existing control subscription. Server time
 plus browser monotonic elapsed time ages CPU and memory to Unknown at 30 seconds;

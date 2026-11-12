@@ -78,6 +78,18 @@ test("Quick switch expires provider liveness instead of retaining an old Live la
  await page.clock.fastForward(60_001);
  await expect(preview.getByRole("status")).toHaveText("Not checked");
 });
+
+test("an on-air input keeps its fresh provider failure visible @flow @fixture",async({page},info)=>{
+ await page.route("**/operate/status?*",route=>route.fulfill({json:{"vrcdn:aurora":{state:"offline",observedAt:fixtureNow}}}));
+ await page.goto("/playwright/event-operator");
+ const source=page.getByRole("article",{name:"Aurora",exact:true});
+ await expect(source.getByText("offline",{exact:true})).toBeVisible();
+ await source.getByRole("button",{name:"Take Aurora",exact:true}).click();await confirm(page,"Put Aurora on air");
+ await details(page);
+ await expect(page.getByText("Observed output",{exact:true}).locator("..")).toContainText("Aurora");
+ await expect(source.getByText("offline",{exact:true})).toBeVisible();
+ await page.screenshot({path:info.outputPath("operator-offline-input.png"),fullPage:true});
+});
 test("replacing or removing live inputs requires confirmation and quality applies next start @flow @fixture",async({page})=>{
  await page.goto("/playwright/event-operator");await page.getByRole("button",{name:"Replace Custom",exact:true}).click();await page.getByLabel("Source label",{exact:true}).fill("Replacement");await page.getByLabel("Video or stream link",{exact:true}).fill("https://www.twitch.tv/replacement");await page.getByRole("button",{name:"Replace source",exact:true}).click();await expect(page.getByRole("article",{name:"Replacement",exact:true})).toHaveCount(0);await confirm(page,"Replace source");
  const source=page.getByRole("article",{name:"Replacement",exact:true});await expect(source).toBeVisible();await source.getByRole("button",{name:"Remove Replacement",exact:true}).click();await confirm(page,"Remove source");await expect(source).toHaveCount(0);
