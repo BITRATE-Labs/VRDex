@@ -282,6 +282,11 @@ export const ingestBatch = internalMutation({
       }
       if (item.actorUserId !== undefined && !/^usr_[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(item.actorUserId)) delete cleanItem.actorUserId;
       if (item.roleId !== undefined && !/^grol_[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(item.roleId)) delete cleanItem.roleId;
+      if (!cleanItem.actorUserId) delete cleanItem.actorDisplayName;
+      if (!["group.member.role.assign", "group.member.role.unassign"].includes(item.eventType)) {
+        delete cleanItem.roleId;
+        delete cleanItem.roleName;
+      }
       await ctx.db.insert("communityMembershipEvents", {
         ...cleanItem,
         integrationId: scan.integrationId,

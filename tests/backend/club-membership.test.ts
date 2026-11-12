@@ -676,3 +676,51 @@ it("explicitly marks unavailable activity scopes independently of cursor encodin
   const result = await owner.query(activity, { communitySlug: "club", startAt: start, endAt: end, paginationOpts: { numItems: 25, cursor: null } });
   assert.deepEqual(result, { page: [], isDone: true, continueCursor: "", scopeUnavailable: true });
 });
+
+it("keeps optional actor and role evidence within its validated event context", async () => {
+  const roleId = "grol_00000000-0000-4000-8000-000000000003";
+  const cases = [
+    { fields: { actorDisplayName: "Moderator" }, eventType: "group.member.join", roleName: undefined },
+    { fields: { actorDisplayName: "Moderator", actorUserId: "invalid" }, eventType: "group.member.join", roleName: undefined },
+    { fields: { roleId, roleName: "DJ" }, eventType: "group.member.join", roleName: undefined },
+    { fields: { roleName: "DJ" }, eventType: "group.member.role.assign", roleName: "DJ" },
+  ];
+  for (const entry of cases) {
+    const { t } = await setup();
+    const scanId = await t.mutation(begin, { startAt: start, endAt: end });
+    await t.mutation(ingest, { scanId, pageNumber: 0, phase: "collect", rawAuditIds: ["context"], events: [{ auditId: "context", eventType: entry.eventType, occurredAt: start + 1, ...entry.fields }], exhausted: true });
+    const [stored] = await t.run(ctx => ctx.db.query("communityMembershipEvents").collect());
+    assert.ok(stored);
+    assert.equal(stored.actorUserId, undefined);
+    assert.equal(stored.actorDisplayName, undefined);
+    assert.equal(stored.roleId, undefined);
+    assert.equal(stored.roleName, entry.roleName);
+    assert.equal(stored.eventType, entry.eventType);
+  }
+});
+
+it("round-trips backend cursors and pinned boundaries without gaps across new rows or refresh ids", async () => {
+  const { t, owner, integrationId } = await setup();
+  await t.run(async ctx => {
+    for (let index = 0; index < 60; index++) await ctx.db.insert("communityMembershipEvents", { integrationId, epochStartedAt: start, groupId: "grp_test", auditId: `cursor-${index}`, eventType: "group.member.join", occurredAt: start + index + 1, receivedAt: start + 100, verified: true });
+  });
+  const args = { communitySlug: "club", startAt: start, endAt: end };
+  const first = await owner.query(activity, { ...args, paginationOpts: { numItems: 25, cursor: null, id: 1 } });
+  const second = await owner.query(activity, { ...args, paginationOpts: { numItems: 25, cursor: first.continueCursor, id: 1 } });
+  assert.equal(first.page.length, 25);
+  assert.equal(second.page.length, 25);
+  assert.equal(first.isDone, false);
+  assert.equal(second.isDone, false);
+  await t.run(ctx => ctx.db.insert("communityMembershipEvents", { integrationId, epochStartedAt: start, groupId: "grp_test", auditId: "cursor-new", eventType: "group.member.join", occurredAt: start + 1000, receivedAt: start + 1001, verified: true }));
+  const pinnedFirst = await owner.query(activity, { ...args, paginationOpts: { numItems: 25, cursor: null, endCursor: first.continueCursor, id: 2 } });
+  const pinnedSecond = await owner.query(activity, { ...args, paginationOpts: { numItems: 25, cursor: first.continueCursor, endCursor: second.continueCursor, id: 2 } });
+  const last = await owner.query(activity, { ...args, paginationOpts: { numItems: 25, cursor: second.continueCursor, id: 2 } });
+  const ids = (rows: { auditId: string }[]) => rows.map(row => row.auditId);
+  assert.deepEqual(ids(pinnedFirst.page), ["cursor-new", ...ids(first.page)]);
+  assert.deepEqual(ids(pinnedSecond.page), ids(second.page));
+  assert.equal(last.page.length, 10);
+  assert.equal(last.isDone, true);
+  const all = [...ids(pinnedFirst.page), ...ids(pinnedSecond.page), ...ids(last.page)];
+  assert.deepEqual(all, ["cursor-new", ...Array.from({ length: 60 }, (_, index) => `cursor-${59 - index}`)]);
+  assert.equal(new Set(all).size, 61);
+});
