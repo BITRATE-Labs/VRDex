@@ -88,13 +88,14 @@ test('gate requires native exit, independent stopped identity, strict receipt an
   assert.equal(fake.calls.at(-1)[0], 'container');
 });
 
-test('a cold Docker create can finish after five seconds without extending the native suite deadline', async () => {
+test('a cold Docker create preserves the full native suite deadline after slow image inspection', async () => {
   const fake = dockerFixture();
   let clock=0;
   const result=await runGate({names,now:()=>clock,execute:async(command,args,options)=>{
+    if(args[0]==='image')clock+=5000;
     if(args[0]==='create') {
-      clock+=15000;
-      if(options.timeoutMs<15000)return {code:143,signal:null,failure:'deadline',stdout:'',stderr:''};
+      clock+=30000;
+      if(options.timeoutMs<30000)return {code:143,signal:null,failure:'deadline',stdout:'',stderr:''};
     }
     if(args[0]==='start')assert.equal(options.timeoutMs,362000);
     return fake.execute(command,args,options);
@@ -147,7 +148,7 @@ test('aborted or exhausted outer budget still attempts bounded owned cleanup and
   assert.equal(result.passed, false); assert.equal(result.cleanup, true);
   assert.ok(!fake.calls.some(args => args[0] === 'start'));
   let time = 0;
-  const late = dockerFixture((args, result) => { if (args[0] === 'create') time = 390000; return result; });
+  const late = dockerFixture((args, result) => { if (args[0] === 'create') time = 410000; return result; });
   assert.equal((await runGate({ execute: late.execute, names, now: () => time })).passed, false);
 });
 

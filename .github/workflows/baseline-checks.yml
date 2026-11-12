@@ -326,7 +326,7 @@ jobs:
         run: docker build -f workers/restream/Dockerfile -t vrdex-restream-worker:ci .
 
       - name: Run required native transport gate
-        timeout-minutes: 7
+        timeout-minutes: 8
         run: node .github/scripts/restream-native.mjs
 
       - name: Verify captured transport with packaged runtime

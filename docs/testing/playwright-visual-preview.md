@@ -369,7 +369,8 @@ The API/MCP, backend and restream host prerequisite steps give the
 over the runner's Canonical mirrors to reduce reliance on Canonical DNS.
 The runner's HTTPS fallbacks and Ubuntu package-signature verification remain in place.
 Installation keeps its five-minute bound. The native transport gate still uses its packaged runtime.
-Docker container creation has a 30-second startup bound within the existing outer deadline.
+Docker container creation has a 30-second startup bound within a seven-minute outer
+deadline and an eight-minute CI step. This preserves the native suite's full allowance.
 Playwright browser installs in baseline, deployed-health, and staging workflows, plus
 synthetic-media installation, prepare the same independent mirror through
 `.github/scripts/configure-ubuntu-mirror.mjs` before installing dependencies. These install

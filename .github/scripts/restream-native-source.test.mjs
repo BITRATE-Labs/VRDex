@@ -41,7 +41,7 @@ test('every PR path retains unconditional setup, build and full native gate in t
     assert.doesNotMatch(step, /\n        if:|continue-on-error/);
   }
   const gate = named('Run required native transport gate');
-  assert.match(gate, /timeout-minutes: 7/);
+  assert.match(gate, /timeout-minutes: 8/);
   assert.match(gate, /node \.github\/scripts\/restream-native.mjs/);
   assert.equal(steps.indexOf(gate), steps.indexOf(named('Build hosted restream worker image')) + 1);
   const captured = named('Verify captured transport with packaged runtime');
