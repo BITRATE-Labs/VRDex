@@ -131,13 +131,16 @@ Every lookup needs a private source reference, with source-specific expiry. This
 
 | Source reference | Admission and retention boundary |
 | --- | --- |
-| Audit event | Retained event in the current integration/epoch and current history-read authority. |
+| Collection-owned audit event | Retained event in the current integration/epoch and current collection authority. No viewer identity is attached. |
+| Viewed activity | Viewer-derived audit references expire at the earlier of source removal or 30 days after the latest authorized view. Current actor permission remains required. |
 | Unsubmitted invitation review | Active 15-minute grant. Expiry/replacement stops pending work. Observations supported only by abandoned reviews are removed within 24 hours of grant expiry. |
 | Invitation recipient | Retained authorized batch/recipient, while pending or for 30 days after its terminal outcome. Removing the record ends the reference sooner. |
 | Scheduled operation | Retained authorized operation while pending, then 30 days after completion/cancellation. Cancellation stops new work; cached names can still label the outcome. |
 | Members or requests | Exact returned row in a permission-checked group read, with a reference expiring after 24 hours unless a fresh read renews it. No membership inference from a name cache. |
 
 Remove queued work when its last authorized reference expires or disappears. Retain a name while another valid source reference needs it, and otherwise delete it within 24 hours. Integration/epoch removal ends every reference and prevents stale writes. Reference cleanup and expired grants are swept in bounded batches; repeated viewing may renew a valid reference but cannot reset provider freshness or negative-cache cooldowns. Lookup reads always recheck source access, so retention never grants access. These durations are proposed builder defaults for review.
+
+Current recommendation, implemented for PR review: bound viewer-derived audit references instead of retaining a permanent staff-to-event association. Collection-owned references retain the event-based boundary. An old private name may need another lookup if its viewer reference expires and no other valid source remains. With name resolution disabled, activity views can read recorded or retained names but do not create people rows or audit references. The view grant itself remains short-lived.
 
 ### Invitations: review the people, then confirm exact recipients
 
@@ -193,6 +196,8 @@ Use the same name-link-or-plain-text rule, larger VRChat control and separate De
 ### Activity filters
 
 Add person and event-kind filters alongside the current date range, covering joins/departures and role changes. Filter the authorized backend result before pagination; never filter only the already loaded rows and imply that the search covered all history. Encode filters in the URL and include them in the page-chain/session-restoration key. A direct link must restore the same view after sign-in. Retain known event-type fallbacks and scope-loss clearing.
+
+Canonical person filtering uses a derived ID projection without rewriting original audit IDs. Before new clients roll out, one authorized preparation start fills legacy projections in bounded, scope-fenced batches; a completion probe verifies readiness. An unprepared person-filtered range offers Retry and Clear filters instead of false empty history. See the [deployment guide](../../deployment/group-telemetry-collector.md#membership-activity-identity-projection) for the operator contract.
 
 ### Lookup progress without a wall of placeholders
 
