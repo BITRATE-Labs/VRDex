@@ -37,6 +37,7 @@ import {
   McpDocumentFetchResponseSchema,
   McpDocumentSearchResponseSchema,
   mcpOutputJsonSchemaForZodSchema,
+  mcpJsonSchemaWithoutLegacyIds,
   normalizeMcpContributionSourceUrl,
   PublicActiveWorldsResponseSchema,
   PublicEventSchema,
@@ -2116,7 +2117,7 @@ export function buildVrdexMcpServer(options: VrdexMcpServerOptions = {}) {
     if (name !== "vrdex_media_submission_declare") {
       advertisedTools.push({
         name, title: registered.title, description: registered.description,
-        inputSchema: { type: "object", ...(registered.inputSchema?.["~standard"].jsonSchema.input({ target: "draft-2020-12" }) ?? { properties: {} }) } as Tool["inputSchema"],
+        inputSchema: mcpJsonSchemaWithoutLegacyIds({ type: "object", ...(registered.inputSchema?.["~standard"].jsonSchema.input({ target: "draft-2020-12" }) ?? { properties: {} }) }) as Tool["inputSchema"],
         ...(registered.outputSchema ? { outputSchema: registered.outputSchemaJson as Tool["outputSchema"] } : {}),
         annotations: registered.annotations, icons: registered.icons,
         execution: registered.execution, _meta: registered._meta,
