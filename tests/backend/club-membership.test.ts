@@ -630,3 +630,13 @@ it("replayed optional evidence preserves the first record and core conflicts sti
   const result = await owner.query(activity, { communitySlug: "club", startAt: start, endAt: end, paginationOpts: { numItems: 25, cursor: null } });
   assert.equal(result.page[0].roleName, "Original DJ");
 });
+
+it("projects only public activity fields and omits empty legacy names", async () => {
+  const { t, owner, integrationId } = await setup();
+  await t.run(ctx => ctx.db.insert("communityMembershipEvents", {
+    integrationId, epochStartedAt: start, groupId: "grp_test", auditId: "legacy-empty", eventType: "group.member.join", occurredAt: start + 1,
+    targetDisplayName: "", actorDisplayName: "", receivedAt: start + 2, verified: true,
+  }));
+  const result = await owner.query(activity, { communitySlug: "club", startAt: start, endAt: end, paginationOpts: { numItems: 25, cursor: null } });
+  assert.deepEqual(result.page, [{ auditId: "legacy-empty", eventType: "group.member.join", occurredAt: start + 1 }]);
+});

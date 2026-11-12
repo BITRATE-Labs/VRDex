@@ -91,8 +91,9 @@ class MembershipFixtureClient extends ConvexReactClient {
     const pagination = input.paginationOpts;
     if (!pagination || typeof pagination !== "object" || !("numItems" in pagination) || typeof pagination.numItems !== "number" || !("cursor" in pagination)) throw new Error("Missing pagination");
     const offset = Number(pagination.cursor ?? 0);
-    const end = Math.min(60, offset + pagination.numItems);
-    const value = { page: Array.from({ length: end - offset }, (_, index) => ({ auditId: `fixture-${offset + index}`, eventType: "group.member.join", occurredAt: start, targetDisplayName: `Fixture member ${offset + index}` })), isDone: end === 60, continueCursor: String(end) };
+    if (pagination.numItems !== 25) throw new Error("Restoration must preserve 25-row page boundaries");
+    const end = Math.min(300, offset + pagination.numItems);
+    const value = { page: Array.from({ length: end - offset }, (_, index) => ({ auditId: `fixture-${offset + index}`, eventType: "group.member.join", occurredAt: start, targetDisplayName: `Fixture member ${offset + index}` })), isDone: end === 300, continueCursor: String(end) };
     return {
       onUpdate: callback => { this.fixtureListeners.add(callback); return () => this.fixtureListeners.delete(callback); },
       localQueryResult: () => { if (this.denied) throw new Error("You do not have access to this category."); return value as FunctionReturnType<Query>; },

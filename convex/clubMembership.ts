@@ -544,8 +544,16 @@ export const listActivity = query({
     return {
       isDone: result.isDone,
       continueCursor: result.continueCursor,
-      page: result.page.map(({ _id, _creationTime, integrationId, epochStartedAt, groupId, receivedAt, verified, ...row }) => ({
-        ...row,
+      page: result.page.map(row => ({
+        auditId: row.auditId,
+        eventType: row.eventType,
+        occurredAt: row.occurredAt,
+        ...(row.targetUserId ? { targetUserId: row.targetUserId } : {}),
+        ...(row.targetDisplayName ? { targetDisplayName: row.targetDisplayName } : {}),
+        ...(row.actorUserId ? { actorUserId: row.actorUserId } : {}),
+        ...(row.actorDisplayName ? { actorDisplayName: row.actorDisplayName } : {}),
+        ...(row.roleId ? { roleId: row.roleId } : {}),
+        ...(row.roleName ? { roleName: row.roleName } : {}),
         ...(row.targetUserId && identities.has(row.targetUserId.toLowerCase()) ? { targetIdentity: identities.get(row.targetUserId.toLowerCase()) } : {}),
         ...(row.actorUserId && identities.has(row.actorUserId.toLowerCase()) ? { actorIdentity: identities.get(row.actorUserId.toLowerCase()) } : {}),
       })),

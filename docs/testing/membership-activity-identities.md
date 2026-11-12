@@ -6,7 +6,7 @@ This implements the [approved design](../superpowers/specs/2026-11-11-membership
 
 Authorized activity queries resolve latest locally cached VRChat names and unique visible verified VRDex profiles using exact provider IDs. Future role events preserve validated role and actor fields. Event-recorded evidence remains separate from cached names. Rows show readable actions, role names and staff attribution, profile links and keyboard-operated details. Missing history stays unresolved.
 
-Query errors clear named history through the existing error boundary. Retry remounts it. Count-only session storage restores previously loaded pages; filters remain in the existing analytics URL.
+Query errors clear named history through the existing error boundary. Retry remounts it. Count-only session storage restores up to 250 previously loaded rows in the original 25-row pages, preserving the identity lookup budget per page. Further rows remain available through Load more. Filters remain in the existing analytics URL.
 
 ## Independent review and fixes
 
@@ -14,11 +14,14 @@ A fresh GPT-6 Astra reviewer inspected the whole implementation. It found a fals
 
 The reviewer also found an actor-link separator encoded outside UTF-8. An actor-VRDex fixture reproduced it; the source byte was corrected and a replacement-character assertion now passes. Coverage also checks deduplicated reads, page verification budget exhaustion and long names. No review findings remain deferred.
 
+PR review also corrected replay target-ID casing, synchronized generated API declarations, bounded count restoration, preserved 25-row page boundaries on return, restored an explicit response allowlist, added descriptive accessible link/disclosure names, and honored the screenshot capture opt-out. The page verification budget remains bounded and fails closed; restoring history now uses the same pages as loading it initially.
+
 ## Local evidence
 
-- Worker suite: 233 passed.
+- Worker suite: 269 passed after the replay-casing regression fix.
 - Focused membership, identity, proof-verification and automatic-statistics backend suite: 67 passed after review fixes and rebase.
-- Storybook desktop/mobile assertions: 6 passed, including role labels, actor/target links, details, pagination restoration and access-loss/retry using real hooks with synthetic transport.
+- Latest membership/identity regression run: 16 passed, including empty legacy names and an exact public response shape.
+- Storybook desktop/mobile assertions: 8 passed, including role labels, actor/target links, accessible details, bounded pagination restoration and access-loss/retry using real hooks with synthetic transport.
 - Repository backend and web type-check scripts passed with the isolated checkout's frozen-lockfile dependencies.
 - Focused frontend lint and whitespace checks passed.
 

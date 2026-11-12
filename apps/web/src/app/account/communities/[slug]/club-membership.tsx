@@ -33,8 +33,8 @@ export function membershipEventLabel(type: string, roleName?: string) {
   return ({ "group.member.join": "Joined", "group.member.leave": "Left", "group.member.remove": "Removed" } as Record<string, string>)[type] ?? "Other activity";
 }
 function PersonName({ identity, recordedName }: { identity?: MembershipEvent["targetIdentity"]; recordedName?: string }) {
-  const name = identity?.displayName ?? recordedName ?? "Unknown member";
-  return identity ? <a href={identity.vrchatUrl} target="_blank" rel="noreferrer" title="VRChat profile, opens in a new tab" className="underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2">{name}</a> : <>{name}</>;
+  const name = identity?.displayName || recordedName || "Unknown member";
+  return identity ? <a href={identity.vrchatUrl} target="_blank" rel="noreferrer" className="underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2">{name}<span className="sr-only"> (VRChat profile, opens in a new tab)</span></a> : <>{name}</>;
 }
 export function MembershipMovementView({
   points,
@@ -237,7 +237,7 @@ export function MembershipActivityView({
               <div className="min-w-0">
                 <p className="break-words font-medium"><PersonName identity={event.targetIdentity} recordedName={event.targetDisplayName} /></p>
                 {event.targetIdentity ? <div className="mt-1 flex gap-4 text-xs text-muted">
-                  <a href={event.targetIdentity.vrchatUrl} target="_blank" rel="noreferrer" title="Opens in a new tab" className="underline underline-offset-4">VRChat</a>
+                  <a href={event.targetIdentity.vrchatUrl} target="_blank" rel="noreferrer" className="underline underline-offset-4">VRChat<span className="sr-only"> (opens in a new tab)</span></a>
                   {event.targetIdentity.vrdexUrl ? <Link href={event.targetIdentity.vrdexUrl} className="underline underline-offset-4">VRDex</Link> : null}
                 </div> : null}
               </div>
@@ -249,7 +249,7 @@ export function MembershipActivityView({
               <time dateTime={new Date(event.occurredAt).toISOString()} className="text-xs text-muted sm:text-right">{metricTime(event.occurredAt)}</time>
             </div>
             <details className="mt-3 text-xs text-muted">
-              <summary className="w-fit cursor-pointer rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">Details</summary>
+              <summary className="w-fit cursor-pointer rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">Details<span className="sr-only"> for {event.targetIdentity?.displayName || event.targetDisplayName || "Unknown member"}, {event.auditId}</span></summary>
               <dl className="mt-3 grid gap-2 border-l border-border pl-3">
                 {[
                   ["Event type", event.eventType], ["Audit ID", event.auditId], ["Target ID", event.targetUserId],
@@ -290,7 +290,7 @@ function MembershipActivityQuery({
   const [restoreCount] = useState(() => {
     try {
       const count = Number(sessionStorage.getItem(storageKey));
-      return Number.isSafeInteger(count) && count > 25 ? count : 25;
+      return Number.isSafeInteger(count) && count > 25 ? Math.min(250, count) : 25;
     } catch { return 25; }
   });
   const query = usePaginatedQuery(
@@ -301,12 +301,13 @@ function MembershipActivityQuery({
   const { status, results, loadMore } = query;
   useEffect(() => {
     if (status === "CanLoadMore" && results.length < restoreCount) {
-      loadMore(Math.min(100, restoreCount - results.length));
+      // Keep the same page boundaries and identity budget when restoring history.
+      loadMore(25);
     }
   }, [status, results.length, loadMore, restoreCount]);
   useEffect(() => {
     if (query.results.length > 0) {
-      try { sessionStorage.setItem(storageKey, String(query.results.length)); } catch { /* Storage is optional. */ }
+      try { sessionStorage.setItem(storageKey, String(Math.min(250, query.results.length))); } catch { /* Storage is optional. */ }
     }
   }, [storageKey, query.results.length]);
   return (
