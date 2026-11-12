@@ -33,9 +33,12 @@ export function membershipEventLabel(type: string, roleName?: string) {
   if (type === "group.member.role.unassign") return roleName ? <>Removed role: <bdi>{roleName}</bdi></> : "Role removed";
   return ({ "group.member.join": "Joined", "group.member.leave": "Left", "group.member.remove": "Removed" } as Record<string, string>)[type] ?? "Other activity";
 }
+function accessiblePersonName(name: string) {
+  return name.replace(/[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, "").trim() || "Unknown member";
+}
 function PersonName({ identity, recordedName }: { identity?: MembershipEvent["targetIdentity"]; recordedName?: string }) {
   const name = identity?.displayName || recordedName || "Unknown member";
-  return identity ? <a href={identity.vrchatUrl} target="_blank" rel="noreferrer" className="underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2"><bdi>{name}</bdi><span className="sr-only"> (VRChat profile, opens in a new tab)</span></a> : <bdi>{name}</bdi>;
+  return identity ? <a href={identity.vrchatUrl} target="_blank" rel="noreferrer" aria-label={`${accessiblePersonName(name)} (VRChat profile, opens in a new tab)`} className="underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2"><bdi>{name}</bdi><span className="sr-only"> (VRChat profile, opens in a new tab)</span></a> : <bdi>{name}</bdi>;
 }
 export function MembershipMovementView({
   points,
@@ -250,7 +253,7 @@ export function MembershipActivityView({
               <time dateTime={new Date(event.occurredAt).toISOString()} className="text-xs text-muted sm:text-right">{metricTime(event.occurredAt)}</time>
             </div>
             <details className="mt-3 text-xs text-muted">
-              <summary className="w-fit cursor-pointer rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">Details<span className="sr-only"> for {event.targetIdentity?.displayName || event.targetDisplayName || "Unknown member"}, {event.auditId}</span></summary>
+              <summary aria-label={`Details for ${accessiblePersonName(event.targetIdentity?.displayName || event.targetDisplayName || "Unknown member")}, ${event.auditId}`} className="w-fit cursor-pointer rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">Details</summary>
               <dl className="mt-3 grid gap-2 border-l border-border pl-3">
                 {[
                   ["Event type", event.eventType], ["Audit ID", event.auditId], ["Target ID", event.targetUserId],

@@ -232,6 +232,8 @@ test("membership names cannot reorder surrounding actions or links @storybook-vi
   expect(await names.evaluateAll(elements => elements.map(element => getComputedStyle(element).unicodeBidi))).toEqual(["isolate", "isolate", "isolate"]);
   await expect(page.getByText("Assigned role: \u202EDJ", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "VRDex", exact: true })).toHaveCount(2);
+  await expect(page.locator("summary")).toHaveAccessibleName("Details for Mira, bidi-names");
+  await expect(page.getByRole("link", { name: "Mira (VRChat profile, opens in a new tab)", exact: true })).toBeVisible();
   if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
     await page.screenshot({ path: path.resolve(process.cwd(), "../../.cache/artifacts", `membership-bidi-${test.info().project.name}.png`), fullPage: true });
   }
