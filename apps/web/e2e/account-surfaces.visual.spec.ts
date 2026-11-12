@@ -412,6 +412,7 @@ test.describe("account surfaces @visual @flow @account-visual", () => {
       test.setTimeout(180_000);
       const identities: string[] = [];
       const protectedIdentities: string[] = [];
+      const ingestionTokens = new Set<unknown>();
       let off = false;
       let requestsWhileOff = 0;
       let other: ClerkTestAccount | undefined;
@@ -427,6 +428,7 @@ test.describe("account surfaces @visual @flow @account-visual", () => {
               if (typeof event !== "object" || event === null || !("event" in event) || event.event !== "$pageview"
                 || !("properties" in event) || typeof event.properties !== "object" || event.properties === null) continue;
               const props = event.properties;
+                ingestionTokens.add("token" in props ? props.token : undefined);
               if ("analytics_mode" in props && props.analytics_mode === "full" && "deployment_category" in props
                 && props.deployment_category === "preview" && "distinct_id" in props && typeof props.distinct_id === "string") {
                 identities.push(props.distinct_id);
@@ -445,9 +447,32 @@ test.describe("account surfaces @visual @flow @account-visual", () => {
       try {
         await page.goto("/account/privacy");
         await openChoices();
+        const authDiagnostics = await page.evaluate(async ({ backend, subject }) => {
+          if (!("Clerk" in window) || typeof window.Clerk !== "object" || !window.Clerk
+            || !("session" in window.Clerk)) return { clerkLoaded: false };
+          const session = window.Clerk.session;
+          if (!session || typeof session !== "object" || !("getToken" in session)
+            || typeof session.getToken !== "function") return { sessionAvailable: false };
+          const token: unknown = await session.getToken({ template: "convex" });
+          if (typeof token !== "string") return { tokenAvailable: false };
+          const response = await fetch(`${backend}/api/query`, { method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ path: "accounts:viewer", args: {}, format: "json" }),
+          });
+          const result: unknown = await response.json();
+          if (!result || typeof result !== "object" || !("value" in result) || !result.value
+            || typeof result.value !== "object" || !("user" in result.value) || !result.value.user
+            || typeof result.value.user !== "object") return { status: response.status, viewerAvailable: false };
+          return { status: response.status, viewerAvailable: true,
+            hasAuthSubject: "analyticsAuthSubject" in result.value.user,
+            subjectMatches: "analyticsAuthSubject" in result.value.user && result.value.user.analyticsAuthSubject === subject };
+        }, { backend: process.env.CANDIDATE_CONVEX_URL, subject: account?.clerkUserId });
+        await testInfo.attach("analytics-auth-diagnostics", { body: JSON.stringify(authDiagnostics), contentType: "application/json" });
+        await expect(panel.getByRole("button", { name: "On", exact: true })).toBeEnabled(hostedExpectOptions);
         await panel.getByRole("button", { name: "On", exact: true }).click();
         await expect(panel).toHaveCount(0, hostedExpectOptions);
         await expect.poll(() => identities.length, hostedExpectOptions).toBeGreaterThan(0);
+        expect([...ingestionTokens]).toEqual(["phc_synthetic_analytics_acceptance"]);
         const first = identities.at(-1);
         if (!first) throw new Error("Consented account emitted no analytics identity");
         expect(first).toMatch(/^[a-f0-9-]{36}$/);
@@ -459,7 +484,7 @@ test.describe("account surfaces @visual @flow @account-visual", () => {
         await openChoices();
         await context.setOffline(true);
         await panel.getByRole("button", { name: "Off", exact: true }).click();
-        await expect.poll(() => page.evaluate(() => localStorage.getItem("vrdex-analytics-choice"))).toBe("off");
+        await expect.poll(() => page.evaluate(() => localStorage.getItem("vrdex-analytics-choice")), hostedExpectOptions).toBe("off");
         off = true;
         await page.evaluate(() => history.pushState({}, "", "/account/privacy?offline=synthetic"));
         await context.setOffline(false);
@@ -479,6 +504,7 @@ test.describe("account surfaces @visual @flow @account-visual", () => {
         await expect.poll(() => identities.length, hostedExpectOptions).toBeGreaterThan(beforeOn);
         expect(identities.at(-1)).toBe(first);
 
+        await page.goto("/account");
         await page.getByRole("button", { name: "Sign out", exact: true }).click();
         await page.getByRole("dialog").getByRole("button", { name: "Sign out", exact: true }).click();
         await expect(page).toHaveURL(/\/sign-in(?:\?|$)/, hostedExpectOptions);
@@ -499,6 +525,7 @@ test.describe("account surfaces @visual @flow @account-visual", () => {
         await page.reload();
         await expect.poll(() => identities.length, hostedExpectOptions).toBeGreaterThan(beforeOtherReload);
         expect(identities.at(-1)).toBe(second);
+        expect([...ingestionTokens]).toEqual(["phc_synthetic_analytics_acceptance"]);
         await openChoices();
         await captureRouteScreenshot(page, testInfo, "account-analytics", { mask: unstableSignedInRegions(page, other.email) });
       } finally {

@@ -307,10 +307,12 @@ jobs:
       - name: Configure synthetic analytics acceptance
         if: inputs.analytics_acceptance
         run: |
-          echo "NEXT_PUBLIC_POSTHOG_FOUNDATION_ENABLED=true" >> "$GITHUB_ENV"
-          echo "NEXT_PUBLIC_POSTHOG_LIMITED_ENABLED=false" >> "$GITHUB_ENV"
-          echo "NEXT_PUBLIC_POSTHOG_KEY=phc_synthetic_analytics_acceptance" >> "$GITHUB_ENV"
-          echo "NEXT_PUBLIC_POSTHOG_DEPLOYMENT_CATEGORY=preview" >> "$GITHUB_ENV"
+          cat <<'ENV' | tee -a "$GITHUB_ENV" .vercel/.env.preview.local > /dev/null
+          NEXT_PUBLIC_POSTHOG_FOUNDATION_ENABLED=true
+          NEXT_PUBLIC_POSTHOG_LIMITED_ENABLED=false
+          NEXT_PUBLIC_POSTHOG_KEY=phc_synthetic_analytics_acceptance
+          NEXT_PUBLIC_POSTHOG_DEPLOYMENT_CATEGORY=preview
+          ENV
 
       - name: Build Vercel preview output
         env:

@@ -28,7 +28,7 @@ test('selected analytics acceptance cannot pass without its desktop and mobile r
   const artifacts = path.join(directory, 'apps/web/playwright-artifacts');
   mkdirSync(artifacts, { recursive: true });
   const stub = path.join(directory, 'fetch.mjs');
-  writeFileSync(stub, `globalThis.fetch = async () => Response.json(${JSON.stringify(identity)});`);
+  writeFileSync(stub, 'globalThis.fetch = async () => Response.json(JSON.parse(process.env.CANDIDATE_TEST_IDENTITY));');
   const devices = ['desktop-chromium', 'mobile-chromium'];
   const namedReport = (titles, projects = devices) => ({ suites: [{ specs: titles.map(title => ({ title,
     tests: projects.map(projectName => ({ projectName, results: [{ status: 'passed' }] })),
@@ -48,7 +48,7 @@ test('selected analytics acceptance cannot pass without its desktop and mobile r
       VRDEX_E2E_BROWSER_TOKEN: 'synthetic', CLERK_SECRET_KEY: 'sk_test_synthetic',
       PLAYWRIGHT_BASE_URL: 'https://candidate.vercel.app', CANDIDATE_HEAD_SHA: expected.head,
       CANDIDATE_CONVEX_URL: expected.backend, NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: expected.clerkKey,
-      VRDEX_ANALYTICS_ACCEPTANCE: String(selected) },
+      VRDEX_ANALYTICS_ACCEPTANCE: String(selected), CANDIDATE_TEST_IDENTITY: JSON.stringify(identity) },
   });
   assert.equal(run(false).status, 0);
   assert.notEqual(run(true).status, 0, 'missing analytics results must fail the selected lane');
