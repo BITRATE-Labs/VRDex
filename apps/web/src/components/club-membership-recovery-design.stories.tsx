@@ -36,7 +36,7 @@ function RecoveryDesign() {
                     {row.profile ? (
                       <a href="#" onClick={event => event.preventDefault()} aria-label={`${row.name}, VRDex profile (demo)`} className="block w-fit text-base font-semibold underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2"><bdi>{row.name}</bdi></a>
                     ) : (
-                      <button type="button" onClick={() => toggle(row.id)} aria-expanded={open} aria-controls={`evidence-${row.id}`} className="flex cursor-pointer items-center gap-2 text-left text-base font-semibold focus-visible:outline focus-visible:outline-2"><bdi>{row.name}</bdi>{open ? <ChevronUp size={16} className="text-muted" /> : <ChevronDown size={16} className="text-muted" />}</button>
+                      <p className="text-base font-semibold"><bdi>{row.name}</bdi></p>
                     )}
                     {row.member ? <Button size="sm" variant="surface" className="mt-3 min-h-10 gap-2" aria-label={`VRChat profile for ${row.name} (demo)`}>VRChat <ArrowUpRight size={16} aria-hidden="true" /></Button> : null}
                   </div>
@@ -46,7 +46,7 @@ function RecoveryDesign() {
                   </div>
                   <div className="flex items-center justify-between gap-3 sm:items-end sm:flex-col sm:justify-start">
                     <span className="text-xs text-muted">{row.time}</span>
-                    {row.profile ? <button type="button" onClick={() => toggle(row.id)} aria-expanded={open} aria-controls={`evidence-${row.id}`} className="cursor-pointer text-sm text-muted underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2">Details {open ? "−" : "+"}</button> : null}
+                    <button type="button" onClick={() => toggle(row.id)} aria-label={`Details for ${row.name}`} aria-expanded={open} aria-controls={`evidence-${row.id}`} className="flex cursor-pointer items-center gap-1 text-sm text-muted underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2">Details {open ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}</button>
                   </div>
                 </div>
                 {open ? <div id={`evidence-${row.id}`} className="mt-4 grid gap-2 border-l border-border pl-4 text-sm text-muted"><p>{row.detail}</p>{row.member ? <p>Member ID: usr_{row.id}</p> : null}<p>Audit ID: demo-{row.id}</p></div> : null}

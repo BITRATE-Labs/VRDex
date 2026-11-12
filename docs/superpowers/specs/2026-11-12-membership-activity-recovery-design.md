@@ -2,13 +2,15 @@
 
 ## Review brief
 
-Make activity history readable without sending every name click to VRChat. The main name opens a verified visible VRDex profile when one exists. Otherwise it opens the row's details. A larger, separate VRChat control remains available. Remove the redundant VRDex link.
+Make activity history readable without sending every name click to VRChat. The main name opens a verified visible VRDex profile when one exists and is plain text otherwise. Every row has the same separate Details control. A larger, separate VRChat control remains available. Remove the redundant VRDex link.
 
 Resolve missing people automatically in the background, for new activity and recently viewed history. BASIC selected this approach on November 12. Historical role recovery is also proposed below; it is not yet approved or implemented. Production data and provider sessions have not been changed for this design.
 
-The requested judgment is whether the row interaction and the bounded role-recovery proposal are right. The main tradeoff is additional provider traffic in exchange for useful names. Some records will remain incomplete when the provider no longer has the evidence.
+The requested judgment is whether the row interaction and the bounded role-recovery proposal are right. BASIC also requested the related workspace improvements below, starting with invitations and scheduled actions. The main tradeoff is additional provider traffic in exchange for useful names. Some records will remain incomplete when the provider no longer has the evidence.
 
 Preview: [interactive Storybook study](http://127.0.0.1:6007/iframe.html?id=clubs-membership-recovery-design--row-interactions&viewMode=story). Data is synthetic. The demo lookup button is a preview control, not proposed product UI.
+
+New previews: [invitations](http://127.0.0.1:6007/iframe.html?id=clubs-people-flows-design--invitations&viewMode=story) and [scheduled actions](http://127.0.0.1:6007/iframe.html?id=clubs-people-flows-design--scheduled-actions&viewMode=story). Switch between them with the preview tabs. All actions are simulated; profile controls do not navigate to real people.
 
 ## Decisions and changes from the previous design
 
@@ -16,7 +18,7 @@ Preview: [interactive Storybook study](http://127.0.0.1:6007/iframe.html?id=club
 | --- | --- |
 | Locked decision | Keep latest known VRChat names in rows and event-recorded names in details. |
 | Locked decision | Automatically resolve missing people in new activity and recently viewed history. BASIC selected this over manual-only lookup. |
-| Requested revision | Main names link to VRDex when a unique visible verified match exists. Otherwise the name controls details. |
+| Current recommendation | Names only navigate: link to VRDex when a unique visible verified match exists, otherwise plain text. Every row uses the same separate Details control. This addresses BASIC's November 12 correction that controls should be consistent. |
 | Requested revision | Enlarge the separate VRChat control and remove the extra VRDex link. Apply the same destination rule to actor names. |
 | Current recommendation | Recover recent historical role/actor evidence through a bounded audit replay, stored separately from immutable original events. |
 | Current recommendation | Show a stable, distinct member identifier when no name can be obtained. Do not imply a lookup is running when it is not. |
@@ -38,14 +40,14 @@ Confirmed from source and the signed-in BITRATE page:
 | Row state | Main control | Secondary control | Details |
 | --- | --- | --- | --- |
 | Named person with an eligible VRDex profile | Name links to that VRDex profile. | VRChat, at least a 40-pixel target. | Separate Details toggle. |
-| Named person without an eligible VRDex profile | Name and chevron toggle details. | Same VRChat control. | Open beneath the row. |
-| Name pending or unavailable | `Member 318b18fc` and chevron toggle details. | Same VRChat control when the full ID is valid. | Lookup state, full ID, last successful observation if any. |
-| Group event without a person target | Recognized subject, such as `Group settings`, toggles details. | No fabricated person link. | Original event type and audit ID. |
+| Named person without an eligible VRDex profile | Plain name. | Same VRChat control. | Separate Details toggle, opening beneath the row. |
+| Name pending or unavailable | Plain `Member 318b18fc`. | Same VRChat control when the full ID is valid. | Same Details toggle; lookup state, full ID, last successful observation if any. |
+| Group event without a person target | Plain recognized subject, such as `Group settings`. | No fabricated person link. | Same Details toggle; original event type and audit ID. |
 | Role event without recoverable role metadata | Normal person control and `Role assigned` or `Role removed`. | Normal person controls. | `Role not recorded`; omit repeated `Role unavailable` text from the row. |
 
 The short member reference uses enough of the normalized ID to distinguish visible collisions, expanding when needed. The full ID remains in details. It is a fallback identity, not a fabricated display name. A resolved name replaces it in place without reordering rows or closing details.
 
-Names, roles and actor labels retain Unicode isolation. Accessible control names remove directional controls. Links and accordion controls remain separate keyboard targets; no nested interactive controls. Actor names follow the same VRDex-first rule, with an explicitly labelled actor-details toggle when no profile exists. There is one VRChat control per person, with an accessible destination and new-tab description.
+Names, roles and actor labels retain Unicode isolation. Accessible control names remove directional controls. Links and accordion controls remain separate keyboard targets; no nested interactive controls. Actor names follow the same VRDex-link-or-plain-text rule. Their evidence lives in the row's Details section. There is one VRChat control per person, with an accessible destination and new-tab description.
 
 Do not use a verified VRDex profile's chosen name as though it were a VRChat observation. It may serve as a final readable fallback for that exact verified person, but details identify its source as `VRDex profile name`.
 
@@ -61,7 +63,8 @@ flowchart TD
   C --> F{Eligible VRDex profile?}
   F -->|Yes: click name| G[VRDex profile]
   G -->|Back| H[Restore loaded history]
-  F -->|No: click name| I[Expand event details]
+  F -->|No| K[Plain name]
+  C -->|Details control on any row| I[Expand event details]
   C -->|VRChat control| J[VRChat profile in new tab]
   C -->|Load more| B
 ```
@@ -104,8 +107,97 @@ If the checkpoint fails, keep the row controls and honest fallback design, and r
 
 ## Delivery and verification
 
-One implementation slice should cover row controls plus bounded name resolution. A second should cover the authorized historical repair and role observations after the provider checkpoint. No new paid tier, service, full directory crawl, avatar import or infrastructure deployment is proposed.
+Start with invitations and scheduled actions, then apply the shared identity presentation to activity and members/requests. Keep historical repair separate until the provider checkpoint passes. Activity filters and lookup-progress presentation are included in the design below. No new paid tier, service, full directory crawl, avatar import or infrastructure deployment is proposed.
 
-Verify automatic deduplication, account-wide budgets, retries, negative caching, stale-name preservation, authority loss, epoch replacement and cleanup. Verify that hidden/ambiguous/unverified profiles never gain links. Recovery tests must preserve original evidence and reject mismatched replay entries. Browser checks cover both name actions, the larger VRChat target, distinct unresolved people, non-person events, in-place resolution, desktop/mobile layout and existing pagination recovery.
+Verify automatic deduplication, account-wide budgets, retries, negative caching, stale-name preservation, authority loss, epoch replacement and cleanup. Verify that hidden/ambiguous/unverified profiles never gain links. Recovery tests must preserve original evidence and reject mismatched replay entries. Browser checks cover profile links versus plain names, consistent Details controls on every row, the larger VRChat target, distinct unresolved people, non-person events, in-place resolution, desktop/mobile layout and existing pagination recovery.
 
-Only the throwaway Storybook study exists today. It demonstrates the row interaction and a simulated name resolution, without backend or provider requests. Local desktop/mobile screenshots received visual review; name disclosure and in-place resolution were exercised. Focused story lint passed. A fresh builder check found no important unanswered planning questions. Final product copy in this document and preview remains proposed for BASIC's exact-copy review.
+Only throwaway Storybook studies exist today. They demonstrate the row interaction, simulated name resolution, invitation selection/review/results, and editing/cancelling Mira's scheduled action. Desktop/mobile screenshots received visual review, and the interactive demo paths were exercised. A time-input event issue found during the preview check was corrected and the changed time was verified in the list. Focused story lint passed. The expanded builder check found gaps in pre-batch lookup authorization and non-audit retention; both are specified below, and its follow-up found no important unanswered planning questions. No backend/provider requests or real operations are part of these studies. Final product copy remains proposed for BASIC's exact-copy review.
+
+## Invitations and scheduled actions first
+
+### Shared identity presentation
+
+Lead with the latest available name. Link that name only to an eligible VRDex profile, otherwise use plain text. Keep one larger VRChat control and the same separate Details disclosure. Hide full IDs from ordinary list rows; show them in details and consequential confirmations. This changes presentation, not how actions identify their targets.
+
+Names are decorations on immutable IDs. A name refresh must never change the selected recipient, scheduled target, role, selection count or authorization. Preserve the existing target-review and expected-revision checks. If recipient mapping or operation revision changes, require the existing review process again; a familiar name cannot substitute for that check. Keep original reviewed IDs and current effective IDs distinguishable in details when the existing workflow supports such mappings.
+
+The name queue must admit these sources explicitly, rather than pretending they are audit events. An authenticated request accepts bounded batch-recipient or operation IDs, checks the permission required to read that specific source, and derives exact person IDs from current records in the active integration/epoch. Provider work uses the same shared budgets, deduplication and cleanup policy as activity lookups. Reading names does not grant permission to invite, edit, cancel or manage a member.
+
+Before a batch exists, add a new permission-checked recipient-review grant. The existing `clubInvitations.preview` checks access and normalizes/deduplicates IDs; it does not issue an eligibility token. The new grant must verify invitation capability for the selected destination, bind the actor, integration/epoch and at most 100 explicitly entered valid target IDs, expire after 15 minutes, and allow at most one active review per actor/integration. Edits replace the grant rather than accumulating parallel grants. Revalidate authority and the grant before enqueueing. Its purpose is name lookup for that exact invitation review, not proof that the provider will accept an invitation. Sending retains the existing operational validation. A workspace read permission alone cannot create this grant. No raw-ID lookup endpoint is exposed outside that invitation-authoring scope.
+
+### Retention across workspace sources
+
+Every lookup needs a private source reference, with source-specific expiry. This extends the earlier audit-only retention rule; it does not extend the lifetime of the underlying operational records.
+
+| Source reference | Admission and retention boundary |
+| --- | --- |
+| Audit event | Retained event in the current integration/epoch and current history-read authority. |
+| Unsubmitted invitation review | Active 15-minute grant. Expiry/replacement stops pending work. Observations supported only by abandoned reviews are removed within 24 hours of grant expiry. |
+| Invitation recipient | Retained authorized batch/recipient, while pending or for 30 days after its terminal outcome. Removing the record ends the reference sooner. |
+| Scheduled operation | Retained authorized operation while pending, then 30 days after completion/cancellation. Cancellation stops new work; cached names can still label the outcome. |
+| Members or requests | Exact returned row in a permission-checked group read, with a reference expiring after 24 hours unless a fresh read renews it. No membership inference from a name cache. |
+
+Remove queued work when its last authorized reference expires or disappears. Retain a name while another valid source reference needs it, and otherwise delete it within 24 hours. Integration/epoch removal ends every reference and prevents stale writes. Reference cleanup and expired grants are swept in bounded batches; repeated viewing may renew a valid reference but cannot reset provider freshness or negative-cache cooldowns. Lookup reads always recheck source access, so retention never grants access. These durations are proposed builder defaults for review.
+
+### Invitations: review the people, then confirm exact recipients
+
+The current outcome view leads with a monospace user ID linking to VRChat. Replace it with the shared identity presentation in both recipient review and results. Keep eligibility and delivery state as separate plain labels. A name lookup pending state does not make an otherwise eligible recipient ineligible.
+
+- Recipient rows have a selection checkbox, name, eligibility, VRChat control and Details. Already-member or otherwise ineligible rows preserve existing selection restrictions and reasons.
+- Show the selected count and the batch's community/event context. Names updating cannot silently change the selection.
+- Final confirmation lists the selected names alongside their full immutable IDs. Keep existing capacity, policy and recipient-review checks. Unresolved names may still proceed when existing eligibility checks permit it and the exact ID is reviewed.
+- Results show the same people with the existing delivery states. Do not translate `Submitted` or `Outcome unknown` into `Sent`. An uncertain send does not gain an automatic resend button or a retry policy from this design.
+- Keep the original reviewed identity available when the effective target differs. A new name is not evidence that such a change was approved.
+
+#### Journey: confirm an invitation batch
+
+```mermaid
+flowchart TD
+  A[Invitations: review recipients] --> B[Select eligible people]
+  B --> C[Review names, exact IDs and count]
+  C -->|Back| A
+  C -->|Confirm through existing checks| D[Batch outcomes]
+  D --> E[Sent, pending, failed or outcome unknown]
+  A -->|Details on any row| F[Identity, reviewed ID and eligibility evidence]
+```
+
+### Scheduled actions: see who, what and when
+
+The current list names the operation but often exposes only a raw target ID. Show the action, person, viewer-local due time and scheduling actor together. Use the same name/VRChat/Details pattern as invitations. Keep edit and cancel as explicit actions governed by existing capability and ownership rules; they never move onto the person's name.
+
+- Edit preserves the exact target and existing revision checks. Changing a recipient or role identity follows the current authoring/review process rather than being inferred from a label.
+- Editing a time keeps existing timezone-authoring context. The list renders in the viewer's timezone; do not add duplicate canonical/viewer times. Event-relative schedules keep their event and offset visible.
+- Cancellation confirmation shows the action, person, full target ID, role where relevant, due time and event/community context. Use the existing permission, revision and pending/claimed-state checks. Do not offer cancellation after the operation is no longer cancellable.
+- Keep pending, submitted, succeeded, cancelled and outcome-unknown states distinct. Labels and cached names never change execution state.
+- Non-person actions show their actual subject, such as a post or instance, without a fabricated member or irrelevant VRChat-person control.
+
+#### Journey: cancel the intended scheduled action
+
+```mermaid
+flowchart TD
+  A[Scheduled actions] --> B[Read person, action and due time]
+  B -->|Details| C[Exact target and operation evidence]
+  B -->|Cancel action if permitted| D[Confirm action, person and exact ID]
+  D -->|Keep action| A
+  D -->|Confirm with revision and state checks| E[Cancelled or current-state conflict]
+```
+
+The local preview exercises invitation selection, final review and simulated mixed outcomes, plus editing and cancelling Mira's scheduled role action. Other scheduled rows illustrate related targets. These fixtures do not prove eligibility, permission checks or provider execution. The established workspace/confirmation journey remains; no Mobbin research is needed for a new sequence or gate.
+
+## Related areas included after the first two previews
+
+### Members and join requests
+
+Use the same name-link-or-plain-text rule, larger VRChat control and separate Details. Move the existing name-click management behavior onto an explicit member-management control. Preserve approve/reject, role assignment, removal and ban controls and their permission checks. Their confirmations show names with exact target IDs. Staff-account identities and VRChat identities remain distinct unless an exact verified connection exists.
+
+### Activity filters
+
+Add person and event-kind filters alongside the current date range, covering joins/departures and role changes. Filter the authorized backend result before pagination; never filter only the already loaded rows and imply that the search covered all history. Encode filters in the URL and include them in the page-chain/session-restoration key. A direct link must restore the same view after sign-in. Retain known event-type fallbacks and scope-loss clearing.
+
+### Lookup progress without a wall of placeholders
+
+Show one quiet list-level status only when actual admitted work is pending. Count distinct people, not repeated rows; cached names remain visible while refreshing. Put individual lookup state, observation time and failure evidence in Details. A stopped, unauthorized, negatively cached or exhausted job must not keep saying it is checking. Name progress is always separate from invitation or scheduled-action execution progress. Proposed status wording is reviewed with the rest of the UI copy before shipping.
+
+### Additional verification
+
+Test that a resolved name leaves selected IDs and operation payloads unchanged; review-token expiry, foreign batch/operation IDs and stale revisions cannot admit work or execute actions; uncertain invitation results cannot trigger duplicate sends; cancelled/superseded operations do not keep enqueueing lookups. Exercise filters across multiple pages and restoration, explicit member-management controls, long names, keyboard navigation and mobile confirmations. Existing operational uncertainty labels remain intact.
