@@ -32,8 +32,12 @@ test("failed commands, expired observations and revoked permissions never imply 
  await page.getByRole("button",{name:"Stale observation",exact:true}).click();await details(page);await expect(page.getByText("Observed output",{exact:true}).locator("..")).toContainText("Unknown");
  await page.getByRole("button",{name:"Revoke capability",exact:true}).click();await expect(page.getByRole("button",{name:"Stop",exact:true})).toBeDisabled();await expect(page.getByRole("button",{name:"Cut to slate",exact:true})).toBeDisabled();await expect(page.getByRole("link",{name:"Host view",exact:true})).toBeVisible();
 });
-test("stopped broadcast starts a chosen destination without claiming observed live output @flow @fixture",async({page})=>{
+test("stopped broadcast starts a chosen destination without claiming observed live output @flow @fixture",async({page},info)=>{
  await page.goto("/playwright/event-operator");await page.getByRole("button",{name:"End session",exact:true}).click();await expect(page.getByLabel("Primary output",{exact:true})).toHaveCount(0);await page.getByRole("button",{name:"Start",exact:true}).click();await expect(page.getByLabel("Started output")).toHaveText("primary");await details(page);await expect(page.getByText("Observed output",{exact:true}).locator("..")).toContainText("Starting");
+ const health=page.getByRole("heading",{name:"Output health",exact:true}).locator("..");
+ await expect(health.getByText("Twitch",{exact:true}).locator("..")).toContainText("Unknown");
+ await expect(health.getByText("VRCDN",{exact:true}).locator("..")).toContainText("starting");
+ await page.screenshot({path:info.outputPath("operator-primary-starting.png"),fullPage:true});
 });
 
 test("direct video status follows fresh worker evidence and clears after Stop @flow @fixture",async({page},info)=>{

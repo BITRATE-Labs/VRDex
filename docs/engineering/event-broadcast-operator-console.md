@@ -68,7 +68,8 @@ Starting and Stopping remain visible before a media observation arrives, bounded
 by the worker lease. Before lease acquisition, startup uses its persisted ready
 deadline and Stop uses its request time plus the existing 30-second grace period.
 Expired lifecycle evidence becomes Unknown. Fresh per-output health takes priority
-over the lifecycle label, and revoked destinations remain Unknown. Ended sessions
+over the lifecycle label. Only the active primary destination can fall back to
+the session lifecycle; unobserved simulcast and revoked destinations stay Unknown. Ended sessions
 display Off air and no observed mode while cleanup still locks Start; an error
 remains Unknown until output cleanup unlocks configuration. Missing active sessions
 and stale live observations never inherit another session's output.

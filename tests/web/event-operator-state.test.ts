@@ -193,8 +193,13 @@ it("stopping preserves fresh per-output health and never promotes revoked destin
   const html = renderOperator(status);
   assert.match(html, /<span>VRCDN<\/span><span>publishing<\/span>/);
   assert.match(html, /<span>Twitch<\/span><span>Unknown<\/span>/);
+  status.outputs[1].authorized = true;
+  status.sessions[0].outputHealth = status.sessions[0].outputHealth.filter(row=>row.outputId!==status.outputs[1].outputId);
+  assert.match(renderOperator(status), /<span>Twitch<\/span><span>Unknown<\/span>/);
   status.sessions[0].outputHealthObservedAt = undefined;
   assert.match(renderOperator(status), /<span>VRCDN<\/span><span>stopping<\/span>/);
+  assert.match(renderOperator(status), /<span>Twitch<\/span><span>Unknown<\/span>/);
+  status.outputs[1].authorized = false;
   status.sessions[0].status = "ended";
   assert.match(renderOperator(status), /<span>Twitch<\/span><span>Unknown<\/span>/);
 });
