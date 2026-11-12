@@ -1,5 +1,6 @@
 import type { OperatorStatus } from "../app/_components/event-operator-view";
 import { eventBroadcastObservationFresh } from "./event-broadcast-observation";
+import { reportedSourceState, type SourceObservation } from "./event-source-observations";
 export type OperatorSession = OperatorStatus["sessions"][number];
 export type OperatorSource = OperatorStatus["sources"][number];
 export function operatorViewState(
@@ -45,14 +46,21 @@ export function operatorViewState(
   const pending = session?.pendingOperation;
   const canStop = status.canControl && active && !stopPending;
   const canOperate = canStop && !session?.connectionTest;
+  const offAir = Boolean(session && ["ended", "error"].includes(session.status)) ||
+    (!status.program?.activeSessionId && !status.outputConfigurationLocked);
+  const observedSource = encoded && session?.currentSourceId && session.observedSourceRevision !== undefined
+    ? { sourceId: session.currentSourceId, revision: session.observedSourceRevision }
+    : undefined;
   return {
     session,
     active,
     observationFresh,
+    offAir,
+    observedSource,
     pending,
     actual: encoded
       ? sourceLabel(session?.currentSourceId, session?.observedSourceRevision)
-      : "Unknown",
+      : offAir ? "Off air" : session?.status === "starting" ? "Starting" : "Unknown",
     desired:
       intent?.kind === "manual"
         ? sourceLabel(intent.sourceId, intent.revision)
@@ -75,6 +83,18 @@ export function operatorViewState(
     canCut: canOperate,
     canStop,
   };
+}
+export function operatorSourceAvailability(
+  source: Pick<OperatorSource, "sourceId" | "revision" | "input">,
+  observation: SourceObservation | undefined,
+  now: number,
+  observedSource?: { sourceId: string; revision: number },
+) {
+  if (observedSource?.sourceId === source.sourceId && observedSource.revision === source.revision) return "On air";
+  // Direct video has no provider liveness probe; decoder readiness is separate.
+  if (source.input?.kind === "direct_media") return "Direct video";
+  const state = reportedSourceState(observation, now);
+  return state === "unknown" ? "Not checked" : state;
 }
 export function resourceFresh(
   session: OperatorSession | undefined,
@@ -110,7 +130,7 @@ export function operatorStatusWindow(
     ...new Map(
       [current, next, preview, ...visible]
         .filter((row): row is OperatorSource =>
-          Boolean(row?.input && row.publicUrl && row.hasPublicUrl),
+          Boolean(row?.input && row.input.kind !== "direct_media" && row.publicUrl && row.hasPublicUrl),
         )
         .map((row) => [row.sourceId, row]),
     ).values(),

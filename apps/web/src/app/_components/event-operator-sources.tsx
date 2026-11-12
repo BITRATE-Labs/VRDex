@@ -7,12 +7,12 @@ import { Field, Input } from "@/components/ui/field";
 import { CopyValueRow } from "@/components/ui/copy-value-row";
 import {
   operatorStatusWindow,
+  operatorSourceAvailability,
   type OperatorSource,
 } from "@/lib/event-operator-state";
 import { eventDjTarget } from "@/lib/event-dj-target";
 import {
   parseSourceObservations,
-  reportedSourceState,
   type SourceObservation,
 } from "@/lib/event-source-observations";
 import { EventOperatorPreview } from "./event-operator-preview";
@@ -27,6 +27,7 @@ export type SourcesControl = {
   canCancel: boolean;
   pending: OperatorStatus["sessions"][number]["pendingOperation"];
   now: number;
+  observedSource?: { sourceId: string; revision: number };
 };
 export function EventOperatorSources({
   sources,
@@ -138,9 +139,11 @@ export function EventOperatorSources({
         const target = source.publicUrl
           ? eventDjTarget(source.publicUrl)
           : undefined;
-        const state = reportedSourceState(
+        const state = operatorSourceAvailability(
+          source,
           target ? observations[target.key] : undefined,
           control.now,
+          control.observedSource,
         );
         return (
           <article

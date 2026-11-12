@@ -90,6 +90,70 @@ function field(html: string, label: string) {
     new RegExp(`<dt[^>]*>${label}</dt><dd[^>]*>(.*?)</dd>`),
   )?.[1];
 }
+it("a directly encoded video is On air even without a provider liveness probe", async () => {
+  const { operatorFixture } = await import("../../apps/web/src/app/playwright/event-operator/fixture-state");
+  const status = operatorFixture();
+  const source = status.sources[0];
+  source.input = { kind: "direct_media", url: "https://media.w3.org/2010/05/sintel/trailer.mp4" };
+  source.publicUrl = source.input.url;
+  const session = status.sessions[0];
+  session.status = "live";
+  session.currentSourceId = source.sourceId;
+  session.observedSourceRevision = source.revision;
+  session.observedSlotKey = "manual:a";
+  const row = renderOperator(status).match(new RegExp(`<article[^>]*aria-label="${source.label}"[^>]*>(.*?)</article>`))?.[1] ?? "";
+  assert.match(row, />On air</);
+  assert.doesNotMatch(row, />unknown</i);
+});
+it("an ended broadcast awaiting cleanup displays Off air rather than Unknown", () => {
+  const status = fixture();
+  status.program.activeSessionId = "";
+  status.sessions[0].status = "ended";
+  const html = renderOperator(status);
+  assert.equal(field(html, "Observed output"), "Off air");
+  assert.equal(field(html, "Observed mode"), "None");
+  assert.match(html, /<h2[^>]*>Output<\/h2><span[^>]*>Off air<\/span>/);
+});
+it("source availability distinguishes direct video, provider checks and fresh encoded identity", async () => {
+  const { operatorSourceAvailability, operatorViewState } = await import("../../apps/web/src/lib/event-operator-state");
+  const { operatorFixture } = await import("../../apps/web/src/app/playwright/event-operator/fixture-state");
+  const status = operatorFixture();
+  const source = status.sources[0];
+  const session = status.sessions[0];
+  session.status = "live";
+  session.currentSourceId = source.sourceId;
+  session.observedSourceRevision = source.revision;
+  session.observedSlotKey = "manual:a";
+  const now = status.serverNow;
+  const observed = operatorViewState(status, 0).observedSource;
+  assert.equal(operatorSourceAvailability(source, undefined, now, observed), "On air");
+  assert.equal(operatorSourceAvailability({...source, revision:source.revision + 1}, undefined, now, observed), "Not checked");
+  assert.equal(operatorSourceAvailability(source, undefined, now, operatorViewState(status, 15_000).observedSource), "Not checked");
+  assert.equal(operatorSourceAvailability(source, {state:"live",observedAt:now}, now), "live");
+  assert.equal(operatorSourceAvailability(source, {state:"live",observedAt:now}, now + 60_001), "Not checked");
+  assert.equal(operatorSourceAvailability(source, {state:"offline",observedAt:now}, now), "offline");
+  assert.equal(operatorSourceAvailability(source, {state:"unavailable",observedAt:now}, now), "unavailable");
+  assert.equal(operatorSourceAvailability({...source,input:{kind:"direct_media",url:"https://media.w3.org/2010/05/sintel/trailer.mp4"}}, undefined, now), "Direct video");
+  source.input = {kind:"direct_media",url:"https://media.w3.org/2010/05/sintel/trailer.mp4"};
+  const {operatorStatusWindow} = await import("../../apps/web/src/lib/event-operator-state");
+  assert.ok(!operatorStatusWindow(status, source, status.sources).some(row=>row.sourceId===source.sourceId));
+});
+it("startup and stopping retain known lifecycle labels before output observations exist", async () => {
+  const { operatorFixture } = await import("../../apps/web/src/app/playwright/event-operator/fixture-state");
+  const status = operatorFixture();
+  const session = status.sessions[0];
+  session.status = "starting";
+  session.programObservedAt = undefined;
+  session.observedOutputMs = undefined;
+  let html = renderOperator(status);
+  assert.match(html, /role="status">starting<\/span>/);
+  assert.equal(field(html,"Observed output"), "Starting");
+  assert.doesNotMatch(html, />On air<\/span>/);
+  session.status = "stopping";
+  html = renderOperator(status);
+  assert.match(html, /role="status">stopping<\/span>/);
+  assert.doesNotMatch(html, />On air<\/span>/);
+});
 it("actual encoded output and committed intent stay on Aurora while Nova prepares; Cut remains enabled", () => {
   const html = renderOperator(fixture());
   assert.match(html, />Preparing</);

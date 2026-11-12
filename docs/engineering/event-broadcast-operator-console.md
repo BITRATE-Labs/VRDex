@@ -51,9 +51,21 @@ Host and operator routes import the same process-shared status reader. It permit
 four concurrent probes, caches for 30 seconds and returns partial results within
 ten seconds without queueing unstarted work. Client refresh waits 30 seconds after
 completion, aborts on unmount, and has a 12-second fetch bound. Missing or older
-than 60-second provider observations display Unknown. Links and copy actions remain
+than 60-second provider observations display Not checked in the operator workspace
+(Unknown in the host view). Direct video has no provider liveness probe and is
+labeled Direct video rather than implying an unsuccessful check. Direct-video
+inputs do not occupy the four provider-probe slots. Fresh encoded
+output identifies the matching source ID and revision as On air in both the input
+row and Quick switch; a local preview alone never establishes that state. Quick
+switch retains observation timestamps so provider results expire on the same
+60-second boundary. Links and copy actions remain
 available during probe failures. The host reader can prioritize a preview only
 when its canonical key belongs to that authorized/public roster.
+
+Starting and Stopping are lifecycle states and remain visible before a media
+observation arrives. Ended/error sessions display Off air and no observed mode,
+including while task cleanup still locks Start. Missing active sessions and stale
+live observations remain Unknown rather than inheriting another session's output.
 
 Diagnostics is collapsed and uses the existing control subscription. Server time
 plus browser monotonic elapsed time ages CPU and memory to Unknown at 30 seconds;
