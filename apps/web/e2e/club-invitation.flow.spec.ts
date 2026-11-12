@@ -273,9 +273,9 @@ test("@flow @club-invitations real invitation sign-in, acceptance and denials", 
   await recipientPage.goto(hostInvitePath);
   await recipientPage.getByRole("button", { name: "Accept invitation", exact: true }).click();
   await expect.poll(() => new URL(recipientPage.url()).pathname === root).toBe(true);
-  const hostWorkspace = await acceptedClient.query(workspaceQuery, club);
-  expect(hostWorkspace.actor.permissions).toEqual(["host_events"]);
   const hostClient = await sessionClient(recipientPage, convexUrl);
+  const hostWorkspace = await hostClient.query(workspaceQuery, club);
+  expect(hostWorkspace.actor.permissions).toEqual(["host_events"]);
   const hostEvent = await helper("seedHostEvent", { profileId: fixture!.profileId });
   const eventPath = `/${fixture!.slug}/events/${hostEvent.slug}`;
   await ownerPage.goto(eventPath);
