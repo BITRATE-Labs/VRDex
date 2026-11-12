@@ -785,3 +785,39 @@ it("preserves RGBA pixels through the bounded raw preview raster", async () => {
     await sharp(prepared.download.body).ensureAlpha().raw().toBuffer(),
   );
 });
+
+it("preserves resized 16-bit and grayscale-alpha stored PNG previews", async () => {
+  const original = sharp({
+    create: { width: 2200, height: 2200, channels: 4, background: { r: 120, g: 30, b: 200, alpha: 0.25 } },
+  });
+  const png16 = await original.clone().toColourspace("rgb16").png().toBuffer();
+  const grayscale = await original.clone().toColourspace("b-w").png().toBuffer();
+  assert.equal((await sharp(png16).metadata()).depth, "ushort");
+  assert.equal((await sharp(grayscale).metadata()).channels, 2);
+  for (const source of [png16, grayscale]) {
+    const prepared = await validateAndPrepareProfileAsset(source, "image/png");
+    for (const body of [source, prepared.download.body]) {
+      const d = detail();
+      d.candidate.contentSha256 = createHash("sha256").update(body).digest("hex");
+      const handlers = createMcpMediaReviewHandlers(dependencies({
+        query: async name => name === "candidate"
+          ? { storageKey: "synthetic-colour-candidate", mimeType: "image/png", profileDisplayName: "Fixture" }
+          : d,
+        readStoredObject: async () => ({ body, contentType: "image/png" }),
+      }));
+      const result = await handlers.preview({ submissionId: "submission-1", expectedReviewVersion: version });
+      const image = result.content[0];
+      assert.ok(image?.type === "image");
+      const preview = Buffer.from(image.data, "base64");
+      const directPng = await sharp(body).rotate()
+        .resize({ width: 2048, height: 2048, fit: "inside", withoutEnlargement: true })
+        .png({ compressionLevel: 9 }).toBuffer();
+      assert.equal((await sharp(preview).metadata()).width, 2048);
+      assert.ok(preview.byteLength <= 4 * 1024 * 1024);
+      assert.deepEqual(
+        await sharp(preview).ensureAlpha().raw().toBuffer(),
+        await sharp(directPng).ensureAlpha().raw().toBuffer(),
+      );
+    }
+  }
+});

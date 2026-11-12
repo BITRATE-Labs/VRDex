@@ -55,10 +55,10 @@ remain unchanged; the helper returns copies and performs no backfill.
 
 ## Following policy
 
-Schedule-gated watch surfaces, lineup players and inline controls share a cached
-rendered timestamp. It starts as null for server rendering and hydration, then
-refreshes on the initial subscription tick, every minute and on visibility
-changes. Reading the timestamp never samples a new clock value during rendering;
+Schedule-gated watch surfaces, lineup players and inline controls use the same
+clock hook. Each instance caches its own rendered timestamp. It starts as null
+on mount, including server rendering and hydration, then refreshes on the
+queued initial subscription tick, every minute and on visibility changes. Reading the timestamp never samples a new clock value during rendering;
 timers and listeners are removed when the hook unmounts.
 
 Wall time selects schedule candidates. Monotonic `performance.now()` timestamps
