@@ -1,7 +1,8 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 import {
-  cleanupClerkTestAccountData,
+  CLEANUP_DRAIN_PASSES,
+  drainClerkTestAccountData,
   clerkTestAuthAvailability,
   createClerkTestAccount,
   deleteClerkTestAccount,
@@ -84,7 +85,6 @@ const authHelpersEnabled = process.env.VRDEX_ENABLE_E2E_AUTH_HELPERS === "true";
  * which is as far as a bounded loop is worth taking — past that, provisioning
  * outrunning teardown is a real defect and should fail rather than be absorbed.
  */
-const CLEANUP_DRAIN_PASSES = 3;
 
 /**
  * Everything on a signed-in capture that varies between identical runs.
@@ -192,7 +192,8 @@ test.describe("account surfaces @visual @flow @account-visual", () => {
     // would keep the page but flips `isAuthenticated` asynchronously, so the
     // subscription outlives the call by an unbounded amount; navigating to
     // `about:blank` would snapshot `about:blank`.
-    await page.close();
+    const browserStopped = await page.close().then(() => true, () => false);
+    expect.soft(browserStopped, "Browser close failed; attempt data cleanup and preserve the identity").toBe(true);
 
     // Convex rows first, then the Clerk user. Provisioning is on-demand from the
     // client with no webhook, so Convex never learns about a Clerk deletion —
@@ -235,38 +236,9 @@ test.describe("account surfaces @visual @flow @account-visual", () => {
     account = undefined;
     reservedEmail = undefined;
 
-    let lastCleanup: Awaited<ReturnType<typeof cleanupClerkTestAccountData>>;
-    let cleaned = false;
-    let drained = false;
-
-    for (let pass = 0; pass < CLEANUP_DRAIN_PASSES; pass += 1) {
-      lastCleanup = await cleanupClerkTestAccountData(request, e2eBrowserToken(), target);
-
-      // The gate above checks the *runner's* `VRDEX_ENABLE_E2E_AUTH_HELPERS`, a
-      // different variable on a different machine from the four the route requires
-      // (`VRDEX_ENABLE_E2E_HELPERS`, `VRDEX_ENABLE_E2E_AUTH_HELPERS`,
-      // `VRDEX_E2E_BROWSER_TOKEN`, `VRDEX_E2E_CONVEX_SECRET`). It can answer 403 or
-      // 400 with the runner flag set, and `request.delete` resolves either way, so
-      // the gate alone cannot tell a completed cleanup from a rejected one.
-      // `ok()` is not the same claim as "the row is gone".
-      const body =
-        lastCleanup !== undefined && lastCleanup.ok()
-          ? ((await lastCleanup.json()) as { deleted?: boolean })
-          : undefined;
-
-      if (body?.deleted === true) {
-        cleaned = true;
-        continue;
-      }
-
-      // 200 with `{ deleted: false }` means no row is there. On the first pass
-      // that is a failure — sign-in got far enough to make an account, so a row
-      // should exist — and on a later pass it is the drain completing. `cleaned`
-      // is what tells them apart. Anything else (a 403 from the route's own gate,
-      // a 400, a transport error) leaves both false and fails below.
-      drained = body?.deleted === false;
-      break;
-    }
+    const { lastCleanup, cleaned, drained } = await drainClerkTestAccountData(
+      request, e2eBrowserToken(), target,
+    );
 
     // The Clerk identity is deleted only once the Convex row is confirmed gone
     // and confirmed to have stayed gone, and that ordering is the whole point.
@@ -284,7 +256,7 @@ test.describe("account surfaces @visual @flow @account-visual", () => {
     // `ensureCurrentUser` could have run and there is no row to protect. Requiring
     // `cleaned` there kept the Clerk user on every attempt, which is a plain leak
     // rather than a recoverable pair: absence is confirmed, not raced.
-    const rowSettled = authenticated ? cleaned && drained : drained;
+    const rowSettled = browserStopped && (authenticated ? cleaned && drained : drained);
 
     // Two deletion paths, because a lost creation response leaves no user id.
     // With one, delete by id — cheapest and exact. Without one, look the email up

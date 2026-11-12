@@ -209,7 +209,9 @@ test("fixture-backed handoff coverage runs in the flow lane and stays out of pro
     webPackage.scripts?.["test:e2e:hosted:account-visual"],
     "playwright test account-surfaces.visual.spec.ts --project=desktop-chromium --project=mobile-chromium",
   );
-  assert.match(workflow, /run: pnpm test:e2e:hosted:account-visual/);
+  const preview = await readFile(".github/workflows/vercel-preview-deploy.yml", "utf8");
+  assert.match(workflow, /uses: \.\/.github\/workflows\/vercel-preview-deploy\.yml/);
+  assert.match(preview, /run: pnpm test:e2e:hosted:account-visual/);
   const productionSmokeScript =
     webPackage.scripts?.["test:e2e:hosted:smoke"] ?? "";
   assert.equal(

@@ -341,9 +341,24 @@ Hosted adapter E2E additionally requires `VRDEX_ENABLE_E2E_ADAPTER_HELPERS=true`
   per-delegation capability the VRCLinking adapter verifies as
   `VRDEX_VRCLINKING_CAPABILITY_KEY`. Keep it distinct from the bearer token
 
-GitHub Actions only runs hosted extended profile, auth, adapter, and developer-credential flows when repository variables `VRDEX_HOSTED_E2E_EXTENDED_PROFILE_FLOW=true`, `VRDEX_HOSTED_E2E_AUTH_HELPERS=true`, `VRDEX_HOSTED_E2E_ADAPTER_HELPERS=true`, `VRDEX_HOSTED_E2E_DEVELOPER_CREDENTIALS=true`, and `VRDEX_HOSTED_E2E_CLERK_AUTH=true` are set. Keep the optional variables unset until the matching hosted app and Convex capabilities are configured. `VRDEX_HOSTED_E2E_CLERK_AUTH` is the one that is not merely a skip switch: once it is `true`, absent Clerk keys fail the run.
+Selected same-repository PR browser coverage requires
+`VRDEX_HOSTED_E2E_AUTH_HELPERS=true`, `VRDEX_HOSTED_E2E_CLERK_AUTH=true`, the
+matching development Clerk keys, browser token and Convex preview deploy key.
+Configure them before enabling selected candidate runs. Their absence fails
+candidate acceptance, it does not skip coverage. Other deployed-health features
+retain their separate optional switches: extended profile fields, provider
+adapters and developer credentials. Keep those switches unset until their
+matching capabilities are configured.
 
 `VERCEL_ENV=production` blocks the E2E route unless `VRDEX_ALLOW_PRODUCTION_E2E_HELPERS=true` is explicitly set. Keep that override unset for VRDex production.
+
+The signed-in auth/account suites reserve the disposable email before creation
+and stop browser activity before cleanup. Their shared helper requires a
+successful deletion followed by an empty response before deleting an
+authenticated Clerk identity. A bounded three-pass drain cannot cancel already
+accepted backend work. Unsettled or failed cleanup fails the test and preserves
+the known Clerk identity for recovery. Browser-close failures are recorded while
+cleanup is still attempted.
 
 Each data-flow run uses a unique `VRDEX_E2E_RUN_ID` prefix and creates only `e2e:`-attributed profiles. Cleanup deletes by slug on the happy path and can fall back to deleting profiles for the run ID if the slug was not captured.
 
@@ -366,7 +381,9 @@ Default PR CI runs lint, types, unit tests, docs, API/MCP checks, the existing b
 
 Agents select `ci:browsers` for UI, authentication, and navigation changes. Select `ci:visuals` when screenshots or baseline comparisons are needed for review. Labels apply regardless of changed file paths.
 
-Browser selection includes public-route smoke on desktop and mobile, local mutation-backed journeys, hosted journeys when configured, signed-in account assertions, and public/Storybook previews. The Storybook build runs only for selected browser consumers. Main pushes skip these PR-only jobs; production deployment controls remain unchanged.
+Same-repository browser selection requires candidate preview deployment and nonempty passing browser/backend evidence, including full commit and both Convex URLs. It never uses shared staging as PR evidence. Forks do not receive private browser credentials and cannot claim this acceptance. See [candidate preview acceptance](../deployment/vercel-preview.md).
+
+Browser selection includes public-route smoke on desktop and mobile, local mutation-backed journeys, exact-head candidate preview journeys and development-instance signed-in account assertions, and public/Storybook previews. The Storybook build runs only for selected browser consumers. Main pushes skip these PR-only jobs; production deployment controls remain unchanged.
 
 The local data-flow job has a 45-minute limit for its serial flow suite, composed-media acceptance and artifact upload. Its previous 30-minute limit canceled a run after 257 flow tests and 12 media tests had passed. Individual test timeouts and all selected coverage remain unchanged.
 

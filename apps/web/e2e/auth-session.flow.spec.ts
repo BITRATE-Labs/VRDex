@@ -4,6 +4,8 @@ import {
   clerkTestAuthAvailability,
   createClerkTestAccount,
   deleteClerkTestAccount,
+  deleteClerkTestAccountByEmail,
+  drainClerkTestAccountData,
   signInClerkTestAccount,
   type ClerkTestAccount,
 } from "./clerk-auth";
@@ -53,7 +55,8 @@ function sessionRunSuffix(testInfo: { workerIndex: number; repeatEachIndex: numb
 }
 
 test("a Clerk session resolves to a verified Convex identity and clears on sign-out @auth-session-staging", async ({
-  browser,
+  page,
+  context,
   request,
 }, testInfo) => {
   test.setTimeout(90_000);
@@ -64,18 +67,25 @@ test("a Clerk session resolves to a verified Convex identity and clears on sign-
   );
 
   const e2eToken = e2eBrowserToken();
-  const context = await browser.newContext();
-  const page = await context.newPage();
   let account: ClerkTestAccount | undefined;
+  let reservedEmail: string | undefined;
+  let authenticated = false;
 
   try {
-    account = await createClerkTestAccount(sessionRunSuffix(testInfo));
+    account = await createClerkTestAccount(sessionRunSuffix(testInfo), {
+      onEmailReserved: email => {
+        reservedEmail = email;
+        testInfo.annotations.push({ type: "disposable-account", description: email });
+      },
+    });
 
     // Asserts the identity end to end: the heading comes from the Convex `users`
     // row `ensureCurrentUser` provisioned out of the token, and "Verified" comes
     // from the `email_verified` claim inside it. A template missing either fails
     // here rather than three screens into a claim.
-    await signInClerkTestAccount(page, account);
+    await signInClerkTestAccount(page, account, {
+      onAuthenticated: () => { authenticated = true; },
+    });
 
     // Survives a reload, so the Convex token is re-minted from the Clerk session
     // rather than held in page memory.
@@ -110,15 +120,21 @@ test("a Clerk session resolves to a verified Convex identity and clears on sign-
     await gotoFlowPage(page, "/account");
     await expect(page).toHaveURL(/\/sign-in\?returnTo=/, hostedExpectOptions);
   } finally {
-    if (account !== undefined) {
-      await request.delete("/api/e2e/auth", {
-        headers: { "x-vrdex-e2e-token": e2eToken },
-        data: { email: account.email },
-      });
-      await deleteClerkTestAccount(account);
+    const browserStopped = await context.close().then(() => true, () => false);
+    expect.soft(browserStopped, "Browser close failed; attempt data cleanup and preserve the identity").toBe(true);
+    const target = account ?? (reservedEmail ? { email: reservedEmail } : undefined);
+    if (target) {
+      const { lastCleanup, cleaned, drained } = await drainClerkTestAccountData(request, e2eToken, target);
+      const rowSettled = browserStopped && (authenticated ? cleaned && drained : drained);
+      expect.soft(rowSettled, `Disposable account did not settle for ${target.email} (browser stopped: ${browserStopped}, HTTP ${lastCleanup?.status() ?? "unavailable"}); preserve the Clerk identity`).toBe(true);
+      if (rowSettled && account) {
+        const deleted = await deleteClerkTestAccount(account);
+        expect.soft(deleted?.ok || deleted?.status === 404, "Clerk disposable account must be deleted").toBe(true);
+      } else if (rowSettled) {
+        const recovery = await deleteClerkTestAccountByEmail(target.email);
+        expect.soft(recovery.checked && recovery.failed === 0, "Recover disposable Clerk account by reserved email").toBe(true);
+      }
     }
-
-    await context.close();
   }
 });
 
