@@ -20,11 +20,13 @@ A further review pass found that role-name retention depended on a valid role ID
 
 The recovery review corrected transient errors clearing history and interrupted restoration shrinking the saved count. Independent review then found cursor invalidation and retry-boundary cases. Regressions now cover new events during normal loading and retry, invalid cursors, permission loss during a transient failure, and denial followed by Retry and restored access. Every non-final page pins its end boundary to the following page's start. A failed first page no longer claims empty history, and the backend retains the original diagnostic cause before classifying errors for the UI. No blocking findings remain from that review.
 
+Provider-controlled member, actor and role names render inside native bidirectional isolation elements. Directional formatting in a name cannot reorder surrounding action labels or links; recorded Unicode evidence remains unchanged. A directional-override fixture verifies browser isolation and receives desktop/mobile screenshot review.
+
 ## Local evidence
 
 - Worker suite: 270 passed after the replay-casing and independent role-name regressions.
 - Focused membership, identity, proof-verification and automatic-statistics backend suite: 70 passed after PR review fixes, including post-authorization error classification, malformed optional evidence, empty legacy names and an exact public response shape.
-- Storybook desktop/mobile assertions: 22 passed, including role labels, actor/target links, accessible details, bounded restoration, transient recovery, first-page errors, reactive boundary changes and access-loss/retry using real hooks with synthetic transport. The local run used four workers.
+- Storybook desktop/mobile assertions: 24 passed, including role labels, actor/target links, accessible details, bounded restoration, transient recovery, first-page errors, reactive boundary changes, bidirectional-name isolation and access-loss/retry using real hooks with synthetic transport. The local run used four workers.
 - Repository backend and web type-check scripts passed with the isolated checkout's frozen-lockfile dependencies.
 - Focused frontend lint and whitespace checks passed.
 

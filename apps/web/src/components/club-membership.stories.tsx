@@ -146,3 +146,10 @@ function PaginationPreview({ initialFailure = false }: { initialFailure?: boolea
 }
 export const PaginationAndAccess: Story = { render: () => <PaginationPreview /> };
 export const InitialActivityFailure: Story = { render: () => <PaginationPreview initialFailure /> };
+export const BidirectionalNames: Story = { render: () => <MembershipActivityView events={[{
+  auditId: "bidi-names", eventType: "group.member.role.assign", occurredAt: start,
+  targetIdentity: { displayName: "\u202EMira", vrchatUrl: "https://vrchat.com/home/user/usr_00000000-0000-4000-8000-000000000001", vrdexUrl: "/mira" },
+  actorUserId: "usr_00000000-0000-4000-8000-000000000002",
+  actorIdentity: { displayName: "\u202ESol", vrchatUrl: "https://vrchat.com/home/user/usr_00000000-0000-4000-8000-000000000002", vrdexUrl: "/sol" },
+  roleName: "\u202EDJ",
+}]} /> };

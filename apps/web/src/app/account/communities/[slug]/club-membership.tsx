@@ -29,13 +29,13 @@ export type MovementPoint = {
 };
 export type MembershipEvent = FunctionReturnType<typeof api.clubMembership.listActivity>["page"][number];
 export function membershipEventLabel(type: string, roleName?: string) {
-  if (type === "group.member.role.assign") return roleName ? `Assigned role: ${roleName}` : "Role assigned";
-  if (type === "group.member.role.unassign") return roleName ? `Removed role: ${roleName}` : "Role removed";
+  if (type === "group.member.role.assign") return roleName ? <>Assigned role: <bdi>{roleName}</bdi></> : "Role assigned";
+  if (type === "group.member.role.unassign") return roleName ? <>Removed role: <bdi>{roleName}</bdi></> : "Role removed";
   return ({ "group.member.join": "Joined", "group.member.leave": "Left", "group.member.remove": "Removed" } as Record<string, string>)[type] ?? "Other activity";
 }
 function PersonName({ identity, recordedName }: { identity?: MembershipEvent["targetIdentity"]; recordedName?: string }) {
   const name = identity?.displayName || recordedName || "Unknown member";
-  return identity ? <a href={identity.vrchatUrl} target="_blank" rel="noreferrer" className="underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2">{name}<span className="sr-only"> (VRChat profile, opens in a new tab)</span></a> : <>{name}</>;
+  return identity ? <a href={identity.vrchatUrl} target="_blank" rel="noreferrer" className="underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2"><bdi>{name}</bdi><span className="sr-only"> (VRChat profile, opens in a new tab)</span></a> : <bdi>{name}</bdi>;
 }
 export function MembershipMovementView({
   points,
