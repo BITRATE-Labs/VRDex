@@ -361,3 +361,15 @@ test("non-person activity uses its subject without inventing a person control @s
   await expect(page.getByRole("link")).toHaveCount(0);
   await expect(page.locator("summary")).toHaveCount(2);
 });
+
+
+test("activity Details label target and actor profile-name provenance @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership--profile-name-fallback&viewMode=story");
+  await expect(page.getByRole("link", { name: "Profile Mira", exact: true })).toHaveAttribute("href", "/mira");
+  await expect(page.getByRole("link", { name: "Profile Sol", exact: true })).toHaveAttribute("href", "/sol");
+  await page.locator("summary").click();
+  await expect(page.getByText("VRDex profile name", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("Name last checked", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Actor name last checked", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("vrdex_profile", { exact: true })).toHaveCount(0);
+});

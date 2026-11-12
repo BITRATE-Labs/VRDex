@@ -275,7 +275,7 @@ function MembersContent({
           <ul className="mt-3 grid gap-1 text-sm">
             {review.targets.map((item) => (
               <li key={targetId(item)}>
-                <ClubPerson userId={targetId(item)} identity={people.people.find(person => person.userId === targetId(item))} recordedName={item.displayName} exactId />
+                <ClubPerson userId={targetId(item)} identity={people.people.find(person => person.userId === targetId(item))} recordedName={item.displayName} visibleIds={review.targets.map(targetId)} exactId />
               </li>
             ))}
           </ul>

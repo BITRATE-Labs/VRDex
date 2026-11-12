@@ -196,3 +196,11 @@ export const NonPersonActivity: Story = {
     { auditId: "unknown-subject", eventType: "future.group.event", occurredAt: start - 1000, targetUserId: "wrld_00000000-0000-4000-8000-000000000001" },
   ]} />,
 };
+
+
+export const ProfileNameFallback: Story = {
+  render: () => <MembershipActivityView events={[{ auditId: "profile-names", eventType: "group.member.role.assign", occurredAt: start, targetUserId: "usr_00000000-0000-4000-8000-000000000001", actorUserId: "usr_00000000-0000-4000-8000-000000000002", roleName: "DJ" }]} people={[
+    { userId: "usr_00000000-0000-4000-8000-000000000001", displayName: "Profile Mira", vrdexUrl: "/mira", source: "vrdex_profile", status: "resolved" },
+    { userId: "usr_00000000-0000-4000-8000-000000000002", displayName: "Profile Sol", vrdexUrl: "/sol", source: "vrdex_profile", status: "resolved" },
+  ]} />,
+};

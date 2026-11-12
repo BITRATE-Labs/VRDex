@@ -260,9 +260,11 @@ export function MembershipActivityView({
                 {[
                   ["Event type", event.eventType], ["Audit ID", event.auditId], ["Target ID", event.targetUserId],
                   ["Name recorded with event", event.targetDisplayName],
+                  ["Name source", target?.source === "vrdex_profile" ? "VRDex profile name" : undefined],
                   ["Name lookup", target?.status],
                   ["Name last checked", target?.observedAt === undefined ? undefined : metricTime(target.observedAt)],
                   ["Actor ID", event.actorUserId], ["Actor name recorded with event", event.actorDisplayName],
+                  ["Actor name source", actor?.source === "vrdex_profile" ? "VRDex profile name" : undefined],
                   ["Actor name lookup", actor?.status],
                   ["Actor name last checked", actor?.observedAt === undefined ? undefined : metricTime(actor.observedAt)],
                   ["Role ID", event.roleId], ["Role recorded with event", event.roleName],

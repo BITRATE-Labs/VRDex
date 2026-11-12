@@ -308,3 +308,19 @@ for (const skew of [-3600000, 3600000]) {
     await expect(page.getByText("Queued", { exact: true })).toBeVisible();
   });
 }
+
+
+test("member confirmation distinguishes missing names with colliding short IDs @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-members--colliding-ids&viewMode=story");
+  const selected = page.getByRole("checkbox");
+  await selected.nth(0).check();
+  await selected.nth(1).check();
+  await page.getByLabel("VRChat role", { exact: true }).selectOption({ label: "DJ" });
+  await page.getByRole("button", { name: "Assign selected", exact: true }).click();
+  const review = page.locator("section").filter({ has: page.getByRole("heading", { name: "Review action", exact: true }) }).last();
+  const names = await review.locator("bdi").allTextContents();
+  expect(names).toHaveLength(2);
+  expect(new Set(names).size).toBe(2);
+  await expect(review).toContainText("usr_00000000-0000-0000-0000-000000000001");
+  await expect(review).toContainText("usr_11111111-1111-1111-1111-111100000001");
+});

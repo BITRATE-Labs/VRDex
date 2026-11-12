@@ -69,6 +69,7 @@ function Fixture() {
   return <ConvexProvider client={client}><main className="mx-auto max-w-4xl space-y-5 p-5"><div className="flex flex-wrap gap-3">
     <button onClick={() => client.change(() => { client.people.resolved = false; })}>Delay names</button>
     <button onClick={() => client.change(() => { client.people.resolved = true; })}>Resolve names</button>
+    <button onClick={() => client.change(() => { client.people.profileNames = true; })}>Use profile names</button>
     <button onClick={() => client.change(() => { client.people.pendingAllowed = false; })}>Disable lookup</button>
     <button onClick={() => client.change(() => { client.people.denied = true; })}>Revoke access</button>
     <button onClick={() => setAuthorized(false)}>Remove workspace access</button>

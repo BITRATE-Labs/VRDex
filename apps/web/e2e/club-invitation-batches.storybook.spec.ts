@@ -471,3 +471,20 @@ test("cancelling a batch distinguishes effective and originally reviewed IDs @st
   await expect(page.getByText("Submitted", { exact: true })).toBeVisible();
   await expect(page.getByText("Cancelled", { exact: true })).toBeVisible();
 });
+
+
+test("batch cancellation distinguishes colliding missing-name references @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-invitations-workspace--late-names&viewMode=story");
+  const first = "usr_00000000-0000-0000-0000-000000000001";
+  const second = "usr_11111111-1111-1111-1111-111100000001";
+  await page.getByLabel("VRChat user IDs").fill([alice, first, second].join("\n"));
+  await page.getByRole("button", { name: "Review invitations", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm invitations", exact: true }).click();
+  await page.getByRole("button", { name: "Cancel unsent invitations", exact: true }).click();
+  const confirmation = page.getByRole("dialog", { name: "Cancel unsent invitations", exact: true });
+  const names = await confirmation.locator("bdi").allTextContents();
+  expect(names).toHaveLength(2);
+  expect(new Set(names).size).toBe(2);
+  await expect(confirmation).toContainText(first);
+  await expect(confirmation).toContainText(second);
+});

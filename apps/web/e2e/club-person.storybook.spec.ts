@@ -83,3 +83,14 @@ test("restoring a previous scope cannot briefly reuse its old grant @storybook-v
   await expect(people.getByRole("link", { name: "Riley", exact: true })).toBeVisible();
   expect(await page.evaluate(() => Number(document.documentElement.dataset.peopleRequests))).toBe(2);
 });
+
+
+test("shared Details identify a VRDex profile name fallback @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-people-controls--lifecycle&viewMode=story");
+  await page.getByRole("button", { name: "Use profile names", exact: true }).click();
+  const people = page.getByRole("region", { name: "People", exact: true });
+  await people.locator("summary").first().click();
+  await expect(people.getByText("VRDex profile name", { exact: true }).first()).toBeVisible();
+  await expect(people.getByText("Name last checked", { exact: true })).toHaveCount(0);
+  await expect(people.getByText("vrdex_profile", { exact: true })).toHaveCount(0);
+});

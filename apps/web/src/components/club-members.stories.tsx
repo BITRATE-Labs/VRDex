@@ -44,8 +44,13 @@ class MembersFixtureClient extends ConvexReactClient {
     private permissions: WorkspaceData["actor"]["permissions"],
     private readonly directoryReadFailure: boolean,
     private readonly mixedCaseRoles: boolean,
+    private readonly collidingIds = false,
   ) {
     super("https://fixture.invalid");
+    if (collidingIds) {
+      this.peopleFixture.resolved = false;
+      this.peopleFixture.pendingAllowed = false;
+    }
   }
   setPermissions(permissions: WorkspaceData["actor"]["permissions"]) {
     this.permissions = permissions;
@@ -100,6 +105,7 @@ class MembersFixtureClient extends ConvexReactClient {
           roleIds: [djRole],
           joinedAt: "2026-08-01T18:00:00Z",
         }));
+      if (this.collidingIds && params.kind !== "roles") items = items.map((item, index) => ({ ...item, ...(index === 1 ? { id: "usr_11111111-1111-1111-1111-111100000001", userId: "usr_11111111-1111-1111-1111-111100000001" } : {}), displayName: undefined }));
       if (params.kind === "search")
         items = items.filter((item) =>
           item.displayName
@@ -205,6 +211,7 @@ function MembersFixture({
   permissions,
   permissionSwitch = false,
   mixedCaseRoles = false,
+  collidingIds = false,
 }: {
   staff?: boolean;
   readFailure?: boolean;
@@ -212,6 +219,7 @@ function MembersFixture({
   permissions?: WorkspaceData["actor"]["permissions"];
   permissionSwitch?: boolean;
   mixedCaseRoles?: boolean;
+  collidingIds?: boolean;
 }) {
   const [limited, setLimited] = useState(false);
   const actorPermissions = useMemo<WorkspaceData["actor"]["permissions"]>(
@@ -220,7 +228,7 @@ function MembersFixture({
       : []),
     [permissions, staff, limited],
   );
-  const [client] = useState(() => new MembersFixtureClient(staff, readFailure, actorPermissions, directoryReadFailure, mixedCaseRoles));
+  const [client] = useState(() => new MembersFixtureClient(staff, readFailure, actorPermissions, directoryReadFailure, mixedCaseRoles, collidingIds));
   useLayoutEffect(() => client.setPermissions(actorPermissions), [client, actorPermissions]);
   const data: WorkspaceData = {
     community: {
@@ -296,3 +304,5 @@ export const OwnerDirectoryUnavailable: Story = {
 export const MixedRoleDirectoryUnavailable: Story = {
   render: () => <MembersFixture staff directoryReadFailure permissions={["view_members", "assign_vrchat_roles", "remove_group_members"]} />,
 };
+
+export const CollidingIds: Story = { render: () => <MembersFixture collidingIds /> };

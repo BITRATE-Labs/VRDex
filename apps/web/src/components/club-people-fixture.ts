@@ -5,6 +5,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 // Synthetic transport only. Components still request and subscribe to actual view contracts.
 export class ClubPeopleFixture {
   resolved = true;
+  profileNames = false;
   denied = false;
   pendingAllowed = true;
   private views = new Map<string, FunctionReturnType<typeof api.clubPeople.readView>>();
@@ -22,6 +23,7 @@ export class ClubPeopleFixture {
     const view = this.views.get(viewId);
     if (!view) throw new Error("Unknown people view");
     if (this.denied) throw new Error("People access revoked");
-    return this.resolved ? view : { ...view, pendingCount: this.pendingAllowed ? view.people.length : 0, people: view.people.map(person => ({ userId: person.userId, vrchatUrl: person.vrchatUrl, status: this.pendingAllowed ? "pending" as const : "retry" as const })) };
+    const resolved = this.profileNames ? { ...view, people: view.people.map(person => ({ ...person, source: "vrdex_profile" as const, observedAt: undefined })) } : view;
+    return this.resolved ? resolved : { ...view, pendingCount: this.pendingAllowed ? view.people.length : 0, people: view.people.map(person => ({ userId: person.userId, vrchatUrl: person.vrchatUrl, status: this.pendingAllowed ? "pending" as const : "retry" as const })) };
   }
 }

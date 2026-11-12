@@ -742,7 +742,7 @@ export function InvitationOutcomes({
           className="rounded-control border border-border p-4"
         >
           <p>Cancel invitations that have not been submitted?</p>
-          <ul className="mt-3 grid gap-3">{result.recipients.filter(item => ["pending", "claimed"].includes(item.state)).map(item => <li key={item.operationId}><ClubPerson userId={item.userId} identity={people.find(person => person.userId === item.userId)} exactId />{item.reviewedUserId !== item.userId ? <p className="break-all text-xs">Originally reviewed: {item.reviewedUserId}</p> : null}</li>)}</ul>
+          <ul className="mt-3 grid gap-3">{result.recipients.filter(item => ["pending", "claimed"].includes(item.state)).map(item => <li key={item.operationId}><ClubPerson userId={item.userId} identity={people.find(person => person.userId === item.userId)} visibleIds={result.recipients.filter(person => ["pending", "claimed"].includes(person.state)).map(person => person.userId)} exactId />{item.reviewedUserId !== item.userId ? <p className="break-all text-xs">Originally reviewed: {item.reviewedUserId}</p> : null}</li>)}</ul>
           <div className="mt-3 flex gap-2">
             <Button
               disabled={busy}
