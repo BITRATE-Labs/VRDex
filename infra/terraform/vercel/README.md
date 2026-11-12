@@ -15,6 +15,7 @@ It manages shared application variables for the existing Vercel project:
 - `NEXT_PUBLIC_POSTHOG_HOST`
 - `NEXT_PUBLIC_POSTHOG_DEPLOYMENT_CATEGORY`, assigned by target rather than `NODE_ENV`
 - `NEXT_PUBLIC_POSTHOG_FOUNDATION_ENABLED=true`, production only
+- `NEXT_PUBLIC_POSTHOG_LIMITED_ENABLED=false`, production only
 
 Interim Limited collection remains disabled. BASIC approved production analytics
 and replay on November 12, 2026. The production flag was bootstrapped through
