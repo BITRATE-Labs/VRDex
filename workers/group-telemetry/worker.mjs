@@ -1,3 +1,4 @@
+import { checkPeople } from "./people-jobs.mjs";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { VrchatClient, VrchatProviderError } from "./vrchat-client.mjs";
@@ -768,8 +769,13 @@ while (!stopping) {
       control, provider, accountBudget, metadataBudget: proofBudget, heartbeat,
       isStopping: () => stopping, reportDeadSession, pauseWithHeartbeats, logEvent,
     });
+    loopPhase = "people_names";
+    const peopleCount = stopping ? 0 : await checkPeople({
+      control, provider, accountBudget, heartbeat, isStopping: () => stopping,
+      reportDeadSession, pauseWithHeartbeats,
+    });
     controlFailures = 0;
-    await pause(assignmentCount > 0 || proofCount > 0 || destinationCount > 0 || groupMemberCount > 0 ? 1_000 : 10_000);
+    await pause(peopleCount > 0 || assignmentCount > 0 || proofCount > 0 || destinationCount > 0 || groupMemberCount > 0 ? 1_000 : 10_000);
   } catch (error) {
     controlFailures += 1;
     logEvent(collectorLoopFailureEvent(error, loopPhase, controlFailures));

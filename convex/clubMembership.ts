@@ -1,3 +1,4 @@
+import { admitVerifiedAudit } from "./clubPeople";
 import { membershipActivityIdentities, membershipIdentity } from "./_membershipActivityIdentity";
 import { readCollectionSubject, readManagedIntegration, resolveGroupObservationPolicy } from "./_groupObservationPolicy";
 import { assertAutomaticOperationAllowed } from "./_communityTelemetry";
@@ -359,7 +360,11 @@ export const finalizeScanPage = internalMutation({
         .withIndex("by_audit", q => q.eq("integrationId", scan.integrationId)
           .eq("epochStartedAt", scan.epochStartedAt).eq("auditId", auditId)).unique();
       if (!item) throw new Error("Missing verified membership event.");
-      if (!item.verified) await ctx.db.patch(item._id, { verified: true });
+      if (!item.verified) {
+        await ctx.db.patch(item._id, { verified: true });
+        const integration = await ctx.db.get(scan.integrationId);
+        if (integration) await admitVerifiedAudit(ctx, integration, item._id);
+      }
     }
     await ctx.db.delete(page._id);
     const complete = args.pageNumber + 1 === scan.finalPageCount;

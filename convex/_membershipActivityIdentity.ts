@@ -11,6 +11,7 @@ export const membershipIdentity = v.object({
   displayName: v.optional(v.string()),
   observedAt: v.optional(v.number()),
   vrdexUrl: v.optional(v.string()),
+  profileDisplayName: v.optional(v.string()),
 });
 
 export async function membershipActivityIdentities(ctx: QueryCtx, ids: readonly string[]) {
@@ -31,7 +32,7 @@ export async function membershipActivityIdentities(ctx: QueryCtx, ids: readonly 
       .withIndex("by_assetType_assetExternalId_state", q => q.eq("assetType", "vrchat_user").eq("assetExternalId", id).eq("state", "active")).take(21);
     if (links.length <= 20 && links.length <= verificationBudget) {
       verificationBudget -= links.length;
-      const profiles = new Map<string, string>();
+      const profiles = new Map<string, { slug: string; displayName: string }>();
       let unresolved = false;
       for (const link of links) {
         const profile = await ctx.db.get(link.profileId);
@@ -43,9 +44,13 @@ export async function membershipActivityIdentities(ctx: QueryCtx, ids: readonly 
         // An unevaluated candidate cannot establish that another match is unique.
         if (proofs.length > 20) { unresolved = true; break; }
         const verified = await getProfileConnectionVerifications(ctx.db, profile._id, [link]);
-        if (verified.has(link._id)) profiles.set(profile._id, profile.slug);
+        if (verified.has(link._id)) profiles.set(profile._id, { slug: profile.slug, displayName: profile.displayName });
       }
-      if (!unresolved && profiles.size === 1) identity.vrdexUrl = `/${encodeURIComponent([...profiles.values()][0])}`;
+      if (!unresolved && profiles.size === 1) {
+        const profile = [...profiles.values()][0];
+        identity.vrdexUrl = `/${encodeURIComponent(profile.slug)}`;
+        identity.profileDisplayName = profile.displayName;
+      }
     }
     result.set(id, identity);
   }

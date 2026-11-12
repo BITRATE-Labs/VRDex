@@ -113,6 +113,15 @@ const telemetryWorker = httpAction(async (ctx, request) => {
       });
       return json(result);
     }
+    if (body.operation.startsWith("people_")) {
+      const worker = { collectorAccountId: collectorAccountId as never, workerId: body.workerId, workerKeyHash: presentedHash };
+      if (body.operation === "people_claim") return json(await ctx.runMutation(internal.clubPeople.claim, { ...worker, limit: 1 }));
+      if (typeof body.personId !== "string" || typeof body.leaseToken !== "string") return json({ error: "invalid_request" }, 400);
+      const lease = { ...worker, personId: body.personId as never, leaseToken: body.leaseToken };
+      if (body.operation === "people_release") return json(await ctx.runMutation(internal.clubPeople.release, lease));
+      if (body.operation === "people_result") return json(await ctx.runMutation(internal.clubPeople.recordResult, { ...lease, result: body.result } as never));
+      return json({ error: "invalid_operation" }, 400);
+    }
     if (body.operation.startsWith("destination_")) {
       // Bind the collector identity and current credential generation inside
       // the cache transaction too, closing the key-rotation dispatch race.

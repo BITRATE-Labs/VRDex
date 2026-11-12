@@ -25,7 +25,7 @@ it("deduplicates normalized identities and uses cache names rather than VRDex di
   const f = await fixture();
   const result = await f.read();
   assert.equal(result.size, 1);
-  assert.deepEqual(result.get(id), { displayName: "Mira", observedAt: now, vrchatUrl: `https://vrchat.com/home/user/${id}`, vrdexUrl: "/mira" });
+  assert.deepEqual(result.get(id), { displayName: "Mira", observedAt: now, vrchatUrl: `https://vrchat.com/home/user/${id}`, vrdexUrl: "/mira", profileDisplayName: "Different VRDex name" });
   await f.t.run(ctx => ctx.db.patch(f.cacheId, { status: "unavailable" }));
   assert.equal((await f.read()).get(id)?.displayName, undefined);
 });
