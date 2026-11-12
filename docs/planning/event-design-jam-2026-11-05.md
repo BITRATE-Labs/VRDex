@@ -254,6 +254,25 @@ Final local repair verification: 18/18 browser regressions passed with files sta
 
 Candidate setup reference supplied by the lead: `80c45af03f2acf680d80cbd3c037001a10c74899`, especially `apps/web/e2e/clerk-auth.ts`, `docs/deployment/vercel-preview.md` and `docs/testing/playwright-visual-preview.md`. It is a dependency/handoff, not proof that PR #457's signed-in host check ran.
 
+After BASIC merged #456, this branch integrated its exact-candidate harness and
+added host acceptance to the existing local signed-in Clerk lane. The owner uses
+the normal role editor, invitation and revocation controls. The host-only session
+can enter the rundown and read status, cannot edit events or control broadcasts,
+and loses the entry button, live rundown, direct page and status access on
+revocation. Both required signed-in regressions passed without skips on
+`eae51a4864dd52093bcbee179be4c9390b2dc096` in
+[run 43128040827](https://github.com/BITRATE-Labs/VRDex/actions/runs/43128040827).
+Post-integration local checks passed 1190 web tests, 46 host/staff/workflow checks,
+and both typechecks. The remaining cold-start phone image mismatch was reproduced
+and corrected after visual review; its new PNG matches the CI actual bytes, and
+both viewport comparisons pass without update mode. Current-head CI and preview
+acceptance remain the final readiness gate.
+
+The same run also passed exact-candidate preview acceptance with one mutation,
+four auth and twelve account cases. Its retained identity report binds that head
+to the deployed preview and matching browser/server backend. This is preview
+acceptance, not production or provider acceptance.
+
 <details>
 <summary>Checkpoint path reconciliation</summary>
 
