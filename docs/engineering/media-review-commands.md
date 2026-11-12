@@ -478,3 +478,25 @@ Previously admitted uploads may still finish into private candidate storage if
 media-kit intake is hidden or disabled after admission, as before. That does not
 publish the candidate. Claim changes or loss of public profile eligibility block
 completion; publication separately rechecks media-kit visibility and restrictions.
+
+## Pagination consumers and direct-publication audit
+
+The production consumers of `listForReview` are the browser media review panel
+and the registered hosted MCP adapter. Each follows `isDone` and continuation
+cursors, including empty filtered pages. `reviewPageRequestSchema` currently has
+only its definition, type export, and contract tests, with no REST or operator
+consumer. The browser preserves reactive subscriptions; the server adapter uses
+bounded sequential calls.
+
+The MCP adapter refreshes email verification and its attestation timestamp before
+each continuation query. After 40 empty continuations it returns the last cursor
+for another call. A non-advancing cursor returns an explicit `PAGE_CURSOR_INVALID`
+error together with the last successful result and cursor. Authorization failures
+remain failures.
+
+`publicationMethod: "trusted_publisher"` identifies the explicit direct-publication
+process for authorized publishers, including superadmins. Independent review uses
+`"independent_review"`. `publicationActorUserId` identifies the publishing account.
+To audit the authority used at publication time, inspect that account's retained
+`accountFeatureGrants` records and their grant, expiry, and revocation timestamps.
+The method field itself does not snapshot the granting feature.

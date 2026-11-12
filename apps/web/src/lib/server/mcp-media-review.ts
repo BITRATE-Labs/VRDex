@@ -186,8 +186,14 @@ export function createMcpMediaReviewHandlers<TActor extends string>(
       let result = mediaReviewListOutputSchema.parse(await dependencies.query("list", args));
       // Bound checkpoint traversal; a remaining continuation stays resumable.
       for (let i = 0; value.batchId && i < 40 && !result.isDone && result.page.length === 0; i++) {
-        if (result.continueCursor === args.paginationOpts.cursor) throw new Error("PAGE_CURSOR_INVALID");
+        if (result.continueCursor === args.paginationOpts.cursor) {
+          const response = jsonResult(result);
+          response.isError = true;
+          response.content.push({ type: "text", text: "PAGE_CURSOR_INVALID" });
+          return response;
+        }
         args.paginationOpts.cursor = result.continueCursor;
+        Object.assign(args, await attestation(dependencies));
         result = mediaReviewListOutputSchema.parse(await dependencies.query("list", args));
       }
       return jsonResult(result);

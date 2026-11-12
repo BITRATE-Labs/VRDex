@@ -339,3 +339,18 @@ Journal caps derive from the largest applicable standing policy quota. An invari
 test covers every role, preventing later policy tuning from making the quota
 comparison unreachable. All 3,291 portable backend tests pass with the same four
 Windows exclusions. Both typechecks and isolated local Convex compile/health pass.
+
+### Continuation freshness and heavier admission coverage
+
+The policy-sized UTF-8 stress fixture now exercises both direct upload admission
+and the placement-proposal command, including its existing asset, placement,
+restriction, and review-snapshot reads. Both succeed within the same transaction
+budget and report correct daily capacity and retry time.
+
+MCP continuation queries now renew email verification and attestation on every
+step. Tests cover a traversal lasting longer than two minutes, a non-advancing
+cursor with an explicit error and retained position, and bounded exhaustion with
+a resumable cursor. A caller audit found only the browser panel and registered
+MCP adapter in production. The exported review request schema has no additional
+live consumer. Direct-publication audit semantics, including superadmins, are
+recorded in `docs/engineering/media-review-commands.md`.

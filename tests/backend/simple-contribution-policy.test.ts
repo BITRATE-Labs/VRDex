@@ -2,8 +2,8 @@ import { resolveContributionPolicy } from "../../convex/_contributionPolicy";
 import assert from "node:assert/strict";
 import { it } from "node:test";
 import { convexTest } from "convex-test";
-import { schema, modules, seed } from "./_mediaReviewFixture";
-import { internal } from "../../convex/_generated/api";
+import { schema, modules, seed, createAndUpload } from "./_mediaReviewFixture";
+import { api, internal } from "../../convex/_generated/api";
 import { SUBMISSION_JOURNAL_LIMITS, contributionChargeRefusal, effectiveContributionPolicy, insertMediaSubmission } from "../../convex/_contributionCapacity";
 import { getAccountFeatureAccess } from "../../convex/_accountFeatures";
 
@@ -165,9 +165,10 @@ it("trusted ceiling discovery and admission stay within Convex transaction read 
   } finally { for (const key of Object.keys(process.env)) if (!(key in env)) delete process.env[key]; Object.assign(process.env, env); }
 });
 
-it("admits below both trusted quotas with disjoint large pending and decided histories", async () => {
+for (const entryPoint of ["begin", "propose"] as const) {
+it(`admits below both trusted quotas with disjoint large histories via ${entryPoint}`, async () => {
   const env = { ...process.env };
-  Object.assign(process.env, { VRDEX_CONTRIBUTION_UPLOADS_ENABLED: "true", VRDEX_PROFILE_MEDIA_KIT_ENABLED: "true",
+  Object.assign(process.env, { VRDEX_CONTRIBUTION_UPLOADS_ENABLED: "true", VRDEX_PROFILE_MEDIA_KIT_ENABLED: "true", VRDEX_PROFILE_MEDIA_DIRECT_UPLOAD_ENABLED: "true",
     VRDEX_PROFILE_MEDIA_SUBMISSIONS_ENABLED: "true", VRDEX_MEDIA_UPLOAD_CLEANUP_READY: "true",
     VRDEX_MEDIA_CLEANUP_URL: "https://example.test/api/internal/media-cleanup", VRDEX_MEDIA_CLEANUP_TOKEN: "test" });
   try {
@@ -184,7 +185,7 @@ it("admits below both trusted quotas with disjoint large pending and decided his
       return ctx.db.insert("profiles", { ...profile, slug: "fresh-target" });
     });
     for (const status of ["submitted", "rejected"] as const) {
-      const count = (status === "submitted" ? limits.openActor : limits.dailyActor) - 1;
+      const count = status === "submitted" ? limits.openActor - 1 : limits.dailyActor - (entryPoint === "propose" ? 2 : 1);
       for (let offset = 0; offset < count; offset += 50) await t.run(async ctx => {
         for (let i = offset; i < Math.min(offset + 50, count); i++) await insertMediaSubmission(ctx.db, {
           profileId: s.profileId, targetProfileSlug: "community-dj", targetProfileDisplayName: "Community DJ", submitterUserId: s.contributorUserId,
@@ -214,11 +215,32 @@ it("admits below both trusted quotas with disjoint large pending and decided his
       sha256: "a".repeat(64), credit: "Artist", sourceDescription: "Budget regression", idempotencyKey: "target-at-limit" });
     assert.equal(denied.receipt?.code, "CONTRIBUTION_TARGET_OPEN_LIMIT");
     await t.run(async ctx => { for (const id of crowded) await ctx.db.patch(id, { status: "rejected" }); });
-    const result = await t.mutation(internal.contributionUploads.begin, { actorUserId: s.contributorUserId, oauthClientId: "client", oauthTokenId: "trusted-admit",
+    let result;
+    if (entryPoint === "propose") {
+      const { intent } = await createAndUpload(t, { ...s, profileId });
+      const reviewer = t.withIdentity(s.moderatorIdentity);
+      const detail = await reviewer.query(api.profileMediaSubmissions.reviewDetail, { submissionId: intent.submissionId });
+      assert.ok(detail);
+      assert.equal((await reviewer.mutation(api.profileMediaSubmissions.decideWithReceipt, {
+        submissionId: intent.submissionId, expectedReviewVersion: detail.reviewVersion, decision: "approve",
+        privateReason: "Inspected source", idempotencyKey: "approve-source",
+      })).operationState, "committed");
+      await t.run(ctx => ctx.db.patch(profileId, { avatarImageUrl: "https://example.test/current.png" }));
+      const actor = t.withIdentity(s.contributorIdentity);
+      const current = await actor.query(api.profileMediaSubmissions.contributionDetail, { submissionId: intent.submissionId });
+      assert.ok(current);
+      result = await actor.mutation(api.profileMediaSubmissions.proposePlacement, {
+        submissionId: intent.submissionId, expectedContributionVersion: current.contributionVersion,
+        idempotencyKey: "placement-below-ceilings",
+      });
+      assert.equal(result.operationState, "committed", JSON.stringify(result));
+    } else {
+      result = await t.mutation(internal.contributionUploads.begin, { actorUserId: s.contributorUserId, oauthClientId: "client", oauthTokenId: "trusted-admit",
       emailVerified: true, emailVerificationAttestedAt: now, mode: "contributor", profileId,
       expectedUpdatedAt: Date.parse("2026-08-26T12:00:00Z"), placement: "profile_image", contentType: "image/png", byteLength: 512,
       sha256: "a".repeat(64), credit: "Artist", sourceDescription: "Budget regression", idempotencyKey: "trusted-below-ceilings" });
-    assert.ok("intentId" in result, JSON.stringify(result));
+      assert.ok("intentId" in result, JSON.stringify(result));
+    }
     const capacity = await t.query(internal.contributionCapacity.get, { actorUserId: s.contributorUserId,
       oauthClientId: "client", oauthTokenId: "trusted-admit", emailVerified: true, emailVerificationAttestedAt: now });
     assert.equal(capacity.usage.creations24h, limits.dailyActor);
@@ -226,6 +248,7 @@ it("admits below both trusted quotas with disjoint large pending and decided his
     assert.equal(capacity.retryAt, now - 120000 + 86400000);
   } finally { for (const key of Object.keys(process.env)) if (!(key in env)) delete process.env[key]; Object.assign(process.env, env); }
 });
+}
 
 it("journal caps cover every applicable role's rolling quota", () => {
   const policy = resolveContributionPolicy({});
