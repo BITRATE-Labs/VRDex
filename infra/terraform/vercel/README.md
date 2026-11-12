@@ -14,9 +14,15 @@ It manages shared application variables for the existing Vercel project:
 - `NEXT_PUBLIC_POSTHOG_KEY`
 - `NEXT_PUBLIC_POSTHOG_HOST`
 - `NEXT_PUBLIC_POSTHOG_DEPLOYMENT_CATEGORY`, assigned by target rather than `NODE_ENV`
+- `NEXT_PUBLIC_POSTHOG_FOUNDATION_ENABLED=true`, production only
+- `NEXT_PUBLIC_POSTHOG_LIMITED_ENABLED=false`, production only
 
-Interim Limited collection is not enabled here. Eligibility and production recording
-activation remain separate dependencies in the analytics acceptance record.
+Interim Limited collection remains disabled. BASIC approved production analytics
+and replay on November 12, 2026. The production flag was bootstrapped through
+Executor and adopted into Terraform state by the Vercel-only workflow apply.
+The one-time import block was then removed. Rebuild the web app
+after changing this public flag. Replay is a separate PostHog project setting,
+documented in the [activation record](../../../docs/deployment/posthog-foundation-activation.md).
 
 - `TEMPORAL_INPUT_HASH_KEY`
 - `TWITCH_CLIENT_ID` when both optional Twitch variables are set

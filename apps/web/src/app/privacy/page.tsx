@@ -9,9 +9,9 @@ export default function PrivacyPolicyPage() {
 
     <article className="max-w-2xl space-y-6 text-sm leading-relaxed" data-ph-no-capture>
       <h1 className="text-3xl font-semibold">Privacy policy</h1>
-      <p>Last updated: November 10, 2026.</p>
+      <p>Last updated: November 12, 2026.</p>
       <section className="space-y-3"><h2 className="text-xl font-semibold">Analytics choices</h2>
-        <p>Before you choose, Limited analytics counts selected page views and interactions without a persistent visitor identifier, account link or session replay. Off stops optional analytics. On allows usage analytics and masked session replay through PostHog.</p>
+        <p>We do not collect optional analytics until you choose On. Off stops optional analytics. On allows usage analytics and masked session replay through PostHog.</p>
         <p>With analytics On, visits and interactions can be linked across visits and, when signed in, to your VRDex account through a random analytics identifier. We do not use your email, display name or connected account identifiers as your analytics identifier.</p>
         <p>Usage events include navigation, clicks, searches, lookups, authentication, claims and time parsing. We use these events to understand product use and diagnose problems. Search text and private form values are excluded from our product events.</p>
       </section>
