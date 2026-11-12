@@ -44,6 +44,7 @@ export const get = internalQuery({
       .query("contributionManifestUsage")
       .withIndex("by_actor", (q) => q.eq("actorUserId", args.actorUserId))
       .unique();
+    const dailySampleLimit = Math.min(policy.limits.dailyActor ?? 0, 100);
     const active = policy.limits.dailyActor === null ? null : await ctx.db
       .query("profileMediaSubmissions")
       .withIndex("by_submitterUserId_createdAt", (q) =>
@@ -52,7 +53,8 @@ export const get = internalQuery({
           .gt("createdAt", Date.now() - DAY),
       )
       .order("desc")
-      .take(policy.limits.dailyActor + 1);
+      .take(dailySampleLimit + 1);
+    const creations24hIsLowerBound = active !== null && active.length > dailySampleLimit;
     const window = (active ?? []).filter(
       (row) => row.createdAt > Date.now() - policy.limits.burstWindowMs,
     );
@@ -94,6 +96,7 @@ export const get = internalQuery({
         retainedRevisions: manifest?.retainedRevisions ?? 0,
         retainedMetadataBytes: manifest?.retainedBytes ?? 0,
         creations24h: active?.length ?? null,
+        creations24hIsLowerBound,
       },
       remaining: {
         bytes: limits.actorBytes === null ? null : Math.max(0, limits.actorBytes - (usage?.bytes ?? 0)),
@@ -102,7 +105,7 @@ export const get = internalQuery({
           limits.actorProcessing - (usage?.processing ?? 0),
         ),
         open: policy.limits.openActor === null || open === null ? null : Math.max(0, policy.limits.openActor - open),
-        creations24h: policy.limits.dailyActor === null || active === null ? null : Math.max(0, policy.limits.dailyActor - active.length),
+        creations24h: policy.limits.dailyActor === null || active === null ? null : active.length >= policy.limits.dailyActor ? 0 : creations24hIsLowerBound ? null : policy.limits.dailyActor - active.length,
       },
       retryAt,
     };

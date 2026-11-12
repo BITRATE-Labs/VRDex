@@ -128,6 +128,7 @@ export const contributionTables = {
     .index("by_submissionId", ["submissionId"]),
   contributionManifestUsage: defineTable({
     actorUserId: v.id("users"),
+    retainedBatches: v.optional(v.number()),
     activeRows: v.number(),
     retainedRevisions: v.number(),
     retainedBytes: v.number(),

@@ -266,3 +266,25 @@ and `d9d2cc5af`, based on `440f37c80aecb3d2b867592ef0470b3f7200df90`.
   traversal is bounded to 40 continuations per call and remains resumable.
 - Ordinary-tier refusal sentences retain their previously approved wording.
   Trusted-tier numerical substitutions follow the approved capacity pattern.
+
+### Second PR review follow-up
+
+Capacity discovery reads at most 101 recent creation records for the rolling-day
+sample, with `creations24hIsLowerBound` marking an incomplete total. Remaining
+daily capacity is null when the sample cannot determine it. The large-source
+regression now passes with a stricter 8 MiB transaction read budget, including
+the exact 1,000-open count and clean admission refusal.
+
+Retained envelope totals now use an optional counter on the existing manifest
+ledger. First creation bootstraps an exact bounded legacy count, then every new
+idempotency key increments it atomically with the envelope insert. Replay and
+archive leave it unchanged. No deployment migration is required for the prior
+1,000-envelope policy. Incomplete unusually large legacy records remain
+fail-closed rather than guessing a count. A regression reaches 10,000 envelopes
+with 9 MB of retained cleanup metadata and a 32 KB read budget, including a
+concurrent last-slot race, replay, and archive.
+
+The browser now follows an empty page after manual pagination even if earlier
+rows are visible or the page is already cached. Consecutive empty continuations
+stop after 40 requests. Four production-component browser assertions pass across
+desktop and mobile for initial/later checkpoints and bounded subscriptions.

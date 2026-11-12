@@ -209,6 +209,11 @@ export const create = internalMutation({
       throw new ConvexError({ code: "BATCH_ENVELOPE_LIMIT" });
     if (envelopes.isLowerBound)
       throw new ConvexError({ code: "BATCH_ENVELOPE_COUNT_INCOMPLETE" });
+    const usage = await ctx.db.query("contributionManifestUsage")
+      .withIndex("by_actor", q => q.eq("actorUserId", args.actorUserId)).unique();
+    if (usage) await ctx.db.patch(usage._id, { retainedBatches: envelopes.count + 1 });
+    else await ctx.db.insert("contributionManifestUsage", { actorUserId: args.actorUserId,
+      retainedBatches: envelopes.count + 1, activeRows: 0, retainedRevisions: 0, retainedBytes: 0 });
     const id = await ctx.db.insert("contributionBatches", {
       actorUserId: args.actorUserId,
       ...input,

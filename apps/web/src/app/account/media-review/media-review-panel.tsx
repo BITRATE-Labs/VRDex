@@ -8,7 +8,7 @@ import {
   type ReviewDetail,
   type CommandReceipt,
 } from "@vrdex/api-contracts";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import type { Id } from "../../../../../../convex/_generated/dataModel";
 import type { FunctionReturnType } from "convex/server";
@@ -538,9 +538,23 @@ export function MediaReviewPanel({
     { initialNumItems: 40 },
   );
 
+  const checkpoint = useRef({ scope: "", count: 0, emptyPages: 0, loading: false });
   useEffect(() => {
-    if (batchId && submissions.length === 0 && paginationStatus === "CanLoadMore") loadMore(40);
-  }, [batchId, submissions.length, paginationStatus, loadMore]);
+    const scope = `${batchId}:${queueStatus}:${effectiveProfileId}`;
+    if (checkpoint.current.scope !== scope || paginationStatus === "LoadingFirstPage")
+      checkpoint.current = { scope, count: 0, emptyPages: 0, loading: false };
+    const state = checkpoint.current;
+    if (!batchId) return;
+    if (paginationStatus === "LoadingMore") { state.loading = true; return; }
+    if (paginationStatus !== "CanLoadMore") return;
+    const empty = submissions.length === state.count;
+    const follow = state.loading || submissions.length === 0;
+    state.count = submissions.length;
+    state.loading = false;
+    state.emptyPages = empty ? state.emptyPages + 1 : 0;
+    // Bound subscriptions even if a backend cursor makes no progress.
+    if (follow && empty && state.emptyPages <= 40) { state.loading = true; loadMore(40); }
+  }, [batchId, queueStatus, effectiveProfileId, submissions, paginationStatus, loadMore]);
 
   async function cleanDueFiles() {
     setCleanupStatus(null);
@@ -691,7 +705,7 @@ export function MediaReviewPanel({
         ))}
       </div>
       {paginationStatus === "CanLoadMore" ? (
-        <Button onClick={() => loadMore(40)} type="button" variant="ghost">
+        <Button onClick={() => { checkpoint.current.loading = true; checkpoint.current.emptyPages = 0; loadMore(40); }} type="button" variant="ghost">
           Load more
         </Button>
       ) : null}

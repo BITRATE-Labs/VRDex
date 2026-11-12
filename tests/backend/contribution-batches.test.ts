@@ -24,6 +24,8 @@ process.env.VRDEX_CONTRIBUTION_BATCHES_ENABLED = "true";
 it("bounds envelope bytes and refuses incomplete admission counts while retaining replay and exact reconciliation", async () => {
   const f = await fixture(12 * 1024 * 1024);
   await f.t.run(async ctx => {
+    const usage = await ctx.db.query("contributionManifestUsage").withIndex("by_actor", q => q.eq("actorUserId", f.s.contributorUserId)).unique();
+    await ctx.db.patch(usage!._id, { retainedBatches: undefined });
     for (let n = 0; n < 12; n++) await ctx.db.insert("contributionBatches", {
       actorUserId: f.s.contributorUserId, idempotencyKey: `large-${n}`, label: "Legacy",
       archived: true, rowCount: 0, createdAt: n, payloadCleanupCursor: "x".repeat(900000),
@@ -58,6 +60,8 @@ it("identifies the stored revision scope for recovery before submitting with a n
 it("bounds retained batch envelopes across archive and legacy rows while preserving replay", async () => {
   const f = await fixture();
   await f.t.run(async ctx => {
+    const usage = await ctx.db.query("contributionManifestUsage").withIndex("by_actor", q => q.eq("actorUserId", f.s.contributorUserId)).unique();
+    await ctx.db.patch(usage!._id, { retainedBatches: undefined });
     for (let n = 1; n < 1000; n++) await ctx.db.insert("contributionBatches", {
       actorUserId: f.s.contributorUserId, idempotencyKey: `legacy-${n}`, label: "Legacy",
       archived: true, rowCount: 0, createdAt: n,
@@ -611,14 +615,10 @@ it("pages all 1001 rows with bounded reads and isolates other actors", async () 
 });
 it("enforces concurrent capacity, counts terminal rows until archive, retains revision charges", async () => {
   const f = await fixture();
-  await f.t.run((ctx) =>
-    ctx.db.insert("contributionManifestUsage", {
-      actorUserId: f.s.contributorUserId,
-      activeRows: 999,
-      retainedRevisions: 999,
-      retainedBytes: 999,
-    }),
-  );
+  await f.t.run(async ctx => {
+    const usage = await ctx.db.query("contributionManifestUsage").withIndex("by_actor", q => q.eq("actorUserId", f.s.contributorUserId)).unique();
+    await ctx.db.patch(usage!._id, { activeRows: 999, retainedRevisions: 999, retainedBytes: 999 });
+  });
   const outcomes = await Promise.allSettled(
     ["a", "b"].map((itemKey) =>
       f.t.mutation(internal.contributionBatches.append, {
@@ -1333,4 +1333,32 @@ it("migrates old archived payload deadlines in bounded pages, preserving holds a
     (await f.t.run((ctx) => ctx.db.get(f.batch.batchId)))?.payloadCleanupAfter,
     batch.payloadCleanupAfter,
   );
+});
+
+it("trusted envelope counter reaches 10000 without scanning retained payloads and preserves replay and archive", async () => {
+  const f = await fixture(32000);
+  await f.t.run(async ctx => {
+    await ctx.db.insert("accountFeatureGrants", { userId: f.s.contributorUserId, feature: "trusted_contributor", state: "active",
+      grantedBy: { tokenIdentifier: "test:operator", issuer: "test", subject: "operator" }, grantedAt: Date.now(), updatedAt: Date.now() });
+    const usage = await ctx.db.query("contributionManifestUsage").withIndex("by_actor", q => q.eq("actorUserId", f.s.contributorUserId)).unique();
+    await ctx.db.patch(usage!._id, { retainedBatches: 9000 });
+  });
+  for (let offset = 1; offset < 9000; offset += 250) await f.t.run(async ctx => {
+    for (let i = offset; i < Math.min(offset + 250, 9000); i++) await ctx.db.insert("contributionBatches", {
+      actorUserId: f.s.contributorUserId, idempotencyKey: `tracked-${i}`, label: "Tracked",
+      archived: true, rowCount: 0, createdAt: i, payloadCleanupCursor: "x".repeat(1000),
+    });
+  });
+  for (let i = 9000; i < 9999; i++) await f.t.mutation(internal.contributionBatches.create, {
+    ...f.authority, input: { idempotencyKey: `tracked-${i}`, label: "Tracked" },
+  });
+  const outcomes = await Promise.allSettled(["last-a", "last-b"].map(idempotencyKey => f.t.mutation(internal.contributionBatches.create, {
+    ...f.authority, input: { idempotencyKey, label: "Tracked" },
+  })));
+  assert.equal(outcomes.filter(result => result.status === "fulfilled").length, 1);
+  assert.match(String((outcomes.find(result => result.status === "rejected") as PromiseRejectedResult).reason), /BATCH_ENVELOPE_LIMIT/);
+  await f.t.mutation(internal.contributionBatches.archive, { ...f.authority, batchId: f.batch.batchId });
+  assert.equal((await f.t.mutation(internal.contributionBatches.create, { ...f.authority, input: { idempotencyKey: "batch", label: "Collection" } })).batchId, f.batch.batchId);
+  await assert.rejects(f.t.mutation(internal.contributionBatches.create, { ...f.authority, input: { idempotencyKey: "over", label: "Over" } }), /BATCH_ENVELOPE_LIMIT/);
+  assert.deepEqual(await f.t.run(ctx => retainedBatchUsage(ctx.db, f.s.contributorUserId, 100)), { count: 10000, isLowerBound: false });
 });

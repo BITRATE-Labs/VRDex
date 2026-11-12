@@ -34,6 +34,8 @@ export function localUploadModes(env: Record<string, string | undefined> = proce
 // Includes archived and legacy envelopes. A bounded read also handles rows created
 // before envelope admission existed, without an unbounded migration transaction.
 export async function retainedBatchUsage(db: DatabaseReader, actor: Id<"users">, limit: number, maximumBytesRead = 8 * 1024 * 1024) {
+  const usage = await db.query("contributionManifestUsage").withIndex("by_actor", q => q.eq("actorUserId", actor)).unique();
+  if (usage?.retainedBatches !== undefined) return { count: usage.retainedBatches, isLowerBound: false };
   const page = await db.query("contributionBatches")
     .withIndex("by_actor_key", q => q.eq("actorUserId", actor)).paginate({
       cursor: null, numItems: limit + 1, maximumRowsRead: limit + 1,

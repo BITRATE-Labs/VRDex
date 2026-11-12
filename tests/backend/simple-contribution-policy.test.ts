@@ -126,7 +126,7 @@ it("trusted ceiling discovery and admission stay within Convex transaction read 
   try {
   const t = convexTest({ schema, modules: { ...modules,
     "../../convex/contributionCapacity.ts": () => import("../../convex/contributionCapacity"),
-    "../../convex/contributionUploads.ts": () => import("../../convex/contributionUploads") }, transactionLimits: true });
+    "../../convex/contributionUploads.ts": () => import("../../convex/contributionUploads") }, transactionLimits: { bytesRead: 8 * 1024 * 1024 } });
   const s = await seed(t);
   const now = Date.now();
   await t.run(async ctx => {
@@ -154,6 +154,8 @@ it("trusted ceiling discovery and admission stay within Convex transaction read 
   const capacity = await t.query(internal.contributionCapacity.get, authority);
   assert.equal(capacity.usage.open, 1000);
   assert.equal(capacity.remaining.open, 0);
+  assert.equal(capacity.usage.creations24hIsLowerBound, true);
+  assert.equal(capacity.remaining.creations24h, null);
   assert.equal(capacity.usage.retainedBatchesIsLowerBound, true);
   const refusal = await t.mutation(internal.contributionUploads.begin, { ...authority, mode: "contributor", profileId: s.profileId,
     expectedUpdatedAt: Date.parse("2026-08-26T12:00:00Z"), placement: "profile_image", contentType: "image/png", byteLength: 512,
