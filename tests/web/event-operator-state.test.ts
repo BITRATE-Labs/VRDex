@@ -127,15 +127,15 @@ it("source availability distinguishes direct video, provider checks and fresh en
   const now = status.serverNow;
   const observed = operatorViewState(status, 0).observedSource;
   assert.equal(operatorSourceAvailability(source, undefined, now, observed), "On air");
-  assert.equal(operatorSourceAvailability(source, {state:"offline",observedAt:now}, now, observed), "offline");
-  assert.equal(operatorSourceAvailability(source, {state:"unavailable",observedAt:now}, now, observed), "unavailable");
+  assert.equal(operatorSourceAvailability(source, {state:"offline",observedAt:now}, now, observed), "Offline");
+  assert.equal(operatorSourceAvailability(source, {state:"unavailable",observedAt:now}, now, observed), "Unavailable");
   assert.equal(operatorSourceAvailability(source, {state:"offline",observedAt:now-60_001}, now, observed), "On air");
   assert.equal(operatorSourceAvailability({...source, revision:source.revision + 1}, undefined, now, observed), "Not checked");
   assert.equal(operatorSourceAvailability(source, undefined, now, operatorViewState(status, 15_000).observedSource), "Not checked");
-  assert.equal(operatorSourceAvailability(source, {state:"live",observedAt:now}, now), "live");
+  assert.equal(operatorSourceAvailability(source, {state:"live",observedAt:now}, now), "Live");
   assert.equal(operatorSourceAvailability(source, {state:"live",observedAt:now}, now + 60_001), "Not checked");
-  assert.equal(operatorSourceAvailability(source, {state:"offline",observedAt:now}, now), "offline");
-  assert.equal(operatorSourceAvailability(source, {state:"unavailable",observedAt:now}, now), "unavailable");
+  assert.equal(operatorSourceAvailability(source, {state:"offline",observedAt:now}, now), "Offline");
+  assert.equal(operatorSourceAvailability(source, {state:"unavailable",observedAt:now}, now), "Unavailable");
   assert.equal(operatorSourceAvailability({...source,input:{kind:"direct_media",url:"https://media.w3.org/2010/05/sintel/trailer.mp4"}}, undefined, now), "Direct video");
   source.input = {kind:"direct_media",url:"https://media.w3.org/2010/05/sintel/trailer.mp4"};
   const {operatorStatusWindow} = await import("../../apps/web/src/lib/event-operator-state");
@@ -156,6 +156,15 @@ it("startup and stopping retain known lifecycle labels before output observation
   html = renderOperator(status);
   assert.match(html, /role="status">stopping<\/span>/);
   assert.doesNotMatch(html, />On air<\/span>/);
+});
+it("a session without its own output ID cannot borrow the prior program destination", async () => {
+  const { operatorFixture } = await import("../../apps/web/src/app/playwright/event-operator/fixture-state");
+  const status = operatorFixture();
+  status.sessions[0].status = "starting";
+  status.sessions[0].outputId = undefined;
+  status.sessions[0].outputHealthObservedAt = undefined;
+  assert.match(renderOperator(status), /<span>VRCDN<\/span><span>Unknown<\/span>/);
+  assert.match(renderOperator(status), /<span>Twitch<\/span><span>Unknown<\/span>/);
 });
 it("lifecycle labels expire with authority and unconfirmed errors do not claim Off air", async () => {
   const { operatorFixture } = await import("../../apps/web/src/app/playwright/event-operator/fixture-state");

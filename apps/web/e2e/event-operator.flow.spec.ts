@@ -55,6 +55,7 @@ test("direct video status follows fresh worker evidence and clears after Stop @f
  await page.getByRole("button",{name:"Check source",exact:true}).click();
  const preview=page.getByRole("region",{name:"Quick switch preview",exact:true});
  await expect(preview.getByRole("status")).toHaveText("Direct video");
+ await expect(preview.getByRole("status")).toHaveCSS("text-transform","none");
  await preview.scrollIntoViewIfNeeded();
  await expect.poll(()=>preview.locator("video").evaluate(node=>node instanceof HTMLVideoElement ? node.currentTime : 0)).toBeGreaterThan(0);
  expect(statusRequests.flat().every(id=>providerIds.has(id))).toBe(true);
@@ -78,7 +79,7 @@ test("Quick switch expires provider liveness instead of retaining an old Live la
  await page.getByRole("textbox",{name:"Or paste a link",exact:true}).fill("vrcdn:aurora");
  await page.getByRole("button",{name:"Check source",exact:true}).click();
  const preview=page.getByRole("region",{name:"Quick switch preview",exact:true});
- await expect(preview.getByRole("status")).toHaveText("live");
+ await expect(preview.getByRole("status")).toHaveText("Live");
  await page.clock.fastForward(60_001);
  await expect(preview.getByRole("status")).toHaveText("Not checked");
 });
@@ -87,11 +88,12 @@ test("an on-air input keeps its fresh provider failure visible @flow @fixture",a
  await page.route("**/operate/status?*",route=>route.fulfill({json:{"vrcdn:aurora":{state:"offline",observedAt:fixtureNow}}}));
  await page.goto("/playwright/event-operator");
  const source=page.getByRole("article",{name:"Aurora",exact:true});
- await expect(source.getByText("offline",{exact:true})).toBeVisible();
+ await expect(source.getByText("Offline",{exact:true})).toBeVisible();
  await source.getByRole("button",{name:"Take Aurora",exact:true}).click();await confirm(page,"Put Aurora on air");
  await details(page);
  await expect(page.getByText("Observed output",{exact:true}).locator("..")).toContainText("Aurora");
- await expect(source.getByText("offline",{exact:true})).toBeVisible();
+ await expect(source.getByText("Offline",{exact:true})).toBeVisible();
+ await expect(source.getByText("Offline",{exact:true})).toHaveCSS("text-transform","none");
  await page.screenshot({path:info.outputPath("operator-offline-input.png"),fullPage:true});
 });
 test("replacing or removing live inputs requires confirmation and quality applies next start @flow @fixture",async({page})=>{

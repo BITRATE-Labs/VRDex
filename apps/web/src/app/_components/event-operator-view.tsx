@@ -314,7 +314,7 @@ export function EventOperatorControls({
     if (view.offAir) return "Off air";
     const fresh=eventBroadcastObservationFresh({serverNow:status.serverNow,elapsedMs:elapsed,leaseExpiresAt:session?.leaseExpiresAt,observedAt:session?.outputHealthObservedAt,status:session?.status});
     const observed = fresh ? session?.outputHealth.find(row=>row.outputId===output.outputId) : undefined;
-    return observed?.status ?? (view.lifecycleFresh && output.outputId === (session?.outputId ?? status.program?.currentOutputId) ? session?.status ?? "Unknown" : "Unknown");
+    return observed?.status ?? (view.lifecycleFresh && output.outputId === session?.outputId ? session?.status ?? "Unknown" : "Unknown");
   }
   const usableOutputs = status.outputs.filter(row => row.authorized !== false && ["ready", "active"].includes(row.state));
   const primaryOutputs = usableOutputs.filter(row=>!row.simulcastEnabled);

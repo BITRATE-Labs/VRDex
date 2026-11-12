@@ -69,7 +69,8 @@ by the worker lease. Before lease acquisition, startup uses its persisted ready
 deadline and Stop uses its request time plus the existing 30-second grace period.
 Expired lifecycle evidence becomes Unknown. Fresh per-output health takes priority
 over the lifecycle label. Only the active primary destination can fall back to
-the session lifecycle; unobserved simulcast and revoked destinations stay Unknown. Ended sessions
+the session lifecycle, using the session's own output ID; a missing output ID,
+unobserved simulcast and revoked destinations stay Unknown. Ended sessions
 display Off air and no observed mode while cleanup still locks Start. The worker
 synchronously fences publication with `outputs.stopNow()` before acknowledging
 Stop as ended; process-stop confirmation and resource cleanup follow separately.

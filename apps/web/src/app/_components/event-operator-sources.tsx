@@ -158,7 +158,7 @@ export function EventOperatorSources({
                   {source.editable ? "Custom" : "Lineup"}
                 </span>
               </div>
-              <span className="capitalize text-sm text-muted">{state}</span>
+              <span className="text-sm text-muted">{state}</span>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button

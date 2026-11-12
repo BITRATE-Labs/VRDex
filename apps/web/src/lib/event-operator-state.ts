@@ -100,11 +100,12 @@ export function operatorSourceAvailability(
   observedSource?: { sourceId: string; revision: number },
 ) {
   const state = reportedSourceState(observation, now);
-  if (state === "offline" || state === "unavailable") return state;
+  const label = {live:"Live",offline:"Offline",unavailable:"Unavailable",unknown:"Not checked"}[state];
+  if (state === "offline" || state === "unavailable") return label;
   if (observedSource?.sourceId === source.sourceId && observedSource.revision === source.revision) return "On air";
   // Direct video has no provider liveness probe; decoder readiness is separate.
   if (source.input?.kind === "direct_media") return "Direct video";
-  return state === "unknown" ? "Not checked" : state;
+  return label;
 }
 export function resourceFresh(
   session: OperatorSession | undefined,
