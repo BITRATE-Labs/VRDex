@@ -1,0 +1,31 @@
+# Workspace identity recovery verification
+
+Implements the [approved design](../superpowers/specs/2026-11-12-membership-activity-recovery-design.md) using the [implementation plan](../superpowers/plans/2026-11-12-workspace-identity-recovery.md). Implementation and verification are in progress; this page records evidence without treating local fixtures as production acceptance.
+
+## Provider checkpoint
+
+On November 12, 2026, the connected AWS read route authenticated to the BASIC owning account and expected operator role. An exact tagged-resource read found the canonical VRDex fixed-egress login host stopped. The checked-in collector service explicitly disables ECS Exec. The existing proof configuration names Oak and the consenting BITRATE group.
+
+No infrastructure was started or changed, no credentials were extracted or rotated, and no live provider requests were made for this checkpoint. Fresh exact-user name lookup, role-list payload coverage and historical audit recovery coverage therefore remain unverified. The existing general collector runtime and past cached names do not establish this checkpoint.
+
+The remaining controlled test uses the canonical login-host tunnel and approved collector account, with a small set of exact missing-name IDs from BITRATE history, one role-list read and a bounded recent audit interval. Record only request counts, exact-ID-match booleans and field-presence/count results. Do not retain raw provider payloads. The checkpoint must not create roles, change profiles, send invitations or alter membership. Starting the currently stopped host is a separate infrastructure action; implementation does not authorize doing that silently.
+
+## Local and CI evidence
+
+The private people foundation passes 65 related backend tests, four focused worker tests and backend typecheck. Independent review found two defects, both fixed and accepted in scoped re-review: concurrent rate-limit results retain the longest account cooldown, and an incomplete reference scan cannot delete a name or discard queued work. Regressions reproduce both original failures and verify the fixes.
+
+The workspace UI passes 158 desktop/mobile browser cases, followed by focused regressions for stored invitation remapping, missing role evidence and access restoration. Eight new provenance/collision regressions first failed, then passed; all 148 affected browser cases also pass. Web typecheck and focused lint pass. Tests exercise production components and hooks through synthetic transports, including name updates during recipient selection and confirmation, exact cancellation revisions, source/access/epoch changes, expiry and bounded retries. Independent task review accepted both provenance and collision fixes.
+
+The integrated recovery backend passes 122 focused backend/HTTP/runtime tests, the full 283-test collector worker suite and backend typecheck. Regressions cover credential rotation during an in-flight claim, concurrent cooldown ordering, every raw row consuming the recovery cap, stale results after stop, exact immutable matching, fixed-window resume, role-label provenance and bounded cleanup. A subsequent parser-boundary fix reproduces and handles null, primitive and array audit rows through the real provider parser and Convex checkpoint. Its 20 backend and 43 provider/worker checks pass; normal ingestion and foreign-group validation remain strict.
+
+Final integrated verification passes all 234 desktop/mobile browser cases across people, invitations, members, scheduled actions, activity, recovery, milestones and analytics. Both backend and web typechecks pass at the integrated source head. Recovery/filter model and redirect tests pass 16/16. Final whole-branch review and hosted checks are separate gates recorded on the PR.
+
+Desktop/mobile screenshots cover invitation confirmation, scheduled cancellation, activity roles, filters, history recovery and the people-view lifecycle. Visual inspection checked control separation, exact IDs, mobile wrapping, long names, fixed repair bounds/counts and recorded/recovered/observed provenance. These stories are outside the committed baseline inventory, so their review screenshots do not require blanket baseline regeneration. CI comparisons still run for selected existing baselines. Markdown lint passes across 367 files, and the documentation production build succeeds with nonblocking local cache, dependency-data age and update-check warnings.
+
+Synthetic tests and the throwaway design previews do not prove live provider delivery. At two name reads per minute, a 100-person invitation review cannot resolve every missing name during its 15-minute grant. Unresolved names retain their exact operational IDs and do not block otherwise valid review.
+
+The final PR's checks and review surfaces record exact-head acceptance. Local synthetic evidence does not establish provider acceptance or deployment.
+
+## Rollout boundary
+
+This task delivers code and a merge-ready PR, not a production rollout or historical repair run. Deploy compatible backend/worker support before new clients. Keep new provider recovery capabilities gated until the checkpoint and intended rollout are accepted. Existing lookup/collector behavior must continue to work during an additive rollout or rollback.

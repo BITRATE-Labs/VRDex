@@ -6,7 +6,7 @@ Make activity history readable without sending every name click to VRChat. The m
 
 Resolve missing people automatically in the background, for new activity and recently viewed history. BASIC selected this approach on November 12 and subsequently approved this expanded design for implementation, independent review and PR iteration until merge-ready. The provider checkpoint remains required before claiming historical recovery coverage. Production rollout and historical repair execution are separate from this implementation approval.
 
-The requested judgment is whether the row interaction and the bounded role-recovery proposal are right. BASIC also requested the related workspace improvements below, starting with invitations and scheduled actions. The main tradeoff is additional provider traffic in exchange for useful names. Some records will remain incomplete when the provider no longer has the evidence.
+BASIC approved the row interactions, bounded role recovery and related workspace improvements, starting with invitations and scheduled actions. The main tradeoff is additional provider traffic in exchange for useful names. Some records will remain incomplete when the provider no longer has the evidence.
 
 Preview: [interactive Storybook study](http://127.0.0.1:6007/iframe.html?id=clubs-membership-recovery-design--row-interactions&viewMode=story). Data is synthetic. The demo lookup button is a preview control, not proposed product UI.
 
@@ -18,12 +18,12 @@ New previews: [invitations](http://127.0.0.1:6007/iframe.html?id=clubs-people-fl
 | --- | --- |
 | Locked decision | Keep latest known VRChat names in rows and event-recorded names in details. |
 | Locked decision | Automatically resolve missing people in new activity and recently viewed history. BASIC selected this over manual-only lookup. |
-| Current recommendation | Names only navigate: link to VRDex when a unique visible verified match exists, otherwise plain text. Every row uses the same separate Details control. This addresses BASIC's November 12 correction that controls should be consistent. |
-| Requested revision | Enlarge the separate VRChat control and remove the extra VRDex link. Apply the same destination rule to actor names. |
-| Current recommendation | Recover recent historical role/actor evidence through a bounded audit replay, stored separately from immutable original events. |
-| Current recommendation | Show a stable, distinct member identifier when no name can be obtained. Do not imply a lookup is running when it is not. |
+| Locked decision | Names only navigate: link to VRDex when a unique visible verified match exists, otherwise plain text. Every row uses the same separate Details control. This addresses BASIC's November 12 correction that controls should be consistent. |
+| Locked decision | Enlarge the separate VRChat control and remove the extra VRDex link. Apply the same destination rule to actor names. |
+| Locked decision | Recover recent historical role/actor evidence through a bounded audit replay, stored separately from immutable original events. Provider coverage and production execution remain subject to the checkpoint below. |
+| Locked decision | Show a stable, distinct member identifier when no name can be obtained. Do not imply a lookup is running when it is not. |
 
-The [previous approved design](./2026-11-11-membership-activity-identities-design.md) deliberately used existing cached names and deferred a new resolver and replay. Live inspection showed that this leaves many rows unresolved. This revision expands that scope and changes the primary link destination. The prior implementation remains shipped; this document proposes its successor.
+The [previous approved design](./2026-11-11-membership-activity-identities-design.md) deliberately used existing cached names and deferred a new resolver and replay. Live inspection showed that this leaves many rows unresolved. This approved revision expands that scope and changes the primary link destination. The prior implementation remains shipped.
 
 ## What causes the gaps
 
@@ -111,7 +111,7 @@ Start with invitations and scheduled actions, then apply the shared identity pre
 
 Verify automatic deduplication, account-wide budgets, retries, negative caching, stale-name preservation, authority loss, epoch replacement and cleanup. Verify that hidden/ambiguous/unverified profiles never gain links. Recovery tests must preserve original evidence and reject mismatched replay entries. Browser checks cover profile links versus plain names, consistent Details controls on every row, the larger VRChat target, distinct unresolved people, non-person events, in-place resolution, desktop/mobile layout and existing pagination recovery.
 
-Only throwaway Storybook studies exist today. They demonstrate the row interaction, simulated name resolution, invitation selection/review/results, and editing/cancelling Mira's scheduled action. Desktop/mobile screenshots received visual review, and the interactive demo paths were exercised. A time-input event issue found during the preview check was corrected and the changed time was verified in the list. Focused story lint passed. The expanded builder check found gaps in pre-batch lookup authorization and non-audit retention; both are specified below, and its follow-up found no important unanswered planning questions. No backend/provider requests or real operations are part of these studies. Final product copy remains proposed for BASIC's exact-copy review.
+At design approval, only throwaway Storybook studies existed. They demonstrate the row interaction, simulated name resolution, invitation selection/review/results, and editing/cancelling Mira's scheduled action. Desktop/mobile screenshots received visual review, and the interactive demo paths were exercised. A time-input event issue found during the preview check was corrected and the changed time was verified in the list. Focused story lint passed. The expanded builder check found gaps in pre-batch lookup authorization and non-audit retention; both are specified below, and its follow-up found no important unanswered planning questions. No backend/provider requests or real operations are part of these studies. BASIC approved the exact design and preview copy with implementation approval. Any additional authored product prose still requires exact-copy review.
 
 ## Invitations and scheduled actions first
 
@@ -196,7 +196,7 @@ Add person and event-kind filters alongside the current date range, covering joi
 
 ### Lookup progress without a wall of placeholders
 
-Show one quiet list-level status only when actual admitted work is pending. Count distinct people, not repeated rows; cached names remain visible while refreshing. Put individual lookup state, observation time and failure evidence in Details. A stopped, unauthorized, negatively cached or exhausted job must not keep saying it is checking. Name progress is always separate from invitation or scheduled-action execution progress. Proposed status wording is reviewed with the rest of the UI copy before shipping.
+Show one quiet list-level status only when actual admitted work is pending. Count distinct people, not repeated rows; cached names remain visible while refreshing. Put individual lookup state, observation time and failure evidence in Details. A stopped, unauthorized, negatively cached or exhausted job must not keep saying it is checking. Name progress is always separate from invitation or scheduled-action execution progress. Use the utility label `Updating names` with the distinct pending count.
 
 ### Additional verification
 

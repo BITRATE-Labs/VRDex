@@ -38,11 +38,11 @@
 
 Worker transport operations are `people_claim`, `people_result`, `people_release`, scoped to the authenticated account and exact current integration/epoch authority. Preserve existing worker fencing and budget rules. Store minimal ID/name/time/retry fields, not entire provider responses. Extend name projection with private observations and source/status fields; keep current public response fields compatible.
 
-- [ ] Write failing backend tests for source permissions, grant replacement/expiry, exact ID matching, hidden/ambiguous profiles, stale-name fallback, negative caching, reference cleanup and epoch fencing. Tests must cover every source type.
-- [ ] Write failing worker tests for name-only exact-user reads, per-request reservation, two/minute shared budget, priority, 429/auth behavior, restart/release and no artwork fetch.
-- [ ] Implement the module, additive indexed tables, bounded sweeper and worker transport. Newly verified membership evidence admits work automatically; viewed sources admit only their actual targets. Pending work must influence normal worker scheduling so it does not wait indefinitely for unrelated collection.
-- [ ] Run focused tests, backend typecheck and worker suite. Synchronize generated API declarations through the existing local codegen workflow. Commit and hand off exact API/types, test evidence and remaining limits.
-- [ ] Independent task review and fixes before consuming the contract.
+- [x] Write failing backend tests for source permissions, grant replacement/expiry, exact ID matching, hidden/ambiguous profiles, stale-name fallback, negative caching, reference cleanup and epoch fencing. Tests must cover every source type.
+- [x] Write failing worker tests for name-only exact-user reads, per-request reservation, two/minute shared budget, priority, 429/auth behavior, restart/release and no artwork fetch.
+- [x] Implement the module, additive indexed tables, bounded sweeper and worker transport. Newly verified membership evidence admits work automatically; viewed sources admit only their actual targets. Pending work must influence normal worker scheduling so it does not wait indefinitely for unrelated collection.
+- [x] Run focused tests, backend typecheck and worker suite. Synchronize generated API declarations through the existing local codegen workflow. Commit and hand off exact API/types, test evidence and remaining limits.
+- [x] Independent task review and fixes before consuming the contract. Both review findings passed scoped re-review after regression fixes.
 
 ## Task 2: real invitations, scheduled actions and shared identity controls
 
@@ -50,11 +50,11 @@ Worker transport operations are `people_claim`, `people_result`, `people_release
 
 **Interfaces:** Consume Task 1's generated `requestView`/`readView` contract. Existing invitation/schedule/member mutations and their IDs/revisions remain authoritative. The shared presentation uses schema-derived people identities, plain fallbacks and one VRChat control, never person-name accordion behavior.
 
-- [ ] Add failing browser checks for consistent name/Details targets, 40-pixel VRChat controls, name-first invitation/schedule rows, exact IDs in review/cancellation, actor profile links and non-person actions.
-- [ ] Implement invitation review lookup grants and outcomes projection. Keep selection keyed by immutable IDs, current reviewed/effective ID distinctions, selected count and existing validation.
-- [ ] Implement scheduled list, edit and cancellation identity presentation with viewer-local times, existing authoring timezone and revision/permission checks. No resend behavior for uncertain outcomes.
-- [ ] Apply shared presentation to membership activity, members/requests and confirmation surfaces. Keep existing management actions explicit and separate from profile navigation. Add one truthful list-level pending-name status.
-- [ ] Exercise real hooks with synthetic transport on desktop/mobile, including delayed name updates during confirmation, access loss, stale grants and long/directional names. Run focused lint and web typecheck. Commit and review the task diff.
+- [x] Add failing browser checks for consistent name/Details targets, 40-pixel VRChat controls, name-first invitation/schedule rows, exact IDs in review/cancellation, actor profile links and non-person actions.
+- [x] Implement invitation review lookup grants and outcomes projection. Keep selection keyed by immutable IDs, current reviewed/effective ID distinctions, selected count and existing validation.
+- [x] Implement scheduled list, edit and cancellation identity presentation with viewer-local times, existing authoring timezone and revision/permission checks. No resend behavior for uncertain outcomes.
+- [x] Apply shared presentation to membership activity, members/requests and confirmation surfaces. Keep existing management actions explicit and separate from profile navigation. Add one truthful list-level pending-name status.
+- [x] Exercise real hooks with synthetic transport on desktop/mobile, including delayed name updates during confirmation, access loss, stale grants and long/directional names. Run focused lint and web typecheck. Commit and review the task diff. Provenance and confirmation-collision findings passed scoped re-review.
 
 ## Task 3: activity filters, role observations and historical repair
 
@@ -62,16 +62,19 @@ Worker transport operations are `people_claim`, `people_result`, `people_release
 
 **Interfaces:** Extend `listActivity` with optional exact `targetUserId` and event-kind filters applied before indexed pagination. Add `requestRecovery`, `stopRecovery`, recovery status and fenced worker claim/page/complete operations. Supplemental evidence keys use integration/epoch/audit ID with immutable core comparison; roles are observed by exact role ID with source/time.
 
-- [ ] Add failing tests for server-side filters across pages and restored URL/auth return; empty scopes and persistent cursor recovery remain bounded.
-- [ ] Implement role-name observations and additive projections, preserving recorded role-name priority and honest current-name provenance. Preserve last-known names after role deletion.
-- [ ] Add failing tests for owner-only repair, durable checkpoints, stop/resume/idempotence, 30-day/10,000-entry bounds, provider budget, mismatched audit evidence, epoch/authority loss and no immutable rewrites.
-- [ ] Implement the owner repair control/status and worker transport using exact current scope. Add a bounded read-only provider checkpoint tool or reuse the canonical existing route; document actual acceptance separately from fixtures and rollout.
-- [ ] Run focused backend/worker/browser tests and both typechecks, update operational documentation, commit and review the task diff.
+- [x] Add failing tests for server-side filters across pages and restored URL/auth return; empty scopes and persistent cursor recovery remain bounded.
+- [x] Implement role-name observations and additive projections, preserving recorded role-name priority and honest current-name provenance. Preserve last-known names after role deletion.
+- [x] Add failing tests for owner-only repair, durable checkpoints, stop/resume/idempotence, 30-day/10,000-entry bounds, provider budget, mismatched audit evidence, epoch/authority loss and no immutable rewrites.
+- [x] Implement the owner repair control/status and worker transport using exact current scope. Reuse the canonical provider route; the stopped login host leaves live acceptance unverified and new traffic gated.
+- [x] Run focused backend/worker/browser tests and both typechecks, update operational documentation and commit. The final independent review evaluates Task 3 and whole-branch integration together.
 
 ## Task 4: whole-branch verification, independent review and PR delivery
 
-- [ ] Compare every approved requirement to production code, tests and current docs, including source cleanup and all related screens. Record any ruled implementation details in the local ledger.
-- [ ] Run selected backend, worker, frontend and browser suites plus typechecks/lint/docs. Capture desktop/mobile screenshots and inspect the actual production components, not just throwaway mocks.
-- [ ] Dispatch a fresh whole-branch independent review on the exact diff. Fix valid findings with failing-then-passing regression evidence and rerun affected checks.
-- [ ] Open one PR with `ci:browsers` and `ci:visuals`, approved-copy provenance, meaningful verification and explicit provider/rollout limits. Do not merge or deploy.
-- [ ] Iterate all valid PR feedback. Before each follow-up push, reply to and resolve handled threads. After the final pushed head's checks finish, refresh comments, sticky summaries, inline threads, formal reviews and mergeability. Stop only at clean merge-ready state, with the PR URL in the final handoff.
+- [x] Compare every approved requirement to production code, tests and current docs, including source cleanup and all related screens. Record ruled implementation details in the local ledger.
+- [x] Run selected backend, worker, frontend and browser suites plus typechecks/lint/docs. Capture desktop/mobile screenshots and inspect the actual production components, not just throwaway mocks.
+
+The PR records the remaining acceptance gates against its current head:
+
+- Fresh whole-branch independent review, including Task 3. Fix valid findings with failing-then-passing regressions and rerun affected checks.
+- One PR with `ci:browsers` and `ci:visuals`, approved-copy provenance, meaningful verification and explicit provider/rollout limits. Do not merge or deploy.
+- Iterate all valid PR feedback. Before each follow-up push, reply to and resolve handled threads. After the final pushed head's checks finish, refresh comments, sticky summaries, inline threads, formal reviews and mergeability. Stop only at clean merge-ready state, with the PR URL in the final handoff.
