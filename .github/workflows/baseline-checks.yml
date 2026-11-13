@@ -678,7 +678,7 @@ jobs:
           PLAYWRIGHT_OUTPUT_DIR: playwright-artifacts/mobile-media/results
           PLAYWRIGHT_HTML_REPORT_DIR: playwright-artifacts/mobile-media/report
           PLAYWRIGHT_JSON_REPORT_FILE: playwright-artifacts/mobile-media/results.json
-        run: pnpm --filter web exec playwright test mobile-hls-playback.spec.ts event-lineup-live.spec.ts --project=desktop-chromium --workers=1
+        run: pnpm --filter web exec playwright test mobile-hls-playback.spec.ts event-lineup-live.spec.ts native-trial-routing.spec.ts --project=desktop-chromium --workers=1
 
       - name: Stop job-owned browser audio backend
         if: always()

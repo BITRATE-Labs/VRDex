@@ -11,7 +11,7 @@ player continues across VRDex navigation. The phone test then checks app switchi
 locking the screen, system playback controls and returning to the page.
 
 ```mermaid
-flowchart LR
+flowchart TD
   A[Signed BASIC account] --> B[Enable local trial routing]
   B --> C[Exact public profile or event]
   C --> D[Play in retained player]
