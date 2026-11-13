@@ -668,6 +668,9 @@ export function ClubAnalyticsContent({
                   key={widget}
                   communitySlug={communitySlug}
                   {...bounds}
+                  targetUserId={location.member ?? undefined}
+                  eventType={location.eventType ?? undefined}
+                  onFilterChange={filters => update({ member: filters.targetUserId ?? null, eventType: filters.eventType ?? null })}
                 />
               );
             if (widget === "instances" && can("instance_history"))

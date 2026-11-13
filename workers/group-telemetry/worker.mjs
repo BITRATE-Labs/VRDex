@@ -1,8 +1,10 @@
+import { checkPeople } from "./people-jobs.mjs";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { VrchatClient, VrchatProviderError } from "./vrchat-client.mjs";
 import { refreshClubAuthority } from "./club-authority.mjs";
 import { collectMembershipPage } from "./membership-collection.mjs";
+import { recoverMembershipPage } from "./membership-recovery.mjs";
 import { budgetedClubProvider } from "./club-request-budget.mjs";
 import { ClubProvider } from "./club-provider.mjs";
 import { readClubProviderJob } from "./club-read-jobs.mjs";
@@ -438,6 +440,15 @@ async function collect(assignment) {
         }
         if (!result?.collected) break;
       }
+      if (!stopping && Date.now() < deadline) {
+        try {
+          await recoverMembershipPage({ assignment, authority, provider, control, expectedUserId: secret.vrchatUserId,
+            accountBudget, integrationBudget, shouldStop: () => stopping, deadline });
+        } catch (error) {
+          if (["authentication", "rate_limit", "membership"].includes(error?.category) || /^Control plane (401|403|429):/.test(error?.message ?? "")) throw error;
+          logEvent({ event: "membership_recovery_failed", category: boundedProviderCategory(error?.category) });
+        }
+      }
     }
   } catch (error) {
     const attempt = (attempts.get(assignment.integrationId) ?? 0) + 1;
@@ -768,8 +779,13 @@ while (!stopping) {
       control, provider, accountBudget, metadataBudget: proofBudget, heartbeat,
       isStopping: () => stopping, reportDeadSession, pauseWithHeartbeats, logEvent,
     });
+    loopPhase = "people_names";
+    const peopleCount = stopping ? 0 : await checkPeople({
+      control, provider, accountBudget, heartbeat, isStopping: () => stopping,
+      reportDeadSession, pauseWithHeartbeats,
+    });
     controlFailures = 0;
-    await pause(assignmentCount > 0 || proofCount > 0 || destinationCount > 0 || groupMemberCount > 0 ? 1_000 : 10_000);
+    await pause(peopleCount > 0 || assignmentCount > 0 || proofCount > 0 || destinationCount > 0 || groupMemberCount > 0 ? 1_000 : 10_000);
   } catch (error) {
     controlFailures += 1;
     logEvent(collectorLoopFailureEvent(error, loopPhase, controlFailures));

@@ -1,3 +1,5 @@
+import { roleObservation } from "./_clubMembershipRecovery";
+import { recordRoleObservations } from "./_membershipRecoveryProjection";
 import { readCollectionSubject, readManagedIntegration } from "./_groupObservationPolicy";
 import { requireActiveBrowserSessionSubject } from "./_browserSessionAuthority";
 import { requireControlProof } from "./_externalControl";
@@ -214,6 +216,7 @@ export const recordAuthority = internalMutation({
     integrationId: v.id("communityVrchatIntegrations"),
     epochStartedAt: v.number(),
     authority: ownMemberAuthority,
+    roles: v.optional(v.array(roleObservation)),
   },
   returns: v.object({ recorded: v.boolean() }),
   handler: async (ctx, args) => {
@@ -279,6 +282,7 @@ export const recordAuthority = internalMutation({
         receivedAt: now,
       },
     });
+    if (args.roles && args.authority.membershipStatus === "member" && args.authority.permissions.some(p => p === "*" || p === "group-audit-view")) await recordRoleObservations(ctx, integration, args.roles, args.authority.observedAt);
     return { recorded: true };
   },
 });

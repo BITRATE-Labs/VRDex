@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import type { FunctionReturnType } from "convex/server";
+import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { ClubErrorBoundary } from "./club-workspace";
 import { useQueries } from "convex/react";
 import { ConvexError } from "convex/values";
@@ -19,6 +18,9 @@ import {
 import { Card, SectionTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
+import { Field, Select } from "@/components/ui/field";
+import { ClubMembershipRecovery } from "./club-membership-recovery";
+import { findPersonIdentity, PersonName, PersonVRChat, PeoplePending, accessiblePersonName, isVrchatUserId, personName, useClubPeople, usePeopleSourceGroups, type PersonIdentity } from "./club-person";
 import { metricNumber, metricTime } from "./club-chart";
 
 export type MovementPoint = {
@@ -27,18 +29,15 @@ export type MovementPoint = {
   joins: number | null;
   departures: number | null;
 };
+export type MembershipFilters = Pick<FunctionArgs<typeof api.clubMembership.listActivity>, "targetUserId" | "eventType">;
+type ActivityFilterControls = MembershipFilters & { onFilterChange?: (filters: MembershipFilters) => void };
+const activityOptions = { "group.member.join": "Joined", "group.member.leave": "Left", "group.member.remove": "Removed", "group.member.role.assign": "Role assigned", "group.member.role.unassign": "Role removed" };
+const nonPersonSubjects: Record<string, string> = { "group.update": "Group settings", "group.post.create": "Group post", "group.instance.create": "Group instance", "group.role.create": "Group role", "group.role.update": "Group role", "group.role.delete": "Group role" };
 export type MembershipEvent = FunctionReturnType<typeof api.clubMembership.listActivity>["page"][number];
 export function membershipEventLabel(type: string, roleName?: string) {
   if (type === "group.member.role.assign") return roleName ? <>Assigned role: <bdi>{roleName}</bdi></> : "Role assigned";
   if (type === "group.member.role.unassign") return roleName ? <>Removed role: <bdi>{roleName}</bdi></> : "Role removed";
-  return ({ "group.member.join": "Joined", "group.member.leave": "Left", "group.member.remove": "Removed" } as Record<string, string>)[type] ?? "Other activity";
-}
-function accessiblePersonName(name: string) {
-  return name.replace(/[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, "").trim() || "Unknown member";
-}
-function PersonName({ identity, recordedName }: { identity?: MembershipEvent["targetIdentity"]; recordedName?: string }) {
-  const name = identity?.displayName || recordedName || "Unknown member";
-  return identity ? <a href={identity.vrchatUrl} target="_blank" rel="noreferrer" aria-label={`${accessiblePersonName(name)} (VRChat profile, opens in a new tab)`} className="underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2"><bdi>{name}</bdi><span className="sr-only"> (VRChat profile, opens in a new tab)</span></a> : <bdi>{name}</bdi>;
+  return Object.hasOwn(activityOptions, type) ? activityOptions[type as keyof typeof activityOptions] : "Other activity";
 }
 export function MembershipMovementView({
   points,
@@ -225,48 +224,71 @@ export function MembershipActivityView({
   loading = false,
   canLoadMore = false,
   onLoadMore,
-}: {
+  people = [],
+  pendingCount = 0,
+  targetUserId,
+  eventType,
+  onFilterChange,
+}: ActivityFilterControls & {
+  people?: PersonIdentity[];
+  pendingCount?: number;
   events: MembershipEvent[];
   loading?: boolean;
   canLoadMore?: boolean;
   onLoadMore?: () => void;
 }) {
+  const visibleIds = events.flatMap(event => [event.targetUserId, event.actorUserId, event.targetIdentity?.vrchatUrl.split("/").at(-1), event.actorIdentity?.vrchatUrl.split("/").at(-1)]).filter(isVrchatUserId);
+  const memberIds = [...new Set([...events.map(event => event.targetUserId).filter(isVrchatUserId).map(id => id.toLowerCase()), ...(targetUserId ? [targetUserId.toLowerCase()] : [])])];
+  const memberLabel = (id: string) => personName(id, findPersonIdentity(people, id)?.displayName || events.find(event => event.targetUserId?.toLowerCase() === id)?.targetIdentity?.displayName || events.find(event => event.targetUserId?.toLowerCase() === id)?.targetDisplayName, memberIds);
   return (
     <Card padding="lg" className="min-w-0">
       <SectionTitle>Membership activity</SectionTitle>
+      {onFilterChange ? <div className="mt-4 flex flex-wrap items-end gap-3"><Field className="min-w-0 basis-full sm:flex-1 sm:basis-0">Member<Select aria-label="Member" value={targetUserId?.toLowerCase() ?? ""} onChange={event => onFilterChange({ targetUserId: event.target.value || undefined, eventType })}><option value="">All members</option>{memberIds.map(id => <option key={id} value={id}>{accessiblePersonName(memberLabel(id))}</option>)}</Select></Field><Field className="min-w-0 basis-full sm:flex-1 sm:basis-0">Activity<Select aria-label="Activity" value={eventType ?? ""} onChange={event => onFilterChange({ targetUserId, eventType: event.target.value || undefined })}><option value="">All activity</option>{Object.entries(activityOptions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}{eventType && !Object.hasOwn(activityOptions, eventType) ? <option value={eventType}>{eventType}</option> : null}</Select></Field>{targetUserId || eventType ? <Button onClick={() => onFilterChange({})}>Clear filters</Button> : null}</div> : null}
+      <PeoplePending count={pendingCount} />
       <div className="mt-4 divide-y divide-border">
-        {events.map((event) => (
-          <div key={event.auditId} className="py-4">
+        {events.map((event) => {
+          const target: PersonIdentity | undefined = findPersonIdentity(people, event.targetUserId) ?? event.targetIdentity;
+          const actor: PersonIdentity | undefined = findPersonIdentity(people, event.actorUserId) ?? event.actorIdentity;
+          const targetId = event.targetUserId ?? target?.vrchatUrl?.split("/").at(-1);
+          const userId = isVrchatUserId(targetId) ? targetId : undefined;
+          const personSubject = userId !== undefined || event.eventType.startsWith("group.member.");
+          const actorId = event.actorUserId ?? actor?.vrchatUrl?.split("/").at(-1);
+          const nonPersonSubject = Object.hasOwn(nonPersonSubjects, event.eventType) ? nonPersonSubjects[event.eventType] : "Group activity";
+          const subject = personSubject ? personName(userId, target?.displayName || event.targetDisplayName, visibleIds) : nonPersonSubject;
+          return <div key={event.auditId} className="py-4">
             <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_12rem]">
               <div className="min-w-0">
-                <p className="break-words font-medium"><PersonName identity={event.targetIdentity} recordedName={event.targetDisplayName} /></p>
-                {event.targetIdentity ? <div className="mt-1 flex gap-4 text-xs text-muted">
-                  <a href={event.targetIdentity.vrchatUrl} target="_blank" rel="noreferrer" className="underline underline-offset-4">VRChat<span className="sr-only"> (opens in a new tab)</span></a>
-                  {event.targetIdentity.vrdexUrl ? <Link href={event.targetIdentity.vrdexUrl} className="underline underline-offset-4">VRDex</Link> : null}
-                </div> : null}
+                <div className="flex flex-wrap items-center gap-3"><p className="min-w-0 break-words font-medium">{personSubject ? <PersonName userId={userId} identity={target} recordedName={event.targetDisplayName} visibleIds={visibleIds} /> : subject}</p><PersonVRChat userId={userId} identity={target} recordedName={event.targetDisplayName} visibleIds={visibleIds} /></div>
               </div>
               <div className="min-w-0">
                 <p className="break-words text-sm">{membershipEventLabel(event.eventType, event.roleName)}</p>
-                {event.actorUserId || event.actorDisplayName ? <p className="mt-1 break-words text-xs text-muted">By <PersonName identity={event.actorIdentity} recordedName={event.actorDisplayName} />{event.actorIdentity?.vrdexUrl ? <> | <Link href={event.actorIdentity.vrdexUrl} className="underline">VRDex</Link></> : null}</p> : null}
-                {event.eventType.startsWith("group.member.role.") && !event.roleName ? <p className="mt-1 text-xs text-muted">Role unavailable</p> : null}
+                {actorId || event.actorDisplayName ? <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted"><span className="min-w-0 break-words">By <PersonName userId={actorId} identity={actor} recordedName={event.actorDisplayName} visibleIds={visibleIds} /></span>{actorId !== userId ? <PersonVRChat userId={actorId} identity={actor} recordedName={event.actorDisplayName} visibleIds={visibleIds} /> : null}</div> : null}
               </div>
               <time dateTime={new Date(event.occurredAt).toISOString()} className="text-xs text-muted sm:text-right">{metricTime(event.occurredAt)}</time>
             </div>
             <details className="mt-3 text-xs text-muted">
-              <summary aria-label={`Details for ${accessiblePersonName(event.targetIdentity?.displayName || event.targetDisplayName || "Unknown member")}, ${event.auditId}`} className="w-fit cursor-pointer rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">Details</summary>
+              <summary aria-label={`Details for ${accessiblePersonName(subject)}, ${event.auditId}`} className="w-fit cursor-pointer rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4">Details</summary>
               <dl className="mt-3 grid gap-2 border-l border-border pl-3">
                 {[
                   ["Event type", event.eventType], ["Audit ID", event.auditId], ["Target ID", event.targetUserId],
                   ["Name recorded with event", event.targetDisplayName],
-                  ["Name last checked", event.targetIdentity?.observedAt === undefined ? undefined : metricTime(event.targetIdentity.observedAt)],
-                  ["Actor ID", event.actorUserId], ["Actor name recorded with event", event.actorDisplayName],
-                  ["Actor name last checked", event.actorIdentity?.observedAt === undefined ? undefined : metricTime(event.actorIdentity.observedAt)],
-                  ["Role ID", event.roleId], ["Role recorded with event", event.roleName],
+                  ["Name source", target?.source === "vrdex_profile" ? "VRDex profile name" : undefined],
+                  ["Name lookup", target?.status],
+                  ["Name last checked", target?.observedAt === undefined ? undefined : metricTime(target.observedAt)],
+                  ["Actor ID", event.actorUserId], [event.actorNameSource === "recovered" ? "Recovered actor name" : "Actor name recorded with event", event.actorDisplayName],
+                  ["Actor name source", actor?.source === "vrdex_profile" ? "VRDex profile name" : undefined],
+                  ["Actor name lookup", actor?.status],
+                  ["Actor name last checked", actor?.observedAt === undefined ? undefined : metricTime(actor.observedAt)],
+                  ["Role ID", event.roleId], [event.roleNameSource === "role_observation" ? "Last observed role name" : event.roleNameSource === "recovered" ? "Recovered role name" : "Role recorded with event", event.roleName],
+                  ["Role last observed", event.roleNameObservedAt === undefined ? undefined : metricTime(event.roleNameObservedAt)],
+                  ["Evidence recovered", event.evidenceRecoveredAt === undefined ? undefined : metricTime(event.evidenceRecoveredAt)],
+                  ["Role", event.eventType.startsWith("group.member.role.") && !event.roleName ? "Role not recorded" : undefined],
                 ].map(([label, value]) => value ? <div key={label}><dt>{label}</dt><dd className="break-all text-foreground">{value}</dd></div> : null)}
               </dl>
+              {userId && onFilterChange ? <Button size="sm" variant="ghost" className="mt-3" onClick={() => onFilterChange({ targetUserId: userId.toLowerCase(), eventType })}>Filter member</Button> : null}
             </details>
-          </div>
-        ))}
+          </div>;
+        })}
       </div>
       {loading ? (
         <Notice role="status">Loading membership activity…</Notice>
@@ -281,16 +303,24 @@ export function MembershipActivityView({
     </Card>
   );
 }
+function AdmittedActivity(props: Parameters<typeof MembershipActivityView>[0]) {
+  const groups = usePeopleSourceGroups(props.events.map(event => event.auditId));
+  const people = useClubPeople(groups.length ? groups.map(auditIds => ({ kind: "activity", auditIds })) : null);
+  return <MembershipActivityView {...props} people={people.people} pendingCount={people.pendingCount} />;
+}
 function MembershipActivityQuery({
   communitySlug,
   startAt,
   endAt,
-}: {
+  targetUserId,
+  eventType,
+  onFilterChange,
+}: ActivityFilterControls & {
   communitySlug: string;
   startAt: number;
   endAt: number;
 }) {
-  const storageKey = `membership-pages:${communitySlug}:${startAt}:${endAt}`;
+  const storageKey = `membership-pages:${communitySlug}:${startAt}:${endAt}${targetUserId || eventType ? `:${targetUserId ?? ""}:${eventType ?? ""}` : ""}`;
   const [restoreCount] = useState(() => {
     try {
       const count = Number(sessionStorage.getItem(storageKey));
@@ -303,8 +333,8 @@ function MembershipActivityQuery({
   const [cursorResets, setCursorResets] = useState(0);
   const queries = useMemo(() => Object.fromEntries(requests.map((pagination, index) => [index, {
     query: api.clubMembership.listActivity,
-    args: { communitySlug, startAt, endAt, paginationOpts: { ...pagination, numItems: 25 } },
-  }])), [communitySlug, startAt, endAt, requests]);
+    args: { communitySlug, startAt, endAt, ...(targetUserId ? { targetUserId } : {}), ...(eventType ? { eventType } : {}), paginationOpts: { ...pagination, numItems: 25 } },
+  }])), [communitySlug, startAt, endAt, targetUserId, eventType, requests]);
   const pages: Record<string, Page | Error | undefined> = useQueries(queries);
   const [previousPages, setPreviousPages] = useState(pages);
   const scopeUnavailable = Object.values(pages).some(page => page && !(page instanceof Error) && page.scopeUnavailable === true);
@@ -377,9 +407,12 @@ function MembershipActivityQuery({
       setRequests(current => current.map((request, index) => pages[index] instanceof Error ? {
       ...request, id: request.id + 1,
     } : request));
-    }}>Retry</Button></Notice> : null}
-    {!clearHistory && (events.length > 0 || errors.length === 0) ? <MembershipActivityView
+    }}>Retry</Button>{onFilterChange && (targetUserId || eventType) ? <Button className="ml-3" size="sm" variant="secondary" onClick={() => onFilterChange({})}>Clear filters</Button> : null}</Notice> : null}
+    {!clearHistory && (events.length > 0 || errors.length === 0) ? <AdmittedActivity
       events={events}
+      targetUserId={targetUserId}
+      eventType={eventType}
+      onFilterChange={onFilterChange}
       loading={loading}
       canLoadMore={canLoadMore}
       onLoadMore={loadMore}
@@ -387,6 +420,6 @@ function MembershipActivityQuery({
   </>;
 }
 
-export function ClubMembershipActivity(props: { communitySlug: string; startAt: number; endAt: number }) {
-  return <ClubErrorBoundary key={`${props.communitySlug}:${props.startAt}:${props.endAt}`} errorMessage="Unable to load activity."><MembershipActivityQuery {...props} /></ClubErrorBoundary>;
+export function ClubMembershipActivity(props: ActivityFilterControls & { communitySlug: string; startAt: number; endAt: number }) {
+  return <><ClubMembershipRecovery /><ClubErrorBoundary key={`${props.communitySlug}:${props.startAt}:${props.endAt}:${props.targetUserId ?? ""}:${props.eventType ?? ""}`} errorMessage="Unable to load activity."><MembershipActivityQuery {...props} /></ClubErrorBoundary></>;
 }

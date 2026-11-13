@@ -112,3 +112,19 @@ test("population chart retains explicit outage breaks without inventing zero sam
   const points = observedChartPoints([{at:0,value:10,coverage:"observed"},{at:120000,value:10,coverage:"observed",breakBefore:true}]);
   assert.deepEqual(points.map(p => p.value), [10,null,10]);
 });
+
+
+test("membership filters survive range navigation and retain exact IDs", () => {
+  const member = "usr_00000000-0000-4000-8000-000000000001";
+  const state = dashboardLocation(new URLSearchParams(`from=2026-09-01&to=2026-09-30&member=${member.toUpperCase()}&eventType=group.member.role.assign`), 30);
+  assert.equal(state.member, member);
+  assert.equal(state.eventType, "group.member.role.assign");
+  const href = dashboardHref("/club/analytics", state, { day: "2026-09-12" });
+  const restored = dashboardLocation(new URL(href, "https://example.test").searchParams, 30);
+  assert.equal(restored.member, member);
+  assert.equal(restored.eventType, "group.member.role.assign");
+  assert.equal(restored.day, "2026-09-12");
+  const invalid = dashboardLocation(new URLSearchParams("member=Mira&eventType="), 30);
+  assert.equal(invalid.member, null);
+  assert.equal(invalid.eventType, null);
+});

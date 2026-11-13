@@ -216,7 +216,8 @@ export class ClubProvider {
   }
 
   async readPage(kind, options = {}) {
-    keys(options, ["n", "offset", ...(kind === "search" ? ["search"] : []), ...(kind === "audit" ? ["startDate", "endDate"] : [])]);
+    const audit = kind === "audit" || kind === "audit_recovery";
+    keys(options, ["n", "offset", ...(kind === "search" ? ["search"] : []), ...(audit ? ["startDate", "endDate"] : [])]);
     const { n, offset } = pageOptions(options);
     if (kind === "instances") {
       // This endpoint has no pagination. Bound the response and slice locally.
@@ -233,21 +234,25 @@ export class ClubProvider {
       });
       return { items: rows.slice(offset, offset + n), nextOffset: offset + n < rows.length ? offset + n : null, observedAt };
     }
-    const paths = { members: "members", search: "members/search", requests: "requests", invites: "invites", roles: "roles", bans: "bans", posts: "posts", audit: "auditLogs" };
+    const paths = { members: "members", search: "members/search", requests: "requests", invites: "invites", roles: "roles", bans: "bans", posts: "posts", audit: "auditLogs", audit_recovery: "auditLogs" };
     if (!Object.hasOwn(paths, kind)) fail();
     const params = new URLSearchParams({ n: String(n), offset: String(offset) });
     if (kind === "search") params.set("query", text(options.search?.trim(), 100, 3));
-    if (kind === "audit") {
+    if (audit) {
       for (const key of ["startDate", "endDate"]) if (options[key] !== undefined) params.set(key, instant(options[key]));
       if (options.startDate && options.endDate && Date.parse(options.startDate) > Date.parse(options.endDate)) fail();
     }
     // Roles has no provider pagination. Fetch once, bound, then slice locally.
     const raw = await this.request(`${this.base}/${paths[kind]}${kind === "roles" ? "" : `?${params}`}`);
-    const rows = kind === "posts" ? object(raw).posts : kind === "audit" ? object(raw).results : raw;
+    const rows = kind === "posts" ? object(raw).posts : audit ? object(raw).results : raw;
     if (!Array.isArray(rows) || rows.length > (kind === "roles" ? 100 : n)) fail("schema_drift");
-    rows.forEach((row) => this.scoped(row));
+    rows.forEach((row) => {
+      // Recovery must count malformed entries; object rows still require exact group scope.
+      if (kind === "audit_recovery" && (!row || typeof row !== "object" || Array.isArray(row))) return;
+      this.scoped(row);
+    });
     const items = kind === "roles" ? rows.slice(offset, offset + n) : rows;
-    const hasNext = kind === "roles" ? offset + n < rows.length : kind === "audit" ? raw.hasNext : kind === "posts" ? offset + items.length < raw.total : items.length === n;
+    const hasNext = kind === "roles" ? offset + n < rows.length : audit ? raw.hasNext : kind === "posts" ? offset + items.length < raw.total : items.length === n;
     if (typeof hasNext !== "boolean" || (hasNext && items.length === 0)) fail("schema_drift");
     return { items, nextOffset: hasNext ? offset + items.length : null, observedAt: this.clock() };
   }

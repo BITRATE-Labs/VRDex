@@ -3,6 +3,7 @@ import { it } from "node:test";
 import { convexTest } from "convex-test";
 import { makeFunctionReference } from "convex/server";
 import schemaModule from "../../convex/schema";
+import { normalizeMembershipAuditPage } from "../../workers/group-telemetry/membership-audit.mjs";
 const schema =
   (schemaModule as unknown as { default?: typeof schemaModule }).default ??
   schemaModule;
@@ -20,6 +21,19 @@ const bucket = makeFunctionReference<"query">(
 const activity = makeFunctionReference<"query">("clubMembership:listActivity");
 const start = Date.UTC(2026, 2, 1),
   end = start + 3600_000;
+it("new parsed mixed-case evidence is immediately canonical-filterable without changing the raw ID", async () => {
+  delete process.env.VRDEX_PEOPLE_RESOLUTION_ENABLED;
+  const { t, owner, integrationId } = await setup();
+  const rawId = "USR_AaAaAaAa-AAAA-aaaa-AAAA-aAaAaAaAaAaA";
+  const events = normalizeMembershipAuditPage([{ id: "new-mixed", groupId: "grp_test", eventType: "group.member.join", created_at: new Date(start + 1).toISOString(), targetId: rawId }], { groupId: "grp_test", startAt: start, endAt: end });
+  const scanId = await t.mutation(begin, { integrationId, epochStartedAt: start, groupId: "grp_test", startAt: start, endAt: end });
+  for (const phase of ["collect", "verify"]) await t.mutation(ingest, { scanId, pageNumber: 0, phase, rawAuditIds: ["new-mixed"], events, exhausted: true });
+  await finishScan(t, scanId);
+  const result = await owner.query(activity, { communitySlug: "club", startAt: start, endAt: end, targetUserId: rawId.toLowerCase(), paginationOpts: { numItems: 10, cursor: null } });
+  assert.equal(result.page.length, 1); assert.equal(result.page[0].targetUserId, rawId);
+  assert.deepEqual(await t.run(ctx => ctx.db.query("clubPeople").collect()), []);
+  assert.deepEqual(await t.run(ctx => ctx.db.query("clubPeopleReferences").collect()), []);
+});
 async function finishScan(t: ReturnType<typeof convexTest>, scanId: string, worker?: { workerId: string; fencingToken: number }) {
   for (;;) {
     const scan = await t.mutation(resume, worker ?? {});

@@ -113,6 +113,15 @@ const telemetryWorker = httpAction(async (ctx, request) => {
       });
       return json(result);
     }
+    if (body.operation.startsWith("people_")) {
+      const worker = { collectorAccountId: collectorAccountId as never, workerId: body.workerId, workerKeyHash: presentedHash };
+      if (body.operation === "people_claim") return json(await ctx.runMutation(internal.clubPeople.claim, { ...worker, limit: 1 }));
+      if (typeof body.personId !== "string" || typeof body.leaseToken !== "string") return json({ error: "invalid_request" }, 400);
+      const lease = { ...worker, personId: body.personId as never, leaseToken: body.leaseToken };
+      if (body.operation === "people_release") return json(await ctx.runMutation(internal.clubPeople.release, lease));
+      if (body.operation === "people_result") return json(await ctx.runMutation(internal.clubPeople.recordResult, { ...lease, result: body.result } as never));
+      return json({ error: "invalid_operation" }, 400);
+    }
     if (body.operation.startsWith("destination_")) {
       // Bind the collector identity and current credential generation inside
       // the cache transaction too, closing the key-rotation dispatch race.
@@ -259,6 +268,7 @@ const telemetryWorker = httpAction(async (ctx, request) => {
         workerKeyHash: presentedHash,
         epochStartedAt: body.epochStartedAt,
         authority: body.authority,
+        ...(body.roles !== undefined ? { roles: body.roles } : {}),
       } as never));
     }
     if (body.operation === "club_read_claim" || body.operation === "club_read_complete") {
@@ -296,6 +306,15 @@ const telemetryWorker = httpAction(async (ctx, request) => {
         now,
       } as never);
       return json({ ok: true });
+    }
+    if (body.operation.startsWith("membership_recovery_")) {
+      const scope = { ...common, workerKeyHash: presentedHash, epochStartedAt: body.epochStartedAt, groupId: body.groupId };
+      if (body.operation === "membership_recovery_claim") return json(await ctx.runMutation(internal.clubMembershipRecovery.claim, scope as never));
+      const lease = { ...scope, recoveryId: body.recoveryId, expectedRevision: body.expectedRevision };
+      if (body.operation === "membership_recovery_check") return json(await ctx.runMutation(internal.clubMembershipRecovery.check, lease as never));
+      if (body.operation === "membership_recovery_failure") return json(await ctx.runMutation(internal.clubMembershipRecovery.recordFailure, { ...lease, rateLimited: body.rateLimited, retryAfterMs: body.retryAfterMs } as never));
+      if (body.operation === "membership_recovery_page") return json(await ctx.runMutation(internal.clubMembershipRecovery.recordPage, { ...lease, offset: body.offset, events: body.events, rawAuditIds: body.rawAuditIds, sourceCount: body.sourceCount, exhausted: body.exhausted } as never));
+      return json({ error: "invalid_operation" }, 400);
     }
     if (body.operation === "membership_scan_begin" || body.operation === "membership_scan_page" || body.operation === "membership_scan_resume" || body.operation === "membership_scan_finalize") {
       const scope = {...common, workerKeyHash: presentedHash, epochStartedAt: body.epochStartedAt, groupId: body.groupId};

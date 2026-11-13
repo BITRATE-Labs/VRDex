@@ -360,6 +360,27 @@ test("deleting a list requires the revision shown at confirmation @storybook-vis
   }
 });
 
+test("mixed-case identity invitation outcomes and cancellation retain stored IDs @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-invitations-workspace--mixed-case-people&viewMode=story");
+  await page.getByLabel("Saved list").selectOption("list-one");
+  await expect(page.getByRole("list", { name: "Select recipients" }).getByRole("link", { name: "Riley", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Review invitations", exact: true }).click();
+  const review = page.getByRole("list", { name: "Reviewed recipients" });
+  await expect(review.getByRole("link", { name: "Riley", exact: true })).toBeVisible();
+  await expect(review.getByRole("listitem")).toHaveCount(2);
+  await page.getByRole("button", { name: "Confirm invitations", exact: true }).click();
+  expect((await page.evaluate(() => JSON.parse(document.documentElement.dataset.invitationPayload!))).reviewedRecipients).toEqual([alice, bob]);
+  await page.getByRole("button", { name: "Cancel unsent invitations", exact: true }).click();
+  const confirmation = page.getByRole("dialog", { name: "Cancel unsent invitations", exact: true });
+  await expect(confirmation.getByText("Nova", { exact: true })).toBeVisible();
+  await expect(confirmation).toContainText(bob.toUpperCase());
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/bd4a-invitation-cancel-${test.info().project.name}.png`, fullPage: true });
+  }
+  await confirmation.getByRole("button", { name: "Confirm cancellation", exact: true }).click();
+  expect((await page.evaluate(() => JSON.parse(document.documentElement.dataset.invitationCancel!))).batchId).toBe("batch-1");
+});
+
 test("recipient review deduplicates user IDs regardless of hex case @storybook-visual", async ({ page }) => {
   const mixedCase = "usr_AaAaAaAa-bBbB-cCcC-dDdD-eEeEeEeEeEeE";
   await page.goto("/iframe.html?id=clubs-invitation-batches--composer&viewMode=story");
@@ -389,3 +410,175 @@ for (const skew of [-3600000, 3600000]) {
     );
   });
 }
+
+
+test("identity review preserves exact targets while names resolve @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-invitations-workspace--owner&viewMode=story");
+  await page.getByLabel("Saved list").selectOption("list-one");
+  await page.getByRole("button", { name: "Review invitations", exact: true }).click();
+  const rows = page.getByRole("list", { name: "Reviewed recipients" }).getByRole("listitem");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first().getByRole("link", { name: "Riley", exact: true })).toHaveAttribute("href", "/riley");
+  await expect(rows.nth(1).getByText("Nova", { exact: true })).toBeVisible();
+  await expect(rows.nth(1).getByRole("link", { name: "Nova", exact: true })).toHaveCount(0);
+  await expect(rows.first()).toContainText(alice);
+  const provider = rows.first().getByRole("link", { name: /VRChat profile/ });
+  expect((await provider.boundingBox())!.height).toBeGreaterThanOrEqual(40);
+  await rows.first().getByText("Details", { exact: true }).click();
+  await expect(rows.first().locator("details")).toHaveAttribute("open", "");
+  await page.getByRole("button", { name: "Confirm invitations" }).click();
+  await expect(page.getByText("Submitted", { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+});
+
+
+test("late names preserve invitation payload and clear on denied views @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-invitations-workspace--late-names&viewMode=story");
+  await page.getByLabel("Saved list").selectOption("list-one");
+  await page.getByRole("button", { name: "Review invitations", exact: true }).click();
+  const review = page.getByRole("region", { name: "Review invitations" });
+  await expect(review.getByRole("status")).toHaveText("Updating names \u00b7 2");
+  await expect(review).toContainText(alice);
+  await expect(review).toContainText(bob);
+  await page.getByRole("button", { name: "Resolve names", exact: true }).click();
+  await expect(review.getByRole("link", { name: "Riley", exact: true })).toBeVisible();
+  await expect(review.getByRole("status")).toHaveCount(0);
+  await page.getByRole("button", { name: "Revoke people access", exact: true }).click();
+  await expect(review.getByRole("link", { name: "Riley", exact: true })).toHaveCount(0);
+  await expect(review).toContainText(alice);
+  await page.getByRole("button", { name: "Confirm invitations" }).click();
+  const payload = await page.evaluate(() => JSON.parse(document.documentElement.dataset.invitationPayload!));
+  expect(payload.reviewedRecipients).toEqual([alice, bob]);
+  expect(payload.destination).toEqual({ kind: "group" });
+  expect(payload.schedule).toEqual({ kind: "immediate" });
+  expect(payload.requestId).toEqual(expect.any(String));
+});
+
+
+test("recipient selection survives name updates and freezes only selected IDs @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-invitations-workspace--late-names&viewMode=story");
+  await page.getByLabel("Saved list").selectOption("list-one");
+  const selection = page.getByRole("list", { name: "Select recipients", exact: true });
+  await expect(selection.getByRole("checkbox")).toHaveCount(2);
+  await selection.getByRole("checkbox", { name: `Select recipient ${bob}`, exact: true }).uncheck();
+  await page.getByRole("button", { name: "Resolve names", exact: true }).click();
+  await expect(selection.getByRole("link", { name: "Riley", exact: true })).toBeVisible();
+  await expect(selection.getByRole("checkbox", { name: `Select recipient ${bob}`, exact: true })).not.toBeChecked();
+  await page.getByRole("button", { name: "Review invitations", exact: true }).click();
+  const review = page.getByRole("region", { name: "Review invitations" });
+  await expect(review.getByRole("listitem")).toHaveCount(1);
+  await expect(review).toContainText(alice);
+  await expect(review).not.toContainText(bob);
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/invitation-identity-selection-${test.info().project.name}.png`, fullPage: true });
+  }
+  await page.getByRole("button", { name: "Confirm invitations" }).click();
+  const payload = await page.evaluate(() => JSON.parse(document.documentElement.dataset.invitationPayload!));
+  expect(payload.reviewedRecipients).toEqual([alice]);
+});
+
+
+test("cancelling a batch distinguishes effective and originally reviewed IDs @storybook-visual", async ({ page }) => {
+  const effective = "usr_33333333-3333-3333-3333-333333333333";
+  await page.goto("/iframe.html?id=clubs-invitations-workspace--remapped-recipient&viewMode=story");
+  await page.getByLabel("Saved list").selectOption("list-one");
+  await page.getByRole("button", { name: "Review invitations", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm invitations", exact: true }).click();
+  await page.getByRole("button", { name: "Cancel unsent invitations", exact: true }).click();
+  const confirmation = page.getByRole("dialog", { name: "Cancel unsent invitations", exact: true });
+  await expect(confirmation.getByText("Nova", { exact: true })).toBeVisible();
+  await expect(confirmation).toContainText(effective);
+  await expect(confirmation).toContainText(`Originally reviewed: ${bob}`);
+  await expect(confirmation).not.toContainText(alice);
+  await page.getByRole("button", { name: "Confirm cancellation", exact: true }).click();
+  await expect(page.getByText("Submitted", { exact: true })).toBeVisible();
+  await expect(page.getByText("Cancelled", { exact: true })).toBeVisible();
+});
+
+
+test("batch cancellation distinguishes colliding missing-name references @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-invitations-workspace--late-names&viewMode=story");
+  const first = "usr_00000000-0000-0000-0000-000000000001";
+  const second = "usr_11111111-1111-1111-1111-111100000001";
+  await page.getByLabel("VRChat user IDs").fill([alice, first, second].join("\n"));
+  await page.getByRole("button", { name: "Review invitations", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm invitations", exact: true }).click();
+  await page.getByRole("button", { name: "Cancel unsent invitations", exact: true }).click();
+  const confirmation = page.getByRole("dialog", { name: "Cancel unsent invitations", exact: true });
+  const names = await confirmation.locator("bdi").allTextContents();
+  expect(names).toHaveLength(2);
+  expect(new Set(names).size).toBe(2);
+  await expect(confirmation).toContainText(first);
+  await expect(confirmation).toContainText(second);
+});
+
+
+test("recipient previews settle once and review cannot freeze stale selection @storybook-visual", async ({ page }) => {
+  await page.clock.install();
+  await page.goto("/iframe.html?id=clubs-invitations-workspace--late-names&viewMode=story");
+  const input = page.getByLabel("VRChat user IDs");
+  await input.fill(alice);
+  const review = page.getByRole("button", { name: "Review invitations", exact: true });
+  await expect(review).toBeDisabled();
+  await input.fill(`${alice}\n`);
+  await input.fill(`${alice}\n${bob}`);
+  expect(await page.evaluate(() => Number(document.documentElement.dataset.invitationPreviews ?? 0))).toBe(0);
+  await page.clock.runFor(350);
+  await expect(page.getByRole("list", { name: "Select recipients", exact: true }).getByRole("checkbox")).toHaveCount(2);
+  expect(await page.evaluate(() => Number(document.documentElement.dataset.invitationPreviews))).toBe(1);
+  await expect.poll(() => page.evaluate(() => Number(document.documentElement.dataset.invitationPeopleRequests))).toBe(1);
+  await page.getByRole("checkbox", { name: `Select recipient ${bob}`, exact: true }).uncheck();
+  await page.getByRole("checkbox", { name: `Select recipient ${alice}`, exact: true }).uncheck();
+  await expect(review).toBeDisabled();
+  await input.fill(bob);
+  await expect(review).toBeDisabled();
+  await page.clock.runFor(350);
+  await expect(review).toBeEnabled();
+  await review.click();
+  const confirmation = page.getByRole("region", { name: "Review invitations", exact: true });
+  await expect(confirmation).toContainText(bob);
+  await expect(confirmation).not.toContainText(alice);
+});
+
+
+test("failed recipient previews retry unchanged text and freeze only the latest settled IDs @storybook-visual", async ({ page }) => {
+  await page.clock.install();
+  await page.goto("/iframe.html?id=clubs-invitation-batches--preview-retry&viewMode=story");
+  const input = page.getByLabel("VRChat user IDs");
+  const review = page.getByRole("button", { name: "Review invitations", exact: true });
+  await input.fill(alice);
+  await page.clock.runFor(350);
+  await expect(page.getByRole("alert")).toContainText("Unable to save invitations.");
+  await expect(review).toBeDisabled();
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/invitation-preview-retry-${test.info().project.name}.png`, fullPage: true });
+  }
+  await page.clock.fastForward(5000);
+  expect(await page.evaluate(() => Number(document.documentElement.dataset.composerPreviews))).toBe(1);
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(review).toBeDisabled();
+  await page.clock.runFor(350);
+  await expect(review).toBeEnabled();
+  await expect(input).toHaveValue(alice);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(await page.evaluate(() => Number(document.documentElement.dataset.composerPreviews))).toBe(2);
+  await input.fill(bob);
+  await expect(review).toBeDisabled();
+  await page.clock.runFor(350);
+  await review.click();
+  const confirmation = page.getByRole("region", { name: "Review invitations", exact: true });
+  await expect(confirmation).toContainText(bob);
+  await expect(confirmation).not.toContainText(alice);
+  await page.getByRole("button", { name: "Confirm invitations", exact: true }).click();
+  expect(await page.evaluate(() => JSON.parse(document.documentElement.dataset.composerReviewedIds!))).toEqual([bob]);
+});
+
+test("malformed recipient preview shows established validation without enabling review @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-invitation-batches--composer&viewMode=story");
+  await page.getByLabel("VRChat user IDs").fill("not-a-user-id");
+  await expect(page.getByRole("alert")).toContainText("Enter valid VRChat user IDs.");
+  await expect(page.getByRole("button", { name: "Review invitations", exact: true })).toBeDisabled();
+  await page.getByLabel("VRChat user IDs").fill(alice);
+  await expect(page.getByRole("button", { name: "Review invitations", exact: true })).toBeEnabled();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
