@@ -298,7 +298,7 @@ describe("collector proof check queue", () => {
       consecutiveControlFailures: 0,
       workerKeyHash: "a".repeat(64),
       now,
-    }));
+    }), /unknown_capability_v1/);
     assert.deepEqual(await t.run(async ctx => (await ctx.db.get(collectorAccountId))?.lastWorkerCapabilities), [...COLLECTOR_CAPABILITIES]);
     const ready = await t.query(internal.communityTelemetry.collectorDeploymentReadiness, {
       collectorAccountId,
