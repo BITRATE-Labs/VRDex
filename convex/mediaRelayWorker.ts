@@ -1,4 +1,5 @@
-import { relayEnabled } from "./_mediaRelayOperations";
+import { NativeTrialConfigSchema } from "../packages/media-relay/src/trial/policy";
+import { activeNativeTrial, relayEnabled, relayOperationState } from "./_mediaRelayOperations";
 import { resolveRelayGrant } from "./mediaRelayPlayback";
 import { GatewayAuthorizationSchema } from "../packages/media-relay/src/contracts";
 import { v } from "convex/values";
@@ -93,6 +94,7 @@ export const observeSource = mutation({
     state: v.string(),
     progressAt: v.number(),
     terminalReason: v.optional(v.string()),
+    trialId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -104,13 +106,24 @@ export const observeSource = mutation({
         : SourceTerminalReasonSchema.parse(args.terminalReason);
     if (terminalReason !== undefined && state !== "unavailable")
       throw Error("Invalid terminal reason");
-    const candidate = await source(ctx, args.streamKey);
+    const terminal = state === "stopped" || state === "unavailable";
+    const candidate = await source(ctx, args.streamKey, terminal);
+    let trialCleanup = false;
+    if (args.trialId !== undefined) {
+      const operation = await relayOperationState(ctx.db);
+      const trial = NativeTrialConfigSchema.parse(JSON.parse(operation?.trialConfiguration ?? "null"));
+      if (!terminal || operation?.trialId !== args.trialId || trial.source.streamKey !== args.streamKey ||
+          trial.worker.workerId !== args.workerId || trial.worker.workerEpoch !== args.workerEpoch)
+        throw Error("Finite cleanup identity mismatch");
+      trialCleanup = true;
+      if (!candidate.owner && candidate.epoch === args.epoch && ["stopped", "unavailable"].includes(candidate.state)) return null;
+    }
     // Cleanup acknowledgment is not authority: it can only end this exact old
     // ownership and must preserve the last durable progress timestamp.
     if (
       (state === "stopped" || state === "unavailable") &&
       candidate.leaseExpiresAt !== undefined &&
-      candidate.leaseExpiresAt <= now
+      (candidate.leaseExpiresAt <= now || trialCleanup)
     ) {
       if (
         candidate.owner?.workerId !== args.workerId ||
@@ -130,7 +143,7 @@ export const observeSource = mutation({
       });
       return null;
     }
-    const row = await owned(ctx, args, now);
+    const row = await owned(ctx, args, now, terminal);
     if (
       state === "queued" ||
       !Number.isFinite(args.progressAt) ||
@@ -143,7 +156,7 @@ export const observeSource = mutation({
         state !== "draining")
     )
       throw Error("Invalid source observation");
-    const terminal = state === "stopped" || state === "unavailable";
+
     await ctx.db.patch(row._id, {
       state,
       progressAt: args.progressAt,
@@ -187,6 +200,11 @@ export const listSources = mutation({
     const binding = await authority(ctx, args.credential, args);
     if (!(await relayEnabled(ctx.db))) throw Error("Relay disabled");
     const now = Date.now();
+    const trial = await activeNativeTrial(ctx.db, now);
+    if (trial) {
+      const row = await ctx.db.query("mediaRelaySources").withIndex("by_streamKey", q => q.eq("streamKey", trial.source.streamKey)).unique();
+      return row ? [{ source: trial.source, state: row.state, admissionRevision: row.admissionRevision ?? 0 }] : [];
+    }
     const own = await ctx.db
       .query("mediaRelaySources")
       .withIndex("by_owner", (q) => q.eq("owner.workerId", args.workerId))
@@ -348,6 +366,9 @@ export const readGateway = query({
         kind: "unavailable",
         reason: row?.terminalReason ?? "unavailable",
       });
+    const trial = await activeNativeTrial(ctx.db);
+    if (trial && (row.owner?.workerId !== trial.worker.workerId || row.owner.workerEpoch !== trial.worker.workerEpoch))
+      return GatewayAuthorizationSchema.parse({ kind: "unavailable", reason: "unavailable" });
     return GatewayAuthorizationSchema.parse({
       kind: "active",
       grant: resolved.grant,

@@ -4,10 +4,12 @@ import { convexTest } from "convex-test";
 import { makeFunctionReference } from "convex/server";
 import schemaModule from "../../convex/schema";
 import { AdmissionSchema, PlaybackRebindSchema, RELAY_POLICY } from "../../packages/media-relay/src";
+import { createControlRpc, gatewayAuthorization } from "../../packages/media-relay/src/providers/convex-control";
 const schema =
   (schemaModule as unknown as { default?: typeof schemaModule }).default ??
   schemaModule;
 const modules = {
+  "../../convex/mediaRelayOperations.ts": () => import("../../convex/mediaRelayOperations"),
   "../../convex/mediaRelayWorker.ts": () =>
     import("../../convex/mediaRelayWorker"),
   "../../convex/_generated/api.ts": () => import("../../convex/_generated/api"),
@@ -726,6 +728,40 @@ it("refresh extends only a near-expiry authorized grant, retaining ID and source
     "unavailable",
   );
 });
+it("native requests preserve original expiry and require deliberate resume without hidden renewal", async test => {
+  let now = Date.now();
+  test.mock.method(Date, "now", () => now);
+  const h = await fixture();
+  process.env.MEDIA_RELAY_GATEWAY_TOKEN = "fixture-gateway";
+  process.env.MEDIA_RELAY_WORKER_TOKEN = "fixture-worker";
+  process.env.MEDIA_RELAY_PLAYBACK_ORIGIN = "https://relay.invalid";
+  const admitted = preparing(await h.play());
+  const originalExpiry = now + 1000;
+  await h.t.run(async ctx => {
+    const grant = await ctx.db.query("mediaRelayGrants").first();
+    const source = await ctx.db.query("mediaRelaySources").first();
+    assert(grant && source);
+    await ctx.db.patch(grant._id, { expiresAt: originalExpiry });
+    await ctx.db.patch(source._id, readySource(source.streamKey));
+  });
+  const sourceBefore = await h.t.run(ctx => ctx.db.query("mediaRelaySources").first());
+  const rpc = createControlRpc({ url: "https://control.invalid", credential: "fixture-gateway", fetcher: async (_url, init) => {
+    const request = JSON.parse(String(init?.body));
+    const value = request.path === "mediaRelayWorker:readGateway"
+      ? await h.t.query(makeFunctionReference<"query">("mediaRelayWorker:readGateway"), request.args)
+      : await h.t.mutation(makeFunctionReference<"mutation">("mediaRelayPlayback:refreshPlayback"), request.args);
+    return Response.json({ status: "success", value });
+  } });
+  const authorize = gatewayAuthorization(rpc);
+  const read = () => authorize({ grantId: admitted.grantId, rendition: "audio", signal: new AbortController().signal });
+  const first = await read();
+  assert.equal(first.kind, "active");
+  now = originalExpiry + 1;
+  assert.equal((await read()).kind, "denied");
+  assert.deepEqual(await h.t.run(ctx => ctx.db.query("mediaRelaySources").first()), sourceBefore);
+  await h.t.run(ctx => ctx.db.patch(h.profileId, { fieldVisibility: { outboundLinks: "private" } }));
+  assert.equal((await read()).kind, "denied");
+});
 it("refresh refuses exact expiry and revoked context but allows valid post-window event continuation", async () => {
   const h = await fixture();
   const refresh = makeFunctionReference<"mutation">(
@@ -1158,12 +1194,12 @@ it("concurrent terminal restarts for different sources share the final admission
 });
 
 const rebind = makeFunctionReference<"mutation">("mediaRelayPlayback:rebindPlayback");
-async function sequenceFixture() {
+async function sequenceFixture(automatic = false) {
   const h = await fixture();
   const slots = await h.t.run(async ctx => {
-    await ctx.db.patch(h.eventId, { watchMode: "performer_sequence" });
+    await ctx.db.patch(h.eventId, automatic ? { watchMode: "event_stream", watchSurfaceEnabled: false, mediaLinks: [] } : { watchMode: "performer_sequence" });
     await ctx.db.patch(h.profileId, { outboundLinks: ["Alpha", "Beta"].map(id => ({ type: "vrcdn", url: `vrcdn:${id}`, label: "Live", source: "owner_authored" })) });
-    const slot = (position: number, selectedStreamId: string) => ctx.db.insert("eventSlots", { eventId: h.eventId, personProfileId: h.profileId, selectedStreamId, position, startAt: Date.now() - 1000 + position * 1000, displayLabel: "DJ", roleLabel: "DJ", sourceType: "manual", sourceLabel: "test", confidence: 1, reviewState: "confirmed", updatedAt: 1 });
+    const slot = (position: number, selectedStreamId: string) => ctx.db.insert("eventSlots", { eventId: h.eventId, personProfileId: h.profileId, selectedStreamId, position, startAt: Date.now() - 10000 + position * 20000, displayLabel: "DJ", roleLabel: "DJ", sourceType: "manual", sourceLabel: "test", confidence: 1, reviewState: "confirmed", updatedAt: 1 });
     return { a: await slot(0, "Alpha"), b: await slot(1, "Beta"), same: await slot(2, "Alpha") };
   });
   const context = (selectedSourceId: string) => ({ ...h.eventContext, selectedSourceId });
@@ -1172,6 +1208,34 @@ async function sequenceFixture() {
   const openNext = (proof = first.grantId, eventId = h.eventId, selectedSourceId = slots.b, streamId = "Beta") => h.t.mutation(open, { context: { kind: "event", eventId, selectedSourceId }, streamId, preferredMode: "audio", continuationGrantId: proof });
   return { ...h, slots, context, first, end, openNext };
 }
+it("automatic community event grants use the current slot and retain public-source revocation without staff enablement", async () => {
+  const h = await fixture();
+  const now = Date.now();
+  const ids = await h.t.run(async ctx => {
+    await ctx.db.patch(h.eventId, { watchSurfaceEnabled: false, watchMode: "event_stream", mediaLinks: [], endAt: now + 120000 });
+    const make = (position: number, startAt: number) => ctx.db.insert("eventSlots", {
+      eventId: h.eventId, personProfileId: h.profileId, selectedStreamId: "Alpha", position, startAt,
+      displayLabel: "DJ", roleLabel: "DJ", sourceType: "manual", sourceLabel: "test", confidence: 1, reviewState: "confirmed", updatedAt: now });
+    return { current: await make(0, now - 10000), future: await make(1, now + 60000) };
+  });
+  const current = { ...h.eventContext, selectedSourceId: ids.current };
+  const grant = preparing(await h.play(current));
+  assert.equal(AdmissionSchema.parse(await h.play({ ...current, selectedSourceId: ids.future })).kind, "unavailable");
+  await h.t.run(ctx => ctx.db.patch(h.profileId, { fieldVisibility: { outboundLinks: "private" } }));
+  assert.equal((await h.t.query(resolve, { grantId: grant.grantId, now: Date.now() })).kind, "denied");
+});
+
+it("a future slot cannot grant an automatic viewer when the current performer has no stream", async () => {
+  const h = await fixture();
+  const now = Date.now();
+  const future = await h.t.run(async ctx => {
+    await ctx.db.patch(h.eventId, { watchSurfaceEnabled: false, mediaLinks: [] });
+    const base = { eventId: h.eventId, displayLabel: "DJ", roleLabel: "DJ", sourceType: "manual", sourceLabel: "test", confidence: 1, reviewState: "confirmed" as const, updatedAt: now };
+    await ctx.db.insert("eventSlots", { ...base, position: 0, startAt: now - 1000 });
+    return ctx.db.insert("eventSlots", { ...base, personProfileId: h.profileId, selectedStreamId: "Alpha", position: 1, startAt: now + 30000 });
+  });
+  assert.equal(AdmissionSchema.parse(await h.play({ ...h.eventContext, selectedSourceId: future })).kind, "unavailable");
+});
 it("same-event postwindow continuation admits an independently authorized slot with a distinct bounded grant", async () => {
   const h = await sequenceFixture(); await h.end();
   assert.equal(AdmissionSchema.parse(await h.t.mutation(open, { context: h.context(h.slots.b), streamId: "Beta", preferredMode: "audio" })).kind, "unavailable");
@@ -1179,6 +1243,16 @@ it("same-event postwindow continuation admits an independently authorized slot w
   const rows = await h.t.run(ctx => ctx.db.query("mediaRelayGrants").collect()); assert.equal(rows.length, 2);
   process.env.MEDIA_RELAY_MAX_GRANTS = "2";
   assert.equal(AdmissionSchema.parse(await h.openNext()).kind, "capacityLimited");
+});
+it("automatic community lineup continuation and same-source identity rebind retain event authority after the fresh-start window", async () => {
+  const h = await sequenceFixture(true);
+  await h.end();
+  preparing(await h.openNext());
+  const valid = await h.t.query(resolve, { grantId: h.first.grantId, now: Date.now() });
+  assert.equal(valid.kind, "valid");
+  assert.equal(PlaybackRebindSchema.parse(await h.t.mutation(rebind, {
+    grantId: h.first.grantId, selectedSourceId: h.slots.same, expectedSelectedSourceId: h.slots.a,
+    expectedContextRevision: valid.grant.contextRevision })).kind, "rebound");
 });
 for (const invalid of ["expired", "released", "revoked", "profile", "other-event", "event-stream", "target-revoked"] as const) it(`continuation denies ${invalid} authority`, async () => {
   const h = await sequenceFixture();
@@ -1435,4 +1509,143 @@ for (const variant of ["svg", "surface-mismatch", "oversize", "raster"] as const
   const url = playbackArtwork({status:"playing",mode:"audio",volume:1,muted:false,metadata:result.metadata,request:{kind:"vrcdn",profileId:h.profileId,profileSlug:"dj",sourceId:"Alpha",src:"vrcdn:Alpha",transport:"mpegts",href:"/people/dj",title:"DJ"}});
   if (variant === "raster") assert.match(url!,/brand=wordmark-v1-512/);
   else assert.equal(url,NEUTRAL_NOW_PLAYING_ARTWORK);
+});
+
+
+it("finite native trial uses existing grants only for its signed operator and exact public context", async test => {
+  const h = await fixture(false);
+  const now = Date.now();
+  const operatorUserId = await h.t.run(ctx => ctx.db.insert("users", { clerkUserId: "trial-operator" }));
+  const config = { version: 1, trialId: "native-trial", operatorUserId,
+    context: h.context, source: { streamKey: "vrcdn/Alpha/1", streamId: "Alpha", inputFormat: "vrcdn_fmp4", packagingVersion: 1 },
+    origin: "https://trial.invalid", origins: ["https://app.invalid"], startsAt: now - 1000, expiresAt: now + 899000,
+    limits: { upstreamBytes: 1024 ** 3, payloadBytes: 256 * 1024 ** 2, requests: 3000, retainedBytes: 128 * 1024 ** 2 },
+    worker: { workerId: "trial-worker", workerEpoch: 1, allocation: { cpuUnits: 1024, memoryMiB: 2048, evidenceId: "native-trial-proof" }, maxSources: 1, draining: false },
+  };
+  await h.t.run(async ctx => { const operation = await ctx.db.query("mediaRelayOperations").first(); assert.ok(operation); await ctx.db.patch(operation._id, { enabled: false }); });
+  process.env.MEDIA_RELAY_TRIAL_CONFIG = JSON.stringify(config);
+  process.env.MEDIA_RELAY_WORKERS = JSON.stringify([config.worker]);
+  process.env.MEDIA_RELAY_WORKER_TOKEN = "trial-worker-token";
+  process.env.MEDIA_RELAY_GATEWAY_TOKEN = "trial-gateway-token";
+  const enable = makeFunctionReference<"mutation">("mediaRelayOperations:setNativeTrialEnabled");
+  const args = { enabled: true, evidence: { target: "finite-native-trial", trialId: config.trialId,
+    evidenceId: config.worker.allocation.evidenceId, measuredAt: now, sourceCap: 1, maximumGrants: 2,
+    memoryPeakBytes: 1024 * 1024, retainedPeakBytes: 1024 * 1024, scratchLimitBytes: 512 * 1024 ** 2, scratchHardBoundVerified: true, budgetEnforcementPassed: true, nativeContractPassed: true, cleanupPassed: true, timestampWarnings: 0 } };
+  try {
+    await assert.rejects(h.t.withIdentity({ subject: "trial-operator" }).mutation(enable, args));
+    await h.t.mutation(enable, args);
+    assert.equal(AdmissionSchema.parse(await h.play()).kind, "unavailable");
+    const operator = h.t.withIdentity({ subject: "trial-operator" });
+    const eligibility = makeFunctionReference<"query">("mediaRelayPlayback:getNativeTrialConfiguration");
+    assert.equal(await h.t.query(eligibility, {}), null);
+    assert.deepEqual((await operator.query(eligibility, {})).context, h.context);
+    const openArgs = { context: h.context, streamId: "Alpha", preferredMode: "audio" };
+    const first = preparing(await operator.mutation(open, openArgs));
+    const second = preparing(await operator.mutation(open, openArgs));
+    assert.notEqual(first.grantId, second.grantId);
+    assert.equal(AdmissionSchema.parse(await operator.mutation(open, openArgs)).kind, "capacityLimited");
+    assert.equal(AdmissionSchema.parse(await operator.mutation(open, { ...openArgs, context: h.eventContext })).kind, "unavailable");
+    await h.t.run(async ctx => {
+      const grants = await ctx.db.query("mediaRelayGrants").collect();
+      assert.equal(grants.length, 2);
+      assert(grants.every(grant => grant.expiresAt === config.expiresAt));
+      const source = await ctx.db.query("mediaRelaySources").first();
+      assert.ok(source);
+      await ctx.db.patch(source._id, { ...readySource("vrcdn/Alpha/1"), progressAt: now, owner: { workerId: config.worker.workerId, workerEpoch: config.worker.workerEpoch } });
+    });
+    assert.equal(AdmissionSchema.parse(await h.t.query(get, { grantId: first.grantId })).kind, "ready");
+    const gatewayRead = makeFunctionReference<"query">("mediaRelayWorker:readGateway");
+    const gatewayArgs = { credential: "trial-gateway-token", grantId: first.grantId, rendition: "audio" };
+    assert.equal((await h.t.query(gatewayRead, gatewayArgs)).kind, "active");
+    await h.t.run(async ctx => { const row = await ctx.db.query("mediaRelaySources").first(); assert.ok(row); await ctx.db.patch(row._id, { owner: { workerId: "wrong-worker", workerEpoch: 1 } }); });
+    assert.equal((await h.t.query(gatewayRead, gatewayArgs)).kind, "unavailable");
+    await h.t.run(async ctx => { const row = await ctx.db.query("mediaRelaySources").first(); assert.ok(row); await ctx.db.patch(row._id, { owner: { workerId: config.worker.workerId, workerEpoch: config.worker.workerEpoch } }); });
+    const configured = process.env.MEDIA_RELAY_TRIAL_CONFIG;
+    process.env.MEDIA_RELAY_TRIAL_CONFIG = JSON.stringify({ ...config, worker: { ...config.worker, workerEpoch: 2 } });
+    assert.equal(AdmissionSchema.parse(await h.t.query(get, { grantId: first.grantId })).kind, "unavailable");
+    await assert.rejects(h.t.mutation(enable, args));
+    process.env.MEDIA_RELAY_TRIAL_CONFIG = configured;
+    await h.t.mutation(release, { grantId: second.grantId });
+    assert.equal(AdmissionSchema.parse(await operator.mutation(open, openArgs)).kind, "capacityLimited");
+    await h.t.run(async ctx => {
+      const original = await ctx.db.query("mediaRelayGrants").withIndex("by_grantId", q => q.eq("grantId", first.grantId)).unique();
+      assert.ok(original);
+      const { _id, _creationTime, trialId, ...ordinary } = original;
+      await ctx.db.insert("mediaRelayGrants", { ...ordinary, grantId: "historical-nontrial" });
+    });
+    assert.equal(AdmissionSchema.parse(await h.t.query(get, { grantId: "historical-nontrial" })).kind, "unavailable");
+    await h.t.run(ctx => ctx.db.patch(h.profileId, { publicationState: "draft_private" }));
+    assert.equal(AdmissionSchema.parse(await h.t.query(get, { grantId: first.grantId })).kind, "unavailable");
+    await h.t.mutation(enable, { enabled: false });
+    assert.equal(AdmissionSchema.parse(await h.t.query(get, { grantId: second.grantId })).kind, "unavailable");
+    const registerTrial = makeFunctionReference<"mutation">("mediaRelayWorker:registerWorker");
+    await h.t.mutation(registerTrial,{credential:"trial-worker-token",observation:{workerId:config.worker.workerId,workerEpoch:config.worker.workerEpoch,allocation:config.worker.allocation,observedAt:now,activeJobs:0,resources:null,jobs:[]}});
+    const observeTrial = makeFunctionReference<"mutation">("mediaRelayWorker:observeSource");
+    const stopArgs = {credential:"trial-worker-token",workerId:config.worker.workerId,workerEpoch:config.worker.workerEpoch,streamKey:config.source.streamKey,epoch:1,state:"stopped",progressAt:0,trialId:config.trialId};
+    await assert.rejects(h.t.mutation(observeTrial,{...stopArgs,trialId:"wrong-trial"}));
+    await assert.rejects(h.t.mutation(observeTrial,{...stopArgs,epoch:2}));
+    await h.t.mutation(observeTrial,stopArgs);
+    await h.t.mutation(observeTrial,stopArgs);
+    await h.t.run(async ctx => {
+      await ctx.db.patch(h.profileId, { publicationState: "published" });
+      const source = await ctx.db.query("mediaRelaySources").first(); assert.ok(source);
+      assert.equal(source.state,"stopped"); assert.equal(source.owner,undefined); assert.equal(source.progressAt,now);
+    });
+    const nextConfig = { ...config, trialId: "native-trial-next", worker: { ...config.worker, workerEpoch: 2 } };
+    process.env.MEDIA_RELAY_TRIAL_CONFIG = JSON.stringify(nextConfig);
+    process.env.MEDIA_RELAY_WORKERS = JSON.stringify([nextConfig.worker]);
+    const nextArgs = { ...args, rearmSource: true, evidence: { ...args.evidence, trialId: nextConfig.trialId } };
+    await h.t.mutation(enable, nextArgs);
+    await h.t.run(async ctx => { const source = await ctx.db.query("mediaRelaySources").first(); assert.equal(source?.state,"stopped"); assert.equal(source?.trialRearmId,nextConfig.trialId); });
+    const nextGrant = preparing(await operator.mutation(open, openArgs));
+    await h.t.run(async ctx => { const source = await ctx.db.query("mediaRelaySources").first(); assert.ok(source); assert.equal(source.state,"queued"); assert.equal(source.trialRearmId,undefined); await ctx.db.patch(source._id,{state:"unavailable"}); });
+    test.mock.method(Date,"now",()=>now+61000);
+    assert.equal(AdmissionSchema.parse(await operator.mutation(open,openArgs)).kind,"unavailable");
+    await assert.rejects(h.t.mutation(enable,nextArgs));
+    assert.equal(AdmissionSchema.parse(await h.t.query(get,{grantId:first.grantId})).kind,"unavailable");
+    await h.t.mutation(enable,{enabled:false});
+    assert.equal(AdmissionSchema.parse(await h.t.query(get,{grantId:nextGrant.grantId})).kind,"unavailable");
+  } finally { delete process.env.MEDIA_RELAY_TRIAL_CONFIG; }
+});
+
+it("fresh manual selection admits only an exact authored-active overlap, preserving missing-current and future guards", async () => {
+  const h = await fixture(); const now = Date.now();
+  const ids = await h.t.run(async ctx => {
+    await ctx.db.patch(h.eventId, { watchSurfaceEnabled: false, watchMode: "event_stream", mediaLinks: [], endAt: now + 120000 });
+    const base = { eventId: h.eventId, personProfileId: h.profileId, selectedStreamId: "Alpha", displayLabel: "DJ", roleLabel: "DJ", sourceType: "manual", sourceLabel: "test", confidence: 1, reviewState: "confirmed" as const, updatedAt: now };
+    const a = await ctx.db.insert("eventSlots", { ...base, position: 0, startAt: now - 10000, endAt: now + 30000 });
+    const b = await ctx.db.insert("eventSlots", { ...base, position: 1, startAt: now - 10000, endAt: now + 30000 });
+    const future = await ctx.db.insert("eventSlots", { ...base, position: 2, startAt: now + 60000 });
+    return { a,b,future };
+  });
+  const play = (selectedSourceId: string) => h.play({ ...h.eventContext, selectedSourceId });
+  preparing(await play(ids.a)); preparing(await play(ids.b));
+  assert.equal(AdmissionSchema.parse(await play(ids.future)).kind,"unavailable");
+  await h.t.run(ctx => ctx.db.patch(ids.b,{ startAt: now + 30000, endAt: now + 60000 }));
+  assert.equal(AdmissionSchema.parse(await play(ids.b)).kind,"unavailable");
+  await h.t.run(async ctx => { await ctx.db.patch(ids.a,{ selectedStreamId: undefined, personProfileId: undefined }); });
+  assert.equal(AdmissionSchema.parse(await play(ids.future)).kind,"unavailable");
+});
+
+
+it("deployment operator lookup is exact, verified, unique and denies browser identity", async () => {
+  const h = await fixture();
+  const lookup = makeFunctionReference<"query">("mediaRelayOperations:nativeTrialOperator");
+  const email = "operator@example.invalid";
+  const id = await h.t.run(ctx => ctx.db.insert("users",{ clerkUserId:"operator", email }));
+  assert.equal(await h.t.query(lookup,{email}),null);
+  await h.t.run(ctx=>ctx.db.patch(id,{emailVerificationTime:Date.now()}));
+  assert.equal(await h.t.query(lookup,{email}),id);
+  await assert.rejects(h.t.withIdentity({subject:"operator"}).query(lookup,{email}));
+  assert.equal(await h.t.query(lookup,{email:"other@example.invalid"}),null);
+  await h.t.run(ctx=>ctx.db.insert("users",{clerkUserId:"duplicate",email,emailVerificationTime:Date.now()}));
+  assert.equal(await h.t.query(lookup,{email}),null);
+});
+
+it("only exact canonical provider MP4 links are admitted as live relay sources", async () => {
+  const h = await fixture();
+  await h.t.run(ctx=>ctx.db.patch(h.profileId,{outboundLinks:[{type:"vrcdn",url:"https://stream.vrcdn.live/live/Alpha.live.mp4",label:"Live",source:"owner_authored"}]}));
+  preparing(await h.play());
+  await h.t.run(ctx=>ctx.db.patch(h.profileId,{outboundLinks:[{type:"vrcdn",url:"https://stream.vrcdn.live/recordings/Alpha.mp4",label:"Live",source:"owner_authored"}]}));
+  assert.equal(AdmissionSchema.parse(await h.play()).kind,"unavailable");
 });

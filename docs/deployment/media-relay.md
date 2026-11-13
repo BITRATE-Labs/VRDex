@@ -205,7 +205,7 @@ media nodes and grant, and closes PiP when selecting audio. Returning to video
 does not request PiP. Physical-phone behavior remains a release gate.
 
 Rollback to the disabled client retains the saved preference. Audio only controls
-are disabled for adapters without an audio rendition. Restored audio selection is
+are omitted for adapters without an audio rendition. Restored audio selection is
 blocked without loading full video; the viewer can deliberately select Video and
 Play to use legacy foreground playback. Legacy playback has no background support
 guarantee. Utility controls use existing approved labels. See the
@@ -246,3 +246,64 @@ retries of an already-queued source do not consume another restart or grant slot
 ## Persisted operator gate
 
 The environment flag alone no longer enables relay work. The deployment-admin enable operation is checked-in blocked pending separately reviewed hard traffic/cost enforcement and current-integration release verification. Complete hosted measurements alone cannot enable it; PAYG acceptance and budget strings are rejected. Disable remains available without evidence. Empty operator state is disabled. See [verification and release controls](../engineering/media-relay-verification.md) for measured local evidence, the unapproved cost proposal, independent emergency stop, staging bootstrap and open disk/traffic gates.
+
+## Automatic community admission and finite operator trial
+
+Fresh automatic event admission uses canonical public lineup timing. The selected
+slot must be the unique current slot, or an explicitly selected authored-active
+slot among overlapping active rows. Missing-current streams, future rows, gaps,
+private links and cancelled/date-only events remain unavailable. Continuing grants
+retain independent revocation, same-event continuation and same-source identity
+rebind. A public profile is never an event-authorization fallback.
+
+The finite integration trial is separate from unrestricted hosted release. Full
+`RELEASE_BLOCKER` stays in place. The trusted internal
+`mediaRelayOperations:setNativeTrialEnabled` operation requires measured finite
+trial evidence and one immutable `MEDIA_RELAY_TRIAL_CONFIG`. A browser identity
+cannot invoke it. The configuration pins operator user ID, public context/source,
+worker binding, gateway origin, allowed page origins, at most fifteen minutes and
+bounded input, delivery, requests and retained storage. The operation record pins
+its canonical configuration and counts at most two issued grants, including releases.
+
+| Setting | Scope and owner |
+| --- | --- |
+| `MEDIA_RELAY_TRIAL_CONFIG` | Matching Convex and finite worker configuration, deployment owner. No secrets. Replace only with a new reviewed trial ID. |
+| `MEDIA_RELAY_TRIAL_SCRATCH` | Worker-only verified tmpfs path, deployment owner. Never an ordinary directory fallback. |
+| `MEDIA_RELAY_CONTROL_URL` | Worker-only explicit Convex HTTPS origin. |
+| `MEDIA_RELAY_WORKER_TOKEN` | Existing worker credential, Convex and worker secret stores. Rotate after trial and remove from expired host. |
+| `MEDIA_RELAY_GATEWAY_TOKEN` | Distinct existing gateway credential, Convex and gateway secret stores. Rotate after trial. |
+| `MEDIA_RELAY_WORKERS` | Convex binding list must contain exactly the reviewed trial worker. |
+
+Keep `MEDIA_RELAY_ENABLED` and `NEXT_PUBLIC_MEDIA_RELAY_ENABLED` off. The signed
+operator can enter the ordinary profile URL with `?relayTrial=<exact-id>` using a
+full page navigation. Eligibility then survives subsequent app navigation. The
+retained provider waits for private eligibility before native admission; only the
+matching context/source uses this path. `/api/media-relay/trial` forwards only
+viewer admission using the user's existing authentication. It receives no deploy
+key. Existing Play and Audio only controls remain the user interface.
+
+Build the finite artifact using `node scripts/package-media-relay.mjs <output>
+--trial`. It uses the existing bundler. Run `node
+scripts/native-trial-qualification.mjs <bundle> <verified-scratch>` on Linux with
+FFmpeg and FFprobe for synthetic original-packager, source-limit and cleanup
+qualification. This does not activate Convex authority or contact VRCDN.
+
+Disable the internal trial gate, stop the process, verify no provider connection,
+FFmpeg child or scratch remains, then verify the finite VM stops. The VM hard
+deadline is independent of application cleanup. The initial selected target's
+stop-session API returned HTTP 415, so immediate API shutdown is not claimed;
+process termination and deadline shutdown require their own evidence.
+
+See [the rehearsal contract](../engineering/audio-background-rehearsal.md) for
+baseline phone evidence, test scope, byte-budget limitations and remaining actual
+provider, retained-player and physical-phone acceptance. Event broadcasting is separate.
+
+A failed finite trial does not automatically reacquire its source. After disabling
+and verifying cleanup, a trusted deployment owner may activate a **new** trial ID
+with `rearmSource: true`. This accepts only a stopped/unavailable source with no
+active lease. Its state stays terminal until the first authorized explicit Play
+consumes the exact new-trial marker and queues it. Source epochs survive. Same-ID
+rearming, draining/active sources and same-trial reacquisition remain refused;
+releasing grants never resets the issued-grant counter. Old trial grants remain
+invalid under the new configuration and do not consume its two-grant allowance.
+The ordinary rolling admission rate limit is retained.

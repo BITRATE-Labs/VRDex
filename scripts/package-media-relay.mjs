@@ -12,7 +12,8 @@ import { resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 const out = resolve(process.argv[2] ?? "dist/media-relay");
 await mkdir(out, { recursive: true });
-const files = {
+const trial = process.argv.includes("--trial");
+const files = trial ? { trial: "packages/media-relay/src/trial/entrypoint.ts" } : {
   worker: "packages/media-relay/src/worker/entrypoint.ts",
   gateway: "packages/media-relay/src/gateway/entrypoint.ts",
 };
@@ -53,26 +54,15 @@ for (const [name, entry] of Object.entries(files)) {
     JSON.stringify(result.metafile, null, 2),
   );
 }
-await chmod(`${out}/worker.mjs`, 0o644);
-await chmod(`${out}/gateway.mjs`, 0o644);
-await utimes(
-  `${out}/gateway.mjs`,
-  new Date("1980-01-01T00:00:00Z"),
-  new Date("1980-01-01T00:00:00Z"),
-);
-await rm(`${out}/gateway.zip`, { force: true });
-execFileSync("zip", ["-q", "-X", "gateway.zip", "gateway.mjs"], { cwd: out });
-hashes.gatewayZip = {
-  sha256: createHash("sha256")
-    .update(await readFile(`${out}/gateway.zip`))
-    .digest("base64"),
-};
+if (!trial) {
+  await chmod(`${out}/worker.mjs`, 0o644);
+  await chmod(`${out}/gateway.mjs`, 0o644);
+  await utimes(`${out}/gateway.mjs`, new Date("1980-01-01T00:00:00Z"), new Date("1980-01-01T00:00:00Z"));
+  await rm(`${out}/gateway.zip`, { force: true });
+  execFileSync("zip", ["-q", "-X", "gateway.zip", "gateway.mjs"], { cwd: out });
+  hashes.gatewayZip = { sha256: createHash("sha256").update(await readFile(`${out}/gateway.zip`)).digest("base64") };
+}
 await writeFile(`${out}/manifest.json`, JSON.stringify(hashes, null, 2) + "\n");
-process.stdout.write(
-  JSON.stringify({
-    out,
-    worker: hashes.worker.sha256,
-    gateway: hashes.gateway.sha256,
-    gatewayZip: hashes.gatewayZip.sha256,
-  }) + "\n",
-);
+process.stdout.write(JSON.stringify({ out,
+  ...(trial ? { trial: hashes.trial.sha256 } : { worker: hashes.worker.sha256, gateway: hashes.gateway.sha256, gatewayZip: hashes.gatewayZip.sha256 }),
+}) + "\n");
