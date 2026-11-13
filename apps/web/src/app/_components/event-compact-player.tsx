@@ -31,6 +31,14 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
   const allowPictureInPicture = owner.supportsPictureInPicture;
   const manualSelection = request?.kind === "performer_sequence" && state.lineup?.selectionRequired === true;
   const currentMedia = owner.media;
+  const [mediaRevision, setMediaRevision] = useState(0);
+  useEffect(() => {
+    const sync = () => setMediaRevision(value => value + 1);
+    sync();
+    const events = ["loadedmetadata", "loadeddata", "emptied"] as const;
+    for (const event of events) currentMedia?.addEventListener(event, sync);
+    return () => { for (const event of events) currentMedia?.removeEventListener(event, sync); };
+  }, [currentMedia]);
   const presentable = Boolean(currentMedia && currentMedia.readyState >= 1);
   const recovery = !twitch && !presentable && !state.lineup?.initializing && ((state.status === "unavailable" && state.unavailableReason !== "ended") || state.status === "blocked");
   const secondaryControls = !twitch && !unsupportedAudio && !manualSelection && (owner.supportsAudioOnly || state.mode === "audio" || (allowPictureInPicture && pip.supported));
@@ -50,9 +58,13 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
       if (document.fullscreenElement === shell.current) return;
       if (slot && shell.current) {
         const pictureHeight = (mount.current?.offsetHeight ?? 0) + (shell.current.querySelector<HTMLElement>("[data-event-playback-audio-poster]")?.offsetHeight ?? 0);
-        slot.style.setProperty("--event-playback-picture-display", pictureHeight > 0 ? "block" : "none");
-        slot.style.setProperty("--event-playback-picture-height", `${pictureHeight}px`);
-        slot.style.setProperty("--event-playback-chrome-height", `${Math.max(0, shell.current.offsetHeight - pictureHeight)}px`);
+        const pictureExpected = pictureHeight > 0 || (!recovery && state.mode === "video" && (state.status === "loading" || state.lineup?.initializing));
+        slot.style.setProperty("--event-playback-picture-display", pictureExpected ? "block" : "none");
+        // Compact wrapping must not resize the inline slot that chooses placement.
+        if (shell.current.dataset.presentation === "inline") {
+          slot.style.setProperty("--event-playback-picture-height", `${pictureHeight || (pictureExpected && twitch ? 300 : 0)}px`);
+          slot.style.setProperty("--event-playback-chrome-height", `${Math.max(0, shell.current.offsetHeight - pictureHeight)}px`);
+        }
       }
       const box = slot?.getBoundingClientRect();
       const inline = box && box.top >= bounds.top && box.bottom <= bounds.top + bounds.height && box.left >= bounds.left && box.right <= bounds.left + bounds.width && box.width >= (twitch ? 400 : 280);
@@ -74,7 +86,7 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
     window.visualViewport?.addEventListener("scroll", schedule);
     measure();
     return () => { cancelAnimationFrame(frame); resize.disconnect(); mutations.disconnect(); window.removeEventListener("resize", schedule); document.removeEventListener("scroll", schedule, true); window.visualViewport?.removeEventListener("resize", schedule); window.visualViewport?.removeEventListener("scroll", schedule); };
-  }, [twitch, mount, owner, request, recovery]);
+  }, [twitch, mount, owner, request, recovery, state.mode, state.status, state.lineup?.initializing, placement?.width]);
   useEffect(() => {
     const sync = () => setFullscreen(document.fullscreenElement === shell.current);
     document.addEventListener("fullscreenchange", sync);
@@ -96,7 +108,7 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
     sync();
     video?.addEventListener("enterpictureinpicture", sync); video?.addEventListener("leavepictureinpicture", sync); video?.addEventListener("webkitpresentationmodechanged", sync);
     return () => { video?.removeEventListener("enterpictureinpicture", sync); video?.removeEventListener("leavepictureinpicture", sync); video?.removeEventListener("webkitpresentationmodechanged", sync); };
-  }, [owner, state.status, state.mode, state.lineup, allowPictureInPicture]);
+  }, [owner, state.status, state.mode, state.lineup, allowPictureInPicture, mediaRevision]);
   const compact = !placement;
   const fallback = twitch && limited;
   const visibleWidth = viewport ? `${viewport.width}px` : "100vw";
