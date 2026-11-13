@@ -238,7 +238,7 @@ async function collect(assignment) {
     integrationBudget.tryConsume(requestCost, reservedAt);
     return !stopping && Date.now() < deadline;
   }
-  async function refreshReadiness() {
+  async function refreshReadiness(refreshDeadline = deadline) {
     try {
       return await refreshClubAuthority({
         assignment,
@@ -247,6 +247,8 @@ async function collect(assignment) {
         expectedUserId: secret.vrchatUserId,
         accountBudget,
         integrationBudget,
+        shouldStop: () => stopping,
+        deadline: refreshDeadline,
       });
     } catch (error) {
       if (
@@ -440,13 +442,27 @@ async function collect(assignment) {
         }
         if (!result?.collected) break;
       }
-      if (!stopping && Date.now() < deadline) {
-        try {
-          await recoverMembershipPage({ assignment, authority, provider, control, expectedUserId: secret.vrchatUserId,
-            accountBudget, integrationBudget, shouldStop: () => stopping, deadline });
-        } catch (error) {
-          if (["authentication", "rate_limit", "membership"].includes(error?.category) || /^Control plane (401|403|429):/.test(error?.message ?? "")) throw error;
-          logEvent({ event: "membership_recovery_failed", category: boundedProviderCategory(error?.category) });
+      if (!stopping && Date.now() < membershipDeadline) {
+        let checkAuthority = false;
+        while (!stopping && Date.now() < membershipDeadline) {
+          let result;
+          try {
+            const authorityAge = authority ? Date.now() - authority.observedAt : Infinity;
+            if (checkAuthority && (!Number.isFinite(authorityAge) || authorityAge < 0 || authorityAge > 30_000)) {
+              result = await refreshReadiness(membershipDeadline);
+              authority = result.authority;
+            }
+            if (authority) result = await recoverMembershipPage({ assignment, authority, provider, control, expectedUserId: secret.vrchatUserId,
+              accountBudget, integrationBudget, shouldStop: () => stopping, deadline: membershipDeadline });
+          } catch (error) {
+            if (["authentication", "rate_limit", "membership"].includes(error?.category) || /^Control plane (401|403|429):/.test(error?.message ?? "")) throw error;
+            logEvent({ event: "membership_recovery_failed", category: boundedProviderCategory(error?.category) });
+            break;
+          }
+          if (!Number.isFinite(result?.retryAt) || result.retryAt <= Date.now()) break;
+          await pauseWithHeartbeats(Math.min(result.retryAt - Date.now(), Math.max(0, membershipDeadline - Date.now())));
+          // Reuse fresh authority after a wait; every retry still claims and checks the current job.
+          checkAuthority = true;
         }
       }
     }

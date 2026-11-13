@@ -2,16 +2,23 @@ import { ClubProvider } from "./club-provider.mjs";
 import { membershipRoleObservations } from "./membership-roles.mjs";
 
 /** Refresh connection readiness within the current integration lease and shared request budget. */
-export async function refreshClubAuthority({ assignment, provider, control, expectedUserId, accountBudget, integrationBudget, clock = Date.now }) {
-  if (assignment.state !== "active" || !Number.isFinite(assignment.epochStartedAt)) return { refreshed: false };
+export async function refreshClubAuthority({ assignment, provider, control, expectedUserId, accountBudget, integrationBudget, clock = Date.now, shouldStop = () => false, deadline = Infinity }) {
+  const stopped = () => shouldStop() || clock() >= deadline;
+  if (stopped() || assignment.state !== "active" || !Number.isFinite(assignment.epochStartedAt)) return { refreshed: false };
+  if (accountBudget.limit < 2 || integrationBudget.limit < 2) return { refreshed: false };
   const now = clock();
-  if (accountBudget.retryAfterMs(2, now) > 0 || integrationBudget.retryAfterMs(2, now) > 0) return { refreshed: false };
+  const retryAfterMs = Math.max(accountBudget.retryAfterMs(2, now), integrationBudget.retryAfterMs(2, now));
+  if (retryAfterMs > 0) return { refreshed: false, retryAt: now + retryAfterMs };
   const lease = { integrationId: assignment.integrationId, fencingToken: assignment.fencingToken };
   const reservation = await control.send("budget", { ...lease, requestCount: 2, now });
-  if (!reservation?.granted) return { refreshed: false };
-  accountBudget.tryConsume(2, now);
-  integrationBudget.tryConsume(2, now);
-  const snapshot = await new ClubProvider({ client: provider, groupId: assignment.vrchatGroupId, expectedUserId, clock }).readAuthority();
+  if (reservation?.granted) {
+    accountBudget.tryConsume(2, now);
+    integrationBudget.tryConsume(2, now);
+  }
+  if (stopped()) return { refreshed: false };
+  if (!reservation?.granted) return { refreshed: false, ...(reservation?.reason === "budget_exhausted" && Number.isFinite(reservation.retryAt) && reservation.retryAt > clock() ? { retryAt: reservation.retryAt } : {}) };
+  const snapshot = await new ClubProvider({ client: provider, groupId: assignment.vrchatGroupId, expectedUserId, clock }).readAuthority({ shouldStop: stopped });
+  if (!snapshot || stopped()) return { refreshed: false };
   const { groupId, userId, ownerUserId, membershipStatus, permissions, observedAt } = snapshot;
   const recorded = await control.send("club_authority", {
     ...lease, epochStartedAt: assignment.epochStartedAt,

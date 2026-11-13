@@ -4,6 +4,16 @@
 
 **Current recommendation: adjust.** Free Join membership and four-hour aggregate polling are proven with a VRDex-owned account and a consenting group. Non-empty instance visibility, active-instance cadence, Request-to-Join, and Invite-Only remain unverified.
 
+## Workspace identity checkpoint, 2026-11-13 UTC
+
+**Disposition: go for controlled activation of workspace name lookup and recent-history recovery.** BASIC authorized rollout after merging PR #464. The existing Oak vault session was reused through the documented login-host tunnel. The observed egress matched the collector NAT address. No login, session transfer, credential rotation or membership change was needed.
+
+The bounded checkpoint made six successful read requests, with no provider errors or rate limits. Exact lookup of the owned account resolved its name and matched its user ID. The role response contained eleven roles, all with names. A quiet one-day audit interval returned no rows; a thirty-day interval returned five rows, and a repeat passed all five through the real recovery parser. Only counts and match booleans were retained. No private membership target or raw provider payload was exported. The temporary tunnel was closed and the login host was confirmed stopped.
+
+Production history preparation for BITRATE's current integration and epoch completed through the bounded canonical-target backfill and its completion probe. This checkpoint establishes provider payload compatibility, not successful historical recovery or resolution of every member. Activation still requires the compatible worker's fresh exact-release heartbeat and the documented backend flags.
+
+The initial worker rollout exposed a protocol mismatch: the worker advertised `membership_recovery_v1`, but the backend capability validator omitted it. The release guard rejected the missing heartbeat and started restoring the previous worker. The repair adds the missing capability to the shared validator and type; its regression sends the actual worker capability array through the registered heartbeat mutation and deployment-readiness query, and still rejects unknown capabilities.
+
 ## 2026-07-22 bounded proof
 
 The proof retained sanitized counts and state names only. The ignored local JSON evidence contains hashed target and account identifiers; this checked-in summary intentionally omits those stable hashes.
