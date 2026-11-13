@@ -288,3 +288,61 @@ test("selected Video preserves legacy playback and pending play; real unsupporte
   assert.equal(owner.getSnapshot().status,"blocked");
   owner.close();
 });
+
+
+test("fresh Play refuses an unlinked current performer even if a later performer has a stream", async () => {
+  const { owner, adapters } = fixture();
+  const startAt = Date.now() - 1000;
+  const pending = owner.play({ kind: "performer_sequence", eventId: "mixed", eventSlug: "mixed", title: "Mixed", href: "/events/mixed", startAt,
+    event: { title: "Mixed", startAt, slots: [
+      { key: "missing", startAt },
+      { key: "later", startAt: startAt + 60000, stream: { streamId: "later", pcUrl: "pc", questUrl: "quest" } },
+    ] },
+  });
+  try {
+    assert.equal(adapters.length, 0);
+    assert.equal(owner.getSnapshot().status, "idle");
+  } finally {
+    adapters[0]?.resolve(false); await pending; owner.close();
+  }
+});
+
+
+test("refused retained retry reports unavailable after a released source crosses the event window", async () => {
+  const { owner, adapters } = fixture();
+  const first = owner.play(request());
+  adapters[0].resolve(true); await first;
+  const replacement = { ...request("a", "https://stream/replacement"), endAt: Date.now() - 1 };
+  owner.update(replacement);
+  assert.equal(owner.getSnapshot().status, "paused");
+  await owner.play(replacement);
+  assert.equal(owner.getSnapshot().status, "unavailable");
+  assert.equal(adapters.length, 1);
+  assert.equal(adapters[0].disposed, 1);
+  owner.close();
+});
+
+
+test("later retained controls supersede an asynchronous selection without replacing its adapter", async () => {
+  const { owner, adapters } = fixture();
+  const selected = request();
+  const starting = owner.play(selected);
+  adapters[0].resolve(true); await starting;
+  const generation = owner.generation;
+  try {
+    const pauseIntent = owner.beginInteraction();
+    owner.pause();
+    assert.ok(owner.interactionRevision > pauseIntent);
+    assert.equal(owner.generation, generation);
+    const resumeIntent = owner.beginInteraction();
+    await owner.play(selected);
+    assert.ok(owner.interactionRevision > resumeIntent);
+    assert.equal(owner.generation, generation);
+    assert.equal(adapters.length, 1);
+    const unchanged = owner.interactionRevision;
+    owner.update({ ...selected, title: "Fresh title" });
+    assert.equal(owner.interactionRevision, unchanged, "metadata refresh is not a new viewer intent");
+    owner.setMuted(true);
+    assert.ok(owner.interactionRevision > unchanged);
+  } finally { owner.close(); }
+});

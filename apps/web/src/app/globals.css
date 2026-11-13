@@ -1403,7 +1403,7 @@ body > .ph-no-capture {
   border: 0;
   border-radius: 0;
 }
-.event-retained-player:fullscreen .event-retained-media {
+.event-retained-player:fullscreen .event-retained-media:not([hidden]) {
   flex: 1;
   min-height: 0;
   display: flex;

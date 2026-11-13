@@ -13,6 +13,11 @@ test("retains the actual playing media node across route navigation and replaces
   await page.getByRole("button", { name: "Play Event a", exact: true }).click();
   const video = page.locator("[data-event-playback-mount] video");
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(0.1);
+  await expect.poll(async () => {
+    const picture = await page.locator("[data-event-playback-mount]").boundingBox();
+    const controls = await page.getByRole("group", { name: "Event a controls", exact: true }).boundingBox();
+    return controls!.y - picture!.y - picture!.height;
+  }).toBeLessThanOrEqual(4);
   await expect.poll(() => authorization.reads).toContain("a");
   await page.screenshot({ path: testInfo.outputPath("retained-player.png") });
   const original = await video.elementHandle(); const time = await video.evaluate(node => (node as HTMLVideoElement).currentTime);
@@ -51,7 +56,7 @@ test("visible Twitch SDK player handles blocked playback, real controls and ifra
   await page.route("https://player.twitch.tv/js/embed/v1.js", route => route.fulfill({ contentType: "application/javascript", body: `
     window.sdkCalls = []; window.sdkLoads = (window.sdkLoads || 0) + 1;
     class Player {
-      constructor(mount, options) { this.handlers = {}; this.blocked = true; window.sdkOptions = options;
+      constructor(mount, options) { this.handlers = {}; this.blocked = true; window.sdkOptions = options; window.sdkPlayer = this;
         this.frame = document.createElement('iframe'); this.frame.width = '400'; this.frame.height = '300'; mount.append(this.frame);
         setTimeout(() => this.emit('ready'), 0);
       }
@@ -70,6 +75,11 @@ test("visible Twitch SDK player handles blocked playback, real controls and ifra
   await expect(page.getByRole("button", { name: "Enable playback", exact: true })).toBeVisible();
   await expect.poll(() => authorization.reads).toContain("a");
   const frame = page.locator("[data-event-playback-mount] iframe"); await expect(frame).toBeVisible();
+  await expect.poll(async () => {
+    const slot = await page.locator('[data-event-playback-inline="a"]').boundingBox();
+    const shell = await page.getByRole("region", { name: "Event playback", exact: true }).boundingBox();
+    return Math.abs(slot!.height - shell!.height);
+  }).toBeLessThanOrEqual(4);
   await page.screenshot({ path: testInfo.outputPath("twitch-player.png") });
   const box = await frame.boundingBox(); expect(box!.width).toBeGreaterThanOrEqual(400); expect(box!.height).toBeGreaterThanOrEqual(300);
   expect(await page.evaluate(() => (window as unknown as { sdkOptions: { parent: string[] } }).sdkOptions.parent)).toEqual([new URL(page.url()).hostname]);
@@ -78,6 +88,13 @@ test("visible Twitch SDK player handles blocked playback, real controls and ifra
   expect(await page.evaluate(() => (window as unknown as { sdkCalls: string[] }).sdkCalls)).toContain("volume:0.3");
   await page.getByRole("button", { name: "Mute", exact: true }).click();
   expect(await page.evaluate(() => (window as unknown as { sdkCalls: string[] }).sdkCalls)).toContain("muted:true");
+  await page.evaluate(() => (window as unknown as { sdkPlayer: { emit(event: string): void } }).sdkPlayer.emit("offline"));
+  await expect(page.getByRole("status")).toHaveText("Stream unavailable");
+  await expect(frame).toBeVisible();
+  await expect(page.getByRole("button", { name: "Try again", exact: true })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("twitch-offline-visible.png") });
+  await page.getByRole("group", { name: "Event a controls" }).getByRole("button", { name: "Play", exact: true }).click();
+  await page.getByRole("button", { name: "Enable playback", exact: true }).click();
   await page.getByRole("group", { name: "Event a controls" }).getByRole("button", { name: "Pause", exact: true }).click();
   expect(await page.evaluate(() => (window as unknown as { sdkCalls: string[] }).sdkCalls)).toContain("pause");
   await page.getByRole("button", { name: "Close event playback" }).click(); await expect(frame).toHaveCount(0);
@@ -224,4 +241,64 @@ test("watch clock stays stable between subscription ticks @flow @fixture", async
   await page.getByRole("button", { name: "Operator preview", exact: true }).click();
   await expect(page.getByRole("region", { name: "Preview Operator preview" })).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+
+test("failed retained playback collapses unused media space inline and compact, then recovers @flow @fixture", async ({ page }, testInfo) => {
+  await playbackAuthorization(page);
+  let failed = true;
+  await page.route("https://stream.vrcdn.live/live/*.webm", route => failed
+    ? route.fulfill({ status: 404, body: "Offline" })
+    : route.fulfill({ contentType: "audio/wav", body: wave() }));
+  await page.goto("/playwright/event-playback");
+  await page.getByRole("button", { name: "Play Event a", exact: true }).click();
+  const shell = page.getByRole("region", { name: "Event playback", exact: true });
+  await expect(shell.getByRole("status")).toHaveText("Stream unavailable");
+  const slot = page.locator('[data-event-playback-inline="a"]');
+  await slot.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("failed-player-inline.png") });
+  expect((await slot.boundingBox())!.height).toBeLessThanOrEqual(180);
+  expect((await shell.boundingBox())!.height).toBeLessThanOrEqual(180);
+  await expect(shell.getByRole("button", { name: "Try again", exact: true })).toBeVisible();
+  await expect(shell.getByRole("button", { name: "Close event playback" })).toBeVisible();
+  if (testInfo.project.name === "desktop-chromium") {
+    const clearance = await shell.evaluate(node => node.previousElementSibling!.getBoundingClientRect().height);
+    await shell.getByRole("button", { name: "Full screen", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    expect((await slot.boundingBox())!.height).toBeLessThanOrEqual(180);
+    expect(await shell.evaluate(node => node.previousElementSibling!.getBoundingClientRect().height)).toBeLessThanOrEqual(clearance + 1);
+    await page.evaluate(() => document.exitFullscreen());
+    await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(false);
+  }
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(shell).toHaveAttribute("data-presentation", "compact");
+  await shell.screenshot({ path: testInfo.outputPath("failed-player-compact.png") });
+  expect((await shell.boundingBox())!.height).toBeLessThanOrEqual(180);
+  failed = false;
+  await shell.getByRole("button", { name: "Try again", exact: true }).click();
+  const media = page.locator("[data-event-playback-mount] video");
+  await expect.poll(() => media.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(0.1);
+  await expect(media).toBeVisible();
+  await expect(shell.getByRole("status")).toHaveCount(0);
+  await shell.getByRole("button", { name: "Close event playback" }).click();
+  await expect(media).toHaveCount(0);
+});
+
+test("a transport error preserves buffered legacy playback while recovery remains explicit @flow @fixture", async ({ page }, testInfo) => {
+  await playbackAuthorization(page);
+  await page.route("https://stream.vrcdn.live/live/*.webm", route => route.fulfill({ contentType: "audio/wav", body: wave() }));
+  await page.goto("/playwright/event-playback");
+  await page.getByRole("button", { name: "Play Event a", exact: true }).click();
+  const video = page.locator("[data-event-playback-mount] video");
+  await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(0.1);
+  const original = await video.elementHandle();
+  const time = await video.evaluate(node => { node.dispatchEvent(new Event("error")); return (node as HTMLVideoElement).currentTime; });
+  await expect(page.getByRole("status")).toHaveText("Stream unavailable");
+  await expect(video).toBeVisible();
+  await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(time + 0.2);
+  expect(await video.evaluate((node, previous) => node === previous, original)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("buffered-transport-error.png") });
+  await page.getByRole("button", { name: "Close event playback" }).click();
+  await expect(video).toHaveCount(0);
 });

@@ -205,7 +205,7 @@ media nodes and grant, and closes PiP when selecting audio. Returning to video
 does not request PiP. Physical-phone behavior remains a release gate.
 
 Rollback to the disabled client retains the saved preference. Audio only controls
-are disabled for adapters without an audio rendition. Restored audio selection is
+are omitted for adapters without an audio rendition. Restored audio selection is
 blocked without loading full video; the viewer can deliberately select Video and
 Play to use legacy foreground playback. Legacy playback has no background support
 guarantee. Utility controls use existing approved labels. See the
@@ -246,3 +246,46 @@ retries of an already-queued source do not consume another restart or grant slot
 ## Persisted operator gate
 
 The environment flag alone no longer enables relay work. The deployment-admin enable operation is checked-in blocked pending separately reviewed hard traffic/cost enforcement and current-integration release verification. Complete hosted measurements alone cannot enable it; PAYG acceptance and budget strings are rejected. Disable remains available without evidence. Empty operator state is disabled. See [verification and release controls](../engineering/media-relay-verification.md) for measured local evidence, the unapproved cost proposal, independent emergency stop, staging bootstrap and open disk/traffic gates.
+
+## Automatic community audio follow-up
+
+**Current recommendation:** qualify the existing native relay for real audio-only
+playback, then extend its public event admission to automatic community lineups.
+Removing an unavailable control is not delivery of audio-only or phone background
+playback. Legacy MPEG-TS still downloads and decodes video.
+
+The current event `watchSurfaceEnabled` check in `_mediaRelayAuthorization.ts`
+selects the older staff-configured product feature. It does not authenticate the
+viewer as staff: relay context resolution already reads only public event/profile
+projections and canonical public links. Treat that interpretation as source-derived,
+not proof that widening paid admission is approved. Keep this check until the
+replacement policy is reviewed and tested.
+
+A bounded follow-up requires:
+
+1. Reuse canonical current-slot inference for fresh automatic event admission.
+   Authorize the actual public slot, performer and normalized VRCDN source. Keep
+   ambiguity, missing-stream, private/removed link, cancellation, and date-only
+   refusals; preserve independent ongoing-grant continuation and revocation.
+2. Review `localOnly` routing and performer-sequence continuation/rebind rules
+   together. Those currently require enabled staff performer-sequence mode.
+   Profile admission is not an event-authorization fallback. No automatic grant
+   or media connection may open before explicit Play.
+3. Finish the separate hosted-release gate in
+   [relay verification](../engineering/media-relay-verification.md). Current
+   `ReleaseEvidenceSchema` rejects hosted release via `RELEASE_BLOCKER`, even
+   with configuration and operator approval. Hard traffic/cost enforcement,
+   physical containment, selected-allocation capacity/recovery margin, demand
+   behavior, cleanup, and a reviewed gate change are prerequisites.
+4. Deploy matching worker/gateway/backend artifacts and measured finite limits,
+   then review persisted operator enablement, `MEDIA_RELAY_ENABLED`, and the web
+   `NEXT_PUBLIC_MEDIA_RELAY_ENABLED` build switch. Keep event broadcasting separate.
+   Existing local mocks and a successful broadcast output are not relay proof.
+5. Verify separate audio playlist decoding, mode switching without duplicate
+   grants, stopped video fetching/decoding, navigation/revocation, real iPhone
+   background/lock-screen playback, and bounded provider connections/egress.
+   Review the actual warm-worker and audience traffic estimate before enablement.
+
+This repair changes none of these backend, provider, billing or rollout gates.
+Current deployed values and hosted resource qualification must be refreshed by the
+release owner; these source requirements do not assert those live values.

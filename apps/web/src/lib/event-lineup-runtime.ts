@@ -7,7 +7,7 @@ import { joinSlot, handoffEligibleAt, handoffBoundaryAt, shouldHandoff } from ".
 import { followingSlot, nextSlot, reconcileSlot, sameLineupSource, type LineupSlot } from "./event-lineup-session";
 
 export type LineupEvent = { title: string; startAt: number; doorsOpenAt?: number; endAt?: number; slots: LineupSlot[] };
-export type LineupSnapshot = { started: boolean; following: boolean; paused: boolean; muted: boolean; volume: number; current?: string; connected: boolean; unavailable: boolean; nextPlaybackBlocked?: boolean; playbackBlocked?: boolean };
+export type LineupSnapshot = { started: boolean; following: boolean; paused: boolean; muted: boolean; volume: number; current?: string; connected: boolean; unavailable: boolean; initializing?: boolean; selectionRequired?: boolean; nextPlaybackBlocked?: boolean; playbackBlocked?: boolean };
 export type LineupObservedSource = {
   readonly media: HTMLMediaElement;
   readonly grantId?: string;
@@ -27,20 +27,24 @@ export type NativeLineupOptions = {
   onCurrent(source: LineupObservedSource, slot: LineupSlot): void;
   onCurrentReleased?(): void;
 };
-type Connection = { slot: LineupSlot; source: LineupObservedSource; evidence: ReturnType<typeof clearPlaybackEvidence>; startupDeadline: number; progressed: boolean };
+type Connection = { slot: LineupSlot; source: LineupObservedSource; evidence: ReturnType<typeof clearPlaybackEvidence>; startupDeadline: number; retryDeadline: number; progressed: boolean };
 // Cold MSE/audio initialization can exceed the established-source failure window.
 // Bound initialization separately; readiness and handoff still require decoded progress.
 const STARTUP_ALLOWANCE_MS = 5000;
+const STARTUP_RETRY_ALLOWANCE_MS = 15_000;
 const SILENCE_HANDOFF_MS = 15_000;
 const SILENCE_WINDOW_MS = 5 * 60_000;
 const failedConnection = (connection: Connection, at: number) =>
   connection.evidence.failureSince !== undefined && at - connection.evidence.failureSince >= 1000 &&
   (connection.progressed || at >= connection.startupDeadline);
+const retryConnection = (connection: Connection, at: number) =>
+  failedConnection(connection, at) && (connection.progressed || at >= connection.retryDeadline);
 const backoff = [1000, 2000, 4000, 10000];
 
 /** One mounted event session owns every media node, request generation and retry deadline. */
 export class EventLineupSession {
   state: LineupSnapshot = { started: false, following: true, paused: true, muted: false, volume: 1, connected: false, unavailable: false };
+  private hasSelectedSource = false;
   private rebinding = false;
   private identityRequest = 0;
   private pendingIdentity?: { active: Connection; target: LineupSlot; request: number };
@@ -75,6 +79,9 @@ export class EventLineupSession {
   }
   private emit() {
     if (this.disposed) return;
+    // Later automatic retries keep failure feedback instead of restarting the initial loading UI.
+    this.state.initializing = Boolean(!this.native && !this.state.paused && this.currentAttempt <= 1 && this.current && !this.current.progressed && performance.now() < this.current.retryDeadline);
+    this.state.selectionRequired = this.state.started && !this.hasSelectedSource && !this.state.current;
     const previous = this.lastSnapshot;
     if (previous && (Object.keys(this.state) as Array<keyof LineupSnapshot>).every(key => this.state[key] === previous[key])) return;
     this.lastSnapshot = { ...this.state };
@@ -130,6 +137,7 @@ export class EventLineupSession {
     this.resetEvidence(); this.emit();
   }
   private select(slot: LineupSlot | undefined) {
+    this.hasSelectedSource ||= Boolean(slot?.stream);
     const pendingIdentity = this.pendingIdentity;
     this.identityRequest++; this.pendingIdentity = undefined;
     this.releaseNext();
@@ -337,7 +345,7 @@ export class EventLineupSession {
       if (this.disposed || token !== (prepared ? this.nextGeneration : this.currentGeneration) || (prepared && (document.visibilityState !== "visible" || this.state.paused || request !== this.playRequest))) { source.release(); return; }
       const acceptedSlot = prepared ? slot : reconcileSlot(slot, this.event.slots);
       if (!acceptedSlot || (!prepared && acceptedSlot.key !== this.selected?.key)) { source.release(); return; }
-      const connection = { slot: acceptedSlot, source, evidence: clearPlaybackEvidence(performance.now()), startupDeadline: performance.now() + STARTUP_ALLOWANCE_MS, progressed: false };
+      const connection = { slot: acceptedSlot, source, evidence: clearPlaybackEvidence(performance.now()), startupDeadline: performance.now() + STARTUP_ALLOWANCE_MS, retryDeadline: performance.now() + STARTUP_RETRY_ALLOWANCE_MS, progressed: false };
       if (prepared) { this.next = connection; source.media.hidden = true; source.setMuted(true); }
       else { this.current = connection; source.media.hidden = this.mode === "audio"; source.setMuted(this.native ? this.state.muted : false); this.native?.onCurrent(source, acceptedSlot); }
       source.setVolume(this.state.volume);
@@ -405,10 +413,10 @@ export class EventLineupSession {
         this.resetEvidence(); this.emit(); return;
       }
     }
-    if (eligible && candidate && !this.state.nextPlaybackBlocked && !this.nextPlayPending && !this.nextPending && at >= this.nextRetryAt && (!this.next || failedConnection(this.next, at))) {
+    if (eligible && candidate && !this.state.nextPlaybackBlocked && !this.nextPlayPending && !this.nextPending && at >= this.nextRetryAt && (!this.next || retryConnection(this.next, at))) {
       this.next?.source.release(); this.next = undefined; void this.connect(candidate, true);
     }
-    if (visible && this.selected?.stream && !this.currentPending && at >= this.currentRetryAt && (!active || failedConnection(active, at))) {
+    if (visible && this.selected?.stream && !this.currentPending && at >= this.currentRetryAt && (!active || retryConnection(active, at))) {
       // Recovery never discards progressing buffered media merely because transport ended.
       if (this.native && active?.source.recover) {
         if (!this.currentPending) {
@@ -417,7 +425,7 @@ export class EventLineupSession {
           void active.source.recover(false).then(accepted => {
             if (this.disposed || active !== this.current || request !== this.playRequest) return;
             if (!accepted) this.state.unavailable = true;
-            active.evidence = clearPlaybackEvidence(performance.now()); active.startupDeadline = performance.now() + STARTUP_ALLOWANCE_MS; active.progressed = false;
+            active.evidence = clearPlaybackEvidence(performance.now()); active.startupDeadline = performance.now() + STARTUP_ALLOWANCE_MS; active.retryDeadline = performance.now() + STARTUP_RETRY_ALLOWANCE_MS; active.progressed = false;
           }).catch(() => { if (!this.disposed && active === this.current && request === this.playRequest) this.state.unavailable = true; }).finally(() => { if (generation === this.currentGeneration && active === this.current) { this.currentPending = false; this.currentRetryAt = performance.now() + backoff[0]; } });
         }
       } else { active?.source.release(); this.current = undefined; void this.connect(this.selected, false); }
