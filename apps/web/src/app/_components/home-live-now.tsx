@@ -12,9 +12,6 @@ import type { EventPlaybackOwner } from "@/lib/event-playback-owner";
 import { eventPlaybackRequest } from "@/lib/event-playback-request";
 import { useEventPlayback, useEventPlaybackSnapshot } from "./event-playback-provider";
 
-// An older public lookup must not replace a later selection in another surface.
-const playIntents = new WeakMap<EventPlaybackOwner, symbol>();
-
 export function HomeLiveNow({ initialEntries = [], performerSlug }: { initialEntries?: LiveEntry[]; performerSlug?: string }) {
   const client = useConvex();
   const owner = useEventPlayback();
@@ -40,7 +37,7 @@ export function LiveNowEntries({ entries, owner, loadEvent }: {
 }) {
   const state = useEventPlaybackSnapshot(owner);
   const [now, setNow] = useState(0);
-  const lookup = useRef<symbol | null>(null);
+  const lookup = useRef<number | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   useEffect(() => {
     let timer: number | undefined;
@@ -71,9 +68,8 @@ export function LiveNowEntries({ entries, owner, loadEvent }: {
           {(entry.host?.displayName ?? entry.hostName) && <span className="home-live-host">{entry.host?.displayName ?? entry.hostName}</span>}
         </div>
         <button type="button" className="home-live-play" disabled={pending === entry.eventId} aria-label={`${playing ? "Pause" : "Play"} ${entry.title}`} onClick={async () => {
-          const intent = Symbol();
+          const intent = owner.beginInteraction();
           lookup.current = intent;
-          playIntents.set(owner, intent);
           const generation = owner.generation;
           if (playing) { owner.pause(); setPending(null); return; }
           if (entry.expiresAt <= Date.now()) { setPending(null); return; }
@@ -84,7 +80,7 @@ export function LiveNowEntries({ entries, owner, loadEvent }: {
               loadEvent(entry.eventSlug),
               new Promise<null>(resolve => { deadline = window.setTimeout(() => resolve(null), 10_000); }),
             ]).finally(() => window.clearTimeout(deadline));
-            if (playIntents.get(owner) !== intent || owner.generation !== generation || !event || entry.expiresAt <= Date.now() || eventLiveSource(event, Date.now())?.key !== entry.sourceKey) return;
+            if (owner.interactionRevision !== intent || owner.generation !== generation || !event || entry.expiresAt <= Date.now() || eventLiveSource(event, Date.now())?.key !== entry.sourceKey) return;
             const request = eventPlaybackRequest(event);
             if (request) { setPending(null); await owner.play(request); }
           } catch { /* A failed fresh projection cannot authorize playback. */ } finally { if (lookup.current === intent) setPending(null); }

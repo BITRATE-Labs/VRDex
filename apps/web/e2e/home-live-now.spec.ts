@@ -102,3 +102,24 @@ test("a stalled fresh public lookup releases Play without starting media @fixtur
   await expect(play).toBeEnabled();
   await expect(page.locator("video,iframe")).toHaveCount(0);
 });
+
+for (const action of ["resume", "pause"] as const) {
+  test(`retained controls ${action} cancels a pending different live selection @fixture`, async ({ page }) => {
+    let requests = 0;
+    await page.route("http://127.0.0.1:6799/**", route => { requests++; return route.fulfill({ path: path.resolve("e2e/fixtures/persistent-synthetic.mpegts"), contentType: "video/mp2t", headers: { "access-control-allow-origin": "*" } }); });
+    await page.goto("/playwright/home-live-now");
+    await page.getByLabel("Fixture state").selectOption("race");
+    await page.getByRole("button", { name: "Play Harbor Sessions 2", exact: true }).click();
+    const shell = page.locator('[data-event-id="home-live-fixture-1"]');
+    await expect.poll(() => page.locator("video").evaluate(node => (node as HTMLVideoElement).currentTime), { timeout: 20000 }).toBeGreaterThan(0);
+    if (action === "resume") await shell.getByRole("button", { name: "Pause", exact: true }).click();
+    await page.getByRole("button", { name: "Play Harbor Sessions 1", exact: true }).click();
+    await shell.getByRole("button", { name: action === "resume" ? "Play" : "Pause", exact: true }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-live-lookups", "2");
+    await expect(page.getByRole("button", { name: "Play Harbor Sessions 1", exact: true })).toBeEnabled();
+    await expect(shell).toBeVisible();
+    expect(requests).toBe(1);
+    expect(await page.locator("video").evaluate(node => (node as HTMLVideoElement).paused)).toBe(action === "pause");
+    await page.getByRole("button", { name: "Close event playback", exact: true }).click();
+  });
+}

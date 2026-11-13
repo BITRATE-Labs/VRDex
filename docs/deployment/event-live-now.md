@@ -48,7 +48,7 @@ cancelled, private or hidden events and missing current sources are excluded.
 The public projection rechecks event, host and performer visibility plus current
 source identity. Clicking Play fetches the current public event again and checks
 its selected source and cache expiry before using the existing retained player.
-Cache records never grant playback authorization. Fresh public lookups are fenced per retained owner so a slower earlier Play selection cannot replace a later click. A lookup that cannot finish within ten seconds releases Play for retry and never connects media. Active listener recovery and
+Cache records never grant playback authorization. Fresh public lookups capture the retained owner's interaction revision and transport generation. A slower earlier Play selection cannot replace a later retained control or selection, including pause/resume that keeps the same adapter. A lookup that cannot finish within ten seconds releases Play for retry and never connects media. Active listener recovery and
 healthy overtime playback remain independent of browse-result expiry.
 
 A DJ profile shows the associated event entry only when one eligible cached event
