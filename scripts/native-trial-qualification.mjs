@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
-import { createServer } from 'node:http';
+import { createServer, request as requestHttp } from 'node:http';
 import { once } from 'node:events';
 import { readdir, writeFile, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-const { createPackager, createNativeTrialSource, createNativeTrialStorage, createPublisher, verifyNativeTrialScratch, completeNativeTrialStop } = await import(pathToFileURL(resolve(process.argv[2])).href);
+const { createPackager, createNativeTrialSource, createNativeTrialStorage, createPublisher, verifyNativeTrialScratch, completeNativeTrialStop, createNativeTrialGateway, bootNativeTrial } = await import(pathToFileURL(resolve(process.argv[2])).href);
 const directory = process.argv[3];
 await verifyNativeTrialScratch(directory);
 const source = { streamKey: 'vrcdn/Alpha/1', streamId: 'Alpha', inputFormat: 'vrcdn_fmp4', packagingVersion: 1 };
@@ -59,8 +59,25 @@ try {
     for (let i=0;i<20&&children.size;i++) await new Promise(r=>setTimeout(r,50));
     assert.equal(children.size,0); assert.deepEqual(await readdir(directory),[]);
   }
+  const probe=createServer();probe.listen(0,'127.0.0.1');await once(probe,'listening');
+  const port=probe.address().port;await new Promise(resolve=>probe.close(resolve));
+  const now=Date.now();let authority=0,exhausted=0;
+  const config={version:1,trialId:'trial',operatorUserId:'operator',source,context:{kind:'profile',profileId:'profile',linkId:'Alpha'},origin:'https://trial.invalid',origins:['https://app.invalid'],startsAt:now-1,expiresAt:now+10000,limits:{upstreamBytes:1024,payloadBytes:1024,requests:3,retainedBytes:1024},worker:{workerId:'worker',workerEpoch:1,allocation:{cpuUnits:1024,memoryMiB:2048,evidenceId:'trial-proof'},maxSources:1,draining:false}};
+  const gateway=createNativeTrialGateway({config,clock:Date.now,authorize:async()=>{authority++;return{kind:'denied'};},readSnapshot:()=>undefined,readSegment:()=>undefined,recordDemand:async()=>{},onExhausted:()=>{exhausted++;}});
+  const http=await bootNativeTrial({PORT:String(port),MEDIA_RELAY_TRIAL_CONFIG:JSON.stringify(config)},async()=>({gateway,stop:async()=>{},upstreamBytes:()=>0,retainedBytes:()=>0,acquisitions:()=>0}));
+  try{
+    const malformed=await new Promise((resolve,reject)=>{
+      const request=requestHttp({hostname:'127.0.0.1',port,path:'*%',method:'GET'},response=>{response.resume();response.once('end',()=>resolve(response.statusCode));});
+      request.once('error',reject);request.end();
+    });
+    assert.equal(malformed,400);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/p/grant/audio/index.m3u8`,{method:'POST'})).status,400);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/${'x'.repeat(2049)}`)).status,400);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/p/grant/audio/index.m3u8`)).status,429);
+    assert.equal(authority,0);assert.equal(exhausted,1);
+  }finally{await http.stop();}
   assert.equal(connections,2);
-  console.log(JSON.stringify({ kind:'native_trial_synthetic', results, cleanup:true, nodeRssBytes:process.memoryUsage().rss }));
+  console.log(JSON.stringify({ kind:'native_trial_synthetic', results, httpCapPassed:true, cleanup:true, nodeRssBytes:process.memoryUsage().rss }));
 } finally {
   for (const child of children) child.kill('SIGKILL');
   server.closeAllConnections(); await new Promise(r=>server.close(r));

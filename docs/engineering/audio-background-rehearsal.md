@@ -53,7 +53,9 @@ and retains finite rolling windows plus a thirty-second retirement grace. Gatewa
 URLs remain usable for that grace after publication advances, with current grant,
 lease and epoch checks on every read. One source acquisition is allowed. Forwarded
 input bytes, delivered body bytes and request count have independent limits.
-Copied URLs debit the same aggregate delivery allowance. Expiry or budget
+Copied URLs debit the same aggregate delivery allowance. Malformed targets, unsupported methods and
+overlong URLs also consume the application request budget. HTTP parser rejects
+are outside that counter, with separate header, connection and VM lifetime bounds. Expiry or budget
 exhaustion stops the worker. Physical packager cleanup precedes an exact-owner
 terminal observation; acknowledgment failure remains visible while local storage
 closes. The HTTP server also closes at expiry. The VM's
@@ -96,13 +98,13 @@ verified 512-MiB tmpfs. Both original packager renditions passed codec and decod
 checks. The ordinary case used one acquisition, 338294 forwarded input bytes and
 425632 retained bytes. The 32768-byte input limit case stopped after forwarding
 28741 bytes and hit its limit once. No FFmpeg process or scratch file remained.
-The command completed in 7639 ms. Whole-VM cgroup memory peak was 504430592 bytes
-(including binary setup); Node RSS at the result was 88489984 bytes. These are
+The command completed in 7531 ms. Whole-VM cgroup memory peak was 504573952 bytes
+(including binary setup); Node RSS at the result was 96530432 bytes. These are
 separate from retained media memory. The scratch mount was removed; the release owner records the independent VM
 deadline readback separately. No provider or deployment credential
 was present in this synthetic test.
 
-Evidence bundle SHA256: `641e437eb4a55f7752bb95503ad71abd72bdfb996469cffbd47695dd192dbdbd`.
+Evidence bundle SHA256: `aca5962d99562a9769024b5326e75df544e25b73b12eab8e7ca97de910b5cae0`.
 Source changes that affect the bundle require matching artifact qualification.
 Actual public-provider, deployed-Convex, retained-browser and phone results remain
 separate pending steps.

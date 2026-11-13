@@ -1,3 +1,4 @@
+import { request as requestHttp } from "node:http";
 import assert from "node:assert/strict";
 import { createServer } from "node:net";
 import { once } from "node:events";
@@ -58,4 +59,25 @@ test("failed terminal RPC still closes local storage and preserves the failure",
   let closed=false;
   await assert.rejects(completeNativeTrialStop({stopWorker:async()=>{},attempts:[],acknowledge:async()=>{throw Error("control unavailable");},close:()=>{closed=true;}}),/control unavailable/);
   assert.equal(closed,true);
+});
+
+import { createNativeTrialGateway } from "../src/trial/gateway";
+import { NativeTrialConfigSchema } from "../src/trial/policy";
+test("malformed targets, unsupported methods and overlong URLs debit the real HTTP cap without crashing",async()=>{
+  const port=await unusedPort(),now=Date.now();let authority=0,exhausted=0;
+  const config=NativeTrialConfigSchema.parse({version:1,trialId:"trial",operatorUserId:"operator",source:{streamKey:"vrcdn/Alpha/1",streamId:"Alpha",inputFormat:"vrcdn_fmp4",packagingVersion:1},context:{kind:"profile",profileId:"profile",linkId:"Alpha"},origin:"https://trial.invalid",origins:["https://app.invalid"],startsAt:now-1,expiresAt:now+10000,limits:{upstreamBytes:1024,payloadBytes:1024,requests:3,retainedBytes:1024},worker:{workerId:"worker",workerEpoch:1,allocation:{cpuUnits:1024,memoryMiB:2048,evidenceId:"trial-proof"},maxSources:1,draining:false}});
+  const gateway=createNativeTrialGateway({config,clock:Date.now,authorize:async()=>{authority++;return{kind:"denied"};},readSnapshot:()=>undefined,readSegment:()=>undefined,recordDemand:async()=>{},onExhausted:()=>{exhausted++;}});
+  const fake=fakeRuntime();
+  const handle=await bootNativeTrial({PORT:String(port),MEDIA_RELAY_TRIAL_CONFIG:JSON.stringify(config)},async()=>({...fake,gateway}));
+  try{
+    const malformed=await new Promise<number>((resolve,reject)=>{
+      const request=requestHttp({hostname:"127.0.0.1",port,path:"*%",method:"GET"},response=>{response.resume();response.once("end",()=>resolve(response.statusCode??0));});
+      request.once("error",reject);request.end();
+    });
+    assert.equal(malformed,400);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/p/grant/audio/index.m3u8`,{method:"POST"})).status,400);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/${"x".repeat(2049)}`)).status,400);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/p/grant/audio/index.m3u8`)).status,429);
+    assert.equal(authority,0);assert.equal(exhausted,1);
+  }finally{await handle.stop();}
 });

@@ -10,13 +10,17 @@ export async function bootNativeTrial(env: NodeJS.ProcessEnv = process.env, star
   const runtime = await start(env);
   const origin = JSON.parse(env.MEDIA_RELAY_TRIAL_CONFIG!).origin as string;
   const server = createServer({ maxHeaderSize: 8192, requestTimeout: 3000, headersTimeout: 3000 }, (req, res) => {
-    if (!req.url || req.url.length > 2048 || !["GET", "OPTIONS"].includes(req.method ?? "")) { res.writeHead(400).end(); return; }
+    let invalid = !req.url || !req.url.startsWith("/") || req.url.length > 2048 || !["GET", "OPTIONS"].includes(req.method ?? "");
     const headers = new Headers();
     if (typeof req.headers.origin === "string") headers.set("Origin", req.headers.origin);
-    void runtime.gateway(new Request(`${origin}${req.url}`, { method: req.method, headers })).then(async reply => {
+    let request: Request;
+    try { request = new Request(`${origin}${invalid ? "/_invalid" : req.url}`, { method: invalid ? "GET" : req.method, headers }); }
+    catch { invalid = true; request = new Request(`${origin}/_invalid`); }
+    // Rejected application requests still debit the same budget without authority or media reads.
+    void runtime.gateway(request).then(async reply => {
       const outputHeaders: Record<string, string> = {};
       reply.headers.forEach((value, key) => { outputHeaders[key] = value; });
-      res.writeHead(reply.status, outputHeaders);
+      res.writeHead(invalid && reply.status !== 429 && reply.status !== 410 ? 400 : reply.status, outputHeaders);
       res.end(Buffer.from(await reply.arrayBuffer()));
     }).catch(() => { if (!res.headersSent) res.writeHead(503); res.end(); });
   });
@@ -47,3 +51,4 @@ export { createNativeTrialStorage } from "./storage";
 export { verifyNativeTrialScratch } from "./scratch";
 export { createPublisher } from "../worker/publisher";
 export { completeNativeTrialStop } from "./runtime";
+export { createNativeTrialGateway } from "./gateway";
