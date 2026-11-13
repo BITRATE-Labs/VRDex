@@ -61,7 +61,7 @@ Every minute one atomic lease owns refresh. Its 55-second deadline fences stale
 writers and allows the next tick to recover after a crash. Two separate indexed
 queries read at most 20 recent starts and 20 explicit ends, each with its own
 persistent cursor and fixed time anchor until its sweep completes. A third query revisits up to 20 previously discovered active events, oldest-checked first. This keeps long events eligible while the ends cursor walks future catalog entries. Events extended beyond their previous end are rechecked from their current source, and private or finished events leave this remembered set. A playback-only public projection omits unused worlds, participants and roster media kits to keep nested reads bounded. Convex permits one pagination operation per query, so the
-scheduler combines these bounded results in a separate selection query.
+scheduler combines these bounded results in a separate selection query. The three phases settle independently: a failed page keeps its cursor for retry while healthy phases still refresh observations and release the lease. A failing phase can delay its own discovery, but cannot suppress unrelated remembered sources.
 
 Each cycle deduplicates canonical provider identities, chooses at most 20 sources
 oldest-observed first, and opens at most four simultaneous VRCDN probes. Each

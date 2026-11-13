@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test, before, after, mock } from "node:test";
 import { convexTest } from "convex-test";
+import { getFunctionName } from "convex/server";
+import type { ActionCtx } from "../../convex/_generated/server";
 import { api, internal } from "../../convex/_generated/api";
 import schemaModule from "../../convex/schema";
 import type { Doc } from "../../convex/_generated/dataModel";
@@ -260,4 +262,29 @@ test("remembered events recheck publication and leave the active set before prob
     assert.deepEqual(await publicRows(t), []);
     assert.equal((await t.run(ctx => ctx.db.query("eventLiveCandidates").collect())).length, 0);
   } finally { fetcher.mock.restore(); }
+});
+
+
+for (const failedPhase of ["starts", "ends", "remembered"] as const) test(`a failed ${failedPhase} discovery phase does not suppress healthy refreshes`, async () => {
+  const { t } = await fixture();
+  await recordLive(t);
+  const { refresh } = await import("../../convex/eventLiveActions");
+  assert.ok("_handler" in refresh && typeof refresh._handler === "function");
+  const original = refresh._handler;
+  const broken = mock.method(refresh, "_handler", (ctx: ActionCtx, args: Record<string, never>) => original({
+    ...ctx,
+    runQuery: async (reference, queryArgs) => {
+      const name = getFunctionName(reference);
+      if ((failedPhase === "remembered" && name === "eventLive:refreshRemembered") ||
+        (name === "eventLive:refreshCandidates" && queryArgs?.phase === failedPhase)) throw Error("Synthetic discovery page failure");
+      return ctx.runQuery(reference, queryArgs);
+    },
+  }, args));
+  const fetcher = mock.method(globalThis, "fetch", async () => new Response(new ReadableStream({ cancel() {} }), { status: 200 }));
+  try {
+    await t.action(internal.eventLiveActions.refresh, {});
+    assert.equal(fetcher.mock.callCount(), 1);
+    assert.equal((await publicRows(t)).length, 1);
+    assert.equal((await t.run(ctx => ctx.db.query("eventLiveRefresh").unique()))?.leaseUntil, 0);
+  } finally { broken.mock.restore(); fetcher.mock.restore(); }
 });
