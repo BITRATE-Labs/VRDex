@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { fetchPublicLiveEvents } from "@/convex/server";
 import { HomeSearchPage } from "./_components/home-search-page";
 import { searchHref } from "./_components/search-view-state";
 
@@ -16,5 +17,5 @@ export default async function Home({ searchParams }: HomePageProps) {
   const query = q?.trim() ?? "";
   if (query) redirect(searchHref({ query, view: "dj" }));
 
-  return <HomeSearchPage />;
+  return <HomeSearchPage initialLiveEntries={await fetchPublicLiveEvents()} />;
 }

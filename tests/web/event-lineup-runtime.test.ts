@@ -297,13 +297,25 @@ test("cold initial playback may initialize for longer than the established failu
     assert.equal(sources[0].released, true);
   });
 });
-test("a cold source that never progresses has a bounded five-second startup allowance", async () => {
-  await runtimeFixture([repeated[0]], async ({ sources, step, progress }) => {
-    progress(false); await step(at(20), 4900);
+test("a valid slow-starting source is not restarted before its first decoded progress", async () => {
+  await runtimeFixture([repeated[0]], async ({ session, sources, step, progress }) => {
+    progress(false); await step(at(20), 7000);
+    assert.equal(sources.length, 1, "keep the same initialization across a slow first keyframe");
+    assert.equal(sources[0].released, false);
+    progress(true); await step(at(20), 400);
+    assert.equal(session.state.connected, true);
+    assert.equal(sources.length, 1);
+  });
+});
+
+test("a cold source that never progresses has a bounded fifteen-second retry allowance", async () => {
+  await runtimeFixture([repeated[0]], async ({ session, sources, step, progress }) => {
+    progress(false); await step(at(20), 14900);
     assert.equal(sources.length, 1);
     await step(at(20), 200);
     assert.equal(sources.length, 2);
     assert.equal(sources[0].released, true);
+    assert.equal(session.state.initializing, false, "offline retries must not restart the initial loading presentation forever");
   });
 });
 test("prepared playback also receives bounded startup time without becoming ready early", async () => {
@@ -312,7 +324,7 @@ test("prepared playback also receives bounded startup time without becoming read
     assert.equal(sources.length, 2);
     assert.equal(session.state.current, "a");
     assert.equal(sources[1].gain.gain.value, 0);
-    await step(at(20, 58), 3300);
+    await step(at(20, 58), 13300);
     assert.equal(sources.length, 3);
     assert.equal(sources[1].released, true);
     assert.equal(session.state.current, "a");
@@ -397,5 +409,56 @@ test("untimed canonical barriers prevent preparation and identity catchup", asyn
   await runtimeFixture([{ ...repeated[0], endAt: undefined, followingBlocked: true }, repeated[1]], async ({ session, sources, step, silence }) => {
     silence(); await step(at(21), 16000);
     assert.equal(session.state.current, "a"); assert.equal(sources.length, 1);
+  });
+});
+
+
+test("a cold source reports unavailable at five seconds without restarting before fifteen", async () => {
+  await runtimeFixture([repeated[0]], async ({ session, sources, step, progress }) => {
+    progress(false); await step(at(20), 5100);
+    assert.equal(session.state.unavailable, true);
+    assert.equal(session.state.initializing, true);
+    assert.equal(sources.length, 1);
+  });
+});
+
+test("a reconnecting cold current source does not hold a ready boundary handoff for fifteen seconds", async () => {
+  await runtimeFixture([repeated[0], { ...repeated[1], stream: stream("different") }], async ({ session, sources, step, progress }) => {
+    progress(false, "different"); await step(at(20, 58), 400);
+    progress(false); await step(at(20, 59), 1200);
+    assert.equal(sources.filter(source => source.id === "shared").length, 2);
+    progress(true, "different"); await step(at(21), 6000);
+    assert.equal(session.state.current, "b");
+  });
+});
+
+test("initial ambiguous timing requires selection until a playable source is chosen", async () => {
+  await runtimeFixture([repeated[0], { ...repeated[1], startAt: at(20) }], async ({ session, sources }) => {
+    assert.equal(session.state.current, undefined);
+    assert.equal(session.state.selectionRequired, true);
+    assert.equal(sources.length, 0);
+    session.manual("a"); await settle();
+    assert.equal(session.state.selectionRequired, false);
+    assert.equal(session.state.current, "a");
+  });
+});
+
+test("revoking a selected row keeps stopped-session recovery distinct from initial selection", async () => {
+  await runtimeFixture([repeated[0]], async ({ session }) => {
+    session.update({ title: "Event", startAt: at(20), slots: [{ ...repeated[0], stream: stream("replacement") }] });
+    assert.equal(session.state.current, undefined);
+    assert.equal(session.state.paused, true);
+    assert.equal(session.state.unavailable, true);
+    assert.equal(session.state.selectionRequired, false);
+  });
+});
+
+test("returning a started viewer to an authored gap retains unavailable-session controls", async () => {
+  await runtimeFixture([repeated[0], repeated[2]], async ({ session, step }) => {
+    await step(at(21, 30));
+    session.live(); await settle();
+    assert.equal(session.state.current, undefined);
+    assert.equal(session.state.unavailable, true);
+    assert.equal(session.state.selectionRequired, false);
   });
 });

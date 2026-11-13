@@ -1,5 +1,20 @@
 # Player repair and live discovery
 
+## November 12 delivery update
+
+BASIC selected current event performers for the first real homepage Live now slice.
+See the [approved hybrid design](../superpowers/specs/2026-11-12-home-live-now-design.md)
+and [implementation plan](../superpowers/plans/2026-11-12-home-live-now.md).
+The implementation uses a shared Convex observation cache, disabled by default.
+Its actual limits and activation requirements are in [event live discovery](../deployment/event-live-now.md).
+
+The original investigation below records the November 6 deployment and proposals,
+not the current deployment. Its 50-source proposal is superseded by a hard
+20-source refresh cap. The supported first slice is current VRCDN performer
+sequences plus explicitly enabled event Twitch channel streams. Twitch-only
+performer sequences need a separate player extension. Screenshot capture and
+native audio relay activation are separate work.
+
 ## Recommendation and decision
 
 Repair the existing foreground player first. Start live discovery with public

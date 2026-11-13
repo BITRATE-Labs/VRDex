@@ -1349,6 +1349,22 @@ export default defineSchema({
   })
     .index("by_communityProfileId_state", ["communityProfileId", "state"])
     .index("by_state", ["state"]),
+  eventLiveObservations: defineTable({
+    sourceKey: v.string(), provider: v.union(v.literal("vrcdn"), v.literal("twitch")), identity: v.string(),
+    status: v.union(v.literal("live"), v.literal("offline"), v.literal("unavailable")),
+    observedAt: v.number(), expiresAt: v.number(),
+  }).index("by_sourceKey", ["sourceKey"]).index("by_expiresAt", ["expiresAt"]).index("by_status_expiresAt", ["status", "expiresAt"]),
+  eventLiveCandidates: defineTable({ eventId: v.id("events"), endAt: v.number(), checkedAt: v.number() })
+    .index("by_eventId", ["eventId"]).index("by_checkedAt", ["checkedAt"]).index("by_endAt", ["endAt"]),
+  eventLiveEntries: defineTable({
+    eventId: v.id("events"), sourceKey: v.string(), expiresAt: v.number(),
+  }).index("by_eventId", ["eventId"]).index("by_expiresAt", ["expiresAt"]).index("by_sourceKey_expiresAt", ["sourceKey", "expiresAt"]),
+  eventLiveRefresh: defineTable({
+    key: v.literal("home"), token: v.string(), leaseUntil: v.number(),
+    startsCursor: v.union(v.string(), v.null()), endsCursor: v.union(v.string(), v.null()),
+    startsAt: v.optional(v.number()), endsAt: v.optional(v.number()), twitchRetryAt: v.optional(v.number()),
+    twitchToken: v.optional(v.object({ cipher: v.string(), expiresAt: v.number(), fingerprint: v.string() })),
+  }).index("by_key", ["key"]),
   events: defineTable({
     venueLabel: v.optional(v.string()),
     contributorUserId: v.optional(v.id("users")),

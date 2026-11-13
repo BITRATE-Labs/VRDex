@@ -49,21 +49,7 @@ export function parseVrcdnLiveStates(value: unknown): VrcdnLiveStates | null {
 
 export type VrcdnLiveLink = LiveClaimLink;
 
-export function vrcdnLiveStateFromStatus(status: number): VrcdnLiveState {
-  // `404` is a real stream that is not publishing. `401` is an id the media
-  // server does not know, which the badge treats the same way -- nobody is
-  // live either way. They are worth keeping apart in the probe because this
-  // endpoint, unlike the manifest, actually does distinguish them: a typo in an
-  // owner's own link reads `401` forever, where an idle stream reads `404`.
-  if (status === 404 || status === 401) {
-    return "offline";
-  }
-
-  // `200` exactly, not 2xx. A bodyless success from an intermediary -- a `204`,
-  // a cache layer's `205` -- is that intermediary answering, not VRCDN handing
-  // over a transport stream, and it should not light up `Live now`.
-  return status === 200 ? "live" : "unavailable";
-}
+export { vrcdnLiveStateFromStatus } from "../../../../convex/_vrcdnLiveProbe";
 
 /**
  * How old an observation may be before it stops being reported.

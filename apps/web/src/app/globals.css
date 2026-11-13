@@ -1403,7 +1403,7 @@ body > .ph-no-capture {
   border: 0;
   border-radius: 0;
 }
-.event-retained-player:fullscreen .event-retained-media {
+.event-retained-player:fullscreen .event-retained-media:not([hidden]) {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -1419,3 +1419,7 @@ body > .ph-no-capture {
   outline: 2px solid white;
   outline-offset: -3px;
 }
+
+/* Shared current-event discovery row. */
+.home-live-row{padding-bottom:24px}.home-live-heading{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-size:15px;font-weight:600}.home-live-dot{width:6px;height:6px;flex-shrink:0;background:var(--accent);border-radius:50%}.home-live-entries{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:8px}.home-live-entry{display:flex;align-items:center;gap:12px;flex:0 0 calc((100% - 24px)/3);min-width:260px;scroll-snap-align:start;padding:12px;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface)}.home-live-entry[data-active]{border-color:var(--accent)}.home-live-artwork{width:64px;height:64px;object-fit:contain;flex-shrink:0}.home-live-identity{display:flex;flex:1;flex-direction:column;min-width:0;gap:3px}.home-live-title,.home-live-performer,.home-live-host{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.home-live-title{font-size:14px;font-weight:600}.home-live-performer{font-size:13px}.home-live-host{font-size:12px;color:var(--muted)}.home-live-title:hover,.home-live-performer:hover{text-decoration:underline}.home-live-play{display:grid;place-items:center;flex-shrink:0;width:44px;height:44px;cursor:pointer;border:1px solid var(--border);border-radius:var(--radius-control);background:var(--surface-muted);color:var(--foreground)}.home-live-play:disabled{opacity:.5;cursor:default}.home-live-play:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(max-width:760px){.home-live-entries{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:8px}.home-live-entry{flex:0 0 285px;scroll-snap-align:start}.home-live-artwork{width:56px;height:56px}}

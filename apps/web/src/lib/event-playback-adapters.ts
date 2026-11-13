@@ -24,18 +24,19 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
     const session = new EventLineupSession(request.event, mount, (lineup) =>
       notify({
         lineup,
-        status: lineup.unavailable
-          ? "unavailable"
-          : lineup.paused
-            ? "paused"
-            : "playing",
+        status: lineup.initializing
+          ? "loading"
+          : lineup.unavailable
+            ? "unavailable"
+            : lineup.paused
+              ? "paused"
+              : "playing",
       }),
     );
+    const play = async () => { await session.play(); return !session.state.paused; };
     return {
-      async play() {
-        await session.play();
-        return !session.state.paused;
-      },
+      play, retry: play,
+      supportsPictureInPicture: false,
       pause: () => session.pause(),
       setVolume(value) {
         session.setVolume(value);
@@ -56,7 +57,7 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
       manual: (key) => session.manual(key),
       live: () => session.live(),
       retryNextPlayback: () => session.retryNextPlayback(),
-      setMode: mode => session.setMode(mode),
+      get media() { return session.media; },
     };
   }
   const video = document.createElement("video");
@@ -134,6 +135,7 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
   // The owner may close before Play awaits the transport import.
   void ready.catch(() => {});
   return {
+    get media() { return disposed ? undefined : video; },
     enableControls(callback) { beforeUnmute = callback; video.controls = true; },
     async play() { const current = ++attempt; await ready; if (disposed || current !== attempt) return false;
       try { await video.play(); return !disposed && current === attempt; } catch { return false; } },
@@ -150,11 +152,6 @@ export function createRetainedPlaybackAdapter(
   notify: AdapterNotify,
   { mode, relay }: { mode: PlaybackMode; relay?: RelayPlaybackClient },
 ): PlaybackAdapter {
-  if (request.kind === "performer_sequence" && request.localOnly) {
-    const adapter = createEventPlaybackAdapter(request, mount, notify);
-    void adapter.setMode?.(mode);
-    return adapter;
-  }
   if (relay && request.kind === "vrcdn" && request.transport !== "video")
     return createRelayPlaybackAdapter({
       request,
@@ -163,7 +160,7 @@ export function createRetainedPlaybackAdapter(
       mode,
       client: relay,
     });
-  if (relay && request.kind === "performer_sequence") return createNativeLineupAdapter({ request, mount, notify, mode, client: relay });
+  if (relay && request.kind === "performer_sequence" && !request.localOnly) return createNativeLineupAdapter({ request, mount, notify, mode, client: relay });
   if (mode === "audio" && request.kind !== "twitch")
     return {
       async play() {

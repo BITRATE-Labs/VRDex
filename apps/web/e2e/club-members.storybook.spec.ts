@@ -21,14 +21,19 @@ test("mixed-case identity members keep names and original action payload IDs @st
 });
 
 for (const [story, count] of [["paged-people", 20], ["underfilled-people", 17]] as const) test(`identity admission keeps partial member groups stable on ${story} @storybook-visual`, async ({ page }) => {
+  await page.clock.install();
   await page.goto(`/iframe.html?id=clubs-members--${story}&viewMode=story`);
   const actions = page.locator("section").filter({ has: page.getByRole("heading", { name: "Recent actions", exact: true }) }).last();
   await expect(actions.getByRole("link", { name: "Riley", exact: true })).toHaveCount(1);
   const admissions = () => page.evaluate(() => JSON.parse(document.documentElement.dataset.operationAdmissions!) as string[][]);
   await expect.poll(admissions).toEqual([Array.from({ length: count }, (_, index) => `Action-MiXeD-${index}`)]);
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
   await page.getByRole("button", { name: "More actions", exact: true }).click();
-  await expect(actions.getByRole("link", { name: "Riley", exact: true })).toHaveCount(1);
   await expect.poll(admissions).toEqual([Array.from({ length: count }, (_, index) => `Action-MiXeD-${index}`), [`Action-MiXeD-${count + 5}`, `Action-MiXeD-${count + 6}`]]);
+  // Freeze the fixture's 500ms second admission while checking the retained group.
+  await expect(actions.getByRole("link", { name: "Riley", exact: true })).toHaveCount(1);
+  await page.clock.runFor(500);
+  await expect(actions.getByRole("link", { name: "Riley", exact: true })).toHaveCount(2);
 });
 test("clearing member search restores the unfiltered directory @storybook-visual", async ({ page }) => {
   await page.goto("/iframe.html?id=clubs-members--owner&viewMode=story");
