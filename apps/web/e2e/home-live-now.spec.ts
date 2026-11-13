@@ -123,3 +123,17 @@ for (const action of ["resume", "pause"] as const) {
     await page.getByRole("button", { name: "Close event playback", exact: true }).click();
   });
 }
+
+
+test("DJ association uses the shared complete projection and never guesses through truncation @fixture", async ({ page }) => {
+  await page.goto("/playwright/home-live-now?view=dj");
+  const row = page.getByRole("region", { name: "Live now", exact: true });
+  await expect(row.getByRole("article")).toHaveCount(1);
+  await page.getByLabel("Fixture state").selectOption("many");
+  await expect(row).toHaveCount(0);
+  await page.getByLabel("Fixture state").selectOption("truncated");
+  await expect(row).toHaveCount(0);
+  await page.getByLabel("Fixture state").selectOption("live");
+  await expect(row.getByRole("article")).toHaveCount(1);
+  await expect(page.locator("video,iframe")).toHaveCount(0);
+});

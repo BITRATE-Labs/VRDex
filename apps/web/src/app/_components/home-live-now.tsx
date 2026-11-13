@@ -15,18 +15,20 @@ import { useEventPlayback, useEventPlaybackSnapshot } from "./event-playback-pro
 export function HomeLiveNow({ initialEntries = [], performerSlug }: { initialEntries?: LiveEntry[]; performerSlug?: string }) {
   const client = useConvex();
   const owner = useEventPlayback();
-  const [entries, setEntries] = useState(initialEntries);
+  const [projection, setProjection] = useState({ entries: initialEntries, complete: false });
   useEffect(() => {
     if (!client) return;
     let unsubscribe = () => {};
     try {
-      const watch = performerSlug ? client.watchQuery(api.eventLive.forPerformer, { slug: performerSlug }) : client.watchQuery(api.eventLive.listPublic, {});
-      const update = () => { try { const next = watch.localQueryResult(); if (next !== undefined) setEntries((Array.isArray(next) ? next : next ? [next] : []).filter(entry => entry.expiresAt > Date.now())); } catch { setEntries([]); } };
+      const watch = client.watchQuery(api.eventLive.listPublic, {});
+      const update = () => { try { const next = watch.localQueryResult(); if (next !== undefined) setProjection(next); } catch { setProjection({ entries: [], complete: false }); } };
       unsubscribe = watch.onUpdate(update);
       update();
     } catch { /* The optional row cannot break the schedule during backend rollout. */ }
     return unsubscribe;
-  }, [client, performerSlug]);
+  }, [client]);
+  const matching = projection.entries.filter(entry => entry.performer?.slug === performerSlug);
+  const entries = performerSlug ? projection.complete && matching.length === 1 ? matching : [] : projection.entries;
   if (!owner) return null;
   return <LiveNowEntries entries={entries} owner={owner} loadEvent={async slug => client ? client.query(api.events.getPublicBySlug, { slug }) : null} />;
 }

@@ -26,13 +26,15 @@ async function fixture(count = 1) {
   });
   return { t, ...ids };
 }
+async function publicRows(t: ReturnType<typeof convexTest>) { return (await t.query(api.eventLive.listPublic, {})).entries; }
 async function recordLive(t: ReturnType<typeof convexTest>) {
   const claim = await t.mutation(internal.eventLive.claimRefresh, {});
   assert.ok(claim);
-  const starts = await t.query(internal.eventLive.refreshCandidates, { phase: "starts", cursor: claim.startsCursor });
-  const ends = await t.query(internal.eventLive.refreshCandidates, { phase: "ends", cursor: claim.endsCursor });
-  const page = await t.query(internal.eventLive.selectSources, { candidates: [...starts.candidates, ...ends.candidates] });
-  await t.mutation(internal.eventLive.finishRefresh, { token: claim.token, startsCursor: starts.cursor, endsCursor: ends.cursor, candidates: page.candidates, observations: page.sources.map(source => ({ source, status: "live" as const, observedAt: Date.now() })) });
+  const starts = await t.query(internal.eventLive.refreshCandidates, { phase: "starts", cursor: claim.startsCursor, anchorAt: claim.startsAt });
+  const ends = await t.query(internal.eventLive.refreshCandidates, { phase: "ends", cursor: claim.endsCursor, anchorAt: claim.endsAt });
+  const remembered = await t.query(internal.eventLive.refreshRemembered, {});
+  const page = await t.query(internal.eventLive.selectSources, { candidates: [...starts.candidates, ...ends.candidates, ...remembered.candidates] });
+  await t.mutation(internal.eventLive.finishRefresh, { token: claim.token, startsCursor: starts.cursor, endsCursor: ends.cursor, events: [...starts.events, ...ends.events, ...remembered.events], visited: remembered.visited, candidates: page.candidates, observations: page.sources.map(source => ({ source, status: "live" as const, observedAt: Date.now() })) });
   return page;
 }
 test("multiple events sharing a current source require one provider observation", async () => {
@@ -40,24 +42,24 @@ test("multiple events sharing a current source require one provider observation"
   const page = await recordLive(t);
   assert.equal(page.sources.length, 1);
   assert.equal(page.candidates.length, 2);
-  const entries = await t.query(api.eventLive.listPublic, {});
+  const entries = await publicRows(t);
   assert.equal(entries.length, 2);
   assert.equal(entries[0].performer?.slug, "aurora");
-  assert.equal(await t.query(api.eventLive.forPerformer, { slug: "aurora" }), null, "do not guess an event association");
+  assert.equal((await t.query(api.eventLive.listPublic, {})).complete, true);
 });
 test("source changes, hidden performers and unpublished events invalidate fresh cached entries", async () => {
   const { t, profileId, events } = await fixture();
   await recordLive(t);
-  assert.equal((await t.query(api.eventLive.listPublic, {})).length, 1);
+  assert.equal((await publicRows(t)).length, 1);
   await t.run(ctx => ctx.db.patch(profileId, { outboundLinks: [{ type: "vrcdn", label: "Other", url: "vrcdn:replacement", source: "owner_authored" }] }));
-  assert.deepEqual(await t.query(api.eventLive.listPublic, {}), []);
+  assert.deepEqual(await publicRows(t), []);
   await t.run(ctx => ctx.db.patch(profileId, { outboundLinks: person.outboundLinks }));
-  assert.equal((await t.query(api.eventLive.listPublic, {})).length, 1);
+  assert.equal((await publicRows(t)).length, 1);
   await t.run(ctx => ctx.db.patch(profileId, { publicSurfacingState: "suppressed" }));
-  assert.deepEqual(await t.query(api.eventLive.listPublic, {}), []);
+  assert.deepEqual(await publicRows(t), []);
   await t.run(ctx => ctx.db.patch(profileId, { publicSurfacingState: "public" }));
   await t.run(ctx => ctx.db.patch(events[0].eventId, { publicationState: "draft_private" }));
-  assert.deepEqual(await t.query(api.eventLive.listPublic, {}), []);
+  assert.deepEqual(await publicRows(t), []);
 });
 test("lease excludes overlapping refreshes, recovers expiry, and rejects a stale writer", async () => {
   const { t } = await fixture();
@@ -77,9 +79,9 @@ test("expired or unavailable observations never appear live", async () => {
   const { t } = await fixture();
   await recordLive(t);
   await t.run(async ctx => { const row = await ctx.db.query("eventLiveObservations").unique(); assert.ok(row); await ctx.db.patch(row._id, { expiresAt: Date.now() - 1 }); });
-  assert.deepEqual(await t.query(api.eventLive.listPublic, {}), []);
+  assert.deepEqual(await publicRows(t), []);
   await t.run(async ctx => { const row = await ctx.db.query("eventLiveObservations").unique(); assert.ok(row); await ctx.db.patch(row._id, { expiresAt: Date.now() + 90_000, status: "unavailable" }); });
-  assert.deepEqual(await t.query(api.eventLive.listPublic, {}), []);
+  assert.deepEqual(await publicRows(t), []);
 });
 test("refresh remains inert and browse data hidden until explicitly enabled", async () => {
   const { t } = await fixture();
@@ -87,7 +89,7 @@ test("refresh remains inert and browse data hidden until explicitly enabled", as
   delete process.env.EVENT_LIVE_ENABLED;
   try {
     assert.equal(await t.mutation(internal.eventLive.claimRefresh, {}), null);
-    assert.deepEqual(await t.query(api.eventLive.listPublic, {}), []);
+    assert.deepEqual(await publicRows(t), []);
     await t.action(internal.eventLiveActions.refresh, {});
   } finally { process.env.EVENT_LIVE_ENABLED = "true"; }
 });
@@ -96,7 +98,7 @@ test("anonymous clients cannot write observations through internal functions", a
   const functions = await import("../../convex/eventLive");
   assert.equal(functions.claimRefresh.isInternal, true);
   assert.equal(functions.finishRefresh.isInternal, true);
-  assert.deepEqual(await t.query(api.eventLive.listPublic, {}), []);
+  assert.deepEqual(await publicRows(t), []);
 });
 
 
@@ -122,7 +124,7 @@ test("a full scheduled cycle deduplicates, caps concurrency, and rotates excess 
     assert.equal(cancelled, 20);
     assert.ok(peak <= 4);
     await t.action(internal.eventLiveActions.refresh, {});
-    assert.equal(calls, 25, "the next bounded page covers the five remaining sources");
+    assert.equal(calls, 40, "the next cycle covers the five remaining sources before refreshing remembered sources");
     assert.equal((await t.run(ctx => ctx.db.query("eventLiveObservations").collect())).length, 25);
   } finally { fetcher.mock.restore(); }
 });
@@ -142,7 +144,7 @@ test("Twitch app tokens stay encrypted and reused; missing credentials never tri
   try {
     await t.action(internal.eventLiveActions.refresh, {});
     assert.equal(tokenCalls + streamCalls, 0);
-    assert.deepEqual(await t.query(api.eventLive.listPublic, {}), []);
+    assert.deepEqual(await publicRows(t), []);
     process.env.TWITCH_CLIENT_ID = "SYNTHETIC_CLIENT";
     process.env.TWITCH_CLIENT_SECRET = "SYNTHETIC_SECRET";
     process.env.VRDEX_CONNECTOR_TOKEN_KEY = Buffer.alloc(32, 7).toString("base64");
@@ -153,7 +155,7 @@ test("Twitch app tokens stay encrypted and reused; missing credentials never tri
     const stored = await t.run(ctx => ctx.db.query("eventLiveRefresh").unique());
     assert.ok(stored?.twitchToken?.cipher.startsWith("v1:"));
     assert.ok(!JSON.stringify(stored).includes("SYNTHETIC_TOKEN"));
-    assert.ok(!JSON.stringify(await t.query(api.eventLive.listPublic, {})).includes("cipher"));
+    assert.ok(!JSON.stringify(await publicRows(t)).includes("cipher"));
   } finally {
     fetcher.mock.restore();
     for (const [name, value] of [["TWITCH_CLIENT_ID", original.id], ["TWITCH_CLIENT_SECRET", original.secret], ["VRDEX_CONNECTOR_TOKEN_KEY", original.key]]) {
@@ -166,8 +168,8 @@ test("bounded discovery never guesses a unique DJ association from a truncated c
   const { t } = await fixture(25);
   await recordLive(t);
   await recordLive(t);
-  assert.equal((await t.query(api.eventLive.listPublic, {})).length, 24);
-  assert.equal(await t.query(api.eventLive.forPerformer, { slug: "aurora" }), null);
+  assert.equal((await publicRows(t)).length, 24);
+  assert.equal((await t.query(api.eventLive.listPublic, {})).complete, false);
 });
 
 test("browse expiry stops at the current performer boundary before provider TTL", async () => {
@@ -175,13 +177,13 @@ test("browse expiry stops at the current performer boundary before provider TTL"
   const boundary = Date.now() + 5000;
   await t.run(ctx => ctx.db.patch(events[0].slotId, { endAt: boundary }));
   await recordLive(t);
-  const entries = await t.query(api.eventLive.listPublic, {});
+  const entries = await publicRows(t);
   assert.equal(entries.length, 1);
   assert.equal(entries[0].expiresAt, boundary);
 });
 
 test("newer unavailable cache entries do not crowd a live source out of the bounded row", async () => {
-  const { t, events } = await fixture(26);
+  const { t, events } = await fixture(126);
   await t.run(async ctx => {
     const now = Date.now();
     for (let i = 0; i < events.length; i++) {
@@ -190,7 +192,72 @@ test("newer unavailable cache entries do not crowd a live source out of the boun
       await ctx.db.insert("eventLiveEntries", { eventId: events[i].eventId, sourceKey, expiresAt: now + (i === 0 ? 80_000 : 90_000) });
     }
   });
-  const entries = await t.query(api.eventLive.listPublic, {});
+  const entries = await publicRows(t);
   assert.equal(entries.length, 1);
   assert.equal(entries[0].eventId, events[0].eventId);
+});
+
+
+test("discovery resumes identical anchored queries across refresh ticks", async () => {
+  const { t } = await fixture(25);
+  let now = Date.now();
+  const clock = mock.method(Date, "now", () => now);
+  try {
+    const first = await t.mutation(internal.eventLive.claimRefresh, {});
+    assert.ok(first);
+    assert.ok(Number.isFinite(first.startsAt));
+    assert.ok(Number.isFinite(first.endsAt));
+    const page = await t.query(internal.eventLive.refreshCandidates, { phase: "ends", cursor: first.endsCursor, anchorAt: first.endsAt });
+    assert.ok(page.cursor);
+    await t.mutation(internal.eventLive.finishRefresh, { token: first.token, startsCursor: null, endsCursor: page.cursor, candidates: [], observations: [] });
+    now += 60_000;
+    const second = await t.mutation(internal.eventLive.claimRefresh, {});
+    assert.ok(second);
+    assert.equal(second.endsAt, first.endsAt, "a resumed cursor retains its original query window");
+    const remaining = await t.query(internal.eventLive.refreshCandidates, { phase: "ends", cursor: second.endsCursor, anchorAt: second.endsAt });
+    assert.equal(remaining.cursor, null);
+    await t.mutation(internal.eventLive.finishRefresh, { token: second.token, startsCursor: null, endsCursor: null, candidates: [], observations: [] });
+    const third = await t.mutation(internal.eventLive.claimRefresh, {});
+    assert.ok(third);
+    assert.equal(third.endsAt, now, "a completed sweep starts a new anchored window");
+  } finally { clock.mock.restore(); }
+});
+
+test("a known long-running event stays fresh while discovery walks future events", async () => {
+  const { t, events } = await fixture();
+  await recordLive(t);
+  let now = Date.now();
+  await t.run(async ctx => {
+    await ctx.db.patch(events[0].eventId, { startAt: now - 12 * 3600_000, endAt: now + 24 * 3600_000 });
+    await ctx.db.patch(events[0].slotId, { startAt: now - 12 * 3600_000 });
+    for (let i = 0; i < 80; i++) await ctx.db.insert("events", {
+      slug: `future-${i}`, title: "Future", sortTitle: "future", startAt: now + 3600_000, endAt: now + 2 * 3600_000,
+      eventStatus: "scheduled", publicationState: "published", sourceType: "community", sourceLabel: "Fixture", updatedAt: now,
+    });
+  });
+  const clock = mock.method(Date, "now", () => now);
+  let probes = 0;
+  const fetcher = mock.method(globalThis, "fetch", async () => { probes++; return new Response(new ReadableStream({ cancel() {} }), { status: 200 }); });
+  try {
+    now += 120_000;
+    await t.action(internal.eventLiveActions.refresh, {});
+    assert.equal(probes, 1, "remembered active events refresh independently of future catalog pages");
+    const entries = await publicRows(t);
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].eventId, events[0].eventId);
+  } finally { fetcher.mock.restore(); clock.mock.restore(); }
+});
+
+
+test("remembered events recheck publication and leave the active set before probing", async () => {
+  const { t, events } = await fixture();
+  await recordLive(t);
+  await t.run(ctx => ctx.db.patch(events[0].eventId, { publicationState: "draft_private" }));
+  const fetcher = mock.method(globalThis, "fetch", async () => { throw Error("Private events must never be probed"); });
+  try {
+    await t.action(internal.eventLiveActions.refresh, {});
+    assert.equal(fetcher.mock.callCount(), 0);
+    assert.deepEqual(await publicRows(t), []);
+    assert.equal((await t.run(ctx => ctx.db.query("eventLiveCandidates").collect())).length, 0);
+  } finally { fetcher.mock.restore(); }
 });

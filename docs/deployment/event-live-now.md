@@ -52,15 +52,15 @@ Cache records never grant playback authorization. Fresh public lookups capture t
 healthy overtime playback remain independent of browse-result expiry.
 
 A DJ profile shows the associated event entry only when one eligible cached event
-matches that performer. Two simultaneous matches are not guessed. A truncated cache also withholds a DJ association instead of claiming uniqueness from a partial result. Existing
+matches that performer. Home and DJ profiles subscribe to the same no-argument projection, sharing its query cache. Two simultaneous matches are not guessed. A truncated cache also withholds a DJ association instead of claiming uniqueness from a partial result. Existing
 standalone profile stream controls remain available.
 
 ## Limits and failure behavior
 
 Every minute one atomic lease owns refresh. Its 55-second deadline fences stale
 writers and allows the next tick to recover after a crash. Two separate indexed
-queries read at most 20 recent starts and 20 ongoing ends, each with its own
-persistent cursor. A playback-only public projection omits unused worlds, participants and roster media kits to keep nested reads bounded. Convex permits one pagination operation per query, so the
+queries read at most 20 recent starts and 20 explicit ends, each with its own
+persistent cursor and fixed time anchor until its sweep completes. A third query revisits up to 20 previously discovered active events, oldest-checked first. This keeps long events eligible while the ends cursor walks future catalog entries. Events extended beyond their previous end are rechecked from their current source, and private or finished events leave this remembered set. A playback-only public projection omits unused worlds, participants and roster media kits to keep nested reads bounded. Convex permits one pagination operation per query, so the
 scheduler combines these bounded results in a separate selection query.
 
 Each cycle deduplicates canonical provider identities, chooses at most 20 sources
@@ -71,10 +71,8 @@ Actual rate-limit reset headers control backoff. Restricted or omitted Twitch
 results, malformed payloads, missing credentials, timeouts and other failures
 remain unavailable, not confident offline observations.
 
-Observations expire after 90 seconds. Public entries expire sooner at their selected slot or event boundary, so time alone cannot keep a past performer advertised while the next one lacks a source. Public reads scan at most 100 recent cache metadata records, deduplicate their
-provider observation reads, and load at most 24 public event projections. Unavailable
-metadata is excluded before spending the public-projection budget. The client also expires each entry on a timer if database
-refresh stops. Convex subscriptions do not rerun merely because time passes, so server rendering filters absolute expiry again and each client schedules the remaining deadlines. See [Convex query time guidance](https://docs.convex.dev/understanding/best-practices/#dont-use-datenow-in-queries). A full or heavily paginated candidate pool can exceed the refresh
+Observations expire after 90 seconds. Public entries expire sooner at their selected slot or event boundary, so time alone cannot keep a past performer advertised while the next one lacks a source. Public reads index only unexpired live observations, scanning at most 100 sources and 100 matching event metadata records per source, with one extra record to detect truncation. They load at most 24 public event projections. Offline and unavailable records cannot crowd live sources out of the metadata scan. Any truncation prevents a DJ profile from claiming a unique event association. The client also expires each entry on a timer if database
+refresh stops. Convex subscriptions do not rerun merely because time passes, so server rendering filters absolute expiry again and each client schedules the remaining deadlines. The optional server snapshot has a 250-millisecond deadline, so a stalled cache read cannot hold up the homepage; its client subscription can populate the row afterward. See [Convex query time guidance](https://docs.convex.dev/understanding/best-practices/#dont-use-datenow-in-queries). A full or heavily paginated candidate pool can exceed the refresh
 budget, so stale results disappear while cursors and oldest-observed selection
 rotate work fairly. No unlimited fresh-coverage promise is made.
 

@@ -38,8 +38,8 @@ function setup() {
     throw new Error(`Unexpected fixture query ${name}`);
   }, watchQuery: (query: FunctionReference<"query">) => {
     const name = getFunctionName(query);
-    if (name === "eventLive:listPublic" || name === "eventLive:forPerformer") return {
-      localQueryResult: () => name === "eventLive:listPublic" ? entries : entries.length === 1 ? entries[0] : null,
+    if (name === "eventLive:listPublic") return {
+      localQueryResult: () => ({ entries, complete: mode !== "truncated" }),
       onUpdate: (callback: () => void) => { listeners.add(callback); return () => listeners.delete(callback); }, journal: () => undefined,
     };
     return { localQueryResult: () => ({ items: [], cursor: null, complete: true }), onUpdate: () => () => {}, journal: () => undefined };
@@ -72,7 +72,7 @@ export default function Fixture() {
   const request = eventPlaybackRequest(fixture.event);
   return <ConvexProvider client={fixture.client}>
     <div className="flex flex-wrap gap-4 p-4 text-sm"><span>Live now fixture</span><label>State <select aria-label="Fixture state" value={mode} onChange={event => { const mode = event.target.value, at = Date.now(); fixture.change(mode, at); setScenario({ mode, at }); }}>
-      <option value="live">Live</option><option value="lookup-never">Lookup stalled</option><option value="race">Delayed first selection</option><option value="many">Several live events</option><option value="broken-image">Image unavailable</option><option value="expiring">Expiring entries</option><option value="empty">Empty</option><option value="expired">Expired</option><option value="removed">Source removed before Play</option>
+      <option value="live">Live</option><option value="truncated">Incomplete projection</option><option value="lookup-never">Lookup stalled</option><option value="race">Delayed first selection</option><option value="many">Several live events</option><option value="broken-image">Image unavailable</option><option value="expiring">Expiring entries</option><option value="empty">Empty</option><option value="expired">Expired</option><option value="removed">Source removed before Play</option>
     </select></label><Link href="/playwright/home-live-now">Home view</Link><Link href="/playwright/home-live-now?view=event">Event view</Link><Link href="/playwright/home-live-now?view=dj">DJ view</Link></div>
     {view === "home" ? <HomeSearchPage beforeSchedule={row} /> : <main className="mx-auto w-full max-w-5xl p-6"><h1>{view === "dj" ? "Aurora" : "Harbor Sessions"}</h1>{row}{request && <EventPlaybackInline owner={owner} request={request} />}</main>}
   </ConvexProvider>;

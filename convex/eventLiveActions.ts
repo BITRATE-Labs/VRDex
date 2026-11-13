@@ -11,11 +11,12 @@ export const refresh = internalAction({ args: {}, returns: v.null(), handler: as
   const startedAt = Date.now();
   const claim = await ctx.runMutation(internal.eventLive.claimRefresh, {});
   if (!claim) return null;
-  const [starts, ends] = await Promise.all([
-    ctx.runQuery(internal.eventLive.refreshCandidates, { phase: "starts", cursor: claim.startsCursor }),
-    ctx.runQuery(internal.eventLive.refreshCandidates, { phase: "ends", cursor: claim.endsCursor }),
+  const [starts, ends, remembered] = await Promise.all([
+    ctx.runQuery(internal.eventLive.refreshCandidates, { phase: "starts", cursor: claim.startsCursor, anchorAt: claim.startsAt }),
+    ctx.runQuery(internal.eventLive.refreshCandidates, { phase: "ends", cursor: claim.endsCursor, anchorAt: claim.endsAt }),
+    ctx.runQuery(internal.eventLive.refreshRemembered, {}),
   ]);
-  const page = await ctx.runQuery(internal.eventLive.selectSources, { candidates: [...starts.candidates, ...ends.candidates] });
+  const page = await ctx.runQuery(internal.eventLive.selectSources, { candidates: [...starts.candidates, ...ends.candidates, ...remembered.candidates] });
   const observations: Array<{ source: LiveSource; status: "live" | "offline" | "unavailable"; observedAt: number }> = [];
   const twitch = page.sources.filter(source => source.provider === "twitch");
   let twitchRetryAt = claim.twitchRetryAt;
@@ -60,6 +61,7 @@ export const refresh = internalAction({ args: {}, returns: v.null(), handler: as
     }
   }));
   await ctx.runMutation(internal.eventLive.finishRefresh, { token: claim.token, candidates: page.candidates, observations,
+    events: [...starts.events, ...ends.events, ...remembered.events], visited: remembered.visited,
     startsCursor: starts.cursor, endsCursor: ends.cursor, ...(twitchRetryAt === undefined ? {} : { twitchRetryAt }), twitchToken: twitchToken ?? null });
   console.info(JSON.stringify({ event: "event_live_refresh", sources: page.sources.length,
     live: observations.filter(o => o.status === "live").length, offline: observations.filter(o => o.status === "offline").length,

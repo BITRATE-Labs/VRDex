@@ -795,6 +795,13 @@ export async function fetchManagedCommunityBySlug(slug: string) {
 /** Shared cached observations only; never performs provider or media I/O. */
 export async function fetchPublicLiveEvents() {
   if (!process.env.NEXT_PUBLIC_CONVEX_URL) return [];
-  try { return (await fetchQuery(api.eventLive.listPublic, {})).filter(entry => entry.expiresAt > Date.now()); }
-  catch { return []; }
+  let deadline: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const projection = await Promise.race([
+      fetchQuery(api.eventLive.listPublic, {}),
+      new Promise<null>(resolve => { deadline = setTimeout(() => resolve(null), 250); }),
+    ]);
+    return (projection?.entries ?? []).filter(entry => entry.expiresAt > Date.now());
+  } catch { return []; }
+  finally { clearTimeout(deadline); }
 }
