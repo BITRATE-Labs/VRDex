@@ -226,7 +226,10 @@ media; it does not measure phone CPU or background playback.
 Audio-only availability belongs to the adapter. Native HLS and relay adapters
 declare a separate audio rendition; legacy MPEG-TS adapters do not. Retained
 controls omit Audio only for those legacy adapters while preserving Video
-recovery and saved preferences. Hiding local lineup video is not audio-only
+recovery and saved preferences. A restored audio preference blocks automatic local
+video too, before creating its session; explicit Video and Play recover it.
+Legacy lineup adapters do not implement a mode switch that only hides video.
+Hiding local lineup video is not audio-only
 decoding. See the [investigation and live-index proposal](../planning/player-performance-and-live-index-2026-11-06.md).
 
 The shared transport uses mpegts.js 1.8.1's supported customLoader interface.
