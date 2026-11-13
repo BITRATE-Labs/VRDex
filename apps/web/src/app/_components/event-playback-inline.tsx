@@ -10,7 +10,7 @@ import { WatchPlayPoster } from "./vrcdn-stream-player";
 export function EventPlaybackInline({ owner, request }: { owner: EventPlaybackOwner; request: Extract<PlaybackRequest,{eventId:string}> }) {
   const state = useEventPlaybackSnapshot(owner);
   const active = state.request?.eventId === request.eventId;
-  const now = useCurrentTimestamp();
+  const now = useCurrentTimestamp(request.kind === "performer_sequence" ? request.event.slots.flatMap(slot => slot.endAt === undefined ? [slot.startAt] : [slot.startAt, slot.endAt]) : []);
   useEffect(() => { owner.update(request); }, [owner, request]);
   if (!active && !canStartEventPlayback(request, now)) return null;
   return <div className="overflow-hidden rounded-card border border-border bg-media text-white" data-event-playback-inline={request.eventId}>

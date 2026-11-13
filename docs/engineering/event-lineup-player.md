@@ -4,10 +4,16 @@ Timed public lineups whose current scheduled performer has a public stream are w
 without staff enabling performer sequence. The editor's Automatic choice uses
 this local browser viewer; Event stream retains the explicitly enabled event
 source. Automatic requests never open native relay grants or broadcasting tools.
-Existing enabled performer-sequence events remain compatible. Fresh Play uses the
+Enabled performer-sequence events use the same fresh-start rule. A new viewer
+does not enter an empty waiting room or manual selector while the scheduled
+source is missing. Existing started sessions retain their manual controls.
+Fresh Play uses the
 same inferred, unambiguous current slot in the inline surface, standalone surface
 and playback owner. A different past or future performer having a stream does
-not make a missing current source watchable. Existing playback keeps its
+not make a missing current source watchable. The viewer clock also refreshes at
+slot starts and inferred/authored ends, so the new-start control changes at the
+boundary without waiting for the normal minute tick or a visibility event.
+Existing playback keeps its
 independent continuation and projection-revalidation rules.
 
 ## Ownership and updates
@@ -124,6 +130,8 @@ A synthetic seven-second startup regression retains its original connection;
 this does not establish live-provider or physical-phone startup performance.
 Once it progresses, the established one-second failure interval applies.
 The allowance does not make a successor ready or bypass pause/revocation fences.
+An offline or never-progressing cold source can now take ten seconds longer to
+reach its first retry. This is the tradeoff for retaining slow valid initialization.
 
 Retries use 1, 2, 4, then 10 second intervals. Each successful handoff resets the
 preparation retry count and deadline for the next candidate. Replacing a prepared connection also

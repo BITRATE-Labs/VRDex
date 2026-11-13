@@ -184,3 +184,26 @@ test('saved audio preference blocks automatic legacy video until explicit Video 
   await expect.poll(() => page.locator('video:not([hidden])').evaluate(node => (node as HTMLVideoElement).currentTime), { timeout: 15000 }).toBeGreaterThan(1);
   expect(opened).toBe(1);
 });
+
+
+test('current-source eligibility updates at the slot boundary without a visibility event @fixture', async ({ page }) => {
+  await page.clock.install();
+  await page.goto('/playwright/event-lineup-live?composed&automatic&transport=http%3A%2F%2F127.0.0.1%3A6799');
+  await page.getByRole('button', { name: 'Before window', exact: true }).click();
+  const play = page.getByRole('button', { name: 'Play Lineup live', exact: true });
+  await expect(play).toBeVisible();
+  await page.getByRole('button', { name: 'missing', exact: true }).click();
+  await page.getByRole('button', { name: 'Just before boundary', exact: true }).click();
+  await expect(play).toBeVisible();
+  await page.evaluate(() => { Date.now = () => 1_240_000; });
+  await page.clock.runFor(5100);
+  await expect(play).toHaveCount(0, { timeout: 1000 });
+  await page.getByRole('button', { name: 'Before window', exact: true }).click();
+  await page.getByRole('button', { name: 'missing-first', exact: true }).click();
+  await expect(play).toHaveCount(0);
+  await page.getByRole('button', { name: 'Just before boundary', exact: true }).click();
+  await page.evaluate(() => { Date.now = () => 1_240_000; });
+  await page.clock.runFor(5100);
+  await expect(play).toBeVisible({ timeout: 1000 });
+  await expect(page.locator('video')).toHaveCount(0);
+});

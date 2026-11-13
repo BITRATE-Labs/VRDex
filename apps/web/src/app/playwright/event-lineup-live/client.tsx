@@ -39,6 +39,7 @@ function setup() {
      if (kind==="swap-source") event={...event,slots:event.slots.map(slot=>({...slot,stream:source("replacement","audible")}))};
      if (kind==="replace") event={...event,slots:event.slots.map(slot=>({...slot,playbackKey:slot.playbackKey+"-new"}))};
      if (kind==="duplicate") event={...event,slots:[{...a,playbackKey:"x"},{...a,playbackKey:"y"},b]};
+     if (kind==="missing-first") event={...event,slots:[{...a,stream:undefined,performer:undefined},b]};
      if (kind==="missing") event={...event,slots:[a,{...b,stream:undefined},{...b,playbackKey:"c",startAt:1_500_000}]};
      if (kind==="third") event={...event,endAt:1_800_000,slots:[a,b,{...b,playbackKey:"c",startAt:1_500_000,endAt:1_800_000,stream:source("third","audible")}]};
      if (kind==="overlap") event={...event,slots:[a,{...b,startAt:1_200_000}]};
@@ -76,8 +77,8 @@ export default function Fixture() {
  const [mounted,setMounted]=useState(true);
  const [baseline,setBaseline]=useState(false);
  return <main className="mx-auto max-w-3xl space-y-5 p-5"><h1>Lineup playback fixture</h1>
-  <div className="flex flex-wrap gap-3">{[["Before event",800_000],["Before window",920_000],["Just before eligible",939_999],["Exactly eligible",940_000],["Eligible",941_000],["Boundary",1_240_000],["Next slot",1_250_000],["Later eligible",1_381_000],["After end",1_600_000]].map(([label,at])=><button key={label} onClick={()=>fixture.setTime(Number(at))}>{label}</button>)}
-  {["third","swap-source","hide","cancel","unpublish","replace","duplicate","missing","overlap","event-stream"].map(action=><button key={action} onClick={()=>fixture.change(action)}>{action}</button>)}
+  <div className="flex flex-wrap gap-3">{[["Before event",800_000],["Before window",920_000],["Just before eligible",939_999],["Exactly eligible",940_000],["Eligible",941_000],["Just before boundary",1_235_000],["Boundary",1_240_000],["Next slot",1_250_000],["Later eligible",1_381_000],["After end",1_600_000]].map(([label,at])=><button key={label} onClick={()=>fixture.setTime(Number(at))}>{label}</button>)}
+  {["third","swap-source","hide","cancel","unpublish","replace","duplicate","missing","missing-first","overlap","event-stream"].map(action=><button key={action} onClick={()=>fixture.change(action)}>{action}</button>)}
   <button onClick={()=>{setMounted(false);setBaseline(false);}}>Unmount</button><button onClick={()=>{setMounted(false);setBaseline(true);}}>Profile player</button>
   </div>
   <ConvexProviderWithAuth client={fixture.client} useAuth={useAnonymousFixtureAuth}>{mounted&&<Profiler id="lineup" onRender={()=>{const target=window as unknown as {lineupCommits?:number};target.lineupCommits=(target.lineupCommits??0)+1;}}>{fixture.composed ? <EventPublicPage event={fixture.initial}/> : <StandaloneProjection initial={fixture.initial}/>}</Profiler>}</ConvexProviderWithAuth>

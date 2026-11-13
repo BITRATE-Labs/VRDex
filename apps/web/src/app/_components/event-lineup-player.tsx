@@ -21,7 +21,7 @@ function StandaloneEventLineupPlayer({ event }: { event: LineupEvent }) {
   const session = useRef<EventLineupSession>(null);
   const [state, setState] = useState<LineupSnapshot>({ started: false, following: true, paused: true, muted: false, volume: 1, connected: false, unavailable: false });
   const [fullscreen, setFullscreen] = useState(false);
-  const now = useCurrentTimestamp();
+  const now = useCurrentTimestamp(event.slots.flatMap(slot => slot.endAt === undefined ? [slot.startAt] : [slot.startAt, slot.endAt]));
   const visible = state.started || (now !== null && Boolean(joinSlot(event.slots, now)?.stream) && isInScheduledWatchWindow({ ...event, now }));
   useEffect(() => {
     if (!mount.current) return;
