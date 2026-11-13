@@ -1,0 +1,256 @@
+import { test, expect } from "@playwright/test";
+const member = "usr_00000000-0000-4000-8000-000000000001";
+
+test("sustained reactive prepends bound active people subscriptions without dropping visible history @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership-recovery--stable-sources&viewMode=story");
+  const rows = page.locator("div.py-4");
+  await expect(rows).toHaveCount(25);
+  await page.getByRole("button", { name: "Load more activity", exact: true }).click();
+  await expect(rows).toHaveCount(50);
+  const views = () => page.evaluate(() => Number(document.documentElement.dataset.peopleActiveViews));
+  await expect.poll(views).toBe(2);
+  for (let count = 1; count <= 60; count++) {
+    await page.getByRole("button", { name: "Prepend next event", exact: true }).click();
+    await expect(rows).toHaveCount(50 + count);
+    await expect(rows.first().getByText("Private Mira", { exact: true })).toBeVisible();
+    expect(await views()).toBeLessThanOrEqual(Math.max(8, 2 * Math.ceil((50 + count) / 25)));
+  }
+  for (let count = 1; count <= 6; count++) {
+    await page.getByRole("button", { name: "Load more activity", exact: true }).click();
+    await expect(rows).toHaveCount(110 + count * 25);
+  }
+  expect(await views()).toBeLessThanOrEqual(2 * Math.ceil(260 / 25));
+  await expect(rows.last().getByText("Private Sol", { exact: true })).toBeVisible();
+});
+
+test("prototype-key event types retain readable activity labels and exact Details @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership--prototype-event-types&viewMode=story");
+  const rows = page.locator("div.py-4");
+  await expect(rows).toHaveCount(5);
+  for (const [index, type] of ["constructor", "toString", "valueOf", "hasOwnProperty", "__proto__"].entries()) {
+    await expect(rows.nth(index).getByText("Group activity", { exact: true })).toBeVisible();
+    await expect(rows.nth(index).getByText("Other activity", { exact: true })).toBeVisible();
+    await rows.nth(index).getByLabel(`Details for Group activity, ${type}`, { exact: true }).click();
+    await expect(rows.nth(index).getByText(type, { exact: true })).toHaveCount(2);
+  }
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/4c7-prototype-activity-${test.info().project.name}.png`, fullPage: true });
+  }
+});
+
+test("reactive activity preserves visible people grants on prepend append and reorder @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership-recovery--stable-sources&viewMode=story");
+  const rows = page.locator("div.py-4");
+  const sources = () => page.evaluate(() => JSON.parse(document.documentElement.dataset.peopleSources ?? "[]"));
+  await expect(rows).toHaveCount(25);
+  await expect(rows.first().getByText("Private Mira", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Load more activity", exact: true }).click();
+  await expect(rows).toHaveCount(50);
+  await expect(rows.last().getByText("Private Sol", { exact: true })).toBeVisible();
+  expect(await sources()).toEqual([0, 25].map(start => ({ kind: "activity", auditIds: Array.from({ length: 25 }, (_, index) => `filtered-${start + index}`) })));
+
+  await page.getByRole("button", { name: "Prepend event", exact: true }).click();
+  await expect(rows).toHaveCount(51);
+  // New admissions stay pending so an accidental loss of old tickets cannot hide behind a fast response.
+  await expect(rows.nth(1).getByText("Private Mira", { exact: true })).toBeVisible();
+  await expect(rows.last().getByText("Private Sol", { exact: true })).toBeVisible();
+  await expect.poll(sources).toHaveLength(3);
+  expect((await sources()).at(-1)).toEqual({ kind: "activity", auditIds: ["new-audit-ID"] });
+  await page.getByRole("heading", { name: "Membership activity", exact: true }).evaluate(element => element.scrollIntoView({ block: "start" }));
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/c888-reactive-activity-${test.info().project.name}.png` });
+  }
+  await page.getByRole("button", { name: "Release people admissions", exact: true }).click();
+  await page.getByRole("button", { name: "Reorder events", exact: true }).click();
+  await expect(rows.first().locator("summary")).toHaveAttribute("aria-label", "Details for Private Mira, filtered-24");
+  expect(await sources()).toHaveLength(3);
+  await page.getByRole("button", { name: "Reorder events", exact: true }).click();
+
+  await page.getByRole("button", { name: "Remove prepended event", exact: true }).click();
+  await expect(rows).toHaveCount(50);
+  expect(await sources()).toHaveLength(3);
+  await page.getByRole("button", { name: "Prepend event", exact: true }).click();
+  await expect(rows).toHaveCount(51);
+  await expect.poll(sources).toHaveLength(4);
+  expect((await sources()).at(-1)).toEqual({ kind: "activity", auditIds: ["new-audit-ID"] });
+  await expect(rows.nth(1).getByText("Private Mira", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Release people admissions", exact: true }).click();
+  await page.getByRole("button", { name: "Load more activity", exact: true }).click();
+  await expect(rows).toHaveCount(76);
+  await expect.poll(sources).toHaveLength(5);
+  expect((await sources()).at(-1)).toEqual({ kind: "activity", auditIds: Array.from({ length: 25 }, (_, index) => `filtered-${50 + index}`) });
+  await page.getByLabel("Member", { exact: true }).selectOption("usr_00000000-0000-4000-8000-000000000002");
+  await expect(rows).toHaveCount(25);
+  await expect.poll(sources).toHaveLength(6);
+  expect((await sources()).at(-1)).toEqual({ kind: "activity", auditIds: Array.from({ length: 25 }, (_, index) => `filtered-${index * 2 + 1}`) });
+});
+
+test("analytics sign-in returns to the exact filtered history @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-workspace--signed-out-analytics&viewMode=story");
+  const href = await page.getByRole("link", { name: "Sign in", exact: true }).getAttribute("href");
+  const signIn = new URL(href!, "https://example.test");
+  const target = new URL(signIn.searchParams.get("returnTo")!, "https://example.test");
+  expect(target.pathname).toBe("/account/communities/afterhours/analytics");
+  expect(target.searchParams.get("member")).toBe(member);
+  expect(target.searchParams.get("eventType")).toBe("group.member.role.assign");
+  expect(target.searchParams.get("from")).toBe("2026-09-01");
+  expect(target.searchParams.get("to")).toBe("2026-09-30");
+});
+
+
+test("activity filters reach indexed pagination and restore their own loaded pages @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership-recovery--filters&viewMode=story");
+  await expect(page.locator("div.py-4")).toHaveCount(25);
+  await page.getByLabel("Member", { exact: true }).selectOption(member);
+  await page.getByLabel("Activity", { exact: true }).selectOption("group.member.join");
+  await expect(page.locator("div.py-4")).toHaveCount(25);
+  await expect(page.getByRole("status").filter({ hasText: "Updating names" })).toHaveCount(0);
+  const filter = await page.evaluate(() => JSON.parse(document.documentElement.dataset.activityFilter!));
+  expect(filter.targetUserId).toBe(member);
+  expect(filter.eventType).toBe("group.member.join");
+  await expect(page.getByLabel("Fixture location")).toContainText(`member=${member}`);
+  await expect(page.getByLabel("Fixture location")).toContainText("eventType=group.member.join");
+  await page.getByRole("button", { name: "Load more activity", exact: true }).click();
+  await expect(page.locator("div.py-4")).toHaveCount(30);
+  await page.getByRole("button", { name: "Leave activity", exact: true }).click();
+  await page.getByRole("button", { name: "Return to activity", exact: true }).click();
+  await expect(page.locator("div.py-4")).toHaveCount(30);
+  await page.getByLabel("Activity", { exact: true }).selectOption("group.member.leave");
+  await expect(page.locator("div.py-4")).toHaveCount(25);
+  await expect(page.getByLabel("Member", { exact: true })).toHaveValue(member);
+  await page.getByLabel("Inspect day", { exact: true }).fill("2026-09-01");
+  await expect(page.getByLabel("Fixture location")).toContainText(`member=${member}`);
+  await expect(page.getByLabel("Fixture location")).toContainText("eventType=group.member.leave");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+  await page.getByRole("heading", { name: "Membership activity", exact: true }).evaluate(element => element.scrollIntoView({ block: "start" }));
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/membership-filter-${test.info().project.name}.png` });
+  }
+});
+
+test("a known person can be filtered from their Details @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership-recovery--filters&viewMode=story");
+  await page.locator("summary").first().click();
+  await page.getByRole("button", { name: "Filter member", exact: true }).first().click();
+  await expect(page.getByLabel("Member", { exact: true })).toHaveValue(member);
+  await expect(page.getByLabel("Fixture location")).toContainText(`member=${member}`);
+});
+
+for (const story of ["disabled", "staff"]) {
+  test(`${story} has no inoperable recovery prompt @storybook-visual`, async ({ page }) => {
+    await page.goto(`/iframe.html?id=clubs-membership-recovery--${story}&viewMode=story`);
+    await expect(page.getByRole("button", { name: "Recover recent history", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Resume recovery", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "History recovery", exact: true })).toHaveCount(0);
+  });
+}
+
+test("owner recovery uses fixed bounds and exact stop and resume revisions @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership-recovery--owner&viewMode=story");
+  await page.getByRole("button", { name: "Recover recent history", exact: true }).click();
+  const recovery = page.getByRole("region", { name: "History recovery", exact: true });
+  await expect(recovery.getByText("Pending", { exact: true })).toBeVisible();
+  const bounds = await recovery.getByLabel("Recovery window").textContent();
+  await page.getByRole("button", { name: "Advance recovery", exact: true }).click();
+  await expect(recovery.getByText("Running", { exact: true })).toBeVisible();
+  await expect(recovery.locator("div").filter({ has: page.getByText("Scanned", { exact: true }) }).last()).toContainText("100");
+  await page.getByRole("button", { name: "Stop recovery", exact: true }).click();
+  expect(await page.evaluate(() => JSON.parse(document.documentElement.dataset.recoveryStop!))).toEqual({ recoveryId: "recovery-one", expectedRevision: 1 });
+  await expect(recovery.getByText("Stopped", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Resume recovery", exact: true }).click();
+  expect(await page.evaluate(() => JSON.parse(document.documentElement.dataset.recoveryRequest!))).toEqual({ communityProfileId: "fixture-club", resume: true, expectedRevision: 2 });
+  await expect(recovery.getByLabel("Recovery window")).toHaveText(bounds!);
+  await expect(recovery.getByText("Pending", { exact: true })).toBeVisible();
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await recovery.screenshot({ path: `../../.cache/artifacts/membership-history-repair-${test.info().project.name}.png` });
+  }
+});
+
+for (const story of ["entry-cap", "page-cap"]) {
+  test(`${story} cannot resume past its cumulative bound @storybook-visual`, async ({ page }) => {
+    await page.goto(`/iframe.html?id=clubs-membership-recovery--${story}&viewMode=story`);
+    await expect(page.getByText("Partial", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Resume recovery", exact: true })).toHaveCount(0);
+  });
+}
+
+
+test("selected member retains a distinct fallback when loaded options disappear @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership-recovery--filters&viewMode=story");
+  await page.getByLabel("Member", { exact: true }).selectOption(member);
+  await page.getByRole("button", { name: "Hide selected member", exact: true }).click();
+  await expect(page.getByText("No recorded membership events.", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Member", { exact: true })).toHaveValue(member);
+  await expect(page.getByLabel("Member", { exact: true }).locator("option:checked")).toHaveText("Member 00000001");
+  await expect(page.getByLabel("Fixture location")).toContainText(`member=${member}`);
+});
+
+
+test("Details distinguish recorded recovered and last-observed role evidence @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership--evidence-provenance&viewMode=story");
+  const rows = page.locator("div.py-4");
+  await expect(rows).toHaveCount(3);
+  for (const row of await rows.all()) await row.locator("summary").click();
+  await expect(rows.nth(0).getByText("Role recorded with event", { exact: true })).toBeVisible();
+  await expect(rows.nth(0).getByText("Actor name recorded with event", { exact: true })).toBeVisible();
+  await expect(rows.nth(0).getByText("Recovered actor name", { exact: true })).toHaveCount(0);
+  await expect(rows.nth(1).getByText("Recovered role name", { exact: true })).toBeVisible();
+  await expect(rows.nth(1).getByText("Recovered actor name", { exact: true })).toBeVisible();
+  await expect(rows.nth(1).getByText("Evidence recovered", { exact: true })).toBeVisible();
+  await expect(rows.nth(2).getByText("Last observed role name", { exact: true })).toBeVisible();
+  await expect(rows.nth(2).getByText("Role last observed", { exact: true })).toBeVisible();
+  await expect(rows.nth(2).getByText("Role recorded with event", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("role_observation", { exact: true })).toHaveCount(0);
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/membership-provenance-${test.info().project.name}.png`, fullPage: true });
+  }
+});
+
+
+test("recovery failures retain truthful state and approved error copy @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership-recovery--stopped&viewMode=story");
+  await page.getByRole("button", { name: "Fail next recovery action", exact: true }).click();
+  await page.getByRole("button", { name: "Resume recovery", exact: true }).click();
+  const recovery = page.getByRole("region", { name: "History recovery", exact: true });
+  await expect(recovery.getByRole("alert")).toHaveText("Refresh to continue.");
+  await expect(recovery.getByText("Stopped", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Internal authority unavailable/)).toHaveCount(0);
+  await page.getByRole("button", { name: "Resume recovery", exact: true }).click();
+  await expect(recovery.getByText("Pending", { exact: true })).toBeVisible();
+  await expect(recovery.getByRole("alert")).toHaveCount(0);
+});
+
+
+test("unprepared person index preserves the filtered URL and offers retry or clear @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership-recovery--filters&viewMode=story");
+  await page.getByRole("button", { name: "Pause fixture index", exact: true }).click();
+  await page.getByLabel("Member", { exact: true }).selectOption(member);
+  await expect(page.getByRole("alert")).toContainText("Unable to load activity.");
+  await expect(page.getByText("No recorded membership events.", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Fixture location")).toContainText(`member=${member}`);
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page.getByRole("button", { name: "Clear filters", exact: true }).click();
+  await expect(page.locator("div.py-4")).toHaveCount(25);
+  await expect(page.getByLabel("Fixture location")).not.toContainText("member=");
+  await page.getByLabel("Member", { exact: true }).selectOption(member);
+  await page.getByRole("button", { name: "Complete fixture index", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByLabel("Member", { exact: true })).toHaveValue(member);
+  await expect(page.locator("div.py-4")).toHaveCount(25);
+});
+
+test("private names join mixed-case raw identities without changing Details evidence @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-membership--mixed-case-private-names&viewMode=story");
+  const rows = page.locator("div.py-4");
+  await expect(rows.first().getByText("Private Mira", { exact: true })).toBeVisible();
+  await expect(rows.first().getByText("Private Sol", { exact: true })).toBeVisible();
+  await expect(rows.nth(1).getByText("Private Mira", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Member", { exact: true }).locator("option")).toHaveCount(2);
+  await rows.first().locator("summary").click();
+  await expect(rows.first().getByText("USR_AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA", { exact: true })).toBeVisible();
+  await expect(rows.first().getByText("USR_BbBbBbBb-BbBb-BbBb-BbBb-BbBbBbBbBbBb", { exact: true })).toBeVisible();
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/membership-canonical-private-${test.info().project.name}.png`, fullPage: true });
+  }
+});

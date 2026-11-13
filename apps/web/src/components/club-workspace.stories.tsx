@@ -1,3 +1,4 @@
+import { usePathname, useSearchParams } from "@storybook/nextjs-vite/navigation.mock";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { ConvexProviderWithAuth, ConvexReactClient } from "convex/react";
 import { ClubConnectionView, GroupObservationControls } from "@/app/account/communities/[slug]/club-connection";
@@ -14,6 +15,7 @@ import { ClubStaffView } from "@/app/account/communities/[slug]/club-staff";
 import { ClubVisibilityView } from "@/app/account/communities/[slug]/club-visibility";
 import {
   ClubWorkspaceView,
+  ClubWorkspace,
   type WorkspaceData,
 } from "@/app/account/communities/[slug]/club-workspace";
 import { PageContainer, PageShell } from "@/components/ui/page-shell";
@@ -513,3 +515,11 @@ export const Visibility: Story = {
     </PageShell>
   ),
 };
+
+
+function SignedOutAnalyticsFixture() {
+  usePathname.mockReturnValue("/account/communities/afterhours/analytics");
+  useSearchParams.mockReturnValue(new URLSearchParams("from=2026-09-01&to=2026-09-30&member=usr_00000000-0000-4000-8000-000000000001&eventType=group.member.role.assign") as ReturnType<typeof useSearchParams>);
+  return <ConvexProviderWithAuth client={fixtureClient} useAuth={useFixtureAuth}><ClubWorkspace communitySlug="afterhours"><p>History</p></ClubWorkspace></ConvexProviderWithAuth>;
+}
+export const SignedOutAnalytics: Story = { render: () => <SignedOutAnalyticsFixture /> };

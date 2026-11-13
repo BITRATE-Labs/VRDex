@@ -1,4 +1,5 @@
 import { ClubProvider } from "./club-provider.mjs";
+import { membershipRoleObservations } from "./membership-roles.mjs";
 
 /** Refresh connection readiness within the current integration lease and shared request budget. */
 export async function refreshClubAuthority({ assignment, provider, control, expectedUserId, accountBudget, integrationBudget, clock = Date.now }) {
@@ -15,6 +16,7 @@ export async function refreshClubAuthority({ assignment, provider, control, expe
   const recorded = await control.send("club_authority", {
     ...lease, epochStartedAt: assignment.epochStartedAt,
     authority: { groupId, userId, ownerUserId, membershipStatus, permissions, observedAt },
+    roles: membershipRoleObservations(snapshot.roles),
   });
   if (recorded?.recorded !== true) return { refreshed: false };
   return { refreshed: true, authority: { groupId, userId, ownerUserId, membershipStatus, permissions, observedAt } };

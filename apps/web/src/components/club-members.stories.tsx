@@ -1,3 +1,4 @@
+import { ClubPeopleFixture } from "./club-people-fixture";
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { useLayoutEffect, useMemo, useState } from "react";
 import {
@@ -32,6 +33,7 @@ const user = (index: number) =>
 const djRole = "grol_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1";
 const adminRole = "grol_00000000-0000-0000-0000-000000000002";
 class MembersFixtureClient extends ConvexReactClient {
+  private readonly peopleFixture = new ClubPeopleFixture();
   private readonly fixtureListeners = new Set<() => void>();
   private readonly cache = new Map<string, unknown>();
   private readonly requests = new Map<string, ProviderReadParams>();
@@ -42,8 +44,18 @@ class MembersFixtureClient extends ConvexReactClient {
     private permissions: WorkspaceData["actor"]["permissions"],
     private readonly directoryReadFailure: boolean,
     private readonly mixedCaseRoles: boolean,
+    private readonly collidingIds = false,
+    private readonly mixedCaseUsers = false,
+    private readonly pagedActions = 0,
   ) {
     super("https://fixture.invalid");
+    if (pagedActions) {
+      for (let index = 0; index < pagedActions + 7; index++) this.jobs.push({ id: `Action-MiXeD-${index}`, revision: 7, payload: index >= pagedActions && index < pagedActions + 5 ? { kind: "publish_post", title: "Hidden post", text: "", visibility: "group", sendNotification: false } : { kind: "invite_member", targetUserId: user(index + 1) }, schedule: { kind: "immediate" }, dueAt: Date.now(), state: "pending", actor: { tokenIdentifier: "fixture", subject: "fixture", issuer: "fixture" }, batchId: "paging", code: null });
+    }
+    if (collidingIds) {
+      this.peopleFixture.resolved = false;
+      this.peopleFixture.pendingAllowed = false;
+    }
   }
   setPermissions(permissions: WorkspaceData["actor"]["permissions"]) {
     this.permissions = permissions;
@@ -52,7 +64,8 @@ class MembersFixtureClient extends ConvexReactClient {
     const key = JSON.stringify([name, args]);
     if (this.cache.has(key)) return this.cache.get(key);
     let result: unknown;
-    if (name === "clubProviderReads:context") {
+    if (name === "clubPeople:readView") result = this.peopleFixture.read(String(args.viewId));
+    else if (name === "clubProviderReads:context") {
       if (this.staff && this.permissions.length === 0)
         throw new Error("Unauthorized context read");
       result = {
@@ -66,7 +79,7 @@ class MembersFixtureClient extends ConvexReactClient {
       };
     }
     else if (name === "clubOperations:list")
-      result = { page: this.jobs, isDone: true, continueCursor: "" };
+      result = this.pagedActions ? { page: (args.paginationOpts as { cursor?: string }).cursor ? this.jobs.slice(this.pagedActions + 5) : this.jobs.slice(0, this.pagedActions + 5), isDone: Boolean((args.paginationOpts as { cursor?: string }).cursor), continueCursor: "next-actions" } : { page: this.jobs, isDone: true, continueCursor: "" };
     else if (name === "clubProviderReads:get") {
       const params = this.requests.get(String(args.requestId));
       if (!params) throw new Error("Missing fixture request");
@@ -97,6 +110,8 @@ class MembersFixtureClient extends ConvexReactClient {
           roleIds: [djRole],
           joinedAt: "2026-08-01T18:00:00Z",
         }));
+      if (this.mixedCaseUsers && params.kind !== "roles") items = items.map(item => ({ ...item, id: item.id.toUpperCase(), userId: item.userId?.toUpperCase(), displayName: undefined }));
+      if (this.collidingIds && params.kind !== "roles") items = items.map((item, index) => ({ ...item, ...(index === 1 ? { id: "usr_11111111-1111-1111-1111-111100000001", userId: "usr_11111111-1111-1111-1111-111100000001" } : {}), displayName: undefined }));
       if (params.kind === "search")
         items = items.filter((item) =>
           item.displayName
@@ -151,7 +166,16 @@ class MembersFixtureClient extends ConvexReactClient {
     const value = args[0] as Record<string, unknown>;
     const name = getFunctionName(mutation);
     let result: unknown = null;
-    if (name === "clubProviderReads:request") {
+    if (name === "clubPeople:requestView") {
+      const source = value.source as FunctionArgs<typeof import("@convex-generated-api").api.clubPeople.requestView>["source"];
+      const read = source.kind === "provider_read" ? this.result("clubProviderReads:get", { requestId: source.requestId }) as FunctionReturnType<typeof import("@convex-generated-api").api.clubProviderReads.get> : null;
+      if (source.kind === "scheduled_operations") {
+        const admissions = JSON.parse(document.documentElement.dataset.operationAdmissions ?? "[]") as string[][];
+        admissions.push(source.operationIds); document.documentElement.dataset.operationAdmissions = JSON.stringify(admissions);
+        if (admissions.length > 1) await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      result = this.peopleFixture.request(source, source.kind === "scheduled_operations" ? this.jobs.filter(job => source.operationIds.includes(job.id as Id<"clubOperations">)).flatMap(job => { const payload = job.payload; return payload && typeof payload === "object" && "targetUserId" in payload && typeof payload.targetUserId === "string" ? [payload.targetUserId] : []; }) : read?.result?.items.map(item => item.userId ?? item.id) ?? [], new Map(read?.result?.items.flatMap(item => item.displayName ? [[item.userId ?? item.id, item.displayName]] : [])));
+    } else if (name === "clubProviderReads:request") {
       if (
         this.staff &&
         !this.permissions.includes("view_members") &&
@@ -161,6 +185,7 @@ class MembersFixtureClient extends ConvexReactClient {
       this.requests.set(id, value.params as ProviderReadParams);
       result = id;
     } else if (name === "clubOperations:enqueue") {
+      document.documentElement.dataset.memberPayload = JSON.stringify(value);
       if ((value.schedule as {kind: string}).kind !== "immediate") throw new Error("Expected immediate schedule");
       const ids: string[] = [];
       for (const payload of value.payloads as Array<Record<string, unknown>>) {
@@ -198,6 +223,9 @@ function MembersFixture({
   permissions,
   permissionSwitch = false,
   mixedCaseRoles = false,
+  collidingIds = false,
+  mixedCaseUsers = false,
+  pagedActions = 0,
 }: {
   staff?: boolean;
   readFailure?: boolean;
@@ -205,6 +233,9 @@ function MembersFixture({
   permissions?: WorkspaceData["actor"]["permissions"];
   permissionSwitch?: boolean;
   mixedCaseRoles?: boolean;
+  collidingIds?: boolean;
+  mixedCaseUsers?: boolean;
+  pagedActions?: number;
 }) {
   const [limited, setLimited] = useState(false);
   const actorPermissions = useMemo<WorkspaceData["actor"]["permissions"]>(
@@ -213,7 +244,7 @@ function MembersFixture({
       : []),
     [permissions, staff, limited],
   );
-  const [client] = useState(() => new MembersFixtureClient(staff, readFailure, actorPermissions, directoryReadFailure, mixedCaseRoles));
+  const [client] = useState(() => new MembersFixtureClient(staff, readFailure, actorPermissions, directoryReadFailure, mixedCaseRoles, collidingIds, mixedCaseUsers, pagedActions));
   useLayoutEffect(() => client.setPermissions(actorPermissions), [client, actorPermissions]);
   const data: WorkspaceData = {
     community: {
@@ -289,3 +320,9 @@ export const OwnerDirectoryUnavailable: Story = {
 export const MixedRoleDirectoryUnavailable: Story = {
   render: () => <MembersFixture staff directoryReadFailure permissions={["view_members", "assign_vrchat_roles", "remove_group_members"]} />,
 };
+
+export const CollidingIds: Story = { render: () => <MembersFixture collidingIds /> };
+
+export const MixedCasePeople: Story = { render: () => <MembersFixture mixedCaseUsers /> };
+export const PagedPeople: Story = { render: () => <MembersFixture pagedActions={20} /> };
+export const UnderfilledPeople: Story = { render: () => <MembersFixture pagedActions={17} /> };
