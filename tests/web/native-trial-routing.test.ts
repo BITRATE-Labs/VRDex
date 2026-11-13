@@ -81,3 +81,18 @@ test("ordinary terminal retry lets the owner reconstruct a transport without nat
     fail();await owner.play(request);assert.equal(created,2);assert.equal(disposed,1);assert.equal(owner.getSnapshot().status,"playing");
   }finally{owner.close();}
 });
+
+test("Video during unresolved eligibility suspends pending Audio and cannot invent playing",async()=>{
+  let resolve!:(value:typeof trial|null)=>void,created=0;
+  const eligibility=new Promise<typeof trial|null>(done=>{resolve=done;});
+  const owner=new EventPlaybackOwner((_request,_notify,mode)=>createDeferredTrialAdapter({load:()=>eligibility,mode,create:()=>{
+    created++;return {play:async()=>false,pause(){},setVolume(){},setMuted(){},update(){},dispose(){}};
+  }}));
+  try{
+    await owner.setMode("audio");const pending=owner.play(request);await Promise.resolve();
+    assert.equal(owner.getSnapshot().status,"loading");
+    await owner.setMode("video");assert.equal(owner.getSnapshot().status,"paused");
+    resolve(null);await pending;assert.equal(created,0);assert.equal(owner.getSnapshot().status,"paused");
+    await owner.play(request);assert.equal(created,1);assert.equal(owner.getSnapshot().status,"blocked");
+  }finally{owner.close();await owner.setMode("video");}
+});

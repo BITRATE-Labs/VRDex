@@ -60,7 +60,7 @@ export function createDeferredTrialAdapter({ load, create, mode: initialMode }: 
     setVolume(value) { volume = value; target?.setVolume(value); },
     setMuted(value) { muted = value; target?.setMuted(value); },
     get setMode() {
-      if (target && !target.setMode) return undefined;
+      if (!target?.setMode) return undefined;
       return async (value: PlaybackMode) => { mode = value; return target?.setMode ? target.setMode(value) : true; };
     },
     update(value) { updated = value; target?.update(value); },
