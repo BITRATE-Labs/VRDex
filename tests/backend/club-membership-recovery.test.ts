@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 import { test } from "node:test";
 import { convexTest } from "convex-test";
 import { makeFunctionReference } from "convex/server";
 import schemaModule from "../../convex/schema";
 import httpModule from "../../convex/http";
 import { recoverMembershipPage } from "../../workers/group-telemetry/membership-recovery.mjs";
-import { RequestBudget } from "../../workers/group-telemetry/runtime.mjs";
+import { RequestBudget, failureDisposition } from "../../workers/group-telemetry/runtime.mjs";
+import { refreshClubAuthority } from "../../workers/group-telemetry/club-authority.mjs";
+import { collectMembershipPage } from "../../workers/group-telemetry/membership-collection.mjs";
 import { VrchatProviderError } from "../../workers/group-telemetry/vrchat-client.mjs";
 import { ClubProvider } from "../../workers/group-telemetry/club-provider.mjs";
 import { normalizeMembershipAuditPage } from "../../workers/group-telemetry/membership-audit.mjs";
@@ -57,6 +61,76 @@ async function setup(enabled = true) {
   return { t, owner, worker: workerArgs, ...ids, now, epochStartedAt, request, claim, insertEvent };
 }
 const page = (s: Awaited<ReturnType<typeof setup>>, job: { recoveryId: string; revision: number; nextOffset: number }, events: unknown[], exhausted = true) => s.t.mutation(mutation("recordPage"), { ...s.worker, recoveryId: job.recoveryId, expectedRevision: job.revision, offset: job.nextOffset, events, sourceCount: events.length, rawAuditIds: events.map(e => (e as { auditId: string }).auditId), exhausted });
+
+for (const initialPhase of ["verify", "complete"]) test(`real quiet four-RPM scans and recovery both progress from ${initialPhase}`, async test => {
+  test.mock.timers.enable({ apis: ["Date"], now: 1800000000000 });
+  const s = await setup(), groupId = "grp_00000000-0000-0000-0000-000000000001";
+  s.worker.groupId = groupId;
+  const oldEndAt = s.now - 120000;
+  await s.t.run(async ctx => {
+    const integration = await ctx.db.get(s.integrationId);
+    assert.ok(integration?.providerAuthority);
+    await ctx.db.patch(s.integrationId, { vrchatGroupId: groupId, requestsPerMinute: 4,
+      providerAuthority: { ...integration.providerAuthority, authority: { ...integration.providerAuthority.authority, groupId } } });
+    await ctx.db.insert("communityMembershipScans", { integrationId: s.integrationId, epochStartedAt: s.epochStartedAt, groupId,
+      startAt: s.now - 600000, endAt: oldEndAt, workerId: "worker", fencingToken: 1, nextOffset: 0, nextPage: 0,
+      phase: initialPhase === "verify" ? "verify" : "finalize", complete: initialPhase === "complete",
+      referenceHash: 2166136261, referenceCount: 0, passHash: 2166136261, createdAt: s.now });
+  });
+  const recoveryId = await s.request();
+  let historical = false;
+  const reads: { historical: boolean; path: string }[] = [];
+  const provider = { async request(path: string) {
+    reads.push({ path, historical });
+    if (path === "/auth/user") return { id: A };
+    if (path.includes("/auditLogs?")) {
+      const recovering = historical; historical = false;
+      const offset = Number(new URL(path, "https://fixture.invalid").searchParams.get("offset"));
+      return { results: recovering ? Array.from({ length: 100 }, (_, index) => ({ id: `historical-${offset + index}`, groupId, created_at: new Date(s.now - 86400000).toISOString(), eventType: "group.member.join" })) : [], hasNext: recovering && offset < 400 };
+    }
+    return { id: groupId, ownerId: A, roles: [], myMember: { groupId, userId: A, membershipStatus: "member", permissions: ["group-audit-view"], roleIds: [] } };
+  }, async readAggregateSnapshot() {
+    await this.request(`/groups/${groupId}`); await this.request(`/groups/${groupId}/instances`);
+    return { observedAt: Date.now(), group: { memberCount: 1 }, instances: [] };
+  } };
+  const control = { async send(op: string, body: Record<string, unknown>) {
+    if (op === "budget") return s.t.mutation(makeFunctionReference<"mutation">("communityTelemetry:reserveRequestBudget"), { integrationId: s.integrationId, collectorAccountId: s.collectorAccountId, workerId: "worker", fencingToken: 1, requestCount: body.requestCount, now: Date.now() });
+    if (op === "club_authority") {
+      const { groupId: _group, ...worker } = s.worker;
+      return s.t.mutation(authority, { ...worker, authority: body.authority, roles: body.roles });
+    }
+    const scanOps: Record<string, string> = { membership_scan_resume: "resumeScan", membership_scan_begin: "beginScan", membership_scan_page: "ingestBatch", membership_scan_finalize: "finalizeScanPage" };
+    const recoveryOps: Record<string, string> = { membership_recovery_claim: "claim", membership_recovery_check: "check", membership_recovery_page: "recordPage", membership_recovery_failure: "recordFailure" };
+    if (Object.hasOwn(scanOps, op) || Object.hasOwn(recoveryOps, op)) {
+      const { integrationId: _id, fencingToken: _fence, epochStartedAt: _epoch, groupId: _group, ...payload } = body;
+      const result = await s.t.mutation(makeFunctionReference<"mutation">(`${Object.hasOwn(scanOps, op) ? "clubMembership" : "clubMembershipRecovery"}:${scanOps[op] ?? recoveryOps[op]}`), { ...s.worker, ...payload });
+      if (op === "membership_recovery_check" && result.current) historical = true;
+      return result;
+    }
+    if (op === "failure") assert.fail(JSON.stringify(body));
+    return { granted: true };
+  } };
+  const source = readFileSync("workers/group-telemetry/worker.mjs", "utf8").replaceAll("\r\n", "\n");
+  const start = source.indexOf("async function collect(assignment)");
+  const collect = runInNewContext(source.slice(start, source.indexOf("/**\n * Hands back", start)) + "\ncollect;", {
+    Date, RequestBudget, failureDisposition, integrationBudgets: new Map(), attempts: new Map(), stopping: false,
+    accountBudget: new RequestBudget(30), secret: { vrchatUserId: A }, COLLECTOR_PROTOCOL_VERSION: "test", randomPollDelayMs: () => 180000,
+    pollId: () => "synthetic", boundedProviderCategory: (value: unknown) => value, collectorAuthRequiredEvent: () => ({}), logEvent: () => {},
+    checkClubOperations: async () => {}, checkClubReads: async () => {}, refreshClubAuthority, collectMembershipPage, recoverMembershipPage,
+    provider, control, pauseWithHeartbeats: async (ms: number) => test.mock.timers.tick(ms),
+  });
+  for (let poll = 0; poll < 6; poll++) {
+    const before = reads.filter(row => row.historical).length;
+    await collect({ integrationId: s.integrationId, vrchatGroupId: groupId, fencingToken: 1, epochStartedAt: s.epochStartedAt, requestsPerMinute: 4, state: "active", enabledFeatures: ["analytics"] });
+    const job = await s.t.run(ctx => ctx.db.get(recoveryId));
+    assert.equal(job?.pages, Math.min(poll + 1, 5));
+    assert.ok(reads.filter(row => row.historical).length - before <= 1);
+    test.mock.timers.tick(180000);
+  }
+  const scans = await s.t.run(ctx => ctx.db.query("communityMembershipScans").collect());
+  assert.ok(scans.some(scan => scan.complete && scan.endAt > oldEndAt), "normal coverage eventually finalizes a newer fixed window");
+  assert.equal((await s.t.run(ctx => ctx.db.get(recoveryId)))?.state, "complete");
+});
 test("owner gate, idempotent start, stop and explicit resume preserve the approved fixed window", async () => {
   const s = await setup(false);
   await assert.rejects(s.t.mutation(mutation("requestRecovery"), { communityProfileId: s.communityProfileId }), /owner/);
