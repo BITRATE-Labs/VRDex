@@ -317,6 +317,7 @@ test("refused retained retry reports unavailable after a released source crosses
   assert.equal(owner.getSnapshot().status, "paused");
   await owner.play(replacement);
   assert.equal(owner.getSnapshot().status, "unavailable");
+  assert.equal(owner.getSnapshot().unavailableReason, "ended");
   assert.equal(adapters.length, 1);
   assert.equal(adapters[0].disposed, 1);
   owner.close();

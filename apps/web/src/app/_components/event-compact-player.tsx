@@ -40,7 +40,8 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
     return () => { for (const event of events) currentMedia?.removeEventListener(event, sync); };
   }, [currentMedia]);
   const presentable = Boolean(currentMedia && currentMedia.readyState >= 1);
-  const recovery = !twitch && !presentable && !state.lineup?.initializing && ((state.status === "unavailable" && state.unavailableReason !== "ended") || state.status === "blocked");
+  const profileEnded = Boolean(request && "profileId" in request && state.unavailableReason === "ended");
+  const recovery = !twitch && !presentable && !state.lineup?.initializing && ((state.status === "unavailable" && !profileEnded) || state.status === "blocked");
   const secondaryControls = !twitch && !unsupportedAudio && !manualSelection && (owner.supportsAudioOnly || state.mode === "audio" || (allowPictureInPicture && pip.supported));
   useLayoutEffect(() => {
     if (!request) return;
@@ -149,7 +150,7 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
           {state.lineup?.following ? <span>Following lineup</span> : <button type="button" onClick={() => owner.live()}>Return to live</button>}
           {state.lineup?.nextPlaybackBlocked && <button type="button" aria-label="Enable next performer playback" onClick={() => owner.retryNextPlayback()}>Enable playback</button>}
         </div>}
-        {((state.status === "unavailable" && !manualSelection) || fallback) && <div className="flex min-h-11 items-center justify-between gap-3 border-t border-white/10 px-3 text-sm"><span role="status">{fallback ? "External playback" : state.unavailableReason === "unsupported" ? "Unsupported" : state.unavailableReason === "ended" ? "Playback stopped" : "Stream unavailable"}</span>{!fallback && state.unavailableReason !== "unsupported" && !twitch && request.kind !== "performer_sequence" && <button type="button" className="min-h-11 py-3 underline" onClick={() => void owner.play(request)}>Try again</button>}{request.kind === "twitch" && request.sourceId.startsWith("https://") && <a href={request.sourceId} target="_blank" rel="noreferrer" className="py-3 underline">Open stream</a>}</div>}
+        {((state.status === "unavailable" && !manualSelection) || fallback) && <div className="flex min-h-11 items-center justify-between gap-3 border-t border-white/10 px-3 text-sm"><span role="status">{fallback ? "External playback" : state.unavailableReason === "unsupported" ? "Unsupported" : state.unavailableReason === "ended" ? "Playback stopped" : "Stream unavailable"}</span>{!fallback && state.unavailableReason !== "unsupported" && (state.unavailableReason !== "ended" || "profileId" in request) && !twitch && request.kind !== "performer_sequence" && <button type="button" className="min-h-11 py-3 underline" onClick={() => void owner.play(request)}>Try again</button>}{request.kind === "twitch" && request.sourceId.startsWith("https://") && <a href={request.sourceId} target="_blank" rel="noreferrer" className="py-3 underline">Open stream</a>}</div>}
         {state.status === "blocked" && (unsupportedAudio ? <div role="status" className="flex min-h-11 items-center border-t border-white/10 px-3 text-sm">Unsupported</div> : <button type="button" className="min-h-11 px-3 text-sm underline" onClick={() => void owner.play(request)}>Enable playback</button>)}
       </>}
     </section>

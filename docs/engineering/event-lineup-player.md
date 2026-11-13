@@ -307,6 +307,10 @@ Fullscreen geometry never updates the inline reservation or compact clearance.
 Compact chrome reflow keeps the last inline measurement instead of resizing the
 slot that determines placement. Initial source imports keep the picture reserved.
 Media metadata/readiness events refresh recovery visibility without another control action.
+An expired event retry shows Playback stopped without a dead retry button. Profile
+transport EOF keeps its existing buffered-media and retry behavior. Native recovery
+that keeps the same grant still uses the five-second failure guard; the fifteen-second
+fence applies when discarding and reopening a source.
 
 Legacy lineup adapters opt out of Picture-in-Picture because an automatic handoff
 replaces their video element. Exposing the current media for buffered recovery
