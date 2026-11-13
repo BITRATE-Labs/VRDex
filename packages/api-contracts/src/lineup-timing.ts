@@ -30,8 +30,7 @@ export function joinLineupSlot<T extends { startAt: number; endAt?: number; foll
 
   let match: T | undefined;
   const effective = inferLineupEnds(slots);
-  for (let index = 0; index < effective.length; index += 1) {
-    const slot = effective[index];
+  for (const [index, slot] of effective.entries()) {
     const next = effective[index + 1];
     if (
       !Number.isFinite(slot.startAt) ||
