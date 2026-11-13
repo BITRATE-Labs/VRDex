@@ -247,6 +247,8 @@ async function collect(assignment) {
         expectedUserId: secret.vrchatUserId,
         accountBudget,
         integrationBudget,
+        shouldStop: () => stopping,
+        deadline,
       });
     } catch (error) {
       if (

@@ -58,6 +58,33 @@ test("authority refresh retries only current explicit shared budget deferrals", 
     assert.equal(reads.length, 0);
   }
 });
+for (const reason of ["budget_deadline", "budget_shutdown", "first_read_deadline", "first_read_shutdown"]) {
+  test(`authority refresh stops before its next provider read after ${reason}`, async () => {
+    const { args, sends, reads } = setup();
+    let now = 1000, stopping = false;
+    args.clock = () => now;
+    args.deadline = 2000;
+    args.shouldStop = () => stopping;
+    const crossBoundary = () => { if (reason.endsWith("deadline")) now = 2000; else stopping = true; };
+    const send = args.control.send;
+    args.control.send = async (op, body) => {
+      const result = await send(op, body);
+      if (op === "budget" && reason.startsWith("budget")) crossBoundary();
+      return result;
+    };
+    const request = args.provider.request;
+    args.provider.request = async path => {
+      const result = await request(path);
+      if (path === "/auth/user" && reason.startsWith("first_read")) crossBoundary();
+      return result;
+    };
+    assert.deepEqual(await refreshClubAuthority(args), { refreshed: false });
+    assert.equal(reads.length, reason.startsWith("budget") ? 0 : 1);
+    assert.equal(sends.some(item => item.operation === "club_authority"), false);
+    assert.equal(args.accountBudget.remaining(now), 8);
+    assert.equal(args.integrationBudget.remaining(now), 8);
+  });
+}
 test("authority sends validated role labels from the same two reads without forwarding permissions", async () => {
   const { args, sends, reads } = setup();
   const request = args.provider.request;

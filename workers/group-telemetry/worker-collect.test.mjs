@@ -268,6 +268,32 @@ test("a deferred two-read authority refresh waits for shared capacity before rec
   assert.equal(h.calls.filter(op => op === "club_authority").length, 2);
 });
 
+for (const reason of ["budget_deadline", "budget_shutdown", "first_read_deadline", "first_read_shutdown"]) {
+  test(`post-wait recovery authority starts no further GET after ${reason}`, async () => {
+    const { h, providerReads, job } = recoveryPollHarness();
+    let waited = false;
+    h.sandbox.pauseWithHeartbeats = async ms => { waited = true; h.advance(ms); };
+    const crossBoundary = () => { if (reason.endsWith("deadline")) h.advance(240000); else h.sandbox.stopping = true; };
+    const send = h.sandbox.control.send;
+    h.sandbox.control.send = async (op, body) => {
+      const result = await send(op, body);
+      if (waited && op === "budget" && body.requestCount === 2 && reason.startsWith("budget")) crossBoundary();
+      return result;
+    };
+    const request = h.sandbox.provider.request;
+    h.sandbox.provider.request = async path => {
+      const result = await request(path);
+      if (waited && path === "/auth/user" && reason.startsWith("first_read")) crossBoundary();
+      return result;
+    };
+    await h.pass();
+    assert.equal(waited, true);
+    assert.equal(providerReads.length, reason.startsWith("budget") ? 4 : 5);
+    assert.equal(providerReads.filter(path => path.includes("/auditLogs?")).length, 0);
+    assert.equal(job.pages, 0);
+  });
+}
+
 test("repeated shared recovery budget denials stop at the existing four-minute deadline", async () => {
   const { h, providerReads, job, serverBudget } = recoveryPollHarness();
   const startedAt = h.clock();
