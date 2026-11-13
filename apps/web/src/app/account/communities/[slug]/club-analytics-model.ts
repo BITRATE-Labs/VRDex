@@ -1,3 +1,4 @@
+import { validUserId } from "../../../../../../../convex/_clubMembershipRecovery";
 import { MAX_OBSERVED_GAP_MS, type SeriesPoint } from "../../../../../../../convex/_clubAnalyticsMath";
 import type { ClubChartPoint } from "./club-chart";
 export type RangeDays = 7 | 30 | 90;
@@ -6,6 +7,8 @@ export type DashboardLocation = {
   to: string;
   day: string | null;
   instance: string | null;
+  member?: string | null;
+  eventType?: string | null;
 };
 
 export function localDateKey(value: Date): string {
@@ -42,6 +45,8 @@ export function dashboardLocation(
     ? { from: localDateKey(fromDate), to: localDateKey(toDate) }
     : fallback;
   const day = search.get("day");
+  const member = search.get("member");
+  const eventType = search.get("eventType");
   return {
     ...range,
     day:
@@ -49,6 +54,8 @@ export function dashboardLocation(
         ? day
         : null,
     instance: search.get("instance") || null,
+    member: member && validUserId(member) ? member.toLowerCase() : null,
+    eventType: eventType && eventType.length <= 200 ? eventType : null,
   };
 }
 
@@ -81,6 +88,8 @@ export function dashboardHref(
   const params = new URLSearchParams({ from: next.from, to: next.to });
   if (next.day) params.set("day", next.day);
   if (next.instance) params.set("instance", next.instance);
+  if (next.member) params.set("member", next.member);
+  if (next.eventType) params.set("eventType", next.eventType);
   return `${pathname}?${params}`;
 }
 

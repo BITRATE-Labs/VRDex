@@ -49,3 +49,16 @@ test("rejected snapshot recording cannot be reported as refreshed authority", as
   args.control.send = async operation => operation === "budget" ? { granted: true } : { recorded: false };
   assert.deepEqual(await refreshClubAuthority(args), { refreshed: false });
 });
+test("authority sends validated role labels from the same two reads without forwarding permissions", async () => {
+  const { args, sends, reads } = setup();
+  const request = args.provider.request;
+  const roleId = "grol_00000000-0000-0000-0000-000000000001";
+  args.provider.request = async path => {
+    const value = await request(path);
+    return path === "/auth/user" ? value : { ...value, roles: [{ id: roleId, name: "Moderators", permissions: ["*"], description: "Private metadata" }] };
+  };
+  await refreshClubAuthority(args);
+  assert.equal(reads.length, 2);
+  assert.deepEqual(sends[1].body.roles, [{ roleId, name: "Moderators" }]);
+  assert.deepEqual(sends[1].body.authority.permissions, ["group-audit-view"]);
+});

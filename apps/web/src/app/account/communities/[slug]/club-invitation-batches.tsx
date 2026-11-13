@@ -11,11 +11,12 @@ import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { api } from "@convex-generated-api";
 import { Button } from "@/components/ui/button";
 import { Card, SectionTitle } from "@/components/ui/card";
-import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { CheckboxField, Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
 import { ClubAccessNotice, useClubWorkspace } from "./club-workspace";
 import { useClubProviderRead, type ProviderItem } from "./club-provider-read";
 import { metricTime } from "./club-chart";
+import { findPersonIdentity, ClubPerson, PeoplePending, useClubPeople, type PersonIdentity } from "./club-person";
 import { operationReason } from "./club-operation-model";
 import type { Id } from "../../../../../../../convex/_generated/dataModel";
 
@@ -51,6 +52,8 @@ export function InvitationComposer({
   onSaveList,
   onRemoveList,
   recipientEligibility,
+  renderReviewedRecipients,
+  renderRecipientSelection,
   moreLists,
   moreEvents,
   moreCreations,
@@ -78,6 +81,8 @@ export function InvitationComposer({
     userId: string,
     destination: Enqueue["destination"],
   ) => ReactNode;
+  renderReviewedRecipients?: (review: Review) => ReactNode;
+  renderRecipientSelection?: (selection: RecipientSelectionProps) => ReactNode;
   moreLists?: ReactNode;
   moreEvents?: ReactNode;
   moreCreations?: ReactNode;
@@ -100,6 +105,37 @@ export function InvitationComposer({
     [busy, setBusy] = useState(false),
     [error, setError] = useState<string | null>(null),
     [notice, setNotice] = useState<string | null>(null);
+  const [selection, setSelection] = useState<{ text: string; ids: string[]; selected: string[] } | null>(null);
+  const [previewAttempt, setPreviewAttempt] = useState(0);
+  const [previewError, setPreviewError] = useState<{ text: string; message: string } | null>(null);
+  useEffect(() => {
+    if (!text.trim()) return;
+    let active = true;
+    const timer = setTimeout(() => void onPreview(text.split(/[\s,;]+/).filter(Boolean)).then(result => {
+      if (active) {
+        setSelection({ text, ids: result.recipients, selected: result.recipients });
+        setPreviewError(null);
+      }
+    }).catch(cause => {
+      if (active) {
+        setSelection(null);
+        setPreviewError({ text, message: cause instanceof Error ? cause.message : "Unable to save invitations." });
+      }
+    }), 300);
+    return () => { active = false; clearTimeout(timer); };
+    // Preview depends on the entered IDs. Identity updates must not reset selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text, previewAttempt]);
+  const currentSelection = selection?.text === text ? selection : null;
+  const selectedInstance = instances.find(item => item.id === instanceId);
+  const selectedCreation = creations.find(item => item.id === creationId);
+  const selectionDestination: Enqueue["destination"] | null = destination === "group" && canGroup
+    ? { kind: "group" }
+    : destination === "instance" && canInstance && instancesFresh && selectedInstance?.worldId && selectedInstance.instanceId
+      ? { kind: "instance", worldId: selectedInstance.worldId, instanceId: selectedInstance.instanceId }
+      : destination === "scheduled_instance" && canInstance && selectedCreation
+        ? { kind: "scheduled_instance", creationOperationId: selectedCreation.id, creationRevision: selectedCreation.revision }
+        : null;
   const recipients = () => text.split(/[\s,;]+/).filter(Boolean);
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -116,7 +152,10 @@ export function InvitationComposer({
     }
   };
   const prepare = async () => {
+    if (!currentSelection?.selected.length) throw new Error("Enter valid VRChat user IDs.");
     const normalized = await onPreview(recipients());
+    const reviewedRecipients = normalized.recipients.filter(id => currentSelection.selected.includes(id));
+    if (!reviewedRecipients.length) throw new Error("Enter valid VRChat user IDs.");
     let target: Enqueue["destination"];
     let destinationLabel: string;
     if (destination === "group" && canGroup) {
@@ -210,7 +249,7 @@ export function InvitationComposer({
         );
     }
     setReview({
-      reviewedRecipients: normalized.recipients,
+      reviewedRecipients,
       destination: target,
       destinationLabel,
       schedule,
@@ -238,6 +277,13 @@ export function InvitationComposer({
           {error}
         </Notice>
       ) : null}
+      {previewError?.text === text ? <Notice variant="error" role="alert">
+        {previewError.message}
+        <Button className="ml-3" size="sm" variant="secondary" disabled={busy} onClick={() => {
+          setPreviewError(null);
+          setPreviewAttempt(attempt => attempt + 1);
+        }}>Retry</Button>
+      </Notice> : null}
       {notice ? <Notice role="status">{notice}</Notice> : null}
       {review ? (
         <Card padding="lg">
@@ -285,17 +331,7 @@ export function InvitationComposer({
                 Open assigned bot in VRChat
               </a>
             ) : null}
-            <ul
-              aria-label="Reviewed recipients"
-              className="max-h-96 overflow-y-auto divide-y divide-border"
-            >
-              {review.reviewedRecipients.map((id) => (
-                <li className="py-3" key={id}>
-                  <p className="break-all font-mono text-xs">{id}</p>
-                  {recipientEligibility?.(id, review.destination)}
-                </li>
-              ))}
-            </ul>
+            {renderReviewedRecipients ? renderReviewedRecipients(review) : <ReviewedRecipients review={review} recipientEligibility={recipientEligibility} />}
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="primary"
@@ -373,6 +409,15 @@ export function InvitationComposer({
               <p className="text-sm text-muted">
                 Up to 100 entries, separated by spaces, commas, or new lines.
               </p>
+              {currentSelection ? (() => {
+                const selectionProps: RecipientSelectionProps = {
+                  ids: currentSelection.ids,
+                  selected: currentSelection.selected,
+                  destination: selectionDestination,
+                  onSelect: (id, checked) => setSelection(current => current?.text === text ? { ...current, selected: checked ? [...current.selected, id] : current.selected.filter(value => value !== id) } : current),
+                };
+                return renderRecipientSelection ? renderRecipientSelection(selectionProps) : <RecipientSelection {...selectionProps} />;
+              })() : null}
               <Field>
                 List name
                 <Input
@@ -587,7 +632,7 @@ export function InvitationComposer({
               <Button
                 className="w-fit"
                 variant="primary"
-                disabled={busy || !text.trim() || (!canGroup && !canInstance)}
+                disabled={busy || !currentSelection?.selected.length || (!canGroup && !canInstance)}
                 onClick={() => void run(prepare)}
               >
                 Review invitations
@@ -612,9 +657,12 @@ const states = {
 };
 function BatchOutcomes({ batchId }: { batchId: Id<"clubInvitationBatches"> }) {
   const result = useQuery(api.clubInvitations.outcomes, { batchId });
+  const people = useClubPeople(result ? { kind: "invitation_batch", batchId } : null);
   const cancel = useMutation(api.clubInvitations.cancel);
   return (
     <InvitationOutcomes
+      people={people.people}
+      pendingCount={people.pendingCount}
       result={result}
       onCancel={async () => {
         await cancel({ batchId });
@@ -623,10 +671,36 @@ function BatchOutcomes({ batchId }: { batchId: Id<"clubInvitationBatches"> }) {
   );
 }
 
+type RecipientSelectionProps = {
+  ids: string[];
+  selected: string[];
+  destination: Enqueue["destination"] | null;
+  onSelect: (userId: string, checked: boolean) => void;
+};
+function RecipientSelection({ ids, selected, onSelect, people = [] }: RecipientSelectionProps & { people?: PersonIdentity[] }) {
+  return <div className="grid gap-3"><p className="text-sm">Selected: {selected.length}</p><ul aria-label="Select recipients" className="max-h-96 divide-y divide-border overflow-y-auto">{ids.map(id => <li key={id} className="flex items-start gap-3 py-3"><CheckboxField aria-label={`Select recipient ${id}`} checked={selected.includes(id)} onChange={event => onSelect(id, event.target.checked)}>{""}</CheckboxField><ClubPerson userId={id} identity={findPersonIdentity(people, id)} visibleIds={ids} /></li>)}</ul></div>;
+}
+function SelectionPeople(props: RecipientSelectionProps) {
+  const people = useClubPeople(props.destination ? { kind: "invitation_review", targetUserIds: props.ids, destination: props.destination } : null);
+  return <><PeoplePending count={people.pendingCount} /><RecipientSelection {...props} people={people.people} /></>;
+}
+
+function ReviewedRecipients({ review, people = [], recipientEligibility }: { review: Review; people?: PersonIdentity[]; recipientEligibility?: (userId: string, destination: Enqueue["destination"]) => ReactNode }) {
+  return <ul aria-label="Reviewed recipients" className="max-h-96 overflow-y-auto divide-y divide-border">{review.reviewedRecipients.map(id => <li className="py-3" key={id}><ClubPerson userId={id} identity={findPersonIdentity(people, id)} visibleIds={review.reviewedRecipients} exactId />{recipientEligibility?.(id, review.destination)}</li>)}</ul>;
+}
+function ReviewPeople({ review, communityProfileId }: { review: Review; communityProfileId: Id<"profiles"> }) {
+  const people = useClubPeople({ kind: "invitation_review", targetUserIds: review.reviewedRecipients, destination: review.destination });
+  return <><PeoplePending count={people.pendingCount} /><ReviewedRecipients review={review} people={people.people} recipientEligibility={(userId, destination) => <RecipientEligibility key={`${userId}:${JSON.stringify(destination)}`} communityProfileId={communityProfileId} userId={userId} destination={destination} />} /></>;
+}
+
 export function InvitationOutcomes({
   result,
   onCancel,
+  people = [],
+  pendingCount = 0,
 }: {
+  people?: PersonIdentity[];
+  pendingCount?: number;
   result: FunctionReturnType<typeof api.clubInvitations.outcomes> | undefined;
   onCancel: () => Promise<void>;
 }) {
@@ -641,6 +715,7 @@ export function InvitationOutcomes({
           {error}
         </Notice>
       ) : null}
+      <PeoplePending count={pendingCount} />
       <ul className="divide-y divide-border">
         {result.recipients.map((item) => (
           <li
@@ -648,19 +723,9 @@ export function InvitationOutcomes({
             className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_10rem]"
           >
             <div>
-              <a
-                href={`https://vrchat.com/home/user/${encodeURIComponent(item.userId)}`}
-                target="_blank"
-                rel="noreferrer"
-                className="break-all font-mono text-xs underline"
-              >
-                {item.userId}
-              </a>
-              {item.reviewedUserId !== item.userId ? (
-                <p className="break-all text-xs text-muted">
-                  Originally reviewed: {item.reviewedUserId}
-                </p>
-              ) : null}
+              <ClubPerson userId={item.userId} identity={findPersonIdentity(people, item.userId)} visibleIds={result.recipients.map(person => person.userId)}>
+                {item.reviewedUserId !== item.userId ? <div><dt>Originally reviewed</dt><dd className="break-all">{item.reviewedUserId}</dd></div> : null}
+              </ClubPerson>
               <p className="mt-1 text-xs text-muted">
                 {metricTime(item.dueAt)}
               </p>
@@ -695,6 +760,7 @@ export function InvitationOutcomes({
           className="rounded-control border border-border p-4"
         >
           <p>Cancel invitations that have not been submitted?</p>
+          <ul className="mt-3 grid gap-3">{result.recipients.filter(item => ["pending", "claimed"].includes(item.state)).map(item => <li key={item.operationId}><ClubPerson userId={item.userId} identity={findPersonIdentity(people, item.userId)} visibleIds={result.recipients.filter(person => ["pending", "claimed"].includes(person.state)).map(person => person.userId)} exactId />{item.reviewedUserId !== item.userId ? <p className="break-all text-xs">Originally reviewed: {item.reviewedUserId}</p> : null}</li>)}</ul>
           <div className="mt-3 flex gap-2">
             <Button
               disabled={busy}
@@ -913,6 +979,8 @@ function InvitationsContent() {
           onRemoveList={async (listId, expectedRevision) => {
             await remove({ communityProfileId, listId, expectedRevision });
           }}
+          renderRecipientSelection={(selection) => <SelectionPeople {...selection} />}
+          renderReviewedRecipients={(review) => <ReviewPeople review={review} communityProfileId={communityProfileId} />}
           recipientEligibility={(userId, destination) => (
             <RecipientEligibility
               key={`${userId}:${JSON.stringify(destination)}`}

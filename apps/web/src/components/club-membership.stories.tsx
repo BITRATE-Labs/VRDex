@@ -188,3 +188,42 @@ export const BidirectionalNames: Story = { render: () => <MembershipActivityView
   actorIdentity: { displayName: "\u202ESol", vrchatUrl: "https://vrchat.com/home/user/usr_00000000-0000-4000-8000-000000000002", vrdexUrl: "/sol" },
   roleName: "\u202EDJ",
 }]} /> };
+
+
+export const NonPersonActivity: Story = {
+  render: () => <MembershipActivityView events={[
+    { auditId: "settings", eventType: "group.update", occurredAt: start, targetUserId: "grp_00000000-0000-4000-8000-000000000001", targetDisplayName: "Old group name" },
+    { auditId: "unknown-subject", eventType: "future.group.event", occurredAt: start - 1000, targetUserId: "wrld_00000000-0000-4000-8000-000000000001" },
+  ]} />,
+};
+
+export const PrototypeEventTypes: Story = {
+  render: () => <MembershipActivityView events={["constructor", "toString", "valueOf", "hasOwnProperty", "__proto__"].map(eventType => ({ auditId: eventType, eventType, occurredAt: start }))} />,
+};
+
+
+export const ProfileNameFallback: Story = {
+  render: () => <MembershipActivityView events={[{ auditId: "profile-names", eventType: "group.member.role.assign", occurredAt: start, targetUserId: "usr_00000000-0000-4000-8000-000000000001", actorUserId: "usr_00000000-0000-4000-8000-000000000002", roleName: "DJ" }]} people={[
+    { userId: "usr_00000000-0000-4000-8000-000000000001", displayName: "Profile Mira", vrdexUrl: "/mira", source: "vrdex_profile", status: "resolved" },
+    { userId: "usr_00000000-0000-4000-8000-000000000002", displayName: "Profile Sol", vrdexUrl: "/sol", source: "vrdex_profile", status: "resolved" },
+  ]} />,
+};
+
+
+export const EvidenceProvenance: Story = {
+  render: () => <MembershipActivityView events={[
+    { auditId: "recorded-role", eventType: "group.member.role.assign", occurredAt: start, targetDisplayName: "Mira", actorDisplayName: "Original Sol", actorNameSource: "recorded", roleName: "Original DJ", roleNameSource: "recorded", evidenceRecoveredAt: start + 1000 },
+    { auditId: "recovered-role", eventType: "group.member.role.assign", occurredAt: start, targetDisplayName: "Mira", actorDisplayName: "Recovered Sol", actorNameSource: "recovered", roleName: "Recovered DJ", roleNameSource: "recovered", evidenceRecoveredAt: start + 2000 },
+    { auditId: "observed-role", eventType: "group.member.role.assign", occurredAt: start, targetDisplayName: "Mira", roleName: "Current DJ", roleNameSource: "role_observation", roleNameObservedAt: start + 3000 },
+  ]} />,
+};
+
+export const MixedCasePrivateNames: Story = {
+  render: () => <MembershipActivityView events={[
+    { auditId: "mixed-case", eventType: "group.member.role.assign", occurredAt: start, targetUserId: "USR_AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA", actorUserId: "USR_BbBbBbBb-BbBb-BbBb-BbBb-BbBbBbBbBbBb" },
+    { auditId: "canonical-case", eventType: "group.member.join", occurredAt: start - 1000, targetUserId: "usr_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" },
+  ]} people={[
+    { userId: "usr_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", displayName: "Private Mira", source: "vrchat_private", status: "resolved" },
+    { userId: "usr_bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", displayName: "Private Sol", source: "vrchat_private", status: "resolved" },
+  ]} onFilterChange={() => {}} />,
+};

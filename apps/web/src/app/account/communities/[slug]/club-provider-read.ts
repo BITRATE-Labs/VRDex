@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useReducer, useState } from "react";
 import { useMutation, useQueries } from "convex/react";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
+import { useOptionalClubWorkspace } from "./club-workspace";
 import { api } from "@convex-generated-api";
 import type { Id } from "../../../../../../../convex/_generated/dataModel";
 
@@ -22,13 +23,20 @@ export function useClubProviderRead(
 ) {
   const request = useMutation(api.clubProviderReads.request);
   const [revision, refresh] = useReducer((value: number) => value + 1, 0);
-  const key = JSON.stringify([communityProfileId, params, revision]);
+  const workspace = useOptionalClubWorkspace();
+  const integration = workspace?.integration;
+  const key = JSON.stringify([communityProfileId, params, revision, workspace?.actor, workspace?.readableCategories, workspace?.visibility, workspace?.connectionState, integration && [integration._id, integration.telemetryEpochStartedAt, integration.createdAt, integration.state, integration.killSwitchEnabled, integration.assignedCollectorAccountId, integration.enabledFeatures]]);
   const [ticket, setTicket] = useState<{
     key: string;
     id?: Id<"clubProviderReadRequests">;
     error?: string;
     attempt?: { nonce: string; startedAt: number };
   } | null>(null);
+  const [previousKey, setPreviousKey] = useState(key);
+  if (previousKey !== key) {
+    setPreviousKey(key);
+    setTicket(null);
+  }
   const [pendingNonce, setPendingNonce] = useState<string | null>(null);
   const [observation, setObservation] = useState<{
     nonce: string;
@@ -171,6 +179,7 @@ export function useClubProviderRead(
             ? "Unable to load data. Try refreshing."
             : null;
   return {
+    requestId,
     data: result && !(result instanceof Error) ? result.result : null,
     error,
     loading:

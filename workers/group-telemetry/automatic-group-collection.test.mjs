@@ -98,6 +98,7 @@ function harness({
       calls.push("history");
       assert.fail("Automatic assignment reached named membership collection");
     },
+    recoverMembershipPage: async () => assert.fail("Automatic assignment reached historical membership repair"),
   };
   const collect = runInNewContext(collectSource + "\ncollect;", sandbox);
   return {

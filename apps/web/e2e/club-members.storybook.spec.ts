@@ -1,12 +1,48 @@
 import { expect, test } from "@playwright/test";
+test("mixed-case identity members keep names and original action payload IDs @storybook-visual", async ({ page }) => {
+  const rawId = "USR_00000000-0000-0000-0000-000000000001";
+  await page.goto("/iframe.html?id=clubs-members--mixed-case-people&viewMode=story");
+  await expect(page.getByRole("checkbox", { name: "Select Riley", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Manage member Riley", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Riley", exact: true })).toBeVisible();
+  await page.getByRole("checkbox", { name: "Select Riley", exact: true }).check();
+  await page.getByLabel("VRChat role", { exact: true }).selectOption("grol_aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1");
+  await page.getByRole("button", { name: "Assign selected", exact: true }).click();
+  const review = page.locator("section").filter({ has: page.getByRole("heading", { name: "Review action", exact: true }) }).last();
+  await expect(review.getByRole("link", { name: "Riley", exact: true })).toBeVisible();
+  await expect(review).toContainText(rawId);
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+    await page.screenshot({ path: `../../.cache/artifacts/bd4a-member-review-${test.info().project.name}.png`, fullPage: true });
+  }
+  await page.getByRole("button", { name: "Confirm action", exact: true }).click();
+  expect(await page.evaluate(() => JSON.parse(document.documentElement.dataset.memberPayload!).payloads[0].targetUserId)).toBe(rawId);
+  const actions = page.locator("section").filter({ has: page.getByRole("heading", { name: "Recent actions", exact: true }) }).last();
+  await expect(actions.getByRole("link", { name: "Riley", exact: true })).toBeVisible();
+});
+
+for (const [story, count] of [["paged-people", 20], ["underfilled-people", 17]] as const) test(`identity admission keeps partial member groups stable on ${story} @storybook-visual`, async ({ page }) => {
+  await page.clock.install();
+  await page.goto(`/iframe.html?id=clubs-members--${story}&viewMode=story`);
+  const actions = page.locator("section").filter({ has: page.getByRole("heading", { name: "Recent actions", exact: true }) }).last();
+  await expect(actions.getByRole("link", { name: "Riley", exact: true })).toHaveCount(1);
+  const admissions = () => page.evaluate(() => JSON.parse(document.documentElement.dataset.operationAdmissions!) as string[][]);
+  await expect.poll(admissions).toEqual([Array.from({ length: count }, (_, index) => `Action-MiXeD-${index}`)]);
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await expect.poll(admissions).toEqual([Array.from({ length: count }, (_, index) => `Action-MiXeD-${index}`), [`Action-MiXeD-${count + 5}`, `Action-MiXeD-${count + 6}`]]);
+  // Freeze the fixture's 500ms second admission while checking the retained group.
+  await expect(actions.getByRole("link", { name: "Riley", exact: true })).toHaveCount(1);
+  await page.clock.runFor(500);
+  await expect(actions.getByRole("link", { name: "Riley", exact: true })).toHaveCount(2);
+});
 test("clearing member search restores the unfiltered directory @storybook-visual", async ({ page }) => {
   await page.goto("/iframe.html?id=clubs-members--owner&viewMode=story");
   await page.getByLabel("Search members").fill("Riley");
   await page.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Nova", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Manage member Nova", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Clear search", exact: true }).click();
   await expect(page.getByLabel("Search members")).toHaveValue("");
-  await expect(page.getByRole("button", { name: "Nova", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Manage member Nova", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Clear search", exact: true })).toHaveCount(0);
 });
 
@@ -32,20 +68,20 @@ test("member search, pagination and confirmed actions @storybook-visual", async 
 }) => {
   await page.goto("/iframe.html?id=clubs-members--owner&viewMode=story");
   await expect(
-    page.getByRole("button", { name: "Riley", exact: true }),
+    page.getByRole("button", { name: "Manage member Riley", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Next page" }).click();
   await expect(
-    page.getByRole("button", { name: "Morgan", exact: true }),
+    page.getByRole("button", { name: "Manage member Morgan", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Previous page" }).click();
-  await page.getByRole("button", { name: "Riley", exact: true }).click();
+  await page.getByRole("button", { name: "Manage member Riley", exact: true }).click();
   await expect(page.getByText("DJ", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close detail" }).click();
   await page.getByLabel("Search members").fill("Riley");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Nova", exact: true }),
+    page.getByRole("button", { name: "Manage member Nova", exact: true }),
   ).toHaveCount(0);
   await page.getByRole("button", { name: "Ban member", exact: true }).click();
   await expect(page.getByText("Review action", { exact: true })).toBeVisible();
@@ -100,7 +136,7 @@ test("failed provider reads offer refresh without inventing members @storybook-v
     page.getByRole("button", { name: "Refresh", exact: true }),
   ).toBeEnabled();
   await expect(
-    page.getByRole("button", { name: "Riley", exact: true }),
+    page.getByRole("button", { name: "Manage member Riley", exact: true }),
   ).toHaveCount(0);
 });
 
@@ -308,3 +344,27 @@ for (const skew of [-3600000, 3600000]) {
     await expect(page.getByText("Queued", { exact: true })).toBeVisible();
   });
 }
+
+
+test("member confirmation distinguishes missing names with colliding short IDs @storybook-visual", async ({ page }) => {
+  await page.goto("/iframe.html?id=clubs-members--colliding-ids&viewMode=story");
+  const selected = page.getByRole("checkbox");
+  await expect(selected).toHaveCount(3);
+  const visibleNames = await page.locator("div.py-4 bdi").allTextContents();
+  expect(visibleNames).toHaveLength(3);
+  expect(new Set(await selected.evaluateAll(elements => elements.map(element => element.getAttribute("aria-label")))).size).toBe(visibleNames.length);
+  for (const name of visibleNames) {
+    await expect(page.getByRole("checkbox", { name: `Select ${name}`, exact: true })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: `Manage member ${name}`, exact: true })).toHaveCount(1);
+  }
+  await selected.nth(0).check();
+  await selected.nth(1).check();
+  await page.getByLabel("VRChat role", { exact: true }).selectOption({ label: "DJ" });
+  await page.getByRole("button", { name: "Assign selected", exact: true }).click();
+  const review = page.locator("section").filter({ has: page.getByRole("heading", { name: "Review action", exact: true }) }).last();
+  const names = await review.locator("bdi").allTextContents();
+  expect(names).toHaveLength(2);
+  expect(new Set(names).size).toBe(2);
+  await expect(review).toContainText("usr_00000000-0000-0000-0000-000000000001");
+  await expect(review).toContainText("usr_11111111-1111-1111-1111-111100000001");
+});
