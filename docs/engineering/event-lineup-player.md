@@ -304,6 +304,9 @@ reveals normal media again. Unavailable playback keeps source identity, controls
 and Close in both inline and compact presentation. Try again is available for
 recoverable failures, but not an unsupported transport or a visible Twitch embed.
 Fullscreen geometry never updates the inline reservation or compact clearance.
+Compact chrome reflow keeps the last inline measurement instead of resizing the
+slot that determines placement. Initial source imports keep the picture reserved.
+Media metadata/readiness events refresh recovery visibility without another control action.
 
 Legacy lineup adapters opt out of Picture-in-Picture because an automatic handoff
 replaces their video element. Exposing the current media for buffered recovery

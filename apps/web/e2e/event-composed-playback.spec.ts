@@ -269,3 +269,21 @@ for (const scenario of ['replacement', 'return-to-live']) test(`a ${scenario} af
   await expect.poll(() => page.locator('video:not([hidden])').evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(1);
   await page.getByRole('button', { name: 'Close event playback', exact: true }).click();
 });
+
+
+test("lineup import delay keeps the inline picture reserved @fixture", async ({ page }) => {
+  let release!: () => void;
+  const ready = new Promise<void>(resolve => { release = resolve; });
+  let delayed = false;
+  await page.route(/mpegts.*\.js/, async route => { delayed = true; await ready; await route.continue(); });
+  await page.route("http://127.0.0.1:6799/**", route => route.fulfill({ contentType: "video/mp2t", path: path.resolve("e2e/fixtures/persistent-synthetic.mpegts"), headers: { "access-control-allow-origin": "*" } }));
+  try {
+    await page.goto("/playwright/event-lineup-live?composed&automatic&transport=http%3A%2F%2F127.0.0.1%3A6799");
+    await page.getByRole("button", { name: "Play Lineup live", exact: true }).click();
+    await expect.poll(() => delayed).toBe(true);
+    const slot = page.locator("[data-event-playback-inline]");
+    await expect.poll(() => slot.evaluate(node => getComputedStyle(node.firstElementChild!.firstElementChild!).display)).toBe("block");
+    const size = await slot.boundingBox();
+    expect(size!.height).toBeGreaterThan(size!.width * 9 / 16);
+  } finally { release(); }
+});

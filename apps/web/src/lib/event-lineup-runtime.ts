@@ -80,7 +80,7 @@ export class EventLineupSession {
   private emit() {
     if (this.disposed) return;
     // Later automatic retries keep failure feedback instead of restarting the initial loading UI.
-    this.state.initializing = Boolean(!this.native && !this.state.paused && this.currentAttempt <= 1 && this.current && !this.current.progressed && performance.now() < this.current.retryDeadline);
+    this.state.initializing = Boolean(!this.native && !this.state.paused && this.currentAttempt <= 1 && (this.currentPending || (this.current && !this.current.progressed && performance.now() < this.current.retryDeadline)));
     this.state.selectionRequired = this.state.started && !this.hasSelectedSource && !this.state.current;
     const previous = this.lastSnapshot;
     if (previous && (Object.keys(this.state) as Array<keyof LineupSnapshot>).every(key => this.state[key] === previous[key])) return;

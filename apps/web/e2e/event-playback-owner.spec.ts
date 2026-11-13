@@ -75,11 +75,13 @@ test("visible Twitch SDK player handles blocked playback, real controls and ifra
   await expect(page.getByRole("button", { name: "Enable playback", exact: true })).toBeVisible();
   await expect.poll(() => authorization.reads).toContain("a");
   const frame = page.locator("[data-event-playback-mount] iframe"); await expect(frame).toBeVisible();
-  await expect.poll(async () => {
-    const slot = await page.locator('[data-event-playback-inline="a"]').boundingBox();
-    const shell = await page.getByRole("region", { name: "Event playback", exact: true }).boundingBox();
-    return Math.abs(slot!.height - shell!.height);
-  }).toBeLessThanOrEqual(4);
+  const slot = page.locator('[data-event-playback-inline="a"]');
+  const retained = page.getByRole("region", { name: "Event playback", exact: true });
+  if ((await slot.boundingBox())!.width >= 400) {
+    await slot.evaluate(node => node.scrollIntoView({ block: "center" }));
+    await expect(retained).toHaveAttribute("data-presentation", "inline");
+    await expect.poll(async () => Math.abs((await slot.boundingBox())!.height - (await retained.boundingBox())!.height)).toBeLessThanOrEqual(4);
+  } else await expect(retained).toHaveAttribute("data-presentation", "compact");
   await page.screenshot({ path: testInfo.outputPath("twitch-player.png") });
   const box = await frame.boundingBox(); expect(box!.width).toBeGreaterThanOrEqual(400); expect(box!.height).toBeGreaterThanOrEqual(300);
   expect(await page.evaluate(() => (window as unknown as { sdkOptions: { parent: string[] } }).sdkOptions.parent)).toEqual([new URL(page.url()).hostname]);
@@ -301,4 +303,47 @@ test("a transport error preserves buffered legacy playback while recovery remain
   await page.screenshot({ path: testInfo.outputPath("buffered-transport-error.png") });
   await page.getByRole("button", { name: "Close event playback" }).click();
   await expect(video).toHaveCount(0);
+});
+
+
+test("blocked playback reveals metadata without another owner action @flow @fixture", async ({ page }) => {
+  await playbackAuthorization(page);
+  await page.addInitScript(() => { HTMLMediaElement.prototype.play = () => Promise.reject(new DOMException("Gesture required", "NotAllowedError")); });
+  let release!: () => void;
+  const response = new Promise<void>(resolve => { release = resolve; });
+  await page.route("https://stream.vrcdn.live/live/*.webm", async route => { await response; await route.fulfill({ contentType: "audio/wav", body: wave() }); });
+  try {
+    await page.goto("/playwright/event-playback");
+    await page.getByRole("button", { name: "Play Event a", exact: true }).click();
+    const shell = page.getByRole("region", { name: "Event playback", exact: true });
+    await expect(shell.getByRole("button", { name: "Enable playback", exact: true })).toBeVisible();
+    const mount = shell.locator("[data-event-playback-mount]");
+    await expect(mount).toBeHidden();
+    release();
+    await expect.poll(() => mount.locator("video").evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(1);
+    await expect(mount).toBeVisible();
+    await expect(shell.getByRole("button", { name: "Enable playback", exact: true })).toBeVisible();
+  } finally { release(); }
+});
+
+test("compact chrome reflow preserves the last inline reservation @flow @fixture", async ({ page }) => {
+  await playbackAuthorization(page);
+  await page.route("https://stream.vrcdn.live/live/*.webm", route => route.fulfill({ contentType: "audio/wav", body: wave() }));
+  await page.goto("/playwright/event-playback");
+  await page.getByRole("button", { name: "Play Event a", exact: true }).click();
+  await expect.poll(() => page.locator("[data-event-playback-mount] video").evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(0.1);
+  const shell = page.getByRole("region", { name: "Event playback", exact: true });
+  const slot = page.locator('[data-event-playback-inline="a"]');
+  await slot.evaluate(node => node.scrollIntoView({ block: "center" }));
+  await expect(shell).toHaveAttribute("data-presentation", "inline");
+  await expect.poll(() => slot.evaluate(node => node.style.getPropertyValue("--event-playback-chrome-height"))).not.toBe("");
+  const chrome = await slot.evaluate(node => node.style.getPropertyValue("--event-playback-chrome-height"));
+  // Force a compact-only reflow, as wrapped controls can do at its narrower width.
+  await page.addStyleTag({ content: '.event-retained-player[data-presentation="compact"] { padding-bottom: 70px; }' });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(shell).toHaveAttribute("data-presentation", "compact");
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  expect(await slot.evaluate(node => node.style.getPropertyValue("--event-playback-chrome-height"))).toBe(chrome);
+  await slot.evaluate(node => node.scrollIntoView({ block: "center" }));
+  await expect(shell).toHaveAttribute("data-presentation", "inline");
 });
