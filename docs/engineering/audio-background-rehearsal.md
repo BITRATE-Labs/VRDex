@@ -84,3 +84,21 @@ separate from desktop browser evidence.
 The earlier finite audio producer and delivery components remain proof comparators,
 not the deployed replacement for the approved shared native HLS product. The
 native-request renewal proposal is deferred.
+
+## Linux synthetic qualification, November 13
+
+The exact bundled artifact passed on the selected one-vCPU/2-GiB target with a
+verified 512-MiB tmpfs. Both original packager renditions passed codec and decode
+checks. The ordinary case used one acquisition, 338294 forwarded input bytes and
+425632 retained bytes. The 32768-byte input limit case stopped after forwarding
+28741 bytes and hit its limit once. No FFmpeg process or scratch file remained.
+The command completed in 7447 ms. Whole-VM cgroup memory peak was 581939200 bytes
+(including binary setup); Node RSS at the result was 88530944 bytes. These are
+separate from retained media memory. The VM subsequently stopped at its hard
+deadline and its scratch mount was removed. No provider or deployment credential
+was present in this synthetic test.
+
+Evidence bundle SHA256: `0a45919c912ac4f1b9450f5ee08c8802bdfc0bdb2197a87e08e7356309d9cabf`.
+Source changes that affect the bundle require matching artifact qualification.
+Actual public-provider, deployed-Convex, retained-browser and phone results remain
+separate pending steps.

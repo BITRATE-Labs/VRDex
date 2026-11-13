@@ -93,7 +93,7 @@ export const setRelayEnabled = internalMutation({
 
 /** Finite integration authority is separate from unrestricted hosted release. */
 export const setNativeTrialEnabled = internalMutation({
-  args: { enabled: v.boolean(), evidence: v.optional(v.any()) },
+  args: { enabled: v.boolean(), evidence: v.optional(v.any()), rearmSource: v.optional(v.boolean()) },
   returns: v.null(),
   handler: async (ctx, args) => {
     await rejectBrowserIdentityForDeploymentOperation(ctx);
@@ -120,6 +120,14 @@ export const setNativeTrialEnabled = internalMutation({
       throw Error("Distinct trial worker/gateway credentials required");
     if (state?.trialId === trial.trialId && state.trialConfiguration !== JSON.stringify(trial))
       throw Error("Existing trial identity cannot be rebound" );
+    if (args.rearmSource) {
+      if (state?.trialId === trial.trialId) throw Error("Source rearm requires a new trial identity");
+      const source = await ctx.db.query("mediaRelaySources").withIndex("by_streamKey", q => q.eq("streamKey", trial.source.streamKey)).unique();
+      if (!source || !["stopped", "unavailable"].includes(source.state) || (source.leaseExpiresAt !== undefined && source.leaseExpiresAt > now))
+        throw Error("Prior source must be terminal with no active lease");
+      // State stays terminal until the first independently authorized Play consumes this marker.
+      await ctx.db.patch(source._id, { trialRearmId: trial.trialId });
+    }
     const patch = { trialEnabled: true, trialId: trial.trialId, trialEvidenceId: evidence.evidenceId,
       trialConfiguration: JSON.stringify(trial), trialGrantsIssued: state?.trialId === trial.trialId ? (state.trialGrantsIssued ?? 0) : 0, updatedAt: now };
     if (state) await ctx.db.patch(state._id, patch);

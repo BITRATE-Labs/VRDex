@@ -41,3 +41,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 }
 
 
+export { createPackager } from "../worker/packager";
+export { createNativeTrialSource } from "./source";
+export { createNativeTrialStorage } from "./storage";
+export { verifyNativeTrialScratch } from "./scratch";
+export { createPublisher } from "../worker/publisher";

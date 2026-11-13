@@ -728,7 +728,7 @@ it("refresh extends only a near-expiry authorized grant, retaining ID and source
     "unavailable",
   );
 });
-it("native requests cross the original grant expiry without page refresh and still revoke immediately", async test => {
+it("native requests preserve original expiry and require deliberate resume without hidden renewal", async test => {
   let now = Date.now();
   test.mock.method(Date, "now", () => now);
   const h = await fixture();
@@ -757,7 +757,7 @@ it("native requests cross the original grant expiry without page refresh and sti
   const first = await read();
   assert.equal(first.kind, "active");
   now = originalExpiry + 1;
-  assert.equal((await read()).kind, "active");
+  assert.equal((await read()).kind, "denied");
   assert.deepEqual(await h.t.run(ctx => ctx.db.query("mediaRelaySources").first()), sourceBefore);
   await h.t.run(ctx => ctx.db.patch(h.profileId, { fieldVisibility: { outboundLinks: "private" } }));
   assert.equal((await read()).kind, "denied");
@@ -1512,7 +1512,7 @@ for (const variant of ["svg", "surface-mismatch", "oversize", "raster"] as const
 });
 
 
-it("finite native trial uses existing grants only for its signed operator and exact public context", async () => {
+it("finite native trial uses existing grants only for its signed operator and exact public context", async test => {
   const h = await fixture(false);
   const now = Date.now();
   const operatorUserId = await h.t.run(ctx => ctx.db.insert("users", { clerkUserId: "trial-operator" }));
@@ -1536,6 +1536,9 @@ it("finite native trial uses existing grants only for its signed operator and ex
     await h.t.mutation(enable, args);
     assert.equal(AdmissionSchema.parse(await h.play()).kind, "unavailable");
     const operator = h.t.withIdentity({ subject: "trial-operator" });
+    const eligibility = makeFunctionReference<"query">("mediaRelayPlayback:getNativeTrialConfiguration");
+    assert.equal(await h.t.query(eligibility, {}), null);
+    assert.deepEqual((await operator.query(eligibility, {})).context, h.context);
     const openArgs = { context: h.context, streamId: "Alpha", preferredMode: "audio" };
     const first = preparing(await operator.mutation(open, openArgs));
     const second = preparing(await operator.mutation(open, openArgs));
@@ -1551,6 +1554,12 @@ it("finite native trial uses existing grants only for its signed operator and ex
       await ctx.db.patch(source._id, { ...readySource("vrcdn/Alpha/1"), owner: { workerId: config.worker.workerId, workerEpoch: config.worker.workerEpoch } });
     });
     assert.equal(AdmissionSchema.parse(await h.t.query(get, { grantId: first.grantId })).kind, "ready");
+    const gatewayRead = makeFunctionReference<"query">("mediaRelayWorker:readGateway");
+    const gatewayArgs = { credential: "trial-gateway-token", grantId: first.grantId, rendition: "audio" };
+    assert.equal((await h.t.query(gatewayRead, gatewayArgs)).kind, "active");
+    await h.t.run(async ctx => { const row = await ctx.db.query("mediaRelaySources").first(); assert.ok(row); await ctx.db.patch(row._id, { owner: { workerId: "wrong-worker", workerEpoch: 1 } }); });
+    assert.equal((await h.t.query(gatewayRead, gatewayArgs)).kind, "unavailable");
+    await h.t.run(async ctx => { const row = await ctx.db.query("mediaRelaySources").first(); assert.ok(row); await ctx.db.patch(row._id, { owner: { workerId: config.worker.workerId, workerEpoch: config.worker.workerEpoch } }); });
     const configured = process.env.MEDIA_RELAY_TRIAL_CONFIG;
     process.env.MEDIA_RELAY_TRIAL_CONFIG = JSON.stringify({ ...config, worker: { ...config.worker, workerEpoch: 2 } });
     assert.equal(AdmissionSchema.parse(await h.t.query(get, { grantId: first.grantId })).kind, "unavailable");
@@ -1569,5 +1578,66 @@ it("finite native trial uses existing grants only for its signed operator and ex
     assert.equal(AdmissionSchema.parse(await h.t.query(get, { grantId: first.grantId })).kind, "unavailable");
     await h.t.mutation(enable, { enabled: false });
     assert.equal(AdmissionSchema.parse(await h.t.query(get, { grantId: second.grantId })).kind, "unavailable");
+    await h.t.run(async ctx => {
+      await ctx.db.patch(h.profileId, { publicationState: "published" });
+      const source = await ctx.db.query("mediaRelaySources").first(); assert.ok(source);
+      await ctx.db.patch(source._id, { state: "stopped", owner: undefined, leaseExpiresAt: undefined });
+    });
+    const nextConfig = { ...config, trialId: "native-trial-next", worker: { ...config.worker, workerEpoch: 2 } };
+    process.env.MEDIA_RELAY_TRIAL_CONFIG = JSON.stringify(nextConfig);
+    process.env.MEDIA_RELAY_WORKERS = JSON.stringify([nextConfig.worker]);
+    const nextArgs = { ...args, rearmSource: true, evidence: { ...args.evidence, trialId: nextConfig.trialId } };
+    await h.t.mutation(enable, nextArgs);
+    await h.t.run(async ctx => { const source = await ctx.db.query("mediaRelaySources").first(); assert.equal(source?.state,"stopped"); assert.equal(source?.trialRearmId,nextConfig.trialId); });
+    const nextGrant = preparing(await operator.mutation(open, openArgs));
+    await h.t.run(async ctx => { const source = await ctx.db.query("mediaRelaySources").first(); assert.ok(source); assert.equal(source.state,"queued"); assert.equal(source.trialRearmId,undefined); await ctx.db.patch(source._id,{state:"unavailable"}); });
+    test.mock.method(Date,"now",()=>now+61000);
+    assert.equal(AdmissionSchema.parse(await operator.mutation(open,openArgs)).kind,"unavailable");
+    await assert.rejects(h.t.mutation(enable,nextArgs));
+    assert.equal(AdmissionSchema.parse(await h.t.query(get,{grantId:first.grantId})).kind,"unavailable");
+    await h.t.mutation(enable,{enabled:false});
+    assert.equal(AdmissionSchema.parse(await h.t.query(get,{grantId:nextGrant.grantId})).kind,"unavailable");
   } finally { delete process.env.MEDIA_RELAY_TRIAL_CONFIG; }
+});
+
+it("fresh manual selection admits only an exact authored-active overlap, preserving missing-current and future guards", async () => {
+  const h = await fixture(); const now = Date.now();
+  const ids = await h.t.run(async ctx => {
+    await ctx.db.patch(h.eventId, { watchSurfaceEnabled: false, watchMode: "event_stream", mediaLinks: [], endAt: now + 120000 });
+    const base = { eventId: h.eventId, personProfileId: h.profileId, selectedStreamId: "Alpha", displayLabel: "DJ", roleLabel: "DJ", sourceType: "manual", sourceLabel: "test", confidence: 1, reviewState: "confirmed" as const, updatedAt: now };
+    const a = await ctx.db.insert("eventSlots", { ...base, position: 0, startAt: now - 10000, endAt: now + 30000 });
+    const b = await ctx.db.insert("eventSlots", { ...base, position: 1, startAt: now - 10000, endAt: now + 30000 });
+    const future = await ctx.db.insert("eventSlots", { ...base, position: 2, startAt: now + 60000 });
+    return { a,b,future };
+  });
+  const play = (selectedSourceId: string) => h.play({ ...h.eventContext, selectedSourceId });
+  preparing(await play(ids.a)); preparing(await play(ids.b));
+  assert.equal(AdmissionSchema.parse(await play(ids.future)).kind,"unavailable");
+  await h.t.run(ctx => ctx.db.patch(ids.b,{ startAt: now + 30000, endAt: now + 60000 }));
+  assert.equal(AdmissionSchema.parse(await play(ids.b)).kind,"unavailable");
+  await h.t.run(async ctx => { await ctx.db.patch(ids.a,{ selectedStreamId: undefined, personProfileId: undefined }); });
+  assert.equal(AdmissionSchema.parse(await play(ids.future)).kind,"unavailable");
+});
+
+
+it("deployment operator lookup is exact, verified, unique and denies browser identity", async () => {
+  const h = await fixture();
+  const lookup = makeFunctionReference<"query">("mediaRelayOperations:nativeTrialOperator");
+  const email = "operator@example.invalid";
+  const id = await h.t.run(ctx => ctx.db.insert("users",{ clerkUserId:"operator", email }));
+  assert.equal(await h.t.query(lookup,{email}),null);
+  await h.t.run(ctx=>ctx.db.patch(id,{emailVerificationTime:Date.now()}));
+  assert.equal(await h.t.query(lookup,{email}),id);
+  await assert.rejects(h.t.withIdentity({subject:"operator"}).query(lookup,{email}));
+  assert.equal(await h.t.query(lookup,{email:"other@example.invalid"}),null);
+  await h.t.run(ctx=>ctx.db.insert("users",{clerkUserId:"duplicate",email,emailVerificationTime:Date.now()}));
+  assert.equal(await h.t.query(lookup,{email}),null);
+});
+
+it("only exact canonical provider MP4 links are admitted as live relay sources", async () => {
+  const h = await fixture();
+  await h.t.run(ctx=>ctx.db.patch(h.profileId,{outboundLinks:[{type:"vrcdn",url:"https://stream.vrcdn.live/live/Alpha.live.mp4",label:"Live",source:"owner_authored"}]}));
+  preparing(await h.play());
+  await h.t.run(ctx=>ctx.db.patch(h.profileId,{outboundLinks:[{type:"vrcdn",url:"https://stream.vrcdn.live/recordings/Alpha.mp4",label:"Live",source:"owner_authored"}]}));
+  assert.equal(AdmissionSchema.parse(await h.play()).kind,"unavailable");
 });

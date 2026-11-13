@@ -6,9 +6,9 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useEventPlayback } from "@/app/_components/event-playback-provider";
 import { EventPlaybackInline } from "@/app/_components/event-playback-inline";
-import { eventPlaybackRequest } from "@/lib/event-playback-request";
+import { eventPlaybackRequest, profilePlaybackRequest } from "@/lib/event-playback-request";
 import { playbackFixtureEvent } from "./fixture-state";
-export function PlaybackFixture({ eventId, twitch }: { eventId: "a" | "b"; twitch: boolean }) {
+export function PlaybackFixture({ eventId, twitch, nativeTrial = false }: { eventId: "a" | "b"; twitch: boolean; nativeTrial?: boolean }) {
   const owner = useEventPlayback();
   const [operatorPreview,setOperatorPreview]=useState(false);
   const [previewSource, setPreviewSource] = useState<PreviewSource>({
@@ -21,6 +21,15 @@ export function PlaybackFixture({ eventId, twitch }: { eventId: "a" | "b"; twitc
     if (!playback) throw new Error("Playback fixture must have a public source");
     return { ...playback, href: `/playwright/event-playback?event=${eventId}` };
   }, [eventId, twitch, startAt]);
+  if (nativeTrial) {
+    const profile = profilePlaybackRequest({ id: "profile", slug: "playwright/event-playback", displayName: "Trial DJ", outboundLinks: [{ type: "vrcdn", url: "https://stream.vrcdn.live/live/Alpha.live.mp4" }] }, "Alpha");
+    return <main className="mx-auto w-full max-w-3xl p-6">
+      <Link href="/playwright/event-playback?event=b">Browse</Link>
+      <div data-event-playback-inline="profile:profile:Alpha">
+        <button type="button" onClick={() => { if (owner && profile) void owner.play(profile); }}>Play trial</button>
+      </div>
+    </main>;
+  }
   return <main className="mx-auto w-full max-w-3xl p-6">
     <Link href={`/playwright/event-playback?event=${eventId === "a" ? "b" : "a"}`}>Other event</Link>
     <Link href="/playwright/event-lineup">Browse</Link>

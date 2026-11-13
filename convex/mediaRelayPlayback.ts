@@ -67,7 +67,7 @@ async function admissionQuota(
     .withIndex("by_key", (q) => q.eq("key", "global"))
     .unique();
   const attempts = (rate?.attempts ?? []).filter((at) => at > now - 60000);
-  const active = await db
+  const active = config.trial ? [] : await db
     .query("mediaRelayGrants")
     .withIndex("by_releasedAt_expiresAt", (q) =>
       q.eq("releasedAt", undefined).gt("expiresAt", now),
@@ -235,7 +235,8 @@ export const openPlayback = mutation({
       .query("mediaRelaySources")
       .withIndex("by_streamKey", (q) => q.eq("streamKey", streamKey))
       .unique();
-    if (config.trial && source && ["stopped", "unavailable", "draining"].includes(source.state))
+    if (config.trial && source && ["stopped", "unavailable", "draining"].includes(source.state) &&
+        !(source.state !== "draining" && source.trialRearmId === config.trial.trialId && (source.leaseExpiresAt === undefined || source.leaseExpiresAt <= now)))
       return { kind: "unavailable", reason: "unavailable" };
     if (
       !source ||
@@ -247,6 +248,7 @@ export const openPlayback = mutation({
       if (source)
         await ctx.db.patch(source._id, {
           state: "queued",
+          trialRearmId: undefined,
           updatedAt: now,
           progressAt: undefined,
           recoveryStartedAt: undefined,

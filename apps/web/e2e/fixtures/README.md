@@ -20,3 +20,10 @@ prerequisite. The browser intercept fulfills a canonical VRCDN URL; playback use
 the production loader, mpegts.js demuxing/MSE, decoding and audio graph. No product
 transport override or remote media fetch is used. Finite fixture EOF is not a live
 provider or long-duration reconnect test.
+
+`persistent-synthetic-audio.mpegts` is a fifteen-second AAC-only stream-copy
+excerpt of the same fixture for the native trial routing test:
+
+```sh
+ffmpeg -i persistent-synthetic.mpegts -map 0:a:0 -c copy -t 15 -f mpegts persistent-synthetic-audio.mpegts
+```

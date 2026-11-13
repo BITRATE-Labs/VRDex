@@ -94,10 +94,11 @@ export async function authority(
       (operations?.drainingWorkers.includes(binding.workerId) ?? false),
   };
 }
-export async function source(ctx: MutationCtx, streamKey: string) {
+export async function source(ctx: MutationCtx, streamKey: string, cleanup = false) {
   StreamKeySchema.parse(streamKey);
   const trial = await activeNativeTrial(ctx.db);
-  if (trial && trial.source.streamKey !== streamKey) throw Error("Source outside finite trial");
+  if (!cleanup && (!(await relayEnabled(ctx.db)) || (trial && trial.source.streamKey !== streamKey)))
+    throw Error("Source outside active relay authority");
   const row = await ctx.db
     .query("mediaRelaySources")
     .withIndex("by_streamKey", (q) => q.eq("streamKey", streamKey))
@@ -112,8 +113,9 @@ export async function owned(
     epoch: number;
   },
   now: number,
+  cleanup = false,
 ) {
-  const row = await source(ctx, identity.streamKey);
+  const row = await source(ctx, identity.streamKey, cleanup);
   if (
     !row.owner ||
     row.owner.workerId !== identity.workerId ||

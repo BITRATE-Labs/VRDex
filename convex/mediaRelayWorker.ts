@@ -104,7 +104,8 @@ export const observeSource = mutation({
         : SourceTerminalReasonSchema.parse(args.terminalReason);
     if (terminalReason !== undefined && state !== "unavailable")
       throw Error("Invalid terminal reason");
-    const candidate = await source(ctx, args.streamKey);
+    const terminal = state === "stopped" || state === "unavailable";
+    const candidate = await source(ctx, args.streamKey, terminal);
     // Cleanup acknowledgment is not authority: it can only end this exact old
     // ownership and must preserve the last durable progress timestamp.
     if (
@@ -130,7 +131,7 @@ export const observeSource = mutation({
       });
       return null;
     }
-    const row = await owned(ctx, args, now);
+    const row = await owned(ctx, args, now, terminal);
     if (
       state === "queued" ||
       !Number.isFinite(args.progressAt) ||
@@ -143,7 +144,7 @@ export const observeSource = mutation({
         state !== "draining")
     )
       throw Error("Invalid source observation");
-    const terminal = state === "stopped" || state === "unavailable";
+
     await ctx.db.patch(row._id, {
       state,
       progressAt: args.progressAt,

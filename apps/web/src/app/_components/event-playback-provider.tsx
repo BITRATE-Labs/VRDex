@@ -21,6 +21,7 @@ import {
   relayPlaybackEnabled,
   retainForegroundGrant,
 } from "@/lib/relay-playback-adapter";
+import { matchesNativeTrial, createNativeTrialOptIn } from "@/lib/native-trial-routing";
 import { retainNowPlaying } from "@/lib/now-playing";
 import { EventCompactPlayer } from "./event-compact-player";
 
@@ -39,24 +40,43 @@ export function useEventPlaybackSnapshot(owner: EventPlaybackOwner) {
 /** Root owner and mount survive route/auth changes. Presentation never reparents media. */
 export function EventPlaybackProvider({ children }: { children: ReactNode }) {
   const mount = useRef<HTMLDivElement>(null);
+  const trial = useRef<ReturnType<typeof createNativeTrialOptIn> | null>(null);
+  useEffect(() => {
+    const expected = new URLSearchParams(window.location.search).get("relayTrial");
+    if (expected) {
+      trial.current ??= createNativeTrialOptIn(expected, window.location.pathname, () =>
+        fetch("/api/media-relay/trial", { cache: "no-store", signal: AbortSignal.timeout(5000) }).then(reply => reply.json()));
+      void trial.current.read();
+    }
+  }, []);
   const [owner] = useState(
     () =>
       new EventPlaybackOwner((request, notify, mode) => {
         if (!mount.current) throw new Error("Playback mount unavailable");
-        if (relayPlaybackEnabled()) {
+        const optIn = trial.current, configuration = optIn?.current() ?? null;
+        const selectedTrial = matchesNativeTrial(configuration, request);
+        const trialEntry = Boolean(optIn && !configuration && request.kind === "vrcdn" && request.href === optIn.href);
+        if (relayPlaybackEnabled() || selectedTrial || trialEntry) {
           const url = process.env.NEXT_PUBLIC_CONVEX_URL;
           if (!url) throw Error("Playback unavailable");
           const client = new ConvexHttpClient(url);
           return createRetainedPlaybackAdapter(request, mount.current, notify, {
             mode,
+            providerTrial: selectedTrial || trialEntry,
             relay: {
-              open: (context, streamId, preferredMode, continuationGrantId) =>
-                client.mutation(api.mediaRelayPlayback.openPlayback, {
-                  context,
-                  streamId,
-                  preferredMode,
-                  ...(continuationGrantId ? { continuationGrantId } : {}),
-                }),
+              open: async (context, streamId, preferredMode, continuationGrantId) => {
+                if ((selectedTrial || trialEntry) && optIn) {
+                  const current = await optIn.read();
+                  if (!matchesNativeTrial(current, request)) return { kind: "unavailable", reason: "unavailable" };
+                  const reply = await fetch("/api/media-relay/trial", { method: "POST", signal: AbortSignal.timeout(5000), headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ trialId: current!.trialId, context, streamId, preferredMode }) });
+                  if (!reply.ok) throw Error("Playback unavailable");
+                  return reply.json();
+                }
+                return client.mutation(api.mediaRelayPlayback.openPlayback, {
+                  context, streamId, preferredMode, ...(continuationGrantId ? { continuationGrantId } : {}),
+                });
+              },
               rebind: (grantId, selectedSourceId, expectedSelectedSourceId, expectedContextRevision) =>
                 client.mutation(api.mediaRelayPlayback.rebindPlayback, { grantId, selectedSourceId, expectedSelectedSourceId, expectedContextRevision }),
               get: (grantId) =>
@@ -84,6 +104,7 @@ export function EventPlaybackProvider({ children }: { children: ReactNode }) {
   const state = useEventPlaybackSnapshot(owner);
   const generation = owner.generation;
   const active = Boolean(state.request);
+  const relayActive = relayPlaybackEnabled() || Boolean(state.request && matchesNativeTrial(trial.current?.current() ?? null, state.request));
   useEffect(() => () => owner.close(), [owner]);
   useEffect(() => {
     const url = process.env.NEXT_PUBLIC_CONVEX_URL;
@@ -104,13 +125,13 @@ export function EventPlaybackProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [owner, generation]);
   useEffect(() => {
-    if (!relayPlaybackEnabled() || !active) return;
+    if (!active || !relayActive) return;
     return retainForegroundGrant(
       owner,
       document,
       () => document.visibilityState === "visible",
     );
-  }, [owner, generation, active]);
+  }, [owner, generation, active, relayActive]);
   useEffect(() => retainNowPlaying(owner), [owner]);
   return (
     <Context.Provider value={owner}>

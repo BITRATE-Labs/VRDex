@@ -3,7 +3,7 @@ import { getPublicProfileMediaKit } from "./_profileAssets";
 import type { Doc } from "./_generated/dataModel";
 import type { DatabaseReader } from "./_generated/server";
 import { getPublicEventBySlug, type PublicEvent } from "./_eventPublic";
-import { joinLineupSlot } from "../packages/api-contracts/src/lineup-timing";
+import { inferLineupEnds, joinLineupSlot } from "../packages/api-contracts/src/lineup-timing";
 import { isInScheduledWatchWindow } from "./_eventRuntime";
 import { canReadProfile } from "./_profilePermissions";
 import { publicProfileOutboundLinks } from "./_profilePublic";
@@ -60,7 +60,7 @@ export async function authorizeRelayContext(
       (link) => {
         const parsed = parseVrcdnStreamLinks(link.url);
         return (
-          parsed?.streamId === streamId && parsed.directVideoUrl === undefined
+          parsed?.streamId === streamId && (parsed.directVideoUrl === undefined || parsed.directVideoUrl === `https://stream.vrcdn.live/live/${streamId}.live.mp4`)
         );
       },
     );
@@ -97,8 +97,14 @@ export async function authorizeRelayContext(
     const slot = projected.slots.find(
       (slot) => slot.playbackKey === context.selectedSourceId,
     );
-    if (slot?.stream?.streamId !== streamId || !slot.performer ||
-        (!continuing && joinLineupSlot(projected.slots, now)?.playbackKey !== slot.playbackKey)) return null;
+    if (slot?.stream?.streamId !== streamId || !slot.performer) return null;
+    if (!continuing) {
+      const joined = joinLineupSlot(projected.slots, now);
+      const active = inferLineupEnds(projected.slots).filter(row => Number.isFinite(row.startAt) && row.startAt <= now &&
+        (row.endAt === undefined || (Number.isFinite(row.endAt) && row.endAt > row.startAt && now < row.endAt)));
+      // An explicit source selection can recover an authored overlap, never a gap or future row.
+      if (joined ? joined.playbackKey !== slot.playbackKey : active.length < 2 || !active.some(row => row.playbackKey === slot.playbackKey)) return null;
+    }
     const slotId = db.normalizeId("eventSlots", slot.playbackKey);
     const storedSlot = slotId ? await db.get(slotId) : null;
     const performer = storedSlot?.personProfileId
@@ -124,7 +130,7 @@ export async function authorizeRelayContext(
       if (!["watch", "stream", "vrcdn"].includes(link.type)) return false;
       const parsed = parseVrcdnStreamLinks(link.url);
       return (
-        parsed?.streamId === streamId && parsed.directVideoUrl === undefined
+        parsed?.streamId === streamId && (parsed.directVideoUrl === undefined || parsed.directVideoUrl === `https://stream.vrcdn.live/live/${streamId}.live.mp4`)
       );
     })
   )

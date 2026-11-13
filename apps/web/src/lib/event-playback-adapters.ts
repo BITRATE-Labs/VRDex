@@ -150,9 +150,9 @@ export function createRetainedPlaybackAdapter(
   request: PlaybackRequest,
   mount: HTMLElement,
   notify: AdapterNotify,
-  { mode, relay }: { mode: PlaybackMode; relay?: RelayPlaybackClient },
+  { mode, relay, providerTrial = false }: { mode: PlaybackMode; relay?: RelayPlaybackClient; providerTrial?: boolean },
 ): PlaybackAdapter {
-  if (relay && request.kind === "vrcdn" && request.transport !== "video")
+  if (relay && request.kind === "vrcdn" && (request.transport !== "video" || providerTrial))
     return createRelayPlaybackAdapter({
       request,
       mount,

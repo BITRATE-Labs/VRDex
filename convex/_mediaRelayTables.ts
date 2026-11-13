@@ -64,6 +64,7 @@ export const mediaRelayTables = {
       v.union(v.literal("unsupported"), v.literal("unavailable")),
     ),
     admissionRevision: v.optional(v.number()),
+    trialRearmId: v.optional(v.string()),
     recoveryStartedAt: v.optional(v.number()),
     // Validated bounded snapshots; references point only to immutable epoch objects.
     snapshots: v.optional(
