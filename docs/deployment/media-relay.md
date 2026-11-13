@@ -298,7 +298,6 @@ See [the rehearsal contract](../engineering/audio-background-rehearsal.md) for
 baseline phone evidence, test scope, byte-budget limitations and remaining actual
 provider, retained-player and physical-phone acceptance. Event broadcasting is separate.
 
-
 A failed finite trial does not automatically reacquire its source. After disabling
 and verifying cleanup, a trusted deployment owner may activate a **new** trial ID
 with `rearmSource: true`. This accepts only a stopped/unavailable source with no
