@@ -11,7 +11,6 @@ import { eventLiveSource } from "../../../../../convex/_eventLive";
 import type { EventPlaybackOwner } from "@/lib/event-playback-owner";
 import { eventPlaybackRequest } from "@/lib/event-playback-request";
 import { useEventPlayback, useEventPlaybackSnapshot } from "./event-playback-provider";
-import styles from "./home-live-now.module.css";
 
 // An older public lookup must not replace a later selection in another surface.
 const playIntents = new WeakMap<EventPlaybackOwner, symbol>();
@@ -56,22 +55,22 @@ export function LiveNowEntries({ entries, owner, loadEvent }: {
   }, [entries]);
   const fresh = entries.filter(entry => entry.expiresAt > now);
   if (!fresh.length) return null;
-  return <section className={styles.row} aria-label="Live now">
-    <h2 className={styles.heading}><span aria-hidden="true" className={styles.dot} />Live now</h2>
-    <div className={styles.entries}>{fresh.map(entry => {
+  return <section className="home-live-row" aria-label="Live now">
+    <h2 className="home-live-heading"><span aria-hidden="true" className="home-live-dot" />Live now</h2>
+    <div className="home-live-entries">{fresh.map(entry => {
       const active = state.request?.eventId === entry.eventId;
       const playing = active && (state.status === "playing" || state.status === "loading");
       const actual = active && state.request?.kind === "performer_sequence" ? state.request.event.slots.find(slot => slot.key === state.lineup?.current) : undefined;
       const performerSlug = actual ? actual.performerId : entry.performer?.slug;
       const performerLabel = actual?.label ?? entry.performerLabel ?? entry.performer?.displayName;
-      return <article key={entry.eventId} className={styles.entry} data-active={active || undefined}>
+      return <article key={entry.eventId} className="home-live-entry" data-active={active || undefined}>
         {entry.imageUrl && <LiveArtwork key={entry.imageUrl} src={entry.imageUrl} />}
-        <div className={styles.identity}>
-          <Link className={styles.title} href={entry.href}>{entry.title}</Link>
-          {performerLabel && (performerSlug ? <Link className={styles.performer} href={`/${performerSlug}`}>{performerLabel}</Link> : <span className={styles.performer}>{performerLabel}</span>)}
-          {(entry.host?.displayName ?? entry.hostName) && <span className={styles.host}>{entry.host?.displayName ?? entry.hostName}</span>}
+        <div className="home-live-identity">
+          <Link className="home-live-title" href={entry.href}>{entry.title}</Link>
+          {performerLabel && (performerSlug ? <Link className="home-live-performer" href={`/${performerSlug}`}>{performerLabel}</Link> : <span className="home-live-performer">{performerLabel}</span>)}
+          {(entry.host?.displayName ?? entry.hostName) && <span className="home-live-host">{entry.host?.displayName ?? entry.hostName}</span>}
         </div>
-        <button type="button" className={styles.play} disabled={pending === entry.eventId} aria-label={`${playing ? "Pause" : "Play"} ${entry.title}`} onClick={async () => {
+        <button type="button" className="home-live-play" disabled={pending === entry.eventId} aria-label={`${playing ? "Pause" : "Play"} ${entry.title}`} onClick={async () => {
           const intent = Symbol();
           lookup.current = intent;
           playIntents.set(owner, intent);
@@ -97,5 +96,5 @@ export function LiveNowEntries({ entries, owner, loadEvent }: {
 
 function LiveArtwork({ src }: { src: string }) {
   const [failed, setFailed] = useState(false);
-  return failed ? null : <Image unoptimized src={src} alt="" width="64" height="64" className={styles.artwork} onError={() => setFailed(true)} />;
+  return failed ? null : <Image unoptimized src={src} alt="" width="64" height="64" className="home-live-artwork" onError={() => setFailed(true)} />;
 }
