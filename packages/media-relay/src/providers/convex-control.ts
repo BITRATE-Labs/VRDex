@@ -5,7 +5,6 @@ import {
   SourceStateSchema,
   PackagerContinuitySchema,
   GatewayAuthorizationSchema,
-  AdmissionSchema,
 } from "../contracts";
 import type { RelayControl } from "../worker/registry";
 import type { WorkerBinding } from "../worker/deployment";
@@ -55,8 +54,8 @@ export function createControlRpc({
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              path: name === "refreshPlayback" && method === "mutation" ? "mediaRelayPlayback:refreshPlayback" : `mediaRelayWorker:${name}`,
-              args: name === "refreshPlayback" && method === "mutation" ? args : { ...args, credential },
+              path: `mediaRelayWorker:${name}`,
+              args: { ...args, credential },
               format: "json",
             }),
             signal: bounded,
@@ -137,7 +136,7 @@ export function createConvexControl(
     },
   };
 }
-export function gatewayAuthorization(rpc: ReturnType<typeof createControlRpc>, clock = Date.now) {
+export function gatewayAuthorization(rpc: ReturnType<typeof createControlRpc>) {
   return async ({
     grantId,
     rendition,
@@ -146,16 +145,8 @@ export function gatewayAuthorization(rpc: ReturnType<typeof createControlRpc>, c
     grantId: string;
     rendition: "audio" | "video";
     signal: AbortSignal;
-  }) => {
-    const read = async () => GatewayAuthorizationSchema.parse(
-      await rpc("query", "readGateway", { grantId, rendition }, signal));
-    const current = await read(), now = clock();
-    if (current.kind !== "active" || current.grant.id !== grantId || !Number.isFinite(now) ||
-        current.grant.issuedAt > now || current.grant.expiresAt <= now || current.grant.expiresAt - now > 3600000)
-      return current;
-    // Native playlist requests continue while page timers are suspended; reuse the viewer's existing renewal authority.
-    const refreshed = AdmissionSchema.parse(await rpc("mutation", "refreshPlayback", { grantId }, signal));
-    if (refreshed.kind !== "ready" && refreshed.kind !== "preparing") return { kind: "denied" } as const;
-    return read();
-  };
+  }) =>
+    GatewayAuthorizationSchema.parse(
+      await rpc("query", "readGateway", { grantId, rendition }, signal),
+    );
 }

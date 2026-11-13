@@ -1,4 +1,4 @@
-import { relayEnabled, relayOperationState } from "./_mediaRelayOperations";
+import { activeNativeTrial, relayEnabled, relayOperationState } from "./_mediaRelayOperations";
 import {
   WorkerBindingsSchema,
   type WorkerBinding,
@@ -96,6 +96,8 @@ export async function authority(
 }
 export async function source(ctx: MutationCtx, streamKey: string) {
   StreamKeySchema.parse(streamKey);
+  const trial = await activeNativeTrial(ctx.db);
+  if (trial && trial.source.streamKey !== streamKey) throw Error("Source outside finite trial");
   const row = await ctx.db
     .query("mediaRelaySources")
     .withIndex("by_streamKey", (q) => q.eq("streamKey", streamKey))

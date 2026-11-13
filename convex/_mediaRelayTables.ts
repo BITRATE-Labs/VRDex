@@ -20,6 +20,11 @@ export const mediaRelayTables = {
     enabled: v.boolean(),
     drainingWorkers: v.array(v.string()),
     evidenceId: v.optional(v.string()),
+    trialEnabled: v.optional(v.boolean()),
+    trialConfiguration: v.optional(v.string()),
+    trialGrantsIssued: v.optional(v.number()),
+    trialId: v.optional(v.string()),
+    trialEvidenceId: v.optional(v.string()),
     updatedAt: v.number(),
   }).index("by_key", ["key"]),
   // One bounded rolling minute of successful explicit restarts; no grant identity changes.
@@ -73,6 +78,7 @@ export const mediaRelayTables = {
     .index("by_owner", ["owner.workerId", "leaseExpiresAt"]),
   mediaRelayGrants: defineTable({
     grantId: v.string(),
+    trialId: v.optional(v.string()),
     streamKey: v.string(),
     context: relayContextValidator,
     contextRevision: v.number(),

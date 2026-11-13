@@ -1,4 +1,4 @@
-import { relayEnabled } from "./_mediaRelayOperations";
+import { activeNativeTrial, relayEnabled } from "./_mediaRelayOperations";
 import { resolveRelayGrant } from "./mediaRelayPlayback";
 import { GatewayAuthorizationSchema } from "../packages/media-relay/src/contracts";
 import { v } from "convex/values";
@@ -187,6 +187,11 @@ export const listSources = mutation({
     const binding = await authority(ctx, args.credential, args);
     if (!(await relayEnabled(ctx.db))) throw Error("Relay disabled");
     const now = Date.now();
+    const trial = await activeNativeTrial(ctx.db, now);
+    if (trial) {
+      const row = await ctx.db.query("mediaRelaySources").withIndex("by_streamKey", q => q.eq("streamKey", trial.source.streamKey)).unique();
+      return row ? [{ source: trial.source, state: row.state, admissionRevision: row.admissionRevision ?? 0 }] : [];
+    }
     const own = await ctx.db
       .query("mediaRelaySources")
       .withIndex("by_owner", (q) => q.eq("owner.workerId", args.workerId))
@@ -348,6 +353,9 @@ export const readGateway = query({
         kind: "unavailable",
         reason: row?.terminalReason ?? "unavailable",
       });
+    const trial = await activeNativeTrial(ctx.db);
+    if (trial && (row.owner?.workerId !== trial.worker.workerId || row.owner.workerEpoch !== trial.worker.workerEpoch))
+      return GatewayAuthorizationSchema.parse({ kind: "unavailable", reason: "unavailable" });
     return GatewayAuthorizationSchema.parse({
       kind: "active",
       grant: resolved.grant,

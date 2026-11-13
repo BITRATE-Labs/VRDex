@@ -9,6 +9,7 @@ const schema =
   (schemaModule as unknown as { default?: typeof schemaModule }).default ??
   schemaModule;
 const modules = {
+  "../../convex/mediaRelayOperations.ts": () => import("../../convex/mediaRelayOperations"),
   "../../convex/mediaRelayWorker.ts": () =>
     import("../../convex/mediaRelayWorker"),
   "../../convex/_generated/api.ts": () => import("../../convex/_generated/api"),
@@ -1508,4 +1509,65 @@ for (const variant of ["svg", "surface-mismatch", "oversize", "raster"] as const
   const url = playbackArtwork({status:"playing",mode:"audio",volume:1,muted:false,metadata:result.metadata,request:{kind:"vrcdn",profileId:h.profileId,profileSlug:"dj",sourceId:"Alpha",src:"vrcdn:Alpha",transport:"mpegts",href:"/people/dj",title:"DJ"}});
   if (variant === "raster") assert.match(url!,/brand=wordmark-v1-512/);
   else assert.equal(url,NEUTRAL_NOW_PLAYING_ARTWORK);
+});
+
+
+it("finite native trial uses existing grants only for its signed operator and exact public context", async () => {
+  const h = await fixture(false);
+  const now = Date.now();
+  const operatorUserId = await h.t.run(ctx => ctx.db.insert("users", { clerkUserId: "trial-operator" }));
+  const config = { version: 1, trialId: "native-trial", operatorUserId,
+    context: h.context, source: { streamKey: "vrcdn/Alpha/1", streamId: "Alpha", inputFormat: "vrcdn_fmp4", packagingVersion: 1 },
+    origin: "https://trial.invalid", origins: ["https://app.invalid"], startsAt: now - 1000, expiresAt: now + 899000,
+    limits: { upstreamBytes: 1024 ** 3, payloadBytes: 256 * 1024 ** 2, requests: 3000, retainedBytes: 128 * 1024 ** 2 },
+    worker: { workerId: "trial-worker", workerEpoch: 1, allocation: { cpuUnits: 1024, memoryMiB: 2048, evidenceId: "native-trial-proof" }, maxSources: 1, draining: false },
+  };
+  await h.t.run(async ctx => { const operation = await ctx.db.query("mediaRelayOperations").first(); assert.ok(operation); await ctx.db.patch(operation._id, { enabled: false }); });
+  process.env.MEDIA_RELAY_TRIAL_CONFIG = JSON.stringify(config);
+  process.env.MEDIA_RELAY_WORKERS = JSON.stringify([config.worker]);
+  process.env.MEDIA_RELAY_WORKER_TOKEN = "trial-worker-token";
+  process.env.MEDIA_RELAY_GATEWAY_TOKEN = "trial-gateway-token";
+  const enable = makeFunctionReference<"mutation">("mediaRelayOperations:setNativeTrialEnabled");
+  const args = { enabled: true, evidence: { target: "finite-native-trial", trialId: config.trialId,
+    evidenceId: config.worker.allocation.evidenceId, measuredAt: now, sourceCap: 1, maximumGrants: 2,
+    memoryPeakBytes: 1024 * 1024, retainedPeakBytes: 1024 * 1024, scratchLimitBytes: 512 * 1024 ** 2, scratchHardBoundVerified: true, budgetEnforcementPassed: true, nativeContractPassed: true, cleanupPassed: true, timestampWarnings: 0 } };
+  try {
+    await assert.rejects(h.t.withIdentity({ subject: "trial-operator" }).mutation(enable, args));
+    await h.t.mutation(enable, args);
+    assert.equal(AdmissionSchema.parse(await h.play()).kind, "unavailable");
+    const operator = h.t.withIdentity({ subject: "trial-operator" });
+    const openArgs = { context: h.context, streamId: "Alpha", preferredMode: "audio" };
+    const first = preparing(await operator.mutation(open, openArgs));
+    const second = preparing(await operator.mutation(open, openArgs));
+    assert.notEqual(first.grantId, second.grantId);
+    assert.equal(AdmissionSchema.parse(await operator.mutation(open, openArgs)).kind, "capacityLimited");
+    assert.equal(AdmissionSchema.parse(await operator.mutation(open, { ...openArgs, context: h.eventContext })).kind, "unavailable");
+    await h.t.run(async ctx => {
+      const grants = await ctx.db.query("mediaRelayGrants").collect();
+      assert.equal(grants.length, 2);
+      assert(grants.every(grant => grant.expiresAt === config.expiresAt));
+      const source = await ctx.db.query("mediaRelaySources").first();
+      assert.ok(source);
+      await ctx.db.patch(source._id, { ...readySource("vrcdn/Alpha/1"), owner: { workerId: config.worker.workerId, workerEpoch: config.worker.workerEpoch } });
+    });
+    assert.equal(AdmissionSchema.parse(await h.t.query(get, { grantId: first.grantId })).kind, "ready");
+    const configured = process.env.MEDIA_RELAY_TRIAL_CONFIG;
+    process.env.MEDIA_RELAY_TRIAL_CONFIG = JSON.stringify({ ...config, worker: { ...config.worker, workerEpoch: 2 } });
+    assert.equal(AdmissionSchema.parse(await h.t.query(get, { grantId: first.grantId })).kind, "unavailable");
+    await assert.rejects(h.t.mutation(enable, args));
+    process.env.MEDIA_RELAY_TRIAL_CONFIG = configured;
+    await h.t.mutation(release, { grantId: second.grantId });
+    assert.equal(AdmissionSchema.parse(await operator.mutation(open, openArgs)).kind, "capacityLimited");
+    await h.t.run(async ctx => {
+      const original = await ctx.db.query("mediaRelayGrants").withIndex("by_grantId", q => q.eq("grantId", first.grantId)).unique();
+      assert.ok(original);
+      const { _id, _creationTime, trialId, ...ordinary } = original;
+      await ctx.db.insert("mediaRelayGrants", { ...ordinary, grantId: "historical-nontrial" });
+    });
+    assert.equal(AdmissionSchema.parse(await h.t.query(get, { grantId: "historical-nontrial" })).kind, "unavailable");
+    await h.t.run(ctx => ctx.db.patch(h.profileId, { publicationState: "draft_private" }));
+    assert.equal(AdmissionSchema.parse(await h.t.query(get, { grantId: first.grantId })).kind, "unavailable");
+    await h.t.mutation(enable, { enabled: false });
+    assert.equal(AdmissionSchema.parse(await h.t.query(get, { grantId: second.grantId })).kind, "unavailable");
+  } finally { delete process.env.MEDIA_RELAY_TRIAL_CONFIG; }
 });

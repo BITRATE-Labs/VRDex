@@ -1,5 +1,7 @@
 import { internal } from "./_generated/api";
-import { relayEnabled } from "./_mediaRelayOperations";
+import { activeNativeTrial, relayEnabled, relayOperationState } from "./_mediaRelayOperations";
+import { currentUserOrNull } from "./_identity";
+import { matchesTrialContext } from "../packages/media-relay/src/trial/policy";
 import { v } from "convex/values";
 import {
   mutation,
@@ -29,7 +31,9 @@ function positiveBounded(value: string | undefined, max: number): number {
     ? parsed
     : 0;
 }
-function admissionConfig() {
+async function admissionConfig(db: DatabaseReader, now = Date.now()) {
+  const trial = await activeNativeTrial(db, now);
+  if (trial) return { enabled: true, sources: 1, grants: 2, perMinute: 4, trial };
   const sources = positiveBounded(process.env.MEDIA_RELAY_MAX_SOURCES, 1000);
   const grants = positiveBounded(process.env.MEDIA_RELAY_MAX_GRANTS, 10000);
   const perMinute = positiveBounded(
@@ -45,12 +49,13 @@ function admissionConfig() {
     sources,
     grants,
     perMinute,
+    trial,
   };
 }
 async function admissionQuota(
   db: DatabaseReader,
   now: number,
-  config: ReturnType<typeof admissionConfig>,
+  config: Awaited<ReturnType<typeof admissionConfig>>,
   continuing = false,
 ) {
   const recent = await db
@@ -102,7 +107,8 @@ export async function resolveRelayGrant(
   now: number,
 ) {
   const denied = { kind: "denied", reason: "unavailable" } as const;
-  if (!admissionConfig().enabled || !(await relayEnabled(db)) || !Number.isFinite(now)) return denied;
+  const config = await admissionConfig(db, now);
+  if (!config.enabled || !(await relayEnabled(db)) || !Number.isFinite(now)) return denied;
   const row = await db
     .query("mediaRelayGrants")
     .withIndex("by_grantId", (q) => q.eq("grantId", grantId))
@@ -115,7 +121,8 @@ export async function resolveRelayGrant(
   )
     return denied;
   const streamId = row.streamKey.split("/")[1];
-  if (!streamId) return denied;
+  if ((!config.trial && row.trialId !== undefined) || !streamId || (config.trial && (row.trialId !== config.trial.trialId || !matchesTrialContext(config.trial, row.context, streamId) ||
+      row.issuedAt < config.trial.startsAt || row.expiresAt > config.trial.expiresAt))) return denied;
   const authorized = await authorizeRelayContext(
     db,
     row.context,
@@ -156,8 +163,10 @@ async function playback(
       reason: source?.terminalReason ?? "unavailable",
     };
   // Delivery origin is server configuration, never caller-controlled.
-  const origin = process.env.MEDIA_RELAY_PLAYBACK_ORIGIN;
-  if (source.state !== "ready" || !origin ||
+  const origin = (await activeNativeTrial(db, now))?.origin ?? process.env.MEDIA_RELAY_PLAYBACK_ORIGIN;
+  const trial = await activeNativeTrial(db, now);
+  const previousTrialOwner = trial && (source.owner?.workerId !== trial.worker.workerId || source.owner.workerEpoch !== trial.worker.workerEpoch);
+  if (source.state !== "ready" || previousTrialOwner || !origin ||
       (source.leaseExpiresAt ?? 0) <= now ||
       !areRenditionsPlayable(source.snapshots ?? {}, now, source.epoch))
     return { kind: "preparing", grantId, retryAfterMs: 1000 };
@@ -192,7 +201,7 @@ export const openPlayback = mutation({
     continuationGrantId: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<Admission> => {
-    const config = admissionConfig();
+    const config = await admissionConfig(ctx.db);
     config.enabled = config.enabled && (await relayEnabled(ctx.db));
     if (!config.enabled) return { kind: "unavailable", reason: "disabled" };
     const context = PublicContextSchema.safeParse(args.context);
@@ -200,6 +209,11 @@ export const openPlayback = mutation({
     if (!context.success || !streamId.success)
       return { kind: "unavailable", reason: "unsupported" };
     const now = Date.now();
+    if (config.trial) {
+      const user = await currentUserOrNull(ctx);
+      if (user?._id !== config.trial.operatorUserId || !matchesTrialContext(config.trial, context.data, streamId.data))
+        return { kind: "unavailable", reason: "unavailable" };
+    }
     let continuing = false;
     if (args.continuationGrantId) {
       const proof = await resolveRelayGrant(ctx.db, args.continuationGrantId, now);
@@ -221,6 +235,8 @@ export const openPlayback = mutation({
       .query("mediaRelaySources")
       .withIndex("by_streamKey", (q) => q.eq("streamKey", streamKey))
       .unique();
+    if (config.trial && source && ["stopped", "unavailable", "draining"].includes(source.state))
+      return { kind: "unavailable", reason: "unavailable" };
     if (
       !source ||
       source.state === "stopped" ||
@@ -250,14 +266,20 @@ export const openPlayback = mutation({
     }
     if (source?.state === "draining")
       return { kind: "capacityLimited", retryAfterMs: 1000 };
+    if (config.trial) {
+      const operation = await relayOperationState(ctx.db);
+      if (!operation || (operation.trialGrantsIssued ?? 0) >= 2) return { kind: "capacityLimited", retryAfterMs: 60000 };
+      await ctx.db.patch(operation._id, { trialGrantsIssued: (operation.trialGrantsIssued ?? 0) + 1 });
+    }
     const grantId = crypto.randomUUID();
     await ctx.db.insert("mediaRelayGrants", {
       grantId,
+      ...(config.trial ? { trialId: config.trial.trialId } : {}),
       streamKey,
       context: context.data,
       contextRevision: authorized.contextRevision,
       issuedAt: now,
-      expiresAt: now + RELAY_POLICY.grantLifetimeMs,
+      expiresAt: Math.min(now + RELAY_POLICY.grantLifetimeMs, config.trial?.expiresAt ?? Infinity),
     });
     return playback(ctx.db, grantId, now);
   },
@@ -297,10 +319,8 @@ export const refreshPlayback = mutation({
         .query("mediaRelayGrants")
         .withIndex("by_grantId", (q) => q.eq("grantId", args.grantId))
         .unique();
-      if (row)
-        await ctx.db.patch(row._id, {
-          expiresAt: now + RELAY_POLICY.grantLifetimeMs,
-        });
+      const expiry = Math.min(now + RELAY_POLICY.grantLifetimeMs, (await activeNativeTrial(ctx.db, now))?.expiresAt ?? Infinity);
+      if (row && expiry > row.expiresAt) await ctx.db.patch(row._id, { expiresAt: expiry });
     }
     return playback(ctx.db, args.grantId, now);
   },
@@ -311,7 +331,7 @@ export const restartPlayback = mutation({
   args: { grantId: v.string() },
   handler: async (ctx, args): Promise<Admission> => {
     const now = Date.now();
-    const config = admissionConfig();
+    const config = await admissionConfig(ctx.db);
     config.enabled = config.enabled && (await relayEnabled(ctx.db));
     const resolved = await resolveRelayGrant(ctx.db, args.grantId, now);
     if (resolved.kind === "denied") {
@@ -327,6 +347,7 @@ export const restartPlayback = mutation({
             : "unavailable",
       };
     }
+    if (config.trial) return playback(ctx.db, args.grantId, now);
     const source = await ctx.db
       .query("mediaRelaySources")
       .withIndex("by_streamKey", (q) =>
@@ -401,5 +422,27 @@ export const cleanupGrants = internalMutation({
     const removed = expired.length + released.length;
     if (removed === 200) await ctx.scheduler.runAfter(0, internal.mediaRelayPlayback.cleanupGrants, {});
     return removed;
+  },
+});
+
+
+/** Account-only opt-in for the pinned trial; public playback remains on its normal path. */
+export const getNativeTrialConfiguration = query({
+  args: {},
+  returns: v.union(v.null(), v.object({ trialId: v.string(), context: relayContextValidator,
+    streamId: v.string(), expiresAt: v.number(), href: v.string() })),
+  handler: async ctx => {
+    const trial = await activeNativeTrial(ctx.db);
+    if (!trial || (await currentUserOrNull(ctx))?._id !== trial.operatorUserId) return null;
+    if (!(await authorizeRelayContext(ctx.db, trial.context, trial.source.streamId, Date.now(), false))) return null;
+    if (trial.context.kind === "profile") {
+      const id = ctx.db.normalizeId("profiles", trial.context.profileId), profile = id ? await ctx.db.get(id) : null;
+      return profile ? { trialId: trial.trialId, context: trial.context, streamId: trial.source.streamId,
+        expiresAt: trial.expiresAt, href: `/${profile.slug}` } : null;
+    }
+    const id = ctx.db.normalizeId("events", trial.context.eventId), event = id ? await ctx.db.get(id) : null;
+    const projected = await getPublicEventBySlug(ctx.db, event);
+    return projected?.communitySlug ? { trialId: trial.trialId, context: trial.context, streamId: trial.source.streamId,
+      expiresAt: trial.expiresAt, href: `/${projected.communitySlug}/events/${projected.slug}` } : null;
   },
 });
