@@ -287,7 +287,10 @@ or blocked and the current media has no metadata/frame to present. A transient
 lineup stall with presentable media keeps the picture and automatic recovery;
 it does not offer a destructive session retry. Sequence recovery uses automatic
 reconnection or the existing performer selector. An ambiguous initial selection
-shows that selector without unavailable prose or playback/retry controls.
+shows that selector without unavailable prose or playback/retry controls only
+until a playable source has ever been selected in that session. The runtime
+records this selection history explicitly. A later revoked selection or return
+to an authored gap retains playback controls and Stream unavailable feedback.
 A blocked or offline Twitch
 iframe stays visible because its provider recovery controls must remain
 interactive. A profile transport-end notification also
@@ -306,3 +309,13 @@ Legacy lineup adapters opt out of Picture-in-Picture because an automatic handof
 replaces their video element. Exposing the current media for buffered recovery
 does not enable that control. Native and direct-stream controls keep their existing
 capability handling; native PiP continuity across handoffs remains unqualified.
+
+## Asynchronous playback intent
+
+The root owner's `interactionRevision` is separate from its transport generation.
+A surface calls `beginInteraction()` before resolving a public source asynchronously
+and accepts the result only while both revisions still match. Later playback
+controls advance the interaction revision even when pause or resume retains the
+same adapter. Metadata revalidation does not create a new viewer intent. This
+prevents an older homepage lookup from overriding a more recent retained-player
+control without reconnecting a healthy source.

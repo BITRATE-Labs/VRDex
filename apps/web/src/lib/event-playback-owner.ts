@@ -139,6 +139,9 @@ export class EventPlaybackOwner {
   private started = false;
   private unavailable = false;
   generation = 0;
+  interactionRevision = 0;
+  /** Fence pending source lookups before a later viewer control can supersede them. */
+  beginInteraction() { return ++this.interactionRevision; }
   constructor(
     private create: (
       request: PlaybackRequest,
@@ -166,6 +169,7 @@ export class EventPlaybackOwner {
     this.adapter = undefined;
   }
   async play(request: PlaybackRequest) {
+    this.beginInteraction();
     const same =
       this.state.request &&
       playbackSourceKey(this.state.request) === playbackSourceKey(request);
@@ -241,12 +245,14 @@ export class EventPlaybackOwner {
     }
   }
   pause() {
+    this.beginInteraction();
     foregroundPlayback.release(this);
     this.attempt++;
     this.adapter?.pause();
     if (this.state.request) this.emit({ status: "paused" });
   }
   async setMode(mode: PlaybackMode) {
+    this.beginInteraction();
     writePlaybackMode(playbackModeStorage(), mode);
     if (mode === this.state.mode) return;
     this.emit({ mode });
@@ -270,16 +276,19 @@ export class EventPlaybackOwner {
   }
   setVolume(value: number) {
     if (!Number.isFinite(value)) return;
+    this.beginInteraction();
     const volume = Math.max(0, Math.min(1, value));
     this.adapter?.setVolume(volume);
     this.emit({ volume });
   }
   setMuted(muted: boolean) {
+    this.beginInteraction();
     this.adapter?.setMuted(muted);
     this.emit({ muted });
   }
   /** Release an embed that can no longer be presented, retaining its explicit retry/link. */
   suspend() {
+    this.beginInteraction();
     foregroundPlayback.release(this);
     const started = this.started;
     this.release();
@@ -287,6 +296,7 @@ export class EventPlaybackOwner {
     this.emit({ status: "paused", lineup: undefined });
   }
   close() {
+    this.beginInteraction();
     foregroundPlayback.release(this);
     this.release();
     this.emit({ request: undefined, status: "idle", lineup: undefined, metadata: undefined });
@@ -327,12 +337,15 @@ export class EventPlaybackOwner {
     await this.adapter?.refresh?.();
   }
   manual(key: string) {
+    this.beginInteraction();
     this.adapter?.manual?.(key);
   }
   live() {
+    this.beginInteraction();
     this.adapter?.live?.();
   }
   retryNextPlayback() {
+    this.beginInteraction();
     this.adapter?.retryNextPlayback?.();
   }
 }

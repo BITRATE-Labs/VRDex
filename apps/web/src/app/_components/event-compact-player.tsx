@@ -29,7 +29,7 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
   const twitch = request?.kind === "twitch";
   const unsupportedAudio = state.status === "blocked" && state.mode === "audio" && !twitch && !owner.supportsAudioOnly;
   const allowPictureInPicture = owner.supportsPictureInPicture;
-  const manualSelection = request?.kind === "performer_sequence" && Boolean(state.lineup) && !state.lineup?.current;
+  const manualSelection = request?.kind === "performer_sequence" && state.lineup?.selectionRequired === true;
   const currentMedia = owner.media;
   const presentable = Boolean(currentMedia && currentMedia.readyState >= 1);
   const recovery = !twitch && !presentable && !state.lineup?.initializing && ((state.status === "unavailable" && state.unavailableReason !== "ended") || state.status === "blocked");

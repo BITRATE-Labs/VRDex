@@ -321,3 +321,28 @@ test("refused retained retry reports unavailable after a released source crosses
   assert.equal(adapters[0].disposed, 1);
   owner.close();
 });
+
+
+test("later retained controls supersede an asynchronous selection without replacing its adapter", async () => {
+  const { owner, adapters } = fixture();
+  const selected = request();
+  const starting = owner.play(selected);
+  adapters[0].resolve(true); await starting;
+  const generation = owner.generation;
+  try {
+    const pauseIntent = owner.beginInteraction();
+    owner.pause();
+    assert.ok(owner.interactionRevision > pauseIntent);
+    assert.equal(owner.generation, generation);
+    const resumeIntent = owner.beginInteraction();
+    await owner.play(selected);
+    assert.ok(owner.interactionRevision > resumeIntent);
+    assert.equal(owner.generation, generation);
+    assert.equal(adapters.length, 1);
+    const unchanged = owner.interactionRevision;
+    owner.update({ ...selected, title: "Fresh title" });
+    assert.equal(owner.interactionRevision, unchanged, "metadata refresh is not a new viewer intent");
+    owner.setMuted(true);
+    assert.ok(owner.interactionRevision > unchanged);
+  } finally { owner.close(); }
+});

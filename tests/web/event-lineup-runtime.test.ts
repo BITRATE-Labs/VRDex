@@ -431,3 +431,34 @@ test("a reconnecting cold current source does not hold a ready boundary handoff 
     assert.equal(session.state.current, "b");
   });
 });
+
+test("initial ambiguous timing requires selection until a playable source is chosen", async () => {
+  await runtimeFixture([repeated[0], { ...repeated[1], startAt: at(20) }], async ({ session, sources }) => {
+    assert.equal(session.state.current, undefined);
+    assert.equal(session.state.selectionRequired, true);
+    assert.equal(sources.length, 0);
+    session.manual("a"); await settle();
+    assert.equal(session.state.selectionRequired, false);
+    assert.equal(session.state.current, "a");
+  });
+});
+
+test("revoking a selected row keeps stopped-session recovery distinct from initial selection", async () => {
+  await runtimeFixture([repeated[0]], async ({ session }) => {
+    session.update({ title: "Event", startAt: at(20), slots: [{ ...repeated[0], stream: stream("replacement") }] });
+    assert.equal(session.state.current, undefined);
+    assert.equal(session.state.paused, true);
+    assert.equal(session.state.unavailable, true);
+    assert.equal(session.state.selectionRequired, false);
+  });
+});
+
+test("returning a started viewer to an authored gap retains unavailable-session controls", async () => {
+  await runtimeFixture([repeated[0], repeated[2]], async ({ session, step }) => {
+    await step(at(21, 30));
+    session.live(); await settle();
+    assert.equal(session.state.current, undefined);
+    assert.equal(session.state.unavailable, true);
+    assert.equal(session.state.selectionRequired, false);
+  });
+});
