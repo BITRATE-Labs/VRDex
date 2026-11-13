@@ -73,6 +73,7 @@ export type PlaybackSnapshot = {
 };
 export type PlaybackAdapter = {
   readonly supportsAudioOnly?: boolean;
+  readonly supportsPictureInPicture?: boolean;
   play(): Promise<boolean>;
   pause(): void;
   setVolume(value: number): void;
@@ -125,6 +126,7 @@ export function playbackSourceKey(request: PlaybackRequest): string {
 /** Owns one foreground transport. Route components supply intent, never media nodes. */
 export class EventPlaybackOwner {
   get supportsAudioOnly() { return this.adapter?.supportsAudioOnly === true; }
+  get supportsPictureInPicture() { return this.adapter?.supportsPictureInPicture !== false; }
   private state: PlaybackSnapshot = {
     status: "idle",
     mode: readPlaybackMode(playbackModeStorage()),

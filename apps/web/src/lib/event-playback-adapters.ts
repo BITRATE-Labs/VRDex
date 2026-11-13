@@ -36,6 +36,7 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
     const play = async () => { await session.play(); return !session.state.paused; };
     return {
       play, retry: play,
+      supportsPictureInPicture: false,
       pause: () => session.pause(),
       setVolume(value) {
         session.setVolume(value);

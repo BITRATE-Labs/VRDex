@@ -28,11 +28,12 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
   const request = state.request;
   const twitch = request?.kind === "twitch";
   const unsupportedAudio = state.status === "blocked" && state.mode === "audio" && !twitch && !owner.supportsAudioOnly;
+  const allowPictureInPicture = owner.supportsPictureInPicture;
   const manualSelection = request?.kind === "performer_sequence" && Boolean(state.lineup) && !state.lineup?.current;
   const currentMedia = owner.media;
   const presentable = Boolean(currentMedia && currentMedia.readyState >= 1);
   const recovery = !twitch && !presentable && !state.lineup?.initializing && ((state.status === "unavailable" && state.unavailableReason !== "ended") || state.status === "blocked");
-  const secondaryControls = !twitch && !unsupportedAudio && !manualSelection && (owner.supportsAudioOnly || state.mode === "audio" || pip.supported);
+  const secondaryControls = !twitch && !unsupportedAudio && !manualSelection && (owner.supportsAudioOnly || state.mode === "audio" || (allowPictureInPicture && pip.supported));
   useLayoutEffect(() => {
     if (!request) return;
     let frame = 0;
@@ -90,12 +91,12 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
   }, [request, fullscreen]);
   useEffect(() => {
     const media = owner.media;
-    const video = media instanceof HTMLVideoElement && state.mode === "video" && media.readyState >= 1 && media.videoWidth > 0 ? media : null;
+    const video = allowPictureInPicture && media instanceof HTMLVideoElement && state.mode === "video" && media.readyState >= 1 && media.videoWidth > 0 ? media : null;
     const sync = () => setPip(pictureInPictureState(video ?? null));
     sync();
     video?.addEventListener("enterpictureinpicture", sync); video?.addEventListener("leavepictureinpicture", sync); video?.addEventListener("webkitpresentationmodechanged", sync);
     return () => { video?.removeEventListener("enterpictureinpicture", sync); video?.removeEventListener("leavepictureinpicture", sync); video?.removeEventListener("webkitpresentationmodechanged", sync); };
-  }, [owner, state.status, state.mode, state.lineup]);
+  }, [owner, state.status, state.mode, state.lineup, allowPictureInPicture]);
   const compact = !placement;
   const fallback = twitch && limited;
   const visibleWidth = viewport ? `${viewport.width}px` : "100vw";
@@ -118,8 +119,8 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
         {state.metadata?.displayName && <span className="text-sm font-medium">{state.metadata.displayName}</span>}
       </div>}
       {request && <>
-        {!fallback && <div className={`relative flex shrink-0 flex-col justify-end ${secondaryControls ? "min-h-[100px]" : ""}`}>{unsupportedAudio ? <button type="button" className="min-h-11 cursor-pointer px-3 text-sm underline" onClick={() => void owner.setMode("video")}>Video</button> : manualSelection ? null : <VrcdnPlayerControls overlay={false} mode={request.kind !== "twitch" ? state.mode : undefined} audioAvailable={owner.supportsAudioOnly} onModeChange={value => void owner.setMode(value)} pipSupported={pip.supported} pipActive={pip.active}
-          onTogglePip={() => { const media = owner.media; if (media instanceof HTMLVideoElement && state.mode === "video") void togglePictureInPicture(media).catch(() => {}); }}
+        {!fallback && <div className={`relative flex shrink-0 flex-col justify-end ${secondaryControls ? "min-h-[100px]" : ""}`}>{unsupportedAudio ? <button type="button" className="min-h-11 cursor-pointer px-3 text-sm underline" onClick={() => void owner.setMode("video")}>Video</button> : manualSelection ? null : <VrcdnPlayerControls overlay={false} mode={request.kind !== "twitch" ? state.mode : undefined} audioAvailable={owner.supportsAudioOnly} onModeChange={value => void owner.setMode(value)} pipSupported={allowPictureInPicture && pip.supported} pipActive={pip.active}
+          onTogglePip={() => { const media = owner.media; if (allowPictureInPicture && media instanceof HTMLVideoElement && state.mode === "video") void togglePictureInPicture(media).catch(() => {}); }}
           label={request.title} connected={state.status === "playing" && (request.kind !== "performer_sequence" || Boolean(state.lineup?.connected))} paused={state.status !== "playing" && state.status !== "loading"} fullscreen={fullscreen} volume={state.volume} muted={state.muted} volumeSettable={volumeSettable}
           onTogglePlay={() => state.status === "playing" || state.status === "loading" ? owner.pause() : void owner.play(request)}
           onToggleMute={() => owner.setMuted(!state.muted)} onVolumeChange={value => owner.setVolume(value)}

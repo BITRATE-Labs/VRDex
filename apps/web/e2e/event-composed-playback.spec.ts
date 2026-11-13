@@ -25,6 +25,9 @@ for (const mode of ['sequence', 'automatic', 'event-stream']) test(`composed pub
     await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime), { timeout: 20000 }).toBeGreaterThan(1);
     await expect(page.locator('video')).toHaveCount(1);
     await expect(page.getByRole('button', { name: 'Audio only', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Video', exact: true })).toHaveCount(0);
+    if (mode !== 'event-stream') await expect(page.getByRole('button', { name: 'Picture in picture', exact: true })).toHaveCount(0);
+    else if (await page.evaluate(() => document.pictureInPictureEnabled)) await expect(page.getByRole('button', { name: 'Picture in picture', exact: true })).toBeVisible();
     if (mode !== 'event-stream') await page.getByRole('button', { name: 'Eligible', exact: true }).click();
     const sourceCount = mode === 'event-stream' ? 1 : 2;
     await expect(page.locator('video')).toHaveCount(sourceCount);
