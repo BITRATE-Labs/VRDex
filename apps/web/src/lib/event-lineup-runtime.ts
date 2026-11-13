@@ -416,7 +416,7 @@ export class EventLineupSession {
     if (eligible && candidate && !this.state.nextPlaybackBlocked && !this.nextPlayPending && !this.nextPending && at >= this.nextRetryAt && (!this.next || retryConnection(this.next, at))) {
       this.next?.source.release(); this.next = undefined; void this.connect(candidate, true);
     }
-    if (visible && this.selected?.stream && !this.currentPending && at >= this.currentRetryAt && (!active || retryConnection(active, at))) {
+    if (visible && this.selected?.stream && !this.currentPending && at >= this.currentRetryAt && (!active || (this.native && active.source.recover ? failedConnection(active, at) : retryConnection(active, at)))) {
       // Recovery never discards progressing buffered media merely because transport ended.
       if (this.native && active?.source.recover) {
         if (!this.currentPending) {

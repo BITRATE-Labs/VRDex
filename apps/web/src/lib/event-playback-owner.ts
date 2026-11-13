@@ -178,7 +178,10 @@ export class EventPlaybackOwner {
       !("profileId" in request) &&
       !canStartEventPlayback(request, Date.now())
     ) {
-      if (same && this.state.request) this.emit({ status: "unavailable", unavailableReason: undefined });
+      if (same && this.state.request) {
+        this.unavailable = true;
+        this.emit({ status: "unavailable", unavailableReason: "ended" });
+      }
       return;
     }
     foregroundPlayback.acquire(this, () => this.pause());
