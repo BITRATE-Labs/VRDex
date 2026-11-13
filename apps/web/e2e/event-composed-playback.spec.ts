@@ -40,6 +40,10 @@ for (const mode of ['sequence', 'automatic', 'event-stream']) test(`composed pub
     await expect(page.locator('video')).toHaveCount(0);
     expect(await original!.evaluate(node => node.isConnected)).toBe(false);
     expect(opened).toBe(sourceCount);
+  } catch (error) {
+    await testInfo.attach('media-at-failure', { contentType: 'application/json', body: JSON.stringify({ opened, media: await page.locator('video').evaluateAll(nodes => nodes.flatMap(node => node instanceof HTMLVideoElement ? [{ time: node.currentTime, paused: node.paused, readyState: node.readyState, error: node.error?.message, hidden: node.hidden }] : [])) }) });
+    await page.screenshot({ path: testInfo.outputPath('startup-at-failure.png'), fullPage: true });
+    throw error;
   } finally { await page.goto('about:blank'); }
 });
 
@@ -157,6 +161,11 @@ test('a slow valid MPEG-TS response starts on its original connection @fixture',
   await page.goto('/playwright/event-lineup-live?composed&automatic&transport=http%3A%2F%2F127.0.0.1%3A6799');
   await page.getByRole('button', { name: 'Play Lineup live', exact: true }).click();
   const video = page.locator('video:not([hidden])');
+  await expect.poll(() => opened).toBe(1);
+  await page.waitForTimeout(5500);
+  await expect(page.getByRole('button', { name: 'Try again', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('status')).toHaveCount(0);
+  await expect(page.locator('[data-event-playback-mount]')).toBeVisible();
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime), { timeout: 15000 }).toBeGreaterThan(1);
   expect(opened).toBe(1);
   await expect(page.getByRole('button', { name: 'Audio only', exact: true })).toHaveCount(0);
@@ -210,7 +219,7 @@ test('current-source eligibility updates at the slot boundary without a visibili
 });
 
 
-test('ambiguous active public streams require manual performer selection before connecting @fixture', async ({ page }) => {
+test('ambiguous active public streams require manual performer selection before connecting @fixture', async ({ page }, testInfo) => {
   let opened = 0;
   await page.route('http://127.0.0.1:6799/**', async route => {
     opened++;
@@ -221,8 +230,12 @@ test('ambiguous active public streams require manual performer selection before 
   await page.getByRole('button', { name: 'Play Lineup live', exact: true }).click();
   const performer = page.getByRole('combobox', { name: 'Performer', exact: true });
   await expect(performer).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Try again', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('group', { name: 'Lineup live controls', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('status')).toHaveCount(0);
   await expect(page.locator('video')).toHaveCount(0);
   expect(opened).toBe(0);
+  await page.screenshot({ path: testInfo.outputPath('manual-selection-only.png') });
   await performer.selectOption('x');
   await expect.poll(() => page.locator('video:not([hidden])').evaluate(node => (node as HTMLVideoElement).currentTime), { timeout: 15000 }).toBeGreaterThan(1);
   expect(opened).toBe(1);

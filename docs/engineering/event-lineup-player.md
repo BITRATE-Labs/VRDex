@@ -132,14 +132,18 @@ EOF alone neither releases playback nor advances the lineup.
 A newly connected source has up to fifteen seconds to begin decoded playback
 before destructive reconnection. This prevents repeatedly restarting a source
 awaiting a slow first keyframe. The original five-second cold-start guard still
-controls unavailability status and release to a ready successor at its boundary;
+records unavailability evidence and releases to a ready successor at its boundary;
 it does not hold an incoming decoded performer for fifteen seconds. A synthetic
 seven-second startup regression retains its original connection. This does not
 establish live-provider or physical-phone startup performance. Once a source
 progresses, the established one-second failure interval applies. The longer retry
 allowance does not make a successor ready or bypass pause/revocation fences.
 An offline or never-progressing cold source can take ten seconds longer to reach
-its first destructive retry, while status and handoff keep their earlier guard.
+its first destructive retry, while internal failure evidence and handoff keep
+their earlier guard. The retained legacy viewer keeps its loading presentation
+through the first connection's protected cold start. Later offline retries keep
+failure feedback visible. A viewer retry resumes the existing session
+rather than replacing its connection.
 
 Retries use 1, 2, 4, then 10 second intervals. Each successful handoff resets the
 preparation retry count and deadline for the next candidate. Replacing a prepared connection also
@@ -281,7 +285,10 @@ operational evidence.
 The retained player collapses its media rectangle while playback is unavailable
 or blocked and the current media has no metadata/frame to present. A transient
 lineup stall with presentable media keeps the picture and automatic recovery;
-it does not offer a destructive session retry. A blocked or offline Twitch
+it does not offer a destructive session retry. Sequence recovery uses automatic
+reconnection or the existing performer selector. An ambiguous initial selection
+shows that selector without unavailable prose or playback/retry controls.
+A blocked or offline Twitch
 iframe stays visible because its provider recovery controls must remain
 interactive. A profile transport-end notification also
 preserves the picture because buffered video may still be playing. Event and

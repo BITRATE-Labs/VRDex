@@ -24,18 +24,18 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
     const session = new EventLineupSession(request.event, mount, (lineup) =>
       notify({
         lineup,
-        status: lineup.unavailable
-          ? "unavailable"
-          : lineup.paused
-            ? "paused"
-            : "playing",
+        status: lineup.initializing
+          ? "loading"
+          : lineup.unavailable
+            ? "unavailable"
+            : lineup.paused
+              ? "paused"
+              : "playing",
       }),
     );
+    const play = async () => { await session.play(); return !session.state.paused; };
     return {
-      async play() {
-        await session.play();
-        return !session.state.paused;
-      },
+      play, retry: play,
       pause: () => session.pause(),
       setVolume(value) {
         session.setVolume(value);

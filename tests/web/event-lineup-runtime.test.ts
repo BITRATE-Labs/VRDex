@@ -309,12 +309,13 @@ test("a valid slow-starting source is not restarted before its first decoded pro
 });
 
 test("a cold source that never progresses has a bounded fifteen-second retry allowance", async () => {
-  await runtimeFixture([repeated[0]], async ({ sources, step, progress }) => {
+  await runtimeFixture([repeated[0]], async ({ session, sources, step, progress }) => {
     progress(false); await step(at(20), 14900);
     assert.equal(sources.length, 1);
     await step(at(20), 200);
     assert.equal(sources.length, 2);
     assert.equal(sources[0].released, true);
+    assert.equal(session.state.initializing, false, "offline retries must not restart the initial loading presentation forever");
   });
 });
 test("prepared playback also receives bounded startup time without becoming ready early", async () => {
@@ -416,6 +417,7 @@ test("a cold source reports unavailable at five seconds without restarting befor
   await runtimeFixture([repeated[0]], async ({ session, sources, step, progress }) => {
     progress(false); await step(at(20), 5100);
     assert.equal(session.state.unavailable, true);
+    assert.equal(session.state.initializing, true);
     assert.equal(sources.length, 1);
   });
 });

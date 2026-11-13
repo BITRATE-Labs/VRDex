@@ -7,7 +7,7 @@ import { joinSlot, handoffEligibleAt, handoffBoundaryAt, shouldHandoff } from ".
 import { followingSlot, nextSlot, reconcileSlot, sameLineupSource, type LineupSlot } from "./event-lineup-session";
 
 export type LineupEvent = { title: string; startAt: number; doorsOpenAt?: number; endAt?: number; slots: LineupSlot[] };
-export type LineupSnapshot = { started: boolean; following: boolean; paused: boolean; muted: boolean; volume: number; current?: string; connected: boolean; unavailable: boolean; nextPlaybackBlocked?: boolean; playbackBlocked?: boolean };
+export type LineupSnapshot = { started: boolean; following: boolean; paused: boolean; muted: boolean; volume: number; current?: string; connected: boolean; unavailable: boolean; initializing?: boolean; nextPlaybackBlocked?: boolean; playbackBlocked?: boolean };
 export type LineupObservedSource = {
   readonly media: HTMLMediaElement;
   readonly grantId?: string;
@@ -78,6 +78,8 @@ export class EventLineupSession {
   }
   private emit() {
     if (this.disposed) return;
+    // Later automatic retries keep failure feedback instead of restarting the initial loading UI.
+    this.state.initializing = Boolean(!this.native && !this.state.paused && this.currentAttempt <= 1 && this.current && !this.current.progressed && performance.now() < this.current.retryDeadline);
     const previous = this.lastSnapshot;
     if (previous && (Object.keys(this.state) as Array<keyof LineupSnapshot>).every(key => this.state[key] === previous[key])) return;
     this.lastSnapshot = { ...this.state };

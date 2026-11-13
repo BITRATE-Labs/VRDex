@@ -28,10 +28,11 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
   const request = state.request;
   const twitch = request?.kind === "twitch";
   const unsupportedAudio = state.status === "blocked" && state.mode === "audio" && !twitch && !owner.supportsAudioOnly;
+  const manualSelection = request?.kind === "performer_sequence" && Boolean(state.lineup) && !state.lineup?.current;
   const currentMedia = owner.media;
   const presentable = Boolean(currentMedia && currentMedia.readyState >= 1);
-  const recovery = !twitch && !presentable && ((state.status === "unavailable" && state.unavailableReason !== "ended") || state.status === "blocked");
-  const secondaryControls = !twitch && !unsupportedAudio && (owner.supportsAudioOnly || state.mode === "audio" || pip.supported);
+  const recovery = !twitch && !presentable && !state.lineup?.initializing && ((state.status === "unavailable" && state.unavailableReason !== "ended") || state.status === "blocked");
+  const secondaryControls = !twitch && !unsupportedAudio && !manualSelection && (owner.supportsAudioOnly || state.mode === "audio" || pip.supported);
   useLayoutEffect(() => {
     if (!request) return;
     let frame = 0;
@@ -89,7 +90,7 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
   }, [request, fullscreen]);
   useEffect(() => {
     const media = owner.media;
-    const video = media instanceof HTMLVideoElement && state.mode === "video" && media.readyState >= 1 ? media : null;
+    const video = media instanceof HTMLVideoElement && state.mode === "video" && media.readyState >= 1 && media.videoWidth > 0 ? media : null;
     const sync = () => setPip(pictureInPictureState(video ?? null));
     sync();
     video?.addEventListener("enterpictureinpicture", sync); video?.addEventListener("leavepictureinpicture", sync); video?.addEventListener("webkitpresentationmodechanged", sync);
@@ -117,7 +118,7 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
         {state.metadata?.displayName && <span className="text-sm font-medium">{state.metadata.displayName}</span>}
       </div>}
       {request && <>
-        {!fallback && <div className={`relative flex shrink-0 flex-col justify-end ${secondaryControls ? "min-h-[100px]" : ""}`}>{unsupportedAudio ? <button type="button" className="min-h-11 cursor-pointer px-3 text-sm underline" onClick={() => void owner.setMode("video")}>Video</button> : <VrcdnPlayerControls overlay={false} mode={request.kind !== "twitch" ? state.mode : undefined} audioAvailable={owner.supportsAudioOnly} onModeChange={value => void owner.setMode(value)} pipSupported={pip.supported} pipActive={pip.active}
+        {!fallback && <div className={`relative flex shrink-0 flex-col justify-end ${secondaryControls ? "min-h-[100px]" : ""}`}>{unsupportedAudio ? <button type="button" className="min-h-11 cursor-pointer px-3 text-sm underline" onClick={() => void owner.setMode("video")}>Video</button> : manualSelection ? null : <VrcdnPlayerControls overlay={false} mode={request.kind !== "twitch" ? state.mode : undefined} audioAvailable={owner.supportsAudioOnly} onModeChange={value => void owner.setMode(value)} pipSupported={pip.supported} pipActive={pip.active}
           onTogglePip={() => { const media = owner.media; if (media instanceof HTMLVideoElement && state.mode === "video") void togglePictureInPicture(media).catch(() => {}); }}
           label={request.title} connected={state.status === "playing" && (request.kind !== "performer_sequence" || Boolean(state.lineup?.connected))} paused={state.status !== "playing" && state.status !== "loading"} fullscreen={fullscreen} volume={state.volume} muted={state.muted} volumeSettable={volumeSettable}
           onTogglePlay={() => state.status === "playing" || state.status === "loading" ? owner.pause() : void owner.play(request)}
@@ -135,7 +136,7 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
           {state.lineup?.following ? <span>Following lineup</span> : <button type="button" onClick={() => owner.live()}>Return to live</button>}
           {state.lineup?.nextPlaybackBlocked && <button type="button" aria-label="Enable next performer playback" onClick={() => owner.retryNextPlayback()}>Enable playback</button>}
         </div>}
-        {(state.status === "unavailable" || fallback) && <div className="flex min-h-11 items-center justify-between gap-3 border-t border-white/10 px-3 text-sm"><span role="status">{fallback ? "External playback" : state.unavailableReason === "unsupported" ? "Unsupported" : state.unavailableReason === "ended" ? "Playback stopped" : "Stream unavailable"}</span>{!fallback && state.unavailableReason !== "unsupported" && !twitch && !(request.kind === "performer_sequence" && presentable) && <button type="button" className="min-h-11 py-3 underline" onClick={() => void owner.play(request)}>Try again</button>}{request.kind === "twitch" && request.sourceId.startsWith("https://") && <a href={request.sourceId} target="_blank" rel="noreferrer" className="py-3 underline">Open stream</a>}</div>}
+        {((state.status === "unavailable" && !manualSelection) || fallback) && <div className="flex min-h-11 items-center justify-between gap-3 border-t border-white/10 px-3 text-sm"><span role="status">{fallback ? "External playback" : state.unavailableReason === "unsupported" ? "Unsupported" : state.unavailableReason === "ended" ? "Playback stopped" : "Stream unavailable"}</span>{!fallback && state.unavailableReason !== "unsupported" && !twitch && request.kind !== "performer_sequence" && <button type="button" className="min-h-11 py-3 underline" onClick={() => void owner.play(request)}>Try again</button>}{request.kind === "twitch" && request.sourceId.startsWith("https://") && <a href={request.sourceId} target="_blank" rel="noreferrer" className="py-3 underline">Open stream</a>}</div>}
         {state.status === "blocked" && (unsupportedAudio ? <div role="status" className="flex min-h-11 items-center border-t border-white/10 px-3 text-sm">Unsupported</div> : <button type="button" className="min-h-11 px-3 text-sm underline" onClick={() => void owner.play(request)}>Enable playback</button>)}
       </>}
     </section>
