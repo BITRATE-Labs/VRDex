@@ -284,3 +284,21 @@ test("failed retained playback collapses unused media space inline and compact, 
   await shell.getByRole("button", { name: "Close event playback" }).click();
   await expect(media).toHaveCount(0);
 });
+
+test("a transport error preserves buffered legacy playback while recovery remains explicit @flow @fixture", async ({ page }, testInfo) => {
+  await playbackAuthorization(page);
+  await page.route("https://stream.vrcdn.live/live/*.webm", route => route.fulfill({ contentType: "audio/wav", body: wave() }));
+  await page.goto("/playwright/event-playback");
+  await page.getByRole("button", { name: "Play Event a", exact: true }).click();
+  const video = page.locator("[data-event-playback-mount] video");
+  await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(0.1);
+  const original = await video.elementHandle();
+  const time = await video.evaluate(node => { node.dispatchEvent(new Event("error")); return (node as HTMLVideoElement).currentTime; });
+  await expect(page.getByRole("status")).toHaveText("Stream unavailable");
+  await expect(video).toBeVisible();
+  await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(time + 0.2);
+  expect(await video.evaluate((node, previous) => node === previous, original)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("buffered-transport-error.png") });
+  await page.getByRole("button", { name: "Close event playback" }).click();
+  await expect(video).toHaveCount(0);
+});

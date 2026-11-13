@@ -89,7 +89,7 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
   }, [request, fullscreen]);
   useEffect(() => {
     const media = owner.media;
-    const video = media instanceof HTMLVideoElement && state.mode === "video" ? media : null;
+    const video = media instanceof HTMLVideoElement && state.mode === "video" && media.readyState >= 1 ? media : null;
     const sync = () => setPip(pictureInPictureState(video ?? null));
     sync();
     video?.addEventListener("enterpictureinpicture", sync); video?.addEventListener("leavepictureinpicture", sync); video?.addEventListener("webkitpresentationmodechanged", sync);

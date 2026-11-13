@@ -134,6 +134,7 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
   // The owner may close before Play awaits the transport import.
   void ready.catch(() => {});
   return {
+    get media() { return disposed ? undefined : video; },
     enableControls(callback) { beforeUnmute = callback; video.controls = true; },
     async play() { const current = ++attempt; await ready; if (disposed || current !== attempt) return false;
       try { await video.play(); return !disposed && current === attempt; } catch { return false; } },
