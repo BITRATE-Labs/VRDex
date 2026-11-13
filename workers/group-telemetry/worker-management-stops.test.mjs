@@ -8,6 +8,7 @@ import { readClubProviderJob } from "./club-read-jobs.mjs";
 import { ClubProvider } from "./club-provider.mjs";
 import { budgetedClubProvider } from "./club-request-budget.mjs";
 import { VrchatProviderError } from "./vrchat-client.mjs";
+import { recoverMembershipPage } from "./membership-recovery.mjs";
 
 const source = readFileSync(
   new URL("./worker.mjs", import.meta.url),
@@ -127,6 +128,7 @@ async function run(jobKind, fault, stage = "preflight", retryAfterMs = 300000, d
     collectMembershipPage: async () => {
       calls.push("history");
     },
+    recoverMembershipPage,
     pauseWithHeartbeats: async () => {},
     randomPollDelayMs: () => 60000,
     pollId: () => "poll",

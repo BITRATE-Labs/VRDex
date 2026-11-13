@@ -198,7 +198,7 @@ it("admission rollback blocks allocated joins but keeps existing collection and 
   assert.equal((await h.t.run(ctx => ctx.db.query("vrchatGroupMemberSnapshots").first()))?.memberCount, 42);
   assert.equal((await h.t.run(ctx => ctx.db.get(h.integrationId)))?.state, "disconnected");
 });
-for (const operation of ["membership_scan_begin", "membership_scan_page", "membership_scan_resume", "membership_scan_finalize", "club_authority", "club_read_claim", "club_read_complete", "club_operation_claim", "club_operation_authorize", "club_operation_complete", "club_operation_reject", "club_operation_defer"])
+for (const operation of ["membership_recovery_claim", "membership_recovery_check", "membership_recovery_page", "membership_recovery_failure", "membership_scan_begin", "membership_scan_page", "membership_scan_resume", "membership_scan_finalize", "club_authority", "club_read_claim", "club_read_complete", "club_operation_claim", "club_operation_authorize", "club_operation_complete", "club_operation_reject", "club_operation_defer"])
 it(`real HTTP handler denies automatic ${operation} with a valid worker key`, async () => {
   const h = await setup();
   const router = (httpModule as unknown as {default?: typeof httpModule}).default ?? httpModule;

@@ -1,3 +1,5 @@
+import { membershipRecoveryTables } from "./_clubMembershipRecoveryTables";
+import { peopleSource, peopleReferenceSource, peopleStatus } from "./_clubPeople";
 import {managedConnectionValidator,connectionProvider} from "./_eventBroadcastConnections";
 import { mediaRelayTables } from "./_mediaRelayTables";
 import { statisticsAdmissionValidator } from "./_groupAdmission";
@@ -725,7 +727,27 @@ const sharedProfileFields = {
 };
 
 export default defineSchema({
+  ...membershipRecoveryTables,
   ...mediaRelayTables,
+  clubPeopleViews: defineTable({
+    communityProfileId: v.id("profiles"), integrationId: v.id("communityVrchatIntegrations"), epochStartedAt: v.number(),
+    subject: clubSubject, source: peopleSource, sourceKey: v.string(), expiresAt: v.number(),
+  }).index("by_actor_scope_key", ["subject.tokenIdentifier", "integrationId", "sourceKey"])
+    .index("by_expiresAt", ["expiresAt"]),
+  clubPeople: defineTable({
+    integrationId: v.id("communityVrchatIntegrations"), epochStartedAt: v.number(), userId: v.string(),
+    collectorAccountId: v.id("collectorAccounts"), status: peopleStatus,
+    displayName: v.optional(v.string()), observedAt: v.optional(v.number()), retryAt: v.number(), failures: v.number(),
+    dueAt: v.optional(v.number()), checkAt: v.number(), priority: v.number(), interestUntil: v.number(),
+    lease: v.optional(v.object({ token: v.string(), workerId: v.string(), workerKeyHash: v.string(), credentialGeneration: v.number(), integrationGeneration: v.number(), expiresAt: v.number() })),
+  }).index("by_scope_user", ["integrationId", "epochStartedAt", "userId"])
+    .index("by_account_priority_due", ["collectorAccountId", "priority", "dueAt"])
+    .index("by_checkAt", ["checkAt"]),
+  clubPeopleReferences: defineTable({
+    personId: v.id("clubPeople"), integrationId: v.id("communityVrchatIntegrations"), source: peopleReferenceSource,
+    sourceKey: v.string(), subject: v.optional(clubSubject), expiresAt: v.number(), checkAt: v.number(),
+  }).index("by_person_key", ["personId", "sourceKey"])
+    .index("by_checkAt", ["checkAt"]),
   clubProviderReadRequests: defineTable({
     communityProfileId: v.id("profiles"), integrationId: v.id("communityVrchatIntegrations"),
     subject: clubSubject, params: providerReadParams, requestKey: v.string(),
@@ -1982,6 +2004,7 @@ export default defineSchema({
     eventType: v.string(),
     occurredAt: v.number(),
     targetUserId: v.optional(v.string()),
+    canonicalTargetUserId: v.optional(v.string()),
     targetDisplayName: v.optional(v.string()),
     actorUserId: v.optional(v.string()),
     actorDisplayName: v.optional(v.string()),
@@ -1991,7 +2014,10 @@ export default defineSchema({
     verified: v.boolean(),
   }).index("by_audit", ["integrationId", "epochStartedAt", "auditId"])
     .index("by_time", ["integrationId", "epochStartedAt", "occurredAt"])
-    .index("by_verified_time", ["integrationId", "epochStartedAt", "verified", "occurredAt"]),
+    .index("by_verified_time", ["integrationId", "epochStartedAt", "verified", "occurredAt"])
+    .index("by_verified_type_time", ["integrationId", "epochStartedAt", "verified", "eventType", "occurredAt"])
+    .index("by_canonical_target_time", ["integrationId", "epochStartedAt", "canonicalTargetUserId", "verified", "occurredAt"])
+    .index("by_canonical_target_type_time", ["integrationId", "epochStartedAt", "canonicalTargetUserId", "verified", "eventType", "occurredAt"]),
   communityMembershipCoverage: defineTable({
     integrationId: v.id("communityVrchatIntegrations"),
     epochStartedAt: v.number(),
@@ -2049,6 +2075,7 @@ export default defineSchema({
     .index("by_collectionScope_kind_account", ["collectionScope.kind", "assignedCollectorAccountId"])
     .index("by_vrchatGroupId", ["vrchatGroupId"])
     .index("by_assignedCollectorAccountId_state", ["assignedCollectorAccountId", "state"])
+    .index("by_account_state_nextPollAt", ["assignedCollectorAccountId", "state", "nextPollAt"])
     .index("by_state_nextPollAt", ["state", "nextPollAt"]),
   vrchatGroupMemberMetadata: defineTable({
     lastStandaloneObservedAt: v.optional(v.number()),

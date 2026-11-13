@@ -6,6 +6,7 @@ import { RequestBudget, failureDisposition } from "./runtime.mjs";
 import { executeClubOperation } from "./club-operation-jobs.mjs";
 import { VrchatProviderError } from "./vrchat-client.mjs";
 import { collectMembershipPage } from "./membership-collection.mjs";
+import { recoverMembershipPage } from "./membership-recovery.mjs";
 const source = readFileSync(
   new URL("./worker.mjs", import.meta.url),
   "utf8",
@@ -96,6 +97,7 @@ function harness({
     collectMembershipPage: async () => {
       calls.push("history");
     },
+    recoverMembershipPage: args => recoverMembershipPage({ ...args, clock: () => now }),
   };
   const collect = runInNewContext(collectSource + "\ncollect;", sandbox);
   return {
@@ -122,6 +124,18 @@ function harness({
     },
   };
 }
+
+test("supplemental recovery runs after collection and ordinary repair failures do not downgrade it", async () => {
+  for (const category of ["transient", "schema_drift", "authentication", "rate_limit"]) {
+    const h = harness();
+    h.sandbox.recoverMembershipPage = async () => {
+      assert.ok(h.calls.includes("history"));
+      throw new VrchatProviderError("repair failed", { category });
+    };
+    await h.pass();
+    assert.equal(h.failures.length, ["authentication", "rate_limit"].includes(category) ? 1 : 0, category);
+  }
+});
 
 test("cached provider observations do not put the next poll in the past", async () => {
   const h = harness();
