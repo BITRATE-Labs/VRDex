@@ -24,8 +24,8 @@ for (const mode of ['sequence', 'automatic', 'event-stream']) test(`composed pub
     const video = page.locator('video:not([hidden])');
     await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime), { timeout: 20000 }).toBeGreaterThan(1);
     await expect(page.locator('video')).toHaveCount(1);
-    await expect(page.getByRole('button', { name: 'Audio only', exact: true })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Video', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Audio only', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Video', exact: true })).toHaveCount(0);
     if (mode !== 'event-stream') await page.getByRole('button', { name: 'Eligible', exact: true }).click();
     const sourceCount = mode === 'event-stream' ? 1 : 2;
     await expect(page.locator('video')).toHaveCount(sourceCount);
@@ -125,4 +125,42 @@ test('event editor defaults to automatic and can select an event stream @fixture
   await mode.selectOption('automatic');
   await mode.scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath('automatic-editor.png') });
+});
+
+
+test('mixed community lineup offers Play only for the actual current linked performer @fixture', async ({ page }, testInfo) => {
+  let mediaRequests = 0;
+  await page.route('http://127.0.0.1:6799/**', route => { mediaRequests++; return route.abort(); });
+  await page.goto('/playwright/event-lineup-live?composed&automatic&transport=http%3A%2F%2F127.0.0.1%3A6799');
+  const play = page.getByRole('button', { name: 'Play Lineup live', exact: true });
+  await expect(play).toBeVisible();
+  await page.getByRole('button', { name: 'missing', exact: true }).click();
+  await page.getByRole('button', { name: 'Next slot', exact: true }).click();
+  await expect(play).toHaveCount(0);
+  await expect(page.locator('[data-event-playback-inline]')).toHaveCount(0);
+  await expect(page.locator('video')).toHaveCount(0);
+  expect(mediaRequests).toBe(0);
+  await page.screenshot({ path: testInfo.outputPath('missing-current-performer.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Before window', exact: true }).click();
+  await expect(play).toBeVisible();
+  expect(mediaRequests).toBe(0);
+});
+
+
+test('a slow valid MPEG-TS response starts on its original connection @fixture', async ({ page }, testInfo) => {
+  test.setTimeout(30000);
+  let opened = 0;
+  await page.route('http://127.0.0.1:6799/**', async route => {
+    opened++;
+    await new Promise(resolve => setTimeout(resolve, 7000));
+    await route.fulfill({ contentType: 'video/mp2t', path: path.resolve('e2e/fixtures/persistent-synthetic.mpegts'), headers: { 'access-control-allow-origin': '*' } });
+  });
+  await page.goto('/playwright/event-lineup-live?composed&automatic&transport=http%3A%2F%2F127.0.0.1%3A6799');
+  await page.getByRole('button', { name: 'Play Lineup live', exact: true }).click();
+  const video = page.locator('video:not([hidden])');
+  await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime), { timeout: 15000 }).toBeGreaterThan(1);
+  expect(opened).toBe(1);
+  await expect(page.getByRole('button', { name: 'Audio only', exact: true })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('slow-start-legacy-controls.png') });
+  await page.getByRole('button', { name: 'Close event playback', exact: true }).click();
 });

@@ -30,7 +30,7 @@ export type NativeLineupOptions = {
 type Connection = { slot: LineupSlot; source: LineupObservedSource; evidence: ReturnType<typeof clearPlaybackEvidence>; startupDeadline: number; progressed: boolean };
 // Cold MSE/audio initialization can exceed the established-source failure window.
 // Bound initialization separately; readiness and handoff still require decoded progress.
-const STARTUP_ALLOWANCE_MS = 5000;
+const STARTUP_ALLOWANCE_MS = 15_000;
 const SILENCE_HANDOFF_MS = 15_000;
 const SILENCE_WINDOW_MS = 5 * 60_000;
 const failedConnection = (connection: Connection, at: number) =>

@@ -3,6 +3,14 @@ import type { PublicEvent } from "../app/_components/event-public-page";
 import type { PlaybackRequest } from "./event-playback-owner";
 import { parseVrcdnStreamLinks } from "../../../../convex/_vrcdnLinks";
 import { publicEventPath } from "./event-path";
+import { joinSlot } from "./event-playback";
+import { isInScheduledWatchWindow } from "../../../../convex/_eventRuntime";
+
+/** A fresh viewer must have the scheduled source; existing playback is reconciled separately. */
+export function canStartEventPlayback(request: Extract<PlaybackRequest, { eventId: string }>, now: number | null) {
+  return isInScheduledWatchWindow({ ...request, now }) &&
+    (request.kind !== "performer_sequence" || (now !== null && Boolean(joinSlot(request.event.slots, now)?.stream)));
+}
 
 /** Authorization is independent of the new-start calendar window. */
 export function eventPlaybackRequest(

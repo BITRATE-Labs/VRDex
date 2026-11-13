@@ -1,7 +1,7 @@
 import type { DjMetadata } from "@vrdex/media-relay";
 import { foregroundPlayback } from "./foreground-playback";
 import type { LineupEvent, LineupSnapshot } from "./event-lineup-runtime";
-import { isInScheduledWatchWindow } from "../../../../convex/_eventRuntime";
+import { canStartEventPlayback } from "./event-playback-request";
 
 import {
   readPlaybackMode,
@@ -170,7 +170,7 @@ export class EventPlaybackOwner {
     if (
       (!same || !this.started) &&
       !("profileId" in request) &&
-      !isInScheduledWatchWindow({ ...request, now: Date.now() })
+      !canStartEventPlayback(request, Date.now())
     )
       return;
     foregroundPlayback.acquire(this, () => this.pause());

@@ -27,6 +27,7 @@ function setup() {
  const initial = event;
  const listeners = new Set<() => void>();
  const client = {watchQuery(query:FunctionReference<"query">) {
+   if (getFunctionName(query) === "events:getHostAccess") return { localQueryResult: () => false, onUpdate: () => () => {}, journal: () => undefined };
    if (getFunctionName(query) !== "events:getPublicBySlug") throw new Error("Unexpected subscription");
    return {localQueryResult:()=>event,onUpdate:(callback:()=>void)=>{listeners.add(callback);return ()=>{listeners.delete(callback);};},journal:()=>undefined};
  }} as unknown as ConvexReactClient;

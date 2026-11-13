@@ -288,3 +288,21 @@ test("selected Video preserves legacy playback and pending play; real unsupporte
   assert.equal(owner.getSnapshot().status,"blocked");
   owner.close();
 });
+
+
+test("fresh Play refuses an unlinked current performer even if a later performer has a stream", async () => {
+  const { owner, adapters } = fixture();
+  const startAt = Date.now() - 1000;
+  const pending = owner.play({ kind: "performer_sequence", eventId: "mixed", eventSlug: "mixed", title: "Mixed", href: "/events/mixed", startAt,
+    event: { title: "Mixed", startAt, slots: [
+      { key: "missing", startAt },
+      { key: "later", startAt: startAt + 60000, stream: { streamId: "later", pcUrl: "pc", questUrl: "quest" } },
+    ] },
+  });
+  try {
+    assert.equal(adapters.length, 0);
+    assert.equal(owner.getSnapshot().status, "idle");
+  } finally {
+    adapters[0]?.resolve(false); await pending; owner.close();
+  }
+});

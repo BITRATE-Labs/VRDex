@@ -1,10 +1,14 @@
 # Event lineup player
 
-Timed public lineups with an available public performer stream are watchable
+Timed public lineups whose current scheduled performer has a public stream are watchable
 without staff enabling performer sequence. The editor's Automatic choice uses
 this local browser viewer; Event stream retains the explicitly enabled event
 source. Automatic requests never open native relay grants or broadcasting tools.
-Existing enabled performer-sequence events remain compatible.
+Existing enabled performer-sequence events remain compatible. Fresh Play uses the
+same inferred, unambiguous current slot in the inline surface, standalone surface
+and playback owner. A different past or future performer having a stream does
+not make a missing current source watchable. Existing playback keeps its
+independent continuation and projection-revalidation rules.
 
 ## Ownership and updates
 
@@ -113,9 +117,12 @@ added by this change. Established playback must stop progressing for at least
 evidence, including buffered playback after transport failure or clean EOF.
 EOF alone neither releases playback nor advances the lineup.
 
-A newly connected source has up to five seconds to begin decoded playback before
+A newly connected source has up to fifteen seconds to begin decoded playback before
 reconnection. This prevents cold MSE/audio startup from being destroyed every
-second. Once it progresses, the established one-second failure interval applies.
+second, or repeatedly restarting a source awaiting a slow first keyframe.
+A synthetic seven-second startup regression retains its original connection;
+this does not establish live-provider or physical-phone startup performance.
+Once it progresses, the established one-second failure interval applies.
 The allowance does not make a successor ready or bypass pause/revocation fences.
 
 Retries use 1, 2, 4, then 10 second intervals. Each successful handoff resets the
@@ -218,7 +225,7 @@ media; it does not measure phone CPU or background playback.
 
 Audio-only availability belongs to the adapter. Native HLS and relay adapters
 declare a separate audio rendition; legacy MPEG-TS adapters do not. Retained
-controls disable Audio only for those legacy adapters while preserving Video
+controls omit Audio only for those legacy adapters while preserving Video
 recovery and saved preferences. Hiding local lineup video is not audio-only
 decoding. See the [investigation and live-index proposal](../planning/player-performance-and-live-index-2026-11-06.md).
 

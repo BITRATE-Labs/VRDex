@@ -297,9 +297,20 @@ test("cold initial playback may initialize for longer than the established failu
     assert.equal(sources[0].released, true);
   });
 });
-test("a cold source that never progresses has a bounded five-second startup allowance", async () => {
+test("a valid slow-starting source is not restarted before its first decoded progress", async () => {
+  await runtimeFixture([repeated[0]], async ({ session, sources, step, progress }) => {
+    progress(false); await step(at(20), 7000);
+    assert.equal(sources.length, 1, "keep the same initialization across a slow first keyframe");
+    assert.equal(sources[0].released, false);
+    progress(true); await step(at(20), 400);
+    assert.equal(session.state.connected, true);
+    assert.equal(sources.length, 1);
+  });
+});
+
+test("a cold source that never progresses has a bounded fifteen-second startup allowance", async () => {
   await runtimeFixture([repeated[0]], async ({ sources, step, progress }) => {
-    progress(false); await step(at(20), 4900);
+    progress(false); await step(at(20), 14900);
     assert.equal(sources.length, 1);
     await step(at(20), 200);
     assert.equal(sources.length, 2);
@@ -312,7 +323,7 @@ test("prepared playback also receives bounded startup time without becoming read
     assert.equal(sources.length, 2);
     assert.equal(session.state.current, "a");
     assert.equal(sources[1].gain.gain.value, 0);
-    await step(at(20, 58), 3300);
+    await step(at(20, 58), 13300);
     assert.equal(sources.length, 3);
     assert.equal(sources[1].released, true);
     assert.equal(session.state.current, "a");
