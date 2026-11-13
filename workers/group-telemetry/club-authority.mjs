@@ -5,6 +5,7 @@ import { membershipRoleObservations } from "./membership-roles.mjs";
 export async function refreshClubAuthority({ assignment, provider, control, expectedUserId, accountBudget, integrationBudget, clock = Date.now, shouldStop = () => false, deadline = Infinity }) {
   const stopped = () => shouldStop() || clock() >= deadline;
   if (stopped() || assignment.state !== "active" || !Number.isFinite(assignment.epochStartedAt)) return { refreshed: false };
+  if (accountBudget.limit < 2 || integrationBudget.limit < 2) return { refreshed: false };
   const now = clock();
   const retryAfterMs = Math.max(accountBudget.retryAfterMs(2, now), integrationBudget.retryAfterMs(2, now));
   if (retryAfterMs > 0) return { refreshed: false, retryAt: now + retryAfterMs };

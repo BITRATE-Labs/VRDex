@@ -44,6 +44,16 @@ test("denied shared or local budgets and inactive assignments perform no provide
   }
 });
 
+test("an impossible two-read local budget stops without a retry for either limit", async () => {
+  for (const budget of ["accountBudget", "integrationBudget"]) {
+    const { args, sends, reads } = setup();
+    args[budget] = new RequestBudget(1);
+    assert.deepEqual(await refreshClubAuthority(args), { refreshed: false }, budget);
+    assert.equal(sends.length, 0);
+    assert.equal(reads.length, 0);
+  }
+});
+
 test("rejected snapshot recording cannot be reported as refreshed authority", async () => {
   const { args } = setup();
   args.control.send = async operation => operation === "budget" ? { granted: true } : { recorded: false };
