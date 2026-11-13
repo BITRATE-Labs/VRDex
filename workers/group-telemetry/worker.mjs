@@ -444,10 +444,11 @@ async function collect(assignment) {
       }
       if (!stopping && Date.now() < membershipDeadline) {
         try {
-          let refreshAuthority = false;
+          let checkAuthority = false;
           while (!stopping && Date.now() < membershipDeadline) {
             let result;
-            if (refreshAuthority) {
+            const authorityAge = authority ? Date.now() - authority.observedAt : Infinity;
+            if (checkAuthority && (!Number.isFinite(authorityAge) || authorityAge < 0 || authorityAge > 30_000)) {
               result = await refreshReadiness(membershipDeadline);
               authority = result.authority;
             }
@@ -455,8 +456,8 @@ async function collect(assignment) {
               accountBudget, integrationBudget, shouldStop: () => stopping, deadline: membershipDeadline });
             if (!Number.isFinite(result?.retryAt) || result.retryAt <= Date.now()) break;
             await pauseWithHeartbeats(Math.min(result.retryAt - Date.now(), Math.max(0, membershipDeadline - Date.now())));
-            // Budget waits cannot carry old authority or a recovery claim into a new request.
-            refreshAuthority = true;
+            // Reuse fresh authority after a wait; every retry still claims and checks the current job.
+            checkAuthority = true;
           }
         } catch (error) {
           if (["authentication", "rate_limit", "membership"].includes(error?.category) || /^Control plane (401|403|429):/.test(error?.message ?? "")) throw error;

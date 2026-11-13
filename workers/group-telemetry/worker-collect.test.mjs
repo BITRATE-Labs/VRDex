@@ -196,6 +196,26 @@ test("historical recovery progresses after repeated quiet polls at four integrat
   assert.ok(job.pages > 0, JSON.stringify({ polls: 3, claims: recoveryClaims.length, providerRequests: providerReads.length, auditRequests: auditReads.length, pages: job.pages }));
   assert.equal(auditReads.length, 3);
   assert.equal(job.pages, 3);
+  assert.equal(h.calls.filter(op => op === "club_authority").length, 6);
+});
+
+test("a short recovery budget wait reuses still-fresh authority without another two reads", async () => {
+  const { h, providerReads, job } = recoveryPollHarness();
+  const aggregate = h.sandbox.provider.readAggregateSnapshot;
+  h.sandbox.provider.readAggregateSnapshot = async () => {
+    const result = await aggregate();
+    h.advance(45000);
+    return result;
+  };
+  const waits = [];
+  h.sandbox.pauseWithHeartbeats = async ms => { waits.push(ms); h.advance(ms); };
+  await h.pass();
+  assert.deepEqual(waits, [15000]);
+  assert.equal(h.calls.filter(op => op === "club_authority").length, 1);
+  assert.equal(providerReads.length, 5);
+  assert.equal(providerReads.filter(path => path.includes("/auditLogs?")).length, 1);
+  assert.equal(h.calls.filter(op => op === "membership_recovery_check").length, 1);
+  assert.equal(job.pages, 1);
 });
 
 for (const reason of ["deadline", "shutdown", "permission", "group", "expired_authority", "revoked_scope"]) {
