@@ -28,7 +28,9 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
   const request = state.request;
   const twitch = request?.kind === "twitch";
   const unsupportedAudio = state.status === "blocked" && state.mode === "audio" && !twitch && !owner.supportsAudioOnly;
-  const recovery = (state.status === "unavailable" && state.unavailableReason !== "ended") || (state.status === "blocked" && !twitch);
+  const currentMedia = owner.media;
+  const presentable = Boolean(currentMedia && currentMedia.readyState >= 1);
+  const recovery = !twitch && !presentable && ((state.status === "unavailable" && state.unavailableReason !== "ended") || state.status === "blocked");
   const secondaryControls = !twitch && !unsupportedAudio && (owner.supportsAudioOnly || state.mode === "audio" || pip.supported);
   useLayoutEffect(() => {
     if (!request) return;
@@ -43,6 +45,7 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
       setLimited(tooSmall);
       if (twitch && tooSmall && (mount.current?.childElementCount || owner.getSnapshot().status !== "paused")) owner.suspend();
       const slot = Array.from(document.querySelectorAll<HTMLElement>("[data-event-playback-inline]")).find(node => node.dataset.eventPlaybackInline === ("profileId" in request ? `profile:${request.profileId}:${request.sourceId}` : request.eventId));
+      if (document.fullscreenElement === shell.current) return;
       if (slot && shell.current) {
         const pictureHeight = (mount.current?.offsetHeight ?? 0) + (shell.current.querySelector<HTMLElement>("[data-event-playback-audio-poster]")?.offsetHeight ?? 0);
         slot.style.setProperty("--event-playback-picture-display", pictureHeight > 0 ? "block" : "none");
@@ -54,7 +57,7 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
       const next = inline ? { top: box.top, left: box.left, width: box.width } : undefined;
       // Keep the last compact clearance even after returning inline. Removing it
       // near the document end clamps scroll and can oscillate between placements.
-      if (!inline && shell.current?.dataset.presentation === "compact") setHeight(shell.current.offsetHeight);
+      if (!inline && shell.current?.dataset.presentation === "compact" && document.fullscreenElement !== shell.current) setHeight(shell.current.offsetHeight);
       setPlacement(previous => previous?.top === next?.top && previous?.left === next?.left && previous?.width === next?.width ? previous : next);
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(measure); };
@@ -73,7 +76,7 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
   useEffect(() => {
     const sync = () => setFullscreen(document.fullscreenElement === shell.current);
     document.addEventListener("fullscreenchange", sync);
-    const resize = new ResizeObserver(() => { if (shell.current?.dataset.presentation === "compact") setHeight(shell.current.offsetHeight); });
+    const resize = new ResizeObserver(() => { if (shell.current?.dataset.presentation === "compact" && document.fullscreenElement !== shell.current) setHeight(shell.current.offsetHeight); });
     if (shell.current) resize.observe(shell.current);
     return () => { document.removeEventListener("fullscreenchange", sync); resize.disconnect(); };
   }, []);
@@ -132,7 +135,7 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
           {state.lineup?.following ? <span>Following lineup</span> : <button type="button" onClick={() => owner.live()}>Return to live</button>}
           {state.lineup?.nextPlaybackBlocked && <button type="button" aria-label="Enable next performer playback" onClick={() => owner.retryNextPlayback()}>Enable playback</button>}
         </div>}
-        {(state.status === "unavailable" || fallback) && <div className="flex min-h-11 items-center justify-between gap-3 border-t border-white/10 px-3 text-sm"><span role="status">{fallback ? "External playback" : state.unavailableReason === "unsupported" ? "Unsupported" : state.unavailableReason === "ended" ? "Playback stopped" : "Stream unavailable"}</span>{!fallback && state.unavailableReason !== "unsupported" && <button type="button" className="min-h-11 py-3 underline" onClick={() => void owner.play(request)}>Try again</button>}{request.kind === "twitch" && request.sourceId.startsWith("https://") && <a href={request.sourceId} target="_blank" rel="noreferrer" className="py-3 underline">Open stream</a>}</div>}
+        {(state.status === "unavailable" || fallback) && <div className="flex min-h-11 items-center justify-between gap-3 border-t border-white/10 px-3 text-sm"><span role="status">{fallback ? "External playback" : state.unavailableReason === "unsupported" ? "Unsupported" : state.unavailableReason === "ended" ? "Playback stopped" : "Stream unavailable"}</span>{!fallback && state.unavailableReason !== "unsupported" && !twitch && !(request.kind === "performer_sequence" && presentable) && <button type="button" className="min-h-11 py-3 underline" onClick={() => void owner.play(request)}>Try again</button>}{request.kind === "twitch" && request.sourceId.startsWith("https://") && <a href={request.sourceId} target="_blank" rel="noreferrer" className="py-3 underline">Open stream</a>}</div>}
         {state.status === "blocked" && (unsupportedAudio ? <div role="status" className="flex min-h-11 items-center border-t border-white/10 px-3 text-sm">Unsupported</div> : <button type="button" className="min-h-11 px-3 text-sm underline" onClick={() => void owner.play(request)}>Enable playback</button>)}
       </>}
     </section>

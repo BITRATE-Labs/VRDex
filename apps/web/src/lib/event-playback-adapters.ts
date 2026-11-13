@@ -56,6 +56,7 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
       manual: (key) => session.manual(key),
       live: () => session.live(),
       retryNextPlayback: () => session.retryNextPlayback(),
+      get media() { return session.media; },
     };
   }
   const video = document.createElement("video");

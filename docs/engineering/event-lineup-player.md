@@ -279,8 +279,11 @@ operational evidence.
 ## Failed playback presentation
 
 The retained player collapses its media rectangle while playback is unavailable
-or blocked. A blocked Twitch iframe stays visible because its provider recovery
-controls must remain interactive. A profile transport-end notification also
+or blocked and the current media has no metadata/frame to present. A transient
+lineup stall with presentable media keeps the picture and automatic recovery;
+it does not offer a destructive session retry. A blocked or offline Twitch
+iframe stays visible because its provider recovery controls must remain
+interactive. A profile transport-end notification also
 preserves the picture because buffered video may still be playing. Event and
 profile placeholders share the measured controls/status height and a responsive
 picture region. Controls use their natural height; a secondary mode/PiP row
@@ -289,4 +292,5 @@ The existing media node stays mounted and owned by the same transport; a status
 change alone does not revoke, stop or recreate playback. Successful recovery
 reveals normal media again. Unavailable playback keeps source identity, controls
 and Close in both inline and compact presentation. Try again is available for
-recoverable failures, but not an unsupported transport.
+recoverable failures, but not an unsupported transport or a visible Twitch embed.
+Fullscreen geometry never updates the inline reservation or compact clearance.

@@ -56,7 +56,7 @@ test("visible Twitch SDK player handles blocked playback, real controls and ifra
   await page.route("https://player.twitch.tv/js/embed/v1.js", route => route.fulfill({ contentType: "application/javascript", body: `
     window.sdkCalls = []; window.sdkLoads = (window.sdkLoads || 0) + 1;
     class Player {
-      constructor(mount, options) { this.handlers = {}; this.blocked = true; window.sdkOptions = options;
+      constructor(mount, options) { this.handlers = {}; this.blocked = true; window.sdkOptions = options; window.sdkPlayer = this;
         this.frame = document.createElement('iframe'); this.frame.width = '400'; this.frame.height = '300'; mount.append(this.frame);
         setTimeout(() => this.emit('ready'), 0);
       }
@@ -88,6 +88,13 @@ test("visible Twitch SDK player handles blocked playback, real controls and ifra
   expect(await page.evaluate(() => (window as unknown as { sdkCalls: string[] }).sdkCalls)).toContain("volume:0.3");
   await page.getByRole("button", { name: "Mute", exact: true }).click();
   expect(await page.evaluate(() => (window as unknown as { sdkCalls: string[] }).sdkCalls)).toContain("muted:true");
+  await page.evaluate(() => (window as unknown as { sdkPlayer: { emit(event: string): void } }).sdkPlayer.emit("offline"));
+  await expect(page.getByRole("status")).toHaveText("Stream unavailable");
+  await expect(frame).toBeVisible();
+  await expect(page.getByRole("button", { name: "Try again", exact: true })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("twitch-offline-visible.png") });
+  await page.getByRole("group", { name: "Event a controls" }).getByRole("button", { name: "Play", exact: true }).click();
+  await page.getByRole("button", { name: "Enable playback", exact: true }).click();
   await page.getByRole("group", { name: "Event a controls" }).getByRole("button", { name: "Pause", exact: true }).click();
   expect(await page.evaluate(() => (window as unknown as { sdkCalls: string[] }).sdkCalls)).toContain("pause");
   await page.getByRole("button", { name: "Close event playback" }).click(); await expect(frame).toHaveCount(0);
@@ -254,6 +261,16 @@ test("failed retained playback collapses unused media space inline and compact, 
   expect((await shell.boundingBox())!.height).toBeLessThanOrEqual(180);
   await expect(shell.getByRole("button", { name: "Try again", exact: true })).toBeVisible();
   await expect(shell.getByRole("button", { name: "Close event playback" })).toBeVisible();
+  if (testInfo.project.name === "desktop-chromium") {
+    const clearance = await shell.evaluate(node => node.previousElementSibling!.getBoundingClientRect().height);
+    await shell.getByRole("button", { name: "Full screen", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    expect((await slot.boundingBox())!.height).toBeLessThanOrEqual(180);
+    expect(await shell.evaluate(node => node.previousElementSibling!.getBoundingClientRect().height)).toBeLessThanOrEqual(clearance + 1);
+    await page.evaluate(() => document.exitFullscreen());
+    await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(false);
+  }
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(shell).toHaveAttribute("data-presentation", "compact");
   await shell.screenshot({ path: testInfo.outputPath("failed-player-compact.png") });
