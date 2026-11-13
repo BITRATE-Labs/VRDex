@@ -313,9 +313,12 @@ capability handling; native PiP continuity across handoffs remains unqualified.
 ## Asynchronous playback intent
 
 The root owner's `interactionRevision` is separate from its transport generation.
-A surface calls `beginInteraction()` before resolving a public source asynchronously
-and accepts the result only while both revisions still match. Later playback
-controls advance the interaction revision even when pause or resume retains the
-same adapter. Metadata revalidation does not create a new viewer intent. This
-prevents an older homepage lookup from overriding a more recent retained-player
-control without reconnecting a healthy source.
+Playback controls advance the interaction revision even when pause or resume
+retains the same adapter. Metadata revalidation does not create a new viewer intent.
+
+This is a caller contract, not an automatic guard around arbitrary asynchronous
+work: a surface must capture `beginInteraction()` before resolving a source and
+compare both `interactionRevision` and `generation` before accepting the result.
+The homepage consumer and its pending-lookup pause/resume regressions are delivered
+in [PR #468](https://github.com/BITRATE-Labs/VRDex/pull/468). The owner contract alone
+does not add a homepage surface or protect an unmodified caller.
