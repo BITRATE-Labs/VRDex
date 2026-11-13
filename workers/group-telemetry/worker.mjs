@@ -238,7 +238,7 @@ async function collect(assignment) {
     integrationBudget.tryConsume(requestCost, reservedAt);
     return !stopping && Date.now() < deadline;
   }
-  async function refreshReadiness() {
+  async function refreshReadiness(refreshDeadline = deadline) {
     try {
       return await refreshClubAuthority({
         assignment,
@@ -248,7 +248,7 @@ async function collect(assignment) {
         accountBudget,
         integrationBudget,
         shouldStop: () => stopping,
-        deadline,
+        deadline: refreshDeadline,
       });
     } catch (error) {
       if (
@@ -442,19 +442,19 @@ async function collect(assignment) {
         }
         if (!result?.collected) break;
       }
-      if (!stopping && Date.now() < deadline) {
+      if (!stopping && Date.now() < membershipDeadline) {
         try {
           let refreshAuthority = false;
-          while (!stopping && Date.now() < deadline) {
+          while (!stopping && Date.now() < membershipDeadline) {
             let result;
             if (refreshAuthority) {
-              result = await refreshReadiness();
+              result = await refreshReadiness(membershipDeadline);
               authority = result.authority;
             }
             if (authority) result = await recoverMembershipPage({ assignment, authority, provider, control, expectedUserId: secret.vrchatUserId,
-              accountBudget, integrationBudget, shouldStop: () => stopping, deadline });
+              accountBudget, integrationBudget, shouldStop: () => stopping, deadline: membershipDeadline });
             if (!Number.isFinite(result?.retryAt) || result.retryAt <= Date.now()) break;
-            await pauseWithHeartbeats(Math.min(result.retryAt - Date.now(), Math.max(0, deadline - Date.now())));
+            await pauseWithHeartbeats(Math.min(result.retryAt - Date.now(), Math.max(0, membershipDeadline - Date.now())));
             // Budget waits cannot carry old authority or a recovery claim into a new request.
             refreshAuthority = true;
           }
