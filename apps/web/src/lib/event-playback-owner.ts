@@ -2,6 +2,7 @@ import type { DjMetadata } from "@vrdex/media-relay";
 import { foregroundPlayback } from "./foreground-playback";
 import type { LineupEvent, LineupSnapshot } from "./event-lineup-runtime";
 import { canStartEventPlayback } from "./event-playback-request";
+import { timedEventRuntimeEndAt } from "../../../../convex/_eventRuntime";
 
 import {
   readPlaybackMode,
@@ -180,7 +181,7 @@ export class EventPlaybackOwner {
     ) {
       if (same && this.state.request) {
         this.unavailable = true;
-        this.emit({ status: "unavailable", unavailableReason: "ended" });
+        this.emit({ status: "unavailable", unavailableReason: Date.now() > timedEventRuntimeEndAt(request) ? "ended" : undefined });
       }
       return;
     }

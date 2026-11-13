@@ -347,3 +347,25 @@ test("later retained controls supersede an asynchronous selection without replac
     assert.ok(owner.interactionRevision > unchanged);
   } finally { owner.close(); }
 });
+
+
+test("refused cold lineup resume keeps live slot unavailability distinct from an ended event", async () => {
+  const now = Date.now();
+  const selected: Extract<PlaybackRequest, { kind: "performer_sequence" }> = {
+    kind: "performer_sequence", eventId: "live", eventSlug: "live", title: "Live", href: "/events/live",
+    startAt: now - 1000, endAt: now + 60_000,
+    event: { title: "Live", startAt: now - 1000, endAt: now + 60_000, slots: [{ key: "a", startAt: now - 1000, stream: { streamId: "a", pcUrl: "a", questUrl: "a" } }] },
+  };
+  const owner = new EventPlaybackOwner((_request, notify) => ({
+    async play() { notify({ status: "unavailable" }); return true; }, pause() {}, setVolume() {}, setMuted() {}, update() {}, dispose() {},
+  }));
+  try {
+    await owner.play(selected);
+    const revoked = { ...selected, event: { ...selected.event, slots: selected.event.slots.map(slot => ({ ...slot, stream: undefined })) } };
+    owner.update(revoked);
+    await owner.play(revoked);
+    assert.equal(owner.getSnapshot().status, "unavailable");
+    assert.equal(owner.getSnapshot().unavailableReason, undefined);
+    assert.ok(owner.getSnapshot().request);
+  } finally { owner.close(); }
+});
