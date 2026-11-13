@@ -3,6 +3,23 @@ import type { PublicEvent } from "../app/_components/event-public-page";
 import type { PlaybackRequest } from "./event-playback-owner";
 import { parseVrcdnStreamLinks } from "../../../../convex/_vrcdnLinks";
 import { publicEventPath } from "./event-path";
+import { joinSlot, type PlaybackSlot } from "./event-playback";
+import { isInScheduledWatchWindow } from "../../../../convex/_eventRuntime";
+
+/** Ambiguity keeps manual selection reachable only when an active public source exists. */
+export function canStartLineupPlayback(slots: readonly PlaybackSlot[], now: number | null) {
+  if (now === null || !Number.isFinite(now)) return false;
+  const current = joinSlot(slots, now);
+  if (current) return Boolean(current.stream);
+  return inferLineupEnds(slots).some(slot => slot.stream && Number.isFinite(slot.startAt) && slot.startAt <= now &&
+    (slot.endAt === undefined || (Number.isFinite(slot.endAt) && slot.endAt > slot.startAt && now < slot.endAt)));
+}
+
+/** Fresh eligibility is independent of authorization for already-started playback. */
+export function canStartEventPlayback(request: Extract<PlaybackRequest, { eventId: string }>, now: number | null) {
+  return isInScheduledWatchWindow({ ...request, now }) &&
+    (request.kind !== "performer_sequence" || canStartLineupPlayback(request.event.slots, now));
+}
 
 /** Authorization is independent of the new-start calendar window. */
 export function eventPlaybackRequest(
