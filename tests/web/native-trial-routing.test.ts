@@ -23,7 +23,7 @@ test("canonical public provider MP4 profile requests remain eligible for the pin
 test("explicit trial admission waits for one eligibility read retained across navigation", async () => {
   let resolve!: (value: unknown) => void, loads = 0, completed = false;
   const future = { ...trial, expiresAt: Date.now() + 10000 };
-  const optIn = createNativeTrialOptIn("trial","/dj",() => { loads++; return new Promise(done => {resolve=done;}); });
+  const optIn = createNativeTrialOptIn("trial",() => { loads++; return new Promise(done => {resolve=done;}); });
   const first = optIn.read().then(value => {completed=true; return value;});
   const second = optIn.read();
   await Promise.resolve(); assert.equal(completed,false); assert.equal(loads,1); assert.equal(optIn.current(),null);
@@ -57,4 +57,27 @@ for(const action of ["pause","dispose"] as const) test(`${action} before eligibi
 test("deferred adapter preserves real admission errors for the owner recovery UI",async()=>{
   const adapter=createDeferredTrialAdapter({load:async()=>trial,mode:"video",create:()=>({play:async()=>{throw Error("admission failed");},pause(){},setVolume(){},setMuted(){},update(){},dispose(){}})});
   await assert.rejects(adapter.play(),/admission failed/);adapter.dispose();
+});
+
+import { EventPlaybackOwner } from "../../apps/web/src/lib/event-playback-owner";
+test("ordinary saved Audio recovers through the owner's Video reconstruction",async()=>{
+  const modes:string[]=[];let disposed=0;
+  const owner=new EventPlaybackOwner((_request,_notify,mode)=>createDeferredTrialAdapter({load:async()=>null,mode,create:(_trial,mode)=>{
+    modes.push(mode);return {play:async()=>mode==="video",pause(){},setVolume(){},setMuted(){},update(){},dispose(){disposed++;}};
+  }}));
+  try{
+    await owner.setMode("audio");await owner.play(request);assert.equal(owner.getSnapshot().status,"blocked");
+    await owner.setMode("video");assert.equal(owner.getSnapshot().status,"paused");
+    await owner.play(request);assert.equal(owner.getSnapshot().status,"playing");assert.deepEqual(modes,["audio","video"]);assert.equal(disposed,1);
+  }finally{owner.close();await owner.setMode("video");}
+});
+test("ordinary terminal retry lets the owner reconstruct a transport without native retry",async()=>{
+  let created=0,disposed=0,fail=()=>{};
+  const owner=new EventPlaybackOwner((_request,notify,mode)=>createDeferredTrialAdapter({load:async()=>null,mode,create:()=>{
+    created++;fail=()=>notify({status:"unavailable"});return {play:async()=>true,pause(){},setVolume(){},setMuted(){},update(){},dispose(){disposed++;}};
+  }}));
+  try{
+    await owner.setMode("video");await owner.play(request);assert.equal(owner.getSnapshot().status,"playing");
+    fail();await owner.play(request);assert.equal(created,2);assert.equal(disposed,1);assert.equal(owner.getSnapshot().status,"playing");
+  }finally{owner.close();}
 });

@@ -15,9 +15,9 @@ export function matchesNativeTrial(trial: NativeTrialRouting | null, request: Pl
 
 
 /** One eligibility read belongs to the retained root owner, including navigation. */
-export function createNativeTrialOptIn(expected: string, href: string, load: () => Promise<unknown>) {
+export function createNativeTrialOptIn(expected: string, load: () => Promise<unknown>) {
   let value: NativeTrialRouting | null = null, promise: Promise<NativeTrialRouting | null> | undefined;
-  return { href, current: () => value,
+  return { current: () => value,
     read: () => promise ??= load().then(input => {
       const parsed = NativeTrialRoutingSchema.safeParse(input);
       value = parsed.success && parsed.data.trialId === expected && parsed.data.expiresAt > Date.now() ? parsed.data : null;
@@ -54,11 +54,15 @@ export function createDeferredTrialAdapter({ load, create, mode: initialMode }: 
     get supportsAudioOnly() { return target?.supportsAudioOnly === true; },
     get supportsPictureInPicture() { return target ? target.supportsPictureInPicture !== false : false; },
     get media() { return target?.media; },
-    play: () => play(), retry: () => play(true),
+    play: () => play(),
+    get retry() { return target && !target.retry ? undefined : () => play(true); },
     pause() { intent = false; version++; target?.pause(); },
     setVolume(value) { volume = value; target?.setVolume(value); },
     setMuted(value) { muted = value; target?.setMuted(value); },
-    async setMode(value) { mode = value; return target?.setMode ? target.setMode(value) : true; },
+    get setMode() {
+      if (target && !target.setMode) return undefined;
+      return async (value: PlaybackMode) => { mode = value; return target?.setMode ? target.setMode(value) : true; };
+    },
     update(value) { updated = value; target?.update(value); },
     refresh: async () => { await target?.refresh?.(); },
     setMetadata(value) { target?.setMetadata?.(value); },

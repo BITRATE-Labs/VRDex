@@ -44,7 +44,7 @@ export function EventPlaybackProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const expected = new URLSearchParams(window.location.search).get("relayTrial");
     if (expected) {
-      trial.current ??= createNativeTrialOptIn(expected, window.location.pathname, () =>
+      trial.current ??= createNativeTrialOptIn(expected, () =>
         fetch("/api/media-relay/trial", { cache: "no-store", signal: AbortSignal.timeout(5000) }).then(reply => reply.json()));
       void trial.current.read();
     }

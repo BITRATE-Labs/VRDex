@@ -59,9 +59,10 @@ test("real root provider waits for trial eligibility and retains audio through n
   await expect(page.locator("audio,video")).toHaveCount(0);
 });
 
-for(const eligibilityFails of [false,true]) test(`pending trial preserves ordinary other-stream playback when eligibility ${eligibilityFails ? "fails":"matches another source"} @fixture`,async({page,baseURL})=>{
+for(const [eligibilityFails,savedAudio] of [[false,false],[true,false],[true,true]]) test(`pending trial preserves ordinary other-stream playback when eligibility ${eligibilityFails ? "fails":"matches another source"}${savedAudio ? " with saved Audio":""} @fixture`,async({page,baseURL})=>{
   let release!:()=>void, requested!:()=>void,opens=0,legacy=0;
   const gate=new Promise<void>(resolve=>{release=resolve;}),seen=new Promise<void>(resolve=>{requested=resolve;});
+  if(savedAudio) await page.addInitScript(()=>localStorage.setItem("vrdex.playback-mode","audio"));
   await page.route("**/api/media-relay/trial",async route=>{
     if(route.request().method()==="POST"){opens++;await route.abort();return;}
     requested();await gate;
@@ -75,8 +76,19 @@ for(const eligibilityFails of [false,true]) test(`pending trial preserves ordina
   await page.goto(`${baseURL}/playwright/event-playback?kind=native-trial&relayTrial=trial`);await seen;
   await page.getByRole("button",{name:"Play other",exact:true}).click();
   expect(opens).toBe(0);expect(legacy).toBe(0);release();
+  if(savedAudio){
+    await page.getByRole("button",{name:"Video",exact:true}).click();
+    await page.getByRole("button",{name:"Play",exact:true}).click();
+  }
   await expect.poll(()=>page.locator("video").evaluate(node=>(node as HTMLVideoElement).currentTime),{timeout:15000}).toBeGreaterThan(0.5);
   expect(opens).toBe(0);expect(legacy).toBe(1);
   await expect(page.getByRole("button",{name:"Audio only",exact:true})).toHaveCount(0);
+  if(eligibilityFails && !savedAudio){
+    const previous=await page.locator("video").elementHandle();
+    await page.locator("video").dispatchEvent("error");
+    await page.getByRole("button",{name:"Try again",exact:true}).click();
+    await expect.poll(()=>page.locator("video").evaluate(node=>(node as HTMLVideoElement).currentTime),{timeout:15000}).toBeGreaterThan(0.5);
+    expect(await previous!.evaluate(node=>node.isConnected)).toBe(false);expect(legacy).toBe(2);
+  }
   await page.getByRole("button",{name:"Close event playback",exact:true}).click();
 });
