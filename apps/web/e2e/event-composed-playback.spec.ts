@@ -177,6 +177,7 @@ test('saved audio preference blocks automatic legacy video until explicit Video 
   await page.getByRole('button', { name: 'Play Lineup live', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText('Unsupported');
   await expect(page.getByRole('button', { name: 'Enable playback', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: 'Performer', exact: true })).toHaveCount(0);
   await expect(page.locator('video')).toHaveCount(0);
   expect(opened).toBe(0);
   await expect(page.getByRole('button', { name: 'Audio only', exact: true })).toHaveCount(0);

@@ -118,7 +118,7 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
           <Link aria-label={`Return to ${request.title}`} href={request.href} className="flex min-w-0 flex-1 items-center gap-2 py-2 text-sm font-medium hover:underline"><span className="min-w-0 truncate">{request.title}{source && <span className="block truncate text-xs font-normal text-white/65">{source}</span>}</span><ArrowUpRight aria-hidden className="size-4 shrink-0" /></Link>
           <button type="button" className="flex size-11 shrink-0 items-center justify-center rounded-control hover:bg-white/10" aria-label="Close event playback" onClick={() => owner.close()}><X aria-hidden className="size-5" /></button>
         </div>
-        {request.kind === "performer_sequence" && <div className="flex min-h-14 shrink-0 items-center gap-2 border-t border-white/10 px-3 py-2 text-xs">
+        {request.kind === "performer_sequence" && state.lineup && <div className="flex min-h-14 shrink-0 items-center gap-2 border-t border-white/10 px-3 py-2 text-xs">
           <select aria-label="Performer" className="h-10 min-w-0 flex-1 rounded-control border border-white/20 bg-media px-2" value={state.lineup?.current ?? ""} onChange={event => owner.manual(event.target.value)}>
             <option value="">Select performer</option>
             {request.event.slots.map(slot => <option key={slot.key} value={slot.key}>{slot.label ?? slot.key}{slot.stream ? "" : " (Unavailable)"}</option>)}
