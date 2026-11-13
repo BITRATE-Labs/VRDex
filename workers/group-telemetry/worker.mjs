@@ -238,7 +238,7 @@ async function collect(assignment) {
     integrationBudget.tryConsume(requestCost, reservedAt);
     return !stopping && Date.now() < deadline;
   }
-  async function refreshReadiness() {
+  async function refreshReadiness(refreshDeadline = deadline) {
     try {
       return await refreshClubAuthority({
         assignment,
@@ -247,6 +247,8 @@ async function collect(assignment) {
         expectedUserId: secret.vrchatUserId,
         accountBudget,
         integrationBudget,
+        shouldStop: () => stopping,
+        deadline: refreshDeadline,
       });
     } catch (error) {
       if (
@@ -418,6 +420,20 @@ async function collect(assignment) {
       const catchupEndAt = Date.now() - 60_000;
       const membershipDeadline = Math.min(deadline, Date.now() + 90_000);
       let authority = refreshed.authority;
+      let activeRecovery = false;
+      const authorityAge = authority ? Date.now() - authority.observedAt : Infinity;
+      if (assignment.enabledFeatures?.includes("analytics") && !stopping && Date.now() < membershipDeadline &&
+          Number.isFinite(authorityAge) && authorityAge >= 0 && authorityAge <= 60_000 &&
+          authority?.groupId === assignment.vrchatGroupId && authority.userId === secret.vrchatUserId && authority.membershipStatus === "member" &&
+          authority.permissions.some(value => value === "*" || value === "group-audit-view")) {
+        try {
+          activeRecovery = !!await control.send("membership_recovery_claim", { integrationId: assignment.integrationId, fencingToken: assignment.fencingToken,
+            epochStartedAt: assignment.epochStartedAt, groupId: assignment.vrchatGroupId });
+        } catch (error) {
+          if (["authentication", "rate_limit", "membership"].includes(error?.category) || /^Control plane (401|403|429):/.test(error?.message ?? "")) throw error;
+          logEvent({ event: "membership_recovery_failed", category: boundedProviderCategory(error?.category) });
+        }
+      }
       // Leave time for the next ownership-proof poll before its two-minute freshness limit.
       for (let page = 0; page < 32 && !stopping && Date.now() < membershipDeadline; page++) {
         // Leave room for control-plane and provider latency before the hard one-minute boundary.
@@ -439,14 +455,29 @@ async function collect(assignment) {
           continue;
         }
         if (!result?.collected) break;
+        if (activeRecovery) break;
       }
-      if (!stopping && Date.now() < deadline) {
-        try {
-          await recoverMembershipPage({ assignment, authority, provider, control, expectedUserId: secret.vrchatUserId,
-            accountBudget, integrationBudget, shouldStop: () => stopping, deadline });
-        } catch (error) {
-          if (["authentication", "rate_limit", "membership"].includes(error?.category) || /^Control plane (401|403|429):/.test(error?.message ?? "")) throw error;
-          logEvent({ event: "membership_recovery_failed", category: boundedProviderCategory(error?.category) });
+      if (!stopping && Date.now() < membershipDeadline) {
+        let checkAuthority = false;
+        while (!stopping && Date.now() < membershipDeadline) {
+          let result;
+          try {
+            const authorityAge = authority ? Date.now() - authority.observedAt : Infinity;
+            if (checkAuthority && (!Number.isFinite(authorityAge) || authorityAge < 0 || authorityAge > 30_000)) {
+              result = await refreshReadiness(membershipDeadline);
+              authority = result.authority;
+            }
+            if (authority) result = await recoverMembershipPage({ assignment, authority, provider, control, expectedUserId: secret.vrchatUserId,
+              accountBudget, integrationBudget, shouldStop: () => stopping, deadline: membershipDeadline });
+          } catch (error) {
+            if (["authentication", "rate_limit", "membership"].includes(error?.category) || /^Control plane (401|403|429):/.test(error?.message ?? "")) throw error;
+            logEvent({ event: "membership_recovery_failed", category: boundedProviderCategory(error?.category) });
+            break;
+          }
+          if (!Number.isFinite(result?.retryAt) || result.retryAt <= Date.now()) break;
+          await pauseWithHeartbeats(Math.min(result.retryAt - Date.now(), Math.max(0, membershipDeadline - Date.now())));
+          // Reuse fresh authority after a wait; every retry still claims and checks the current job.
+          checkAuthority = true;
         }
       }
     }

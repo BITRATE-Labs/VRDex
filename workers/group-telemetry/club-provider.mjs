@@ -191,9 +191,11 @@ export class ClubProvider {
     return record;
   }
 
-  async readAuthority() {
+  async readAuthority({ shouldStop = () => false } = {}) {
+    if (shouldStop()) return null;
     const user = object(await this.request("/auth/user"));
     if (user.id !== this.expectedUserId) fail("authentication");
+    if (shouldStop()) return null;
     const group = object(await this.request(`${this.base}?includeRoles=true`));
     if (group.id !== this.groupId) fail("provider_scope");
     const member = group.myMember;
