@@ -63,6 +63,7 @@ function harness({
           failures.push(args);
           if (!args.telemetryOnly) connection = "degraded";
         }
+        if (op === "membership_recovery_claim") return null;
         return { granted: true };
       },
     },
@@ -216,6 +217,46 @@ test("a short recovery budget wait reuses still-fresh authority without another 
   assert.equal(providerReads.filter(path => path.includes("/auditLogs?")).length, 1);
   assert.equal(h.calls.filter(op => op === "membership_recovery_check").length, 1);
   assert.equal(job.pages, 1);
+});
+
+test("no active recovery or an optional probe outage retains the ordinary 32-attempt bound", async () => {
+  for (const mode of ["null", "outage"]) {
+    const h = harness({ features: ["analytics"] });
+    h.sandbox.refreshClubAuthority = async () => ({ authority: { groupId: "grp_00000000-0000-0000-0000-000000000001", userId: "bot", membershipStatus: "member", permissions: ["group-audit-view"], observedAt: h.clock() } });
+    let steps = 0, probes = 0;
+    h.sandbox.collectMembershipPage = async () => { steps++; return { collected: true }; };
+    h.sandbox.recoverMembershipPage = async () => ({ recovered: false });
+    const send = h.sandbox.control.send;
+    h.sandbox.control.send = async (op, body) => {
+      if (op === "membership_recovery_claim") { probes++; if (mode === "outage") throw new Error("Control plane 503: unavailable"); return null; }
+      return send(op, body);
+    };
+    await h.pass();
+    assert.equal(probes, 1);
+    assert.equal(steps, 32);
+    assert.deepEqual(h.failures, []);
+  }
+});
+
+for (const reason of ["shutdown", "stopped_job", "revoked_job"]) test(`early recovery probe is not dispatch authority after ${reason}`, async () => {
+  const { h, providerReads, job } = recoveryPollHarness();
+  const send = h.sandbox.control.send;
+  let claims = 0, checks = 0;
+  h.sandbox.control.send = async (op, body) => {
+    if (op === "membership_recovery_claim") {
+      claims++;
+      if (claims > 1 && reason === "stopped_job") return null;
+    }
+    const result = await send(op, body);
+    if (op === "membership_recovery_claim" && claims === 1 && reason === "shutdown") h.sandbox.stopping = true;
+    if (op === "membership_recovery_check") { checks++; if (reason === "revoked_job") return { current: false }; }
+    return result;
+  };
+  await h.pass();
+  assert.equal(claims, reason === "shutdown" ? 1 : reason === "revoked_job" ? 3 : 2);
+  assert.equal(checks, reason === "revoked_job" ? 1 : 0);
+  assert.equal(providerReads.filter(path => path.includes("/auditLogs?")).length, 0);
+  assert.equal(job.pages, 0);
 });
 
 for (const phase of ["catchup", "recovery"]) {
@@ -373,6 +414,7 @@ test("normal membership using the allowance does not give recovery a fresh windo
   const scan = { scanId: "normal", startAt: 1, endAt: 940000, nextOffset: 0, nextPage: 0, phase: "collect", complete: false };
   const send = h.sandbox.control.send;
   h.sandbox.control.send = async (op, body) => {
+    if (op === "membership_recovery_claim") return null;
     if (op === "membership_scan_resume") { h.calls.push(op); return { ...scan }; }
     if (op === "membership_scan_page") { scan.nextOffset += body.sourceCount; scan.nextPage++; }
     return send(op, body);
