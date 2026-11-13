@@ -7,6 +7,7 @@ import { executeClubOperation } from "./club-operation-jobs.mjs";
 import { VrchatProviderError } from "./vrchat-client.mjs";
 import { collectMembershipPage } from "./membership-collection.mjs";
 import { recoverMembershipPage } from "./membership-recovery.mjs";
+import { refreshClubAuthority } from "./club-authority.mjs";
 const source = readFileSync(
   new URL("./worker.mjs", import.meta.url),
   "utf8",
@@ -128,6 +129,7 @@ function harness({
 test("supplemental recovery runs after collection and ordinary repair failures do not downgrade it", async () => {
   for (const category of ["transient", "schema_drift", "authentication", "rate_limit"]) {
     const h = harness();
+    h.sandbox.refreshClubAuthority = async () => ({ authority: { groupId: "grp_00000000-0000-0000-0000-000000000001", userId: "bot", membershipStatus: "member", permissions: ["*"], observedAt: h.clock() } });
     h.sandbox.recoverMembershipPage = async () => {
       assert.ok(h.calls.includes("history"));
       throw new VrchatProviderError("repair failed", { category });
@@ -135,6 +137,160 @@ test("supplemental recovery runs after collection and ordinary repair failures d
     await h.pass();
     assert.equal(h.failures.length, ["authentication", "rate_limit"].includes(category) ? 1 : 0, category);
   }
+});
+
+function recoveryPollHarness() {
+  const h = harness({ features: ["analytics"], requestsPerMinute: 4 });
+  const groupId = "grp_00000000-0000-0000-0000-000000000001";
+  const userId = "usr_00000000-0000-0000-0000-000000000001";
+  const providerReads = [], recoveryClaims = [];
+  const job = { recoveryId: "recovery", revision: 0, startAt: 1, endAt: 900000, nextOffset: 0, pages: 0, state: "pending" };
+  const serverBudget = new RequestBudget(4);
+  h.sandbox.secret.vrchatUserId = userId;
+  h.sandbox.pauseWithHeartbeats = async ms => h.advance(ms);
+  h.sandbox.provider.request = async path => {
+    providerReads.push(path);
+    if (path === "/auth/user") return { id: userId };
+    if (path.includes("/auditLogs?")) return { results: [], hasNext: false };
+    if (path.endsWith("/instances")) return [];
+    return { id: groupId, ownerId: userId, roles: [], myMember: { groupId, userId, membershipStatus: "member", permissions: ["group-audit-view"], roleIds: [] } };
+  };
+  h.sandbox.provider.readAggregateSnapshot = async () => {
+    h.calls.push("aggregate");
+    await h.sandbox.provider.request(`/groups/${groupId}`);
+    await h.sandbox.provider.request(`/groups/${groupId}/instances`);
+    return { observedAt: h.clock(), group: { memberCount: 1 }, instances: [] };
+  };
+  const send = h.sandbox.control.send;
+  h.sandbox.control.send = async (op, body) => {
+    await send(op, body);
+    if (op === "budget") {
+      const granted = serverBudget.tryConsume(body.requestCount, h.clock());
+      return { granted, ...(granted ? {} : { reason: "budget_exhausted", retryAt: h.clock() + serverBudget.retryAfterMs(body.requestCount, h.clock()) }) };
+    }
+    if (op === "club_authority") return { recorded: true };
+    if (op === "membership_scan_resume") return { complete: true, endAt: h.clock() - 60000 };
+    if (op === "membership_recovery_claim") {
+      job.state = "running";
+      recoveryClaims.push(h.clock());
+      return { ...job };
+    }
+    if (op === "membership_recovery_check") return { current: true };
+    if (op === "membership_recovery_page") { job.pages++; job.nextOffset += body.sourceCount; return { accepted: true }; }
+    return { granted: true };
+  };
+  h.sandbox.refreshClubAuthority = args => refreshClubAuthority({ ...args, clock: h.clock });
+  h.sandbox.collectMembershipPage = args => collectMembershipPage({ ...args, clock: h.clock });
+  return { h, providerReads, recoveryClaims, job, serverBudget };
+}
+
+test("historical recovery progresses after repeated quiet polls at four integration requests per minute", async () => {
+  const { h, providerReads, recoveryClaims, job } = recoveryPollHarness();
+  for (let poll = 0; poll < 3; poll++) await h.pass();
+  assert.equal(h.calls.filter(op => op === "ingest").length, 3);
+  assert.equal(h.calls.filter(op => op === "membership_scan_resume").length, 3);
+  assert.ok(recoveryClaims.length >= 3);
+  assert.equal(job.state, "running");
+  assert.deepEqual(h.failures, []);
+  const auditReads = providerReads.filter(path => path.includes("/auditLogs?"));
+  assert.ok(job.pages > 0, JSON.stringify({ polls: 3, claims: recoveryClaims.length, providerRequests: providerReads.length, auditRequests: auditReads.length, pages: job.pages }));
+  assert.equal(auditReads.length, 3);
+  assert.equal(job.pages, 3);
+});
+
+for (const reason of ["deadline", "shutdown", "permission", "group", "expired_authority", "revoked_scope"]) {
+  test(`recovery budget wait cannot dispatch after ${reason}`, async () => {
+    const { h, providerReads, job } = recoveryPollHarness();
+    let waited = false;
+    h.sandbox.pauseWithHeartbeats = async ms => {
+      waited = true;
+      h.advance(reason === "deadline" ? 240000 : ms);
+      if (reason === "shutdown") h.sandbox.stopping = true;
+    };
+    const request = h.sandbox.provider.request;
+    h.sandbox.provider.request = async path => {
+      const result = await request(path);
+      if (waited && result.myMember) {
+        if (reason === "permission") result.myMember.permissions = [];
+        if (reason === "group") result.id = "grp_00000000-0000-0000-0000-000000000002";
+      }
+      return result;
+    };
+    const send = h.sandbox.control.send;
+    h.sandbox.control.send = async (op, body) => {
+      const result = await send(op, body);
+      if (waited && op === "club_authority" && reason === "expired_authority") h.advance(61000);
+      if (waited && op === "membership_recovery_check" && reason === "revoked_scope") return { current: false };
+      return result;
+    };
+    await h.pass();
+    assert.equal(waited, true);
+    assert.equal(providerReads.filter(path => path.includes("/auditLogs?")).length, 0);
+    assert.equal(job.pages, 0);
+    if (["deadline", "shutdown"].includes(reason)) assert.equal(providerReads.length, 4);
+  });
+}
+
+test("shared recovery budget deferral refreshes authority and then advances one page", async () => {
+  const { h, providerReads, job, serverBudget } = recoveryPollHarness();
+  let denied = false;
+  const send = h.sandbox.control.send;
+  h.sandbox.control.send = async (op, body) => {
+    if (!denied && op === "budget" && body.requestCount === 1) {
+      assert.equal(serverBudget.tryConsume(2, h.clock()), true);
+      denied = true;
+    }
+    return send(op, body);
+  };
+  await h.pass();
+  assert.equal(denied, true);
+  assert.equal(job.pages, 1);
+  assert.equal(providerReads.filter(path => path.includes("/auditLogs?")).length, 1);
+  assert.equal(h.calls.filter(op => op === "club_authority").length, 3);
+});
+
+test("a deferred two-read authority refresh waits for shared capacity before recovery", async () => {
+  const { h, providerReads, job, serverBudget } = recoveryPollHarness();
+  let waited = false, denied = false;
+  h.sandbox.pauseWithHeartbeats = async ms => { waited = true; h.advance(ms); };
+  const send = h.sandbox.control.send;
+  h.sandbox.control.send = async (op, body) => {
+    if (waited && !denied && op === "budget" && body.requestCount === 2) {
+      assert.equal(serverBudget.tryConsume(3, h.clock()), true);
+      denied = true;
+    }
+    return send(op, body);
+  };
+  await h.pass();
+  assert.equal(denied, true);
+  assert.equal(job.pages, 1);
+  assert.equal(providerReads.filter(path => path.includes("/auditLogs?")).length, 1);
+  assert.equal(h.calls.filter(op => op === "club_authority").length, 2);
+});
+
+test("repeated shared recovery budget denials stop at the existing four-minute deadline", async () => {
+  const { h, providerReads, job, serverBudget } = recoveryPollHarness();
+  const startedAt = h.clock();
+  const waits = [];
+  h.sandbox.pauseWithHeartbeats = async ms => { waits.push(ms); h.advance(ms); };
+  const send = h.sandbox.control.send;
+  h.sandbox.control.send = async (op, body) => {
+    if (op === "budget" && body.requestCount === 1) assert.equal(serverBudget.tryConsume(2, h.clock()), true);
+    return send(op, body);
+  };
+  await h.pass();
+  assert.deepEqual(waits, [60000, 60000, 60000, 60000]);
+  assert.equal(h.clock(), startedAt + 240000 + 60000);
+  assert.equal(job.pages, 0);
+  assert.equal(providerReads.filter(path => path.includes("/auditLogs?")).length, 0);
+});
+
+test("missing initial audit authority does not add recovery refreshes or budget waits", async () => {
+  const h = harness();
+  h.sandbox.pauseWithHeartbeats = async () => assert.fail("No recovery budget deferral was admitted");
+  await h.pass();
+  assert.equal(h.calls.filter(op => op === "authority").length, 1);
+  assert.equal(h.calls.includes("membership_recovery_claim"), false);
 });
 
 test("cached provider observations do not put the next poll in the past", async () => {

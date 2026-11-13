@@ -38,7 +38,7 @@ test("denied shared or local budgets and inactive assignments perform no provide
     const { args, reads, sends } = setup(mode !== "shared");
     if (mode === "local") args.accountBudget.tryConsume(10, 1000);
     if (mode === "inactive") args.assignment.state = "disconnecting";
-    assert.deepEqual(await refreshClubAuthority(args), { refreshed: false });
+    assert.deepEqual(await refreshClubAuthority(args), { refreshed: false, ...(mode === "local" ? { retryAt: 61000 } : {}) });
     assert.equal(reads.length, 0);
     assert.equal(sends.some(item => item.operation === "club_authority"), false);
   }
@@ -48,6 +48,15 @@ test("rejected snapshot recording cannot be reported as refreshed authority", as
   const { args } = setup();
   args.control.send = async operation => operation === "budget" ? { granted: true } : { recorded: false };
   assert.deepEqual(await refreshClubAuthority(args), { refreshed: false });
+});
+test("authority refresh retries only current explicit shared budget deferrals", async () => {
+  for (const reason of ["budget_exhausted", "unavailable", "unknown", "past", "invalid"]) {
+    const { args, reads } = setup();
+    args.control.send = async () => ({ granted: false, reason: ["past", "invalid"].includes(reason) ? "budget_exhausted" : reason,
+      retryAt: reason === "past" ? 1000 : reason === "invalid" ? Infinity : 2000 });
+    assert.deepEqual(await refreshClubAuthority(args), { refreshed: false, ...(reason === "budget_exhausted" ? { retryAt: 2000 } : {}) });
+    assert.equal(reads.length, 0);
+  }
 });
 test("authority sends validated role labels from the same two reads without forwarding permissions", async () => {
   const { args, sends, reads } = setup();

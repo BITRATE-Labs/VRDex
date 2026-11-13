@@ -5,10 +5,11 @@ import { membershipRoleObservations } from "./membership-roles.mjs";
 export async function refreshClubAuthority({ assignment, provider, control, expectedUserId, accountBudget, integrationBudget, clock = Date.now }) {
   if (assignment.state !== "active" || !Number.isFinite(assignment.epochStartedAt)) return { refreshed: false };
   const now = clock();
-  if (accountBudget.retryAfterMs(2, now) > 0 || integrationBudget.retryAfterMs(2, now) > 0) return { refreshed: false };
+  const retryAfterMs = Math.max(accountBudget.retryAfterMs(2, now), integrationBudget.retryAfterMs(2, now));
+  if (retryAfterMs > 0) return { refreshed: false, retryAt: now + retryAfterMs };
   const lease = { integrationId: assignment.integrationId, fencingToken: assignment.fencingToken };
   const reservation = await control.send("budget", { ...lease, requestCount: 2, now });
-  if (!reservation?.granted) return { refreshed: false };
+  if (!reservation?.granted) return { refreshed: false, ...(reservation?.reason === "budget_exhausted" && Number.isFinite(reservation.retryAt) && reservation.retryAt > clock() ? { retryAt: reservation.retryAt } : {}) };
   accountBudget.tryConsume(2, now);
   integrationBudget.tryConsume(2, now);
   const snapshot = await new ClubProvider({ client: provider, groupId: assignment.vrchatGroupId, expectedUserId, clock }).readAuthority();

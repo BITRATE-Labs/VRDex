@@ -14,9 +14,11 @@ export async function recoverMembershipPage({ assignment, authority, provider, c
       !Number.isSafeInteger(job.pages) || job.pages < 0 || job.pages >= 100) return { recovered: false };
   const claim = { ...scope, recoveryId: job.recoveryId, expectedRevision: job.revision };
   const reservedAt = clock();
-  if (accountBudget.retryAfterMs(1, reservedAt) > 0 || integrationBudget.retryAfterMs(1, reservedAt) > 0) return { recovered: false };
+  const retryAfterMs = Math.max(accountBudget.retryAfterMs(1, reservedAt), integrationBudget.retryAfterMs(1, reservedAt));
+  if (retryAfterMs > 0) return { recovered: false, retryAt: reservedAt + retryAfterMs };
   const reservation = await control.send("budget", { integrationId: assignment.integrationId, fencingToken: assignment.fencingToken, requestCount: 1, now: reservedAt });
-  if (!reservation?.granted || stopped()) return { recovered: false };
+  if (stopped()) return { recovered: false };
+  if (!reservation?.granted) return { recovered: false, ...(reservation?.reason === "budget_exhausted" && Number.isFinite(reservation.retryAt) && reservation.retryAt > clock() ? { retryAt: reservation.retryAt } : {}) };
   if (!(await control.send("membership_recovery_check", claim))?.current || stopped()) return { recovered: false };
   const sentAt = clock();
   if (Math.floor(sentAt / 60_000) !== Math.floor(reservedAt / 60_000) ||

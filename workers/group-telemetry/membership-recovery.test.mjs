@@ -39,6 +39,18 @@ test("recovery reads one durable page after reservation and a current-job check"
   assert.equal(page.events[0].targetUserId, userId);
 });
 
+test("recovery returns retry times only for genuine local or shared budget deferrals", async () => {
+  for (const reason of ["local", "budget_exhausted", "unavailable", "unknown", "past", "invalid"]) {
+    const { args, reads } = fixture();
+    const send = args.control.send;
+    if (reason === "local") args.integrationBudget.tryConsume(10, 100000);
+    args.control.send = async (op, body) => op === "budget" ? { granted: false, reason: reason === "past" || reason === "invalid" ? "budget_exhausted" : reason,
+      retryAt: reason === "past" ? 100000 : reason === "invalid" ? Infinity : 120000 } : send(op, body);
+    assert.deepEqual(await recoverMembershipPage(args), { recovered: false, ...(["local", "budget_exhausted"].includes(reason) ? { retryAt: reason === "local" ? 160000 : 120000 } : {}) }, reason);
+    assert.equal(reads.length, 0);
+  }
+});
+
 test("disabled or stopped recovery, denied budgets and changed authority issue no audit request", async () => {
   for (const reason of ["disabled", "stopped", "budget", "authority", "shutdown", "window", "capacity"]) {
     const { args, sends, reads } = fixture();

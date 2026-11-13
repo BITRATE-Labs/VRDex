@@ -442,8 +442,20 @@ async function collect(assignment) {
       }
       if (!stopping && Date.now() < deadline) {
         try {
-          await recoverMembershipPage({ assignment, authority, provider, control, expectedUserId: secret.vrchatUserId,
-            accountBudget, integrationBudget, shouldStop: () => stopping, deadline });
+          let refreshAuthority = false;
+          while (!stopping && Date.now() < deadline) {
+            let result;
+            if (refreshAuthority) {
+              result = await refreshReadiness();
+              authority = result.authority;
+            }
+            if (authority) result = await recoverMembershipPage({ assignment, authority, provider, control, expectedUserId: secret.vrchatUserId,
+              accountBudget, integrationBudget, shouldStop: () => stopping, deadline });
+            if (!Number.isFinite(result?.retryAt) || result.retryAt <= Date.now()) break;
+            await pauseWithHeartbeats(Math.min(result.retryAt - Date.now(), Math.max(0, deadline - Date.now())));
+            // Budget waits cannot carry old authority or a recovery claim into a new request.
+            refreshAuthority = true;
+          }
         } catch (error) {
           if (["authentication", "rate_limit", "membership"].includes(error?.category) || /^Control plane (401|403|429):/.test(error?.message ?? "")) throw error;
           logEvent({ event: "membership_recovery_failed", category: boundedProviderCategory(error?.category) });
