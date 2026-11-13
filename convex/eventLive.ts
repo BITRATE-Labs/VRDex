@@ -49,11 +49,13 @@ async function projectCandidates(db: DatabaseReader, rows: readonly (Doc<"events
   for (const event of rows) {
     if (!event || event.publicationState !== "published" || event.eventStatus !== "scheduled" ||
       event.startAt === undefined || event.startAt > now || timedEventRuntimeEndAt({ startAt: event.startAt, endAt: event.endAt }) <= now) continue;
-    const projected = await getPublicEventBySlug(db, event, { includeAssociationMediaKits: false, playbackOnly: true });
-    if (!projected || projected.scheduleKind === "date_only") continue;
-    events.push({ eventId: event._id, endAt: timedEventRuntimeEndAt({ startAt: event.startAt, endAt: event.endAt }) });
-    const selected = eventLiveSource(projected, now);
-    if (selected) candidates.push({ eventId: event._id, source: { key: selected.key, provider: selected.provider, identity: selected.identity } });
+    try {
+      const projected = await getPublicEventBySlug(db, event, { includeAssociationMediaKits: false, playbackOnly: true });
+      if (!projected || projected.scheduleKind === "date_only") continue;
+      events.push({ eventId: event._id, endAt: timedEventRuntimeEndAt({ startAt: event.startAt, endAt: event.endAt }) });
+      const selected = eventLiveSource(projected, now);
+      if (selected) candidates.push({ eventId: event._id, source: { key: selected.key, provider: selected.provider, identity: selected.identity } });
+    } catch { /* One malformed event must not park the discovery page. */ }
   }
   return { candidates, events };
 }
@@ -146,18 +148,20 @@ async function publicEntries(db: DatabaseReader) {
     for (const entry of entries.slice(0, 100)) {
       if (projections >= 24) { complete = false; break liveSources; }
       projections++;
-      const event = await getPublicEventBySlug(db, await db.get(entry.eventId), { includeAssociationMediaKits: false, playbackOnly: true });
-      const selected = event && eventLiveSource(event, now);
-      if (!event || !selected || selected.key !== entry.sourceKey || selected.validUntil <= now) continue;
-      const slot = event.slots.find(slot => slot.playbackKey === selected.slotKey);
-      result.push({ eventId: entry.eventId, eventSlug: event.slug, href: event.communitySlug ? eventPathForSlugs(event.communitySlug, event.slug) : `/events/${event.slug}`,
-        title: event.title, sourceKey: selected.key, expiresAt: Math.min(entry.expiresAt, observation.expiresAt, selected.validUntil),
-        ...(event.thumbnailImageUrl || event.posterImageUrl || event.communityImageUrl ? { imageUrl: event.thumbnailImageUrl ?? event.posterImageUrl ?? event.communityImageUrl } : {}),
-        ...(event.communitySlug && event.communityName ? { host: { slug: event.communitySlug, displayName: event.communityName } } : {}),
-        ...(event.communityName ? { hostName: event.communityName } : {}),
-        ...(slot?.performer ? { performer: { slug: slot.performer.slug, displayName: slot.performer.displayName } } : {}),
-        ...(slot ? { performerLabel: slot.displayLabel } : {}),
-      });
+      try {
+        const event = await getPublicEventBySlug(db, await db.get(entry.eventId), { includeAssociationMediaKits: false, playbackOnly: true });
+        const selected = event && eventLiveSource(event, now);
+        if (!event || !selected || selected.key !== entry.sourceKey || selected.validUntil <= now) continue;
+        const slot = event.slots.find(slot => slot.playbackKey === selected.slotKey);
+        result.push({ eventId: entry.eventId, eventSlug: event.slug, href: event.communitySlug ? eventPathForSlugs(event.communitySlug, event.slug) : `/events/${event.slug}`,
+          title: event.title, sourceKey: selected.key, expiresAt: Math.min(entry.expiresAt, observation.expiresAt, selected.validUntil),
+          ...(event.thumbnailImageUrl || event.posterImageUrl || event.communityImageUrl ? { imageUrl: event.thumbnailImageUrl ?? event.posterImageUrl ?? event.communityImageUrl } : {}),
+          ...(event.communitySlug && event.communityName ? { host: { slug: event.communitySlug, displayName: event.communityName } } : {}),
+          ...(event.communityName ? { hostName: event.communityName } : {}),
+          ...(slot?.performer ? { performer: { slug: slot.performer.slug, displayName: slot.performer.displayName } } : {}),
+          ...(slot ? { performerLabel: slot.displayLabel } : {}),
+        });
+      } catch { complete = false; }
     }
   }
   return { entries: result.sort((a, b) => a.title.localeCompare(b.title) || a.eventId.localeCompare(b.eventId)), complete };

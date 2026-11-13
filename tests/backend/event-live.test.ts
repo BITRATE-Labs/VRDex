@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test, before, after, mock } from "node:test";
 import { convexTest } from "convex-test";
 import { getFunctionName } from "convex/server";
-import type { ActionCtx } from "../../convex/_generated/server";
+import type { ActionCtx, QueryCtx } from "../../convex/_generated/server";
 import { api, internal } from "../../convex/_generated/api";
 import schemaModule from "../../convex/schema";
 import type { Doc } from "../../convex/_generated/dataModel";
@@ -287,4 +287,49 @@ for (const failedPhase of ["starts", "ends", "remembered"] as const) test(`a fai
     assert.equal((await publicRows(t)).length, 1);
     assert.equal((await t.run(ctx => ctx.db.query("eventLiveRefresh").unique()))?.leaseUntil, 0);
   } finally { broken.mock.restore(); fetcher.mock.restore(); }
+});
+
+
+async function failOneProfileRead(t: ReturnType<typeof convexTest>, event: { slotId: Doc<"eventSlots">["_id"] }, name: "listPublic" | "refreshCandidates") {
+  const profileId = await t.run(async ctx => {
+    const id = await ctx.db.insert("profiles", { ...person, slug: "broken-profile" });
+    await ctx.db.patch(event.slotId, { personProfileId: id });
+    return id;
+  });
+  const functions = await import("../../convex/eventLive");
+  const handler = functions[name];
+  assert.ok("_handler" in handler && typeof handler._handler === "function");
+  const original = handler._handler;
+  return mock.method(handler, "_handler", (ctx: QueryCtx, args: Record<string, unknown>) => original({
+    ...ctx, db: { ...ctx.db, get: async (id: Parameters<QueryCtx["db"]["get"]>[0]) => {
+      if (id === profileId) throw Error("Synthetic corrupt profile projection");
+      return ctx.db.get(id);
+    } },
+  }, args));
+}
+
+test("one rejected event projection keeps healthy public entries but withholds uniqueness", async () => {
+  const { t, events } = await fixture(2);
+  await recordLive(t);
+  const failure = await failOneProfileRead(t, events[0], "listPublic");
+  try {
+    const result = await t.query(api.eventLive.listPublic, {});
+    assert.equal(result.complete, false);
+    assert.equal(result.entries.length, 1);
+    assert.equal(result.entries[0].eventId, events[1].eventId);
+  } finally { failure.mock.restore(); }
+});
+
+test("discovery advances past a rejected event projection instead of parking its page", async () => {
+  const { t, events } = await fixture(25);
+  const failure = await failOneProfileRead(t, events[0], "refreshCandidates");
+  try {
+    const claim = await t.mutation(internal.eventLive.claimRefresh, {}); assert.ok(claim);
+    const first = await t.query(internal.eventLive.refreshCandidates, { phase: "ends", cursor: null, anchorAt: claim.endsAt });
+    assert.ok(first.cursor);
+    assert.equal(first.candidates.some(row => row.eventId === events[0].eventId), false);
+    const second = await t.query(internal.eventLive.refreshCandidates, { phase: "ends", cursor: first.cursor, anchorAt: claim.endsAt });
+    assert.equal(second.cursor, null);
+    assert.equal(first.candidates.length + second.candidates.length, 24);
+  } finally { failure.mock.restore(); }
 });
