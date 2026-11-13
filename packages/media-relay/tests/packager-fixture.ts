@@ -106,9 +106,7 @@ http://127.0.0.1:${address.port}/nested.ts
     );
     await chmod(wrapper, 0o700);
   }
-  const start = createPackager({
-    ...(captureChild ? { ffmpegPath: wrapper } : {}),
-    createRelay: () =>
+  const createRelay = () =>
       createSourceRelay({
         inputFormat: "vrcdn_fmp4",
         resolveAddresses: async () => [{ address: "93.184.216.34", family: 4 }],
@@ -123,11 +121,12 @@ http://127.0.0.1:${address.port}/nested.ts
           );
           return request(`http://127.0.0.1:${address.port}`, cb);
         },
-      }),
-  });
+      });
+  const start = createPackager({ ...(captureChild ? { ffmpegPath: wrapper } : {}), createRelay });
   return {
     directory,
     start,
+    createRelay,
     childPid: async () =>
       Number(await readFile(join(directory, "child.pid"), "utf8")),
     disconnect: () => provider.closeAllConnections(),
