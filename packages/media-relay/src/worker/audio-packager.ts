@@ -4,6 +4,7 @@ import { once } from "node:events";
 import { randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { z } from "zod";
 import { createSourceRelay } from "../../../../workers/restream/source-relay.mjs";
 import { parseSourceDescriptor, type SourceDescriptor } from "../contracts";
 import { createAudioBuffer } from "./audio-buffer";
@@ -18,6 +19,7 @@ export async function startAudioPackager(options: {
   onFailure(reason: string): void;
   createRelay?: typeof createSourceRelay;
   ffmpegPath?: string;
+  ffprobePath?: string;
 }) {
   const source = parseSourceDescriptor(options.source);
   if (!Number.isSafeInteger(options.epoch) || options.epoch < 1 ||
@@ -28,11 +30,38 @@ export async function startAudioPackager(options: {
   const abort = new AbortController(), buffer = createAudioBuffer(), token = randomUUID();
   let failed = false, stopping: Promise<void> | undefined, upstreamBytes = 0, busy = 0;
   let child: ReturnType<typeof spawn> | undefined, closed: Promise<void> | undefined;
+  let inspector: ReturnType<typeof spawn> | undefined, inspectorClosed: Promise<void> | undefined, verifiedAudio = false;
   let relay: Awaited<ReturnType<typeof createSourceRelay>> | undefined;
   let input: ReturnType<Awaited<ReturnType<typeof createSourceRelay>>["createInput"]> | undefined;
   let feeding: Promise<void> | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined, initialized = false;
   let watchdog: ReturnType<typeof setInterval> | undefined;
+  async function verifyAudio(bytes: Buffer) {
+    inspector = spawn(options.ffprobePath ?? "ffprobe", ["-v", "error", "-show_entries", "stream=codec_name,codec_type", "-of", "json", "pipe:0"],
+      { stdio: ["pipe", "pipe", "ignore"], windowsHide: true });
+    const probe = inspector;
+    inspectorClosed = new Promise(resolve => probe.once("close", () => resolve()));
+    await new Promise<void>((resolve, reject) => {
+      let output = Buffer.alloc(0), failure = "";
+      const timeout = setTimeout(() => { failure = "audio_probe_deadline"; probe.kill("SIGKILL"); }, 2000);
+      probe.stdout?.on("data", (chunk: Buffer) => {
+        if (output.length + chunk.length > 16384) { failure = "audio_probe_output_limit"; probe.kill("SIGKILL"); }
+        else output = Buffer.concat([output, chunk]);
+      });
+      probe.once("error", () => { failure = "audio_probe_unavailable"; });
+      probe.stdin?.on("error", () => {});
+      probe.once("close", code => {
+        clearTimeout(timeout);
+        try {
+          if (failure || code !== 0) throw Error(failure || "audio_probe_invalid");
+          z.object({ streams: z.array(z.object({ codec_name: z.literal("aac"), codec_type: z.literal("audio") })).length(1) })
+            .parse(JSON.parse(output.toString("utf8")));
+          resolve();
+        } catch { reject(Error(failure || "audio_probe_invalid")); }
+      });
+      probe.stdin?.end(bytes);
+    });
+  }
   function fail(reason: string) {
     if (failed || abort.signal.aborted) return;
     failed = true;
@@ -56,11 +85,23 @@ export async function startAudioPackager(options: {
         chunks.push(chunk);
       }
       const bytes = Buffer.concat(chunks, size);
-      if (name === "audio.m3u8") buffer.publish(bytes.toString("utf8"));
+      if (name === "audio.m3u8") {
+        const text = bytes.toString("utf8");
+        buffer.publish(text);
+        if (!verifiedAudio) {
+          const first = text.split(/\r?\n/).find(line => /^audio-\d+\.ts$/.test(line));
+          const sample = first ? buffer.get(first) : undefined;
+          if (!sample) throw Error("Missing audio sample");
+          await verifyAudio(sample);
+          verifiedAudio = true;
+        }
+      }
       else buffer.put(name, bytes);
       response.writeHead(201).end();
-    } catch {
-      response.writeHead(413).end(); request.destroy(); fail("audio_output_limit");
+    } catch (error) {
+      response.writeHead(413).end(); request.destroy();
+      fail(error instanceof Error && ["audio_probe_deadline", "audio_probe_output_limit", "audio_probe_unavailable", "audio_probe_invalid"].includes(error.message)
+        ? error.message : "audio_output_limit");
     } finally { clearTimeout(deadline); busy--; }
   });
   async function stop() {
@@ -68,6 +109,8 @@ export async function startAudioPackager(options: {
     stopping = (async () => {
       abort.abort(); clearTimeout(timer); clearInterval(watchdog); options.signal.removeEventListener("abort", onAbort);
       child?.stdin?.destroy();
+      if (inspector && inspector.exitCode === null && inspector.signalCode === null) inspector.kill("SIGKILL");
+      await inspectorClosed;
       if (child && child.exitCode === null && child.signalCode === null) {
         child.kill("SIGTERM");
         const kill = setTimeout(() => child?.kill("SIGKILL"), 1000);
@@ -104,12 +147,18 @@ export async function startAudioPackager(options: {
     const response = await fetch(url, { signal: abort.signal, redirect: "error" });
     if (!response.ok || !response.body) throw Error("Audio source unavailable");
     const body = response.body;
-    const args = ["-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "pipe",
+    const args = ["-hide_banner", "-loglevel", "warning", "-nostats", "-nostdin", "-protocol_whitelist", "pipe",
       "-f", "mp4", "-enable_drefs", "0", "-i", "pipe:0", "-map", "0:a:0", "-vn", "-sn", "-dn",
-      "-c:a", "aac", "-b:a", "128k", "-ac", "2", "-ar", "48000", "-f", "hls", "-hls_time", "2",
+      "-c:a", "copy", "-f", "hls", "-hls_time", "2",
       "-hls_list_size", "8", "-hls_segment_filename", `http://127.0.0.1:${address.port}/${token}/audio-%d.ts`,
       "-method", "PUT", `http://127.0.0.1:${address.port}/${token}/audio.m3u8`];
-    child = spawn(options.ffmpegPath ?? "ffmpeg", args, { stdio: ["pipe", "ignore", "ignore"], windowsHide: true });
+    child = spawn(options.ffmpegPath ?? "ffmpeg", args, { stdio: ["pipe", "ignore", "pipe"], windowsHide: true });
+    let diagnostics = "";
+    child.stderr?.on("data", (chunk: Buffer) => {
+      diagnostics = (diagnostics + chunk.toString("utf8")).slice(-16384);
+      if (/Non-monoton(?:ous|ic)|non monotonically increasing|invalid DTS|DTS .* out of order|timestamp discontinuity/i.test(diagnostics))
+        fail("audio_timestamp_discontinuity");
+    });
     closed = new Promise<void>(resolve => child?.once("close", () => { resolve(); if (!abort.signal.aborted) fail("audio_packager_closed"); }));
     child.once("error", () => fail("audio_packager_start"));
     if (!child.stdin) throw Error("Audio packager input unavailable");
@@ -128,6 +177,6 @@ export async function startAudioPackager(options: {
     });
     initialized = true;
     abort.signal.throwIfAborted();
-    return { buffer, stop, upstreamBytes: () => upstreamBytes };
+    return { buffer: { ...buffer, get: (name: string) => verifiedAudio ? buffer.get(name) : undefined }, stop, upstreamBytes: () => upstreamBytes };
   } catch (error) { await stop(); throw error; }
 }

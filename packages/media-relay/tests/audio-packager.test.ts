@@ -65,3 +65,34 @@ test("upstream byte exhaustion stops the owned audio child and guarded provider 
     assert.equal(packager.buffer.bytes(), 0);
   } finally { await stop?.(); await f.close(); }
 });
+
+test("unsupported audio is rejected instead of silently transcoded for the rehearsal", { timeout: 15000 }, async () => {
+  const f = await fixture("libx264", null, false, undefined, "libmp3lame");
+  let stop: (() => Promise<void>) | undefined;
+  try {
+    const failures: string[] = [];
+    const packager = await startAudioPackager({ source, epoch: 1, createRelay: f.createRelay,
+      lifetimeMs: 10000, upstreamByteLimit: 4 * 1024 * 1024, signal: new AbortController().signal,
+      onFailure: reason => failures.push(reason) });
+    stop = packager.stop;
+    await until(() => failures.length > 0 || !!packager.buffer.get("audio.m3u8"));
+    assert.equal(packager.buffer.get("audio.m3u8"), undefined);
+    assert(failures.length > 0);
+  } finally { await stop?.(); await f.close(); }
+});
+
+test("copy-only timestamp resets terminate the rehearsal rather than continuing invalid media", { timeout: 15000 }, async () => {
+  const f = await fixture("libx264", "timestamps");
+  let stop: (() => Promise<void>) | undefined;
+  try {
+    const failures: string[] = [];
+    const packager = await startAudioPackager({ source, epoch: 1, createRelay: f.createRelay,
+      lifetimeMs: 10000, upstreamByteLimit: 4 * 1024 * 1024, signal: new AbortController().signal,
+      onFailure: reason => failures.push(reason) });
+    stop = packager.stop;
+    await until(() => failures.length > 0);
+    await packager.stop();
+    assert.deepEqual(failures, ["audio_timestamp_discontinuity"]);
+    assert.equal(f.counts().active, 0);
+  } finally { await stop?.(); await f.close(); }
+});

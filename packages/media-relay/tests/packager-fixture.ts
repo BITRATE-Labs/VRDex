@@ -22,6 +22,7 @@ export async function fixture(
   broken: "partial" | "timestamps" | "playlist" | null = null,
   captureChild = false,
   metadataComment?: string,
+  audioCodec = "aac",
 ) {
   const directory = await mkdtemp(join(tmpdir(), "vrdex-packager-"));
   const input = join(directory, "input.mp4");
@@ -48,7 +49,7 @@ export async function fixture(
       "-pix_fmt",
       "yuv420p",
       "-c:a",
-      "aac",
+      audioCodec,
       "-movflags",
       "frag_keyframe+empty_moov+default_base_moof",
       ...(metadataComment ? ["-metadata", `comment=${metadataComment}`] : []),

@@ -10,9 +10,17 @@ The intended experience is music continuing when a listener changes pages,
 switches apps or locks an iPhone. Audio only must deliver audio bytes through a
 native audio element, without downloading or decoding video in the browser.
 
-The first qualification target is explicit Audio only on one known public VRCDN
-source. A separately reviewed finite rehearsal can prove that transport without
-finishing the full dual-rendition CDN platform. Current-video-to-background
+The transport is already demonstrated. BASIC reported the October 28 protected
+hosted synthetic audio/video tests and real VRCDN HLS video working on iPhone
+Safari. The same single-upstream relay's copy-AAC audio-only playlist passed
+FFprobe and a four-second decode; separate live audio-only phone acceptance was
+pending. See the [original experiment record](../../scripts/mobile-media-spike/hosted/README.md)
+and [approved shared-relay design](../superpowers/specs/2026-10-28-mobile-vrcdn-playback-design.md).
+
+The first remaining phone target is explicit Audio only on one known public
+VRCDN source through the existing protected test page and a finite sandbox.
+Complete and integrate the selected shared native HLS path rather than replace
+it with another standalone demo. Current-video-to-background
 continuity and following the event across DJ changes remain required outcomes;
 one-source audio proof does not establish either.
 
@@ -22,10 +30,11 @@ separate from provider availability, production activation and device acceptance
 
 ## Smaller producer and delivery path
 
-`startAudioPackager` is a finite producer, not a production entrypoint. It uses
+`startAudioPackager` is a bounded memory proof comparator, not a production
+replacement for the approved shared copy-HLS worker. It uses
 the existing guarded, public-address-pinned VRCDN source relay. A counted
 fragmented-MP4 input pipe feeds one FFmpeg process. FFmpeg selects audio, excludes
-video, and encodes 128-kbit/s AAC into two-second HLS segments. No relay scratch
+video, and stream-copies AAC into approximately two-second HLS segments. No relay scratch
 files or video segments are generated. The upstream still contains the source's
 multiplexed video bytes; this is a client bandwidth/decode improvement, not an
 upstream audio-only provider endpoint.
@@ -35,6 +44,9 @@ FFmpeg PUTs only to a random loopback sink. The sink caps each audio segment at
 The buffer retains at most nine segment objects and 1 MiB of segment payload.
 Pending request buffers, temporary copies, Node, FFmpeg and HTTP buffers are
 additional memory; a container/process memory limit still needs qualification.
+The first output is inspected with a bounded, owned FFprobe before visibility;
+non-AAC audio is refused instead of silently transcoded. Timestamp-reset warnings
+stop the rehearsal. Diagnostics remain bounded and are never printed.
 The buffer rejects foreign paths, changed immutable segments and playlist tags
 that could introduce another network source. Old segments retire only after a
 new complete playlist references existing objects. Publications expire after ten
@@ -59,13 +71,17 @@ allowance.
 
 ## Background authority and community events
 
-The full relay's grants last twelve hours. Foreground JavaScript cannot be relied
+The approved full relay's grants last twelve hours. Foreground JavaScript cannot be relied
 on to renew them while iOS suspends the page. Gateway authorization therefore
-uses native playlist traffic to renew a still-valid grant in its final hour,
+has a candidate change using native playlist traffic to renew a still-valid grant in its final hour,
 through the existing public `mediaRelayPlayback:refreshPlayback` capability.
 That call carries only the grant ID, without the gateway credential. The gateway
 reads authority before renewal and again afterward. It cannot renew an expired,
 released or revoked grant, admit another source, or restart a failed source.
+This changes the approved twelve-hour policy, which requires deliberate resume
+after background expiry. Its mechanics are tested, but the policy change needs
+a separate disposition before shipping. It is not required to repeat the
+already-demonstrated short phone experiment.
 
 Automatic community sequence authorization now follows the public event viewer
 without requiring staff to turn on performer sequence. New admission must name
@@ -82,20 +98,23 @@ stream on backgrounding is not the proposed solution.
 
 ## Proposed finite phone rehearsal
 
-Current recommendation: reuse local compute first, one known public source,
-one iPhone Air and one desktop Chrome listener, at most fifteen minutes. Proposed
+Current recommendation: reuse the protected `vrdex-mobile-playback-test` page
+and temporary Vercel Sandbox approach. Use one known public source, one iPhone
+Air and one desktop Chrome listener, at most fifteen minutes. Proposed
 bounds are 256 MiB total upstream input, 32 MiB aggregate delivered payload and
 2,000 handler requests, with source/publication revalidation on each request.
 A larger source bitrate can hit the upstream cap before fifteen minutes; the
 correct behavior is to stop. These are proposed rehearsal bounds, not production
 capacity or cost acceptance.
 
-A temporary LAN listener would need an exact reviewed bind address, port,
-firewall scope and teardown. No LAN exposure or public tunnel is created here.
-An HTTP LAN audio test can assess native playback, but does not qualify the
-production HTTPS origin, Media Session controls or cross-origin handoff. A hosted
-alternative needs a separately reviewed account/resource/network identity,
-lifetime, allocation and spend limit before provisioning.
+The old sandbox expired. Its checked-in rewrite is historical, not an available
+origin. A new finite sandbox and test-project rewrite need an exact reviewed
+team/project identity, source, lifetime, allocation and spend limit before
+provisioning. Retain Vercel authentication. Scope the sandbox route with an
+unguessable capability so knowledge of the sandbox hostname does not bypass
+the finite allowance. Do not add a new LAN listener or firewall exception.
+The existing hosted page and local evidence export should be reused unchanged
+where possible; its success is still separate from production VRDex integration.
 
 Required phone observations: start explicit audio by touch, navigate within
 VRDex, switch apps, lock for several minutes beyond the buffered window, pause
