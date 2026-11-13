@@ -1,6 +1,8 @@
 # Workspace identity recovery verification
 
-Implements the [approved design](../superpowers/specs/2026-11-12-membership-activity-recovery-design.md) using the [implementation plan](../superpowers/plans/2026-11-12-workspace-identity-recovery.md). Implementation and verification are in progress; this page records evidence without treating local fixtures as production acceptance.
+Implements the [approved design](../superpowers/specs/2026-11-12-membership-activity-recovery-design.md) using the [implementation plan](../superpowers/plans/2026-11-12-workspace-identity-recovery.md). PR #464 is merged. This page distinguishes local verification from provider and deployed acceptance.
+
+The [November 13 provider checkpoint](../engineering/group-telemetry-provider-proof.md#workspace-identity-checkpoint-2026-11-13-utc) verifies owned-account exact-name lookup, eleven named roles and five non-empty audit rows accepted by the real recovery parser. Production canonical-target preparation completed for BITRATE's current scope. The first collector rollout uncovered a missing backend capability literal; the repair regression uses the worker's actual capability array. Its 200 focused checks and backend typecheck pass. These facts do not establish activation or a completed historical recovery job.
 
 ## Provider checkpoint
 

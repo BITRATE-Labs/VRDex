@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { convexTest } from "convex-test";
+import { makeFunctionReference } from "convex/server";
 
 import { api, internal } from "../../convex/_generated/api";
 import schemaModule from "../../convex/schema";
 import { proofShareOf } from "../../convex/communityTelemetry";
+import { COLLECTOR_CAPABILITIES } from "../../workers/group-telemetry/runtime.mjs";
 
 import { newClerkUserId } from "./_clerkTestIdentity";
 const modules = {
@@ -280,17 +282,28 @@ describe("collector proof check queue", () => {
         workerId: "worker-readiness",
         releaseSha,
         collectorVersion: "group-telemetry-v1",
-        capabilities: ["telemetry_v1", "vrchat_proof_v1"],
+        capabilities: [...COLLECTOR_CAPABILITIES],
         consecutiveControlFailures: 0,
         workerKeyHash: "a".repeat(64),
         now,
       }),
       { recorded: true, automaticEnrollmentBacklog: false, statisticsAdmissionDiagnostics: { pending: 0, active: 0, paused: 0, ended: 0, cleanup_pending: 0, cancelled: 0, externalWaiting: 0, processingBacklog: 0, oldestProcessingAgeMs: 0 } },
     );
+    await assert.rejects(t.mutation(makeFunctionReference<"mutation">("communityTelemetry:recordCollectorHeartbeat"), {
+      collectorAccountId,
+      workerId: "worker-readiness",
+      releaseSha,
+      collectorVersion: "group-telemetry-v1",
+      capabilities: [...COLLECTOR_CAPABILITIES, "unknown_capability_v1"],
+      consecutiveControlFailures: 0,
+      workerKeyHash: "a".repeat(64),
+      now,
+    }));
+    assert.deepEqual(await t.run(async ctx => (await ctx.db.get(collectorAccountId))?.lastWorkerCapabilities), [...COLLECTOR_CAPABILITIES]);
     const ready = await t.query(internal.communityTelemetry.collectorDeploymentReadiness, {
       collectorAccountId,
       expectedReleaseSha: releaseSha.toUpperCase(),
-      requiredCapabilities: ["telemetry_v1", "vrchat_proof_v1"],
+      requiredCapabilities: [...COLLECTOR_CAPABILITIES],
       maxHeartbeatAgeMs: 120_000,
       now,
     });
