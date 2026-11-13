@@ -218,6 +218,40 @@ test("a short recovery budget wait reuses still-fresh authority without another 
   assert.equal(job.pages, 1);
 });
 
+for (const phase of ["catchup", "recovery"]) {
+  for (const kind of ["rejected", "control_http", "transport", "timeout"]) {
+    test(`${phase} budget waits propagate heartbeat ${kind} failures without further provider calls`, async () => {
+      const { h, providerReads, job } = recoveryPollHarness();
+      const failure = kind === "control_http" ? new Error("Control plane 503: unavailable")
+        : kind === "transport" ? new TypeError("synthetic network failure")
+          : kind === "timeout" ? Object.assign(new Error("synthetic timeout"), { name: "TimeoutError" }) : null;
+      const events = [];
+      Object.assign(h.sandbox, { lastHeartbeatAt: 0, controlFailures: 0, runtimeMetadata: {}, logEvent: event => events.push(event), pause: async ms => h.advance(ms) });
+      const heartbeatStart = source.indexOf("async function heartbeat()");
+      h.sandbox.heartbeat = runInNewContext(source.slice(heartbeatStart, source.indexOf("/**\n * Prove", heartbeatStart)) + "\nheartbeat;", h.sandbox);
+      const pauseStart = source.indexOf("async function pauseWithHeartbeats(ms)");
+      h.sandbox.pauseWithHeartbeats = runInNewContext(source.slice(pauseStart, source.indexOf("async function checkClubReads", pauseStart)) + "\npauseWithHeartbeats;", h.sandbox);
+      const send = h.sandbox.control.send;
+      h.sandbox.control.send = async (op, body) => {
+        if (op === "heartbeat") {
+          h.calls.push(op);
+          if (failure) throw failure;
+          return { recorded: false };
+        }
+        return send(op, body);
+      };
+      if (phase === "catchup") h.sandbox.collectMembershipPage = async () => ({ collected: false, retryAt: h.clock() + 60000 });
+      await assert.rejects(h.pass(), failure ? error => error === failure : /Control plane heartbeat was rejected\./);
+      assert.equal(h.calls.filter(op => op === "heartbeat").length, 1);
+      assert.equal(providerReads.length, 4);
+      assert.equal(job.pages, 0);
+      assert.deepEqual(h.failures, []);
+      assert.equal(events.some(event => event.event === "membership_recovery_failed"), false);
+      assert.ok(h.calls.includes("release"));
+    });
+  }
+}
+
 for (const reason of ["deadline", "shutdown", "permission", "group", "expired_authority", "revoked_scope"]) {
   test(`recovery budget wait cannot dispatch after ${reason}`, async () => {
     const { h, providerReads, job } = recoveryPollHarness();
