@@ -280,11 +280,13 @@ operational evidence.
 
 The retained player collapses its media rectangle while playback is unavailable
 or blocked. A blocked Twitch iframe stays visible because its provider recovery
-controls must remain interactive. Event and profile inline placeholders reserve only the controls,
-identity, lineup controls when present, and recovery action. Recovery controls
-use their natural height. Both placeholders use the measured shell height, so
-missing mode/PiP rows leave no reserved strip. The existing media
-node stays mounted and owned by the same transport; a status change alone does
-not revoke, stop or recreate playback. Successful recovery reveals normal media
-again. Unavailable playback keeps an explicit Try again action, source identity,
-controls and Close in both inline and compact presentation.
+controls must remain interactive. A profile transport-end notification also
+preserves the picture because buffered video may still be playing. Event and
+profile placeholders share the measured controls/status height and a responsive
+picture region. Controls use their natural height; a secondary mode/PiP row
+retains its existing minimum spacing. Missing rows leave no reserved strip.
+The existing media node stays mounted and owned by the same transport; a status
+change alone does not revoke, stop or recreate playback. Successful recovery
+reveals normal media again. Unavailable playback keeps source identity, controls
+and Close in both inline and compact presentation. Try again is available for
+recoverable failures, but not an unsupported transport.

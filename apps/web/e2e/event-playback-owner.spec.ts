@@ -13,6 +13,11 @@ test("retains the actual playing media node across route navigation and replaces
   await page.getByRole("button", { name: "Play Event a", exact: true }).click();
   const video = page.locator("[data-event-playback-mount] video");
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(0.1);
+  await expect.poll(async () => {
+    const picture = await page.locator("[data-event-playback-mount]").boundingBox();
+    const controls = await page.getByRole("group", { name: "Event a controls", exact: true }).boundingBox();
+    return controls!.y - picture!.y - picture!.height;
+  }).toBeLessThanOrEqual(4);
   await expect.poll(() => authorization.reads).toContain("a");
   await page.screenshot({ path: testInfo.outputPath("retained-player.png") });
   const original = await video.elementHandle(); const time = await video.evaluate(node => (node as HTMLVideoElement).currentTime);
@@ -70,6 +75,11 @@ test("visible Twitch SDK player handles blocked playback, real controls and ifra
   await expect(page.getByRole("button", { name: "Enable playback", exact: true })).toBeVisible();
   await expect.poll(() => authorization.reads).toContain("a");
   const frame = page.locator("[data-event-playback-mount] iframe"); await expect(frame).toBeVisible();
+  await expect.poll(async () => {
+    const slot = await page.locator('[data-event-playback-inline="a"]').boundingBox();
+    const shell = await page.getByRole("region", { name: "Event playback", exact: true }).boundingBox();
+    return Math.abs(slot!.height - shell!.height);
+  }).toBeLessThanOrEqual(4);
   await page.screenshot({ path: testInfo.outputPath("twitch-player.png") });
   const box = await frame.boundingBox(); expect(box!.width).toBeGreaterThanOrEqual(400); expect(box!.height).toBeGreaterThanOrEqual(300);
   expect(await page.evaluate(() => (window as unknown as { sdkOptions: { parent: string[] } }).sdkOptions.parent)).toEqual([new URL(page.url()).hostname]);
