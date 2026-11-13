@@ -2,7 +2,8 @@ import { supportsNowPlayingArtwork } from "../packages/media-relay/src/artwork-p
 import { getPublicProfileMediaKit } from "./_profileAssets";
 import type { Doc } from "./_generated/dataModel";
 import type { DatabaseReader } from "./_generated/server";
-import { getPublicEventBySlug } from "./_eventPublic";
+import { getPublicEventBySlug, type PublicEvent } from "./_eventPublic";
+import { joinLineupSlot } from "../packages/api-contracts/src/lineup-timing";
 import { isInScheduledWatchWindow } from "./_eventRuntime";
 import { canReadProfile } from "./_profilePermissions";
 import { publicProfileOutboundLinks } from "./_profilePublic";
@@ -82,7 +83,6 @@ export async function authorizeRelayContext(
   const projected = await getPublicEventBySlug(db, event);
   if (
     !projected ||
-    !projected.watchSurfaceEnabled ||
     projected.status === "cancelled" ||
     projected.scheduleKind === "date_only" ||
     projected.startAt === undefined
@@ -93,11 +93,12 @@ export async function authorizeRelayContext(
     !isInScheduledWatchWindow({ ...projected, startAt: projected.startAt, now })
   )
     return null;
-  if (projected.watchMode === "performer_sequence") {
+  if (isRelaySequence(projected)) {
     const slot = projected.slots.find(
       (slot) => slot.playbackKey === context.selectedSourceId,
     );
-    if (slot?.stream?.streamId !== streamId || !slot.performer) return null;
+    if (slot?.stream?.streamId !== streamId || !slot.performer ||
+        (!continuing && joinLineupSlot(projected.slots, now)?.playbackKey !== slot.playbackKey)) return null;
     const slotId = db.normalizeId("eventSlots", slot.playbackKey);
     const storedSlot = slotId ? await db.get(slotId) : null;
     const performer = storedSlot?.personProfileId
@@ -116,6 +117,7 @@ export async function authorizeRelayContext(
       metadata: await profileMetadata(db, performer, "discovery"),
     };
   }
+  if (!projected.watchSurfaceEnabled) return null;
   if (
     context.selectedSourceId !== streamId ||
     !projected.mediaLinks.some((link) => {
@@ -137,4 +139,10 @@ export async function authorizeRelayContext(
     ]),
     metadata: metadata(projected.title),
   };
+}
+
+/** Same explicit-versus-automatic sequence choice as the public event viewer. */
+export function isRelaySequence(event: PublicEvent) {
+  return event.watchSurfaceEnabled ? event.watchMode === "performer_sequence" :
+    event.slots.some(slot => slot.stream && slot.playbackKey && Number.isFinite(slot.startAt));
 }

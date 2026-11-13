@@ -9,7 +9,8 @@ import {
   type DatabaseReader,
 } from "./_generated/server";
 import { relayContextValidator } from "./_mediaRelayTables";
-import { authorizeRelayContext } from "./_mediaRelayAuthorization";
+import { authorizeRelayContext, isRelaySequence } from "./_mediaRelayAuthorization";
+import { getPublicEventBySlug } from "./_eventPublic";
 import {
   AdmissionSchema,
   PlaybackGrantSchema,
@@ -206,7 +207,8 @@ export const openPlayback = mutation({
         return { kind: "unavailable", reason: "unavailable" };
       const eventId = ctx.db.normalizeId("events", context.data.eventId);
       const event = eventId ? await ctx.db.get(eventId) : null;
-      if (event?.watchMode !== "performer_sequence") return { kind: "unavailable", reason: "unavailable" };
+      const projected = await getPublicEventBySlug(ctx.db, event);
+      if (!projected || !isRelaySequence(projected)) return { kind: "unavailable", reason: "unavailable" };
       continuing = true;
     }
     const authorized = await authorizeRelayContext(ctx.db, context.data, streamId.data, now, continuing);
@@ -367,7 +369,8 @@ export const rebindPlayback = mutation({
     const context = resolved.grant.context;
     const eventId = ctx.db.normalizeId("events", context.eventId);
     const event = eventId ? await ctx.db.get(eventId) : null;
-    if (event?.watchMode !== "performer_sequence") return denied;
+    const projected = await getPublicEventBySlug(ctx.db, event);
+    if (!projected || !isRelaySequence(projected)) return denied;
     const streamId = resolved.grant.streamKey.split("/")[1];
     const target = { ...context, selectedSourceId: args.selectedSourceId };
     const authorized = await authorizeRelayContext(ctx.db, target, streamId, now, true);

@@ -4,6 +4,7 @@ import { convexTest } from "convex-test";
 import { makeFunctionReference } from "convex/server";
 import schemaModule from "../../convex/schema";
 import { AdmissionSchema, PlaybackRebindSchema, RELAY_POLICY } from "../../packages/media-relay/src";
+import { createControlRpc, gatewayAuthorization } from "../../packages/media-relay/src/providers/convex-control";
 const schema =
   (schemaModule as unknown as { default?: typeof schemaModule }).default ??
   schemaModule;
@@ -726,6 +727,40 @@ it("refresh extends only a near-expiry authorized grant, retaining ID and source
     "unavailable",
   );
 });
+it("native requests cross the original grant expiry without page refresh and still revoke immediately", async test => {
+  let now = Date.now();
+  test.mock.method(Date, "now", () => now);
+  const h = await fixture();
+  process.env.MEDIA_RELAY_GATEWAY_TOKEN = "fixture-gateway";
+  process.env.MEDIA_RELAY_WORKER_TOKEN = "fixture-worker";
+  process.env.MEDIA_RELAY_PLAYBACK_ORIGIN = "https://relay.invalid";
+  const admitted = preparing(await h.play());
+  const originalExpiry = now + 1000;
+  await h.t.run(async ctx => {
+    const grant = await ctx.db.query("mediaRelayGrants").first();
+    const source = await ctx.db.query("mediaRelaySources").first();
+    assert(grant && source);
+    await ctx.db.patch(grant._id, { expiresAt: originalExpiry });
+    await ctx.db.patch(source._id, readySource(source.streamKey));
+  });
+  const sourceBefore = await h.t.run(ctx => ctx.db.query("mediaRelaySources").first());
+  const rpc = createControlRpc({ url: "https://control.invalid", credential: "fixture-gateway", fetcher: async (_url, init) => {
+    const request = JSON.parse(String(init?.body));
+    const value = request.path === "mediaRelayWorker:readGateway"
+      ? await h.t.query(makeFunctionReference<"query">("mediaRelayWorker:readGateway"), request.args)
+      : await h.t.mutation(makeFunctionReference<"mutation">("mediaRelayPlayback:refreshPlayback"), request.args);
+    return Response.json({ status: "success", value });
+  } });
+  const authorize = gatewayAuthorization(rpc);
+  const read = () => authorize({ grantId: admitted.grantId, rendition: "audio", signal: new AbortController().signal });
+  const first = await read();
+  assert.equal(first.kind, "active");
+  now = originalExpiry + 1;
+  assert.equal((await read()).kind, "active");
+  assert.deepEqual(await h.t.run(ctx => ctx.db.query("mediaRelaySources").first()), sourceBefore);
+  await h.t.run(ctx => ctx.db.patch(h.profileId, { fieldVisibility: { outboundLinks: "private" } }));
+  assert.equal((await read()).kind, "denied");
+});
 it("refresh refuses exact expiry and revoked context but allows valid post-window event continuation", async () => {
   const h = await fixture();
   const refresh = makeFunctionReference<"mutation">(
@@ -1158,12 +1193,12 @@ it("concurrent terminal restarts for different sources share the final admission
 });
 
 const rebind = makeFunctionReference<"mutation">("mediaRelayPlayback:rebindPlayback");
-async function sequenceFixture() {
+async function sequenceFixture(automatic = false) {
   const h = await fixture();
   const slots = await h.t.run(async ctx => {
-    await ctx.db.patch(h.eventId, { watchMode: "performer_sequence" });
+    await ctx.db.patch(h.eventId, automatic ? { watchMode: "event_stream", watchSurfaceEnabled: false, mediaLinks: [] } : { watchMode: "performer_sequence" });
     await ctx.db.patch(h.profileId, { outboundLinks: ["Alpha", "Beta"].map(id => ({ type: "vrcdn", url: `vrcdn:${id}`, label: "Live", source: "owner_authored" })) });
-    const slot = (position: number, selectedStreamId: string) => ctx.db.insert("eventSlots", { eventId: h.eventId, personProfileId: h.profileId, selectedStreamId, position, startAt: Date.now() - 1000 + position * 1000, displayLabel: "DJ", roleLabel: "DJ", sourceType: "manual", sourceLabel: "test", confidence: 1, reviewState: "confirmed", updatedAt: 1 });
+    const slot = (position: number, selectedStreamId: string) => ctx.db.insert("eventSlots", { eventId: h.eventId, personProfileId: h.profileId, selectedStreamId, position, startAt: Date.now() - 10000 + position * 20000, displayLabel: "DJ", roleLabel: "DJ", sourceType: "manual", sourceLabel: "test", confidence: 1, reviewState: "confirmed", updatedAt: 1 });
     return { a: await slot(0, "Alpha"), b: await slot(1, "Beta"), same: await slot(2, "Alpha") };
   });
   const context = (selectedSourceId: string) => ({ ...h.eventContext, selectedSourceId });
@@ -1172,6 +1207,34 @@ async function sequenceFixture() {
   const openNext = (proof = first.grantId, eventId = h.eventId, selectedSourceId = slots.b, streamId = "Beta") => h.t.mutation(open, { context: { kind: "event", eventId, selectedSourceId }, streamId, preferredMode: "audio", continuationGrantId: proof });
   return { ...h, slots, context, first, end, openNext };
 }
+it("automatic community event grants use the current slot and retain public-source revocation without staff enablement", async () => {
+  const h = await fixture();
+  const now = Date.now();
+  const ids = await h.t.run(async ctx => {
+    await ctx.db.patch(h.eventId, { watchSurfaceEnabled: false, watchMode: "event_stream", mediaLinks: [], endAt: now + 120000 });
+    const make = (position: number, startAt: number) => ctx.db.insert("eventSlots", {
+      eventId: h.eventId, personProfileId: h.profileId, selectedStreamId: "Alpha", position, startAt,
+      displayLabel: "DJ", roleLabel: "DJ", sourceType: "manual", sourceLabel: "test", confidence: 1, reviewState: "confirmed", updatedAt: now });
+    return { current: await make(0, now - 10000), future: await make(1, now + 60000) };
+  });
+  const current = { ...h.eventContext, selectedSourceId: ids.current };
+  const grant = preparing(await h.play(current));
+  assert.equal(AdmissionSchema.parse(await h.play({ ...current, selectedSourceId: ids.future })).kind, "unavailable");
+  await h.t.run(ctx => ctx.db.patch(h.profileId, { fieldVisibility: { outboundLinks: "private" } }));
+  assert.equal((await h.t.query(resolve, { grantId: grant.grantId, now: Date.now() })).kind, "denied");
+});
+
+it("a future slot cannot grant an automatic viewer when the current performer has no stream", async () => {
+  const h = await fixture();
+  const now = Date.now();
+  const future = await h.t.run(async ctx => {
+    await ctx.db.patch(h.eventId, { watchSurfaceEnabled: false, mediaLinks: [] });
+    const base = { eventId: h.eventId, displayLabel: "DJ", roleLabel: "DJ", sourceType: "manual", sourceLabel: "test", confidence: 1, reviewState: "confirmed" as const, updatedAt: now };
+    await ctx.db.insert("eventSlots", { ...base, position: 0, startAt: now - 1000 });
+    return ctx.db.insert("eventSlots", { ...base, personProfileId: h.profileId, selectedStreamId: "Alpha", position: 1, startAt: now + 30000 });
+  });
+  assert.equal(AdmissionSchema.parse(await h.play({ ...h.eventContext, selectedSourceId: future })).kind, "unavailable");
+});
 it("same-event postwindow continuation admits an independently authorized slot with a distinct bounded grant", async () => {
   const h = await sequenceFixture(); await h.end();
   assert.equal(AdmissionSchema.parse(await h.t.mutation(open, { context: h.context(h.slots.b), streamId: "Beta", preferredMode: "audio" })).kind, "unavailable");
@@ -1179,6 +1242,16 @@ it("same-event postwindow continuation admits an independently authorized slot w
   const rows = await h.t.run(ctx => ctx.db.query("mediaRelayGrants").collect()); assert.equal(rows.length, 2);
   process.env.MEDIA_RELAY_MAX_GRANTS = "2";
   assert.equal(AdmissionSchema.parse(await h.openNext()).kind, "capacityLimited");
+});
+it("automatic community lineup continuation and same-source identity rebind retain event authority after the fresh-start window", async () => {
+  const h = await sequenceFixture(true);
+  await h.end();
+  preparing(await h.openNext());
+  const valid = await h.t.query(resolve, { grantId: h.first.grantId, now: Date.now() });
+  assert.equal(valid.kind, "valid");
+  assert.equal(PlaybackRebindSchema.parse(await h.t.mutation(rebind, {
+    grantId: h.first.grantId, selectedSourceId: h.slots.same, expectedSelectedSourceId: h.slots.a,
+    expectedContextRevision: valid.grant.contextRevision })).kind, "rebound");
 });
 for (const invalid of ["expired", "released", "revoked", "profile", "other-event", "event-stream", "target-revoked"] as const) it(`continuation denies ${invalid} authority`, async () => {
   const h = await sequenceFixture();
