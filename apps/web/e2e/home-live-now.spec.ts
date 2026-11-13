@@ -74,3 +74,31 @@ test("several live events stay in one compact scrolling row @fixture", async ({ 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.locator("video,iframe")).toHaveCount(0);
 });
+
+test("a slow earlier lookup cannot replace the later Play selection @fixture", async ({ page }) => {
+  let requests = 0;
+  await page.route("http://127.0.0.1:6799/**", route => { requests++; return route.fulfill({ path: path.resolve("e2e/fixtures/persistent-synthetic.mpegts"), contentType: "video/mp2t", headers: { "access-control-allow-origin": "*" } }); });
+  await page.goto("/playwright/home-live-now");
+  await page.getByLabel("Fixture state").selectOption("race");
+  await page.getByRole("button", { name: "Play Harbor Sessions 1", exact: true }).click();
+  await page.getByRole("button", { name: "Play Harbor Sessions 2", exact: true }).click();
+  const shell = page.locator('[data-event-id="home-live-fixture-1"]');
+  await expect(page.locator("html")).toHaveAttribute("data-live-lookups", "2");
+  await expect(shell).toBeVisible();
+  await expect.poll(() => page.locator("video").evaluate(node => (node as HTMLVideoElement).currentTime), { timeout: 20000 }).toBeGreaterThan(1);
+  await expect(shell).toBeVisible();
+  expect(requests).toBe(1);
+  await page.getByRole("button", { name: "Close event playback", exact: true }).click();
+});
+
+test("a stalled fresh public lookup releases Play without starting media @fixture", async ({ page }) => {
+  await page.goto("/playwright/home-live-now");
+  await page.getByLabel("Fixture state").selectOption("lookup-never");
+  await page.clock.install();
+  const play = page.getByRole("button", { name: "Play Harbor Sessions", exact: true });
+  await play.click();
+  await expect(play).toBeDisabled();
+  await page.clock.fastForward(10_001);
+  await expect(play).toBeEnabled();
+  await expect(page.locator("video,iframe")).toHaveCount(0);
+});

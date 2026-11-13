@@ -2,7 +2,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useConvex } from "convex/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pause, Play } from "lucide-react";
 import { api } from "@convex-generated-api";
 import type { LiveEntry } from "../../../../../convex/eventLive";
@@ -12,6 +12,9 @@ import type { EventPlaybackOwner } from "@/lib/event-playback-owner";
 import { eventPlaybackRequest } from "@/lib/event-playback-request";
 import { useEventPlayback, useEventPlaybackSnapshot } from "./event-playback-provider";
 import styles from "./home-live-now.module.css";
+
+// An older public lookup must not replace a later selection in another surface.
+const playIntents = new WeakMap<EventPlaybackOwner, symbol>();
 
 export function HomeLiveNow({ initialEntries = [], performerSlug }: { initialEntries?: LiveEntry[]; performerSlug?: string }) {
   const client = useConvex();
@@ -38,6 +41,7 @@ export function LiveNowEntries({ entries, owner, loadEvent }: {
 }) {
   const state = useEventPlaybackSnapshot(owner);
   const [now, setNow] = useState(0);
+  const lookup = useRef<symbol | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   useEffect(() => {
     let timer: number | undefined;
@@ -68,15 +72,23 @@ export function LiveNowEntries({ entries, owner, loadEvent }: {
           {(entry.host?.displayName ?? entry.hostName) && <span className={styles.host}>{entry.host?.displayName ?? entry.hostName}</span>}
         </div>
         <button type="button" className={styles.play} disabled={pending === entry.eventId} aria-label={`${playing ? "Pause" : "Play"} ${entry.title}`} onClick={async () => {
-          if (playing) { owner.pause(); return; }
-          if (entry.expiresAt <= Date.now()) return;
+          const intent = Symbol();
+          lookup.current = intent;
+          playIntents.set(owner, intent);
+          const generation = owner.generation;
+          if (playing) { owner.pause(); setPending(null); return; }
+          if (entry.expiresAt <= Date.now()) { setPending(null); return; }
           setPending(entry.eventId);
+          let deadline: number | undefined;
           try {
-            const event = await loadEvent(entry.eventSlug);
-            if (!event || entry.expiresAt <= Date.now() || eventLiveSource(event, Date.now())?.key !== entry.sourceKey) return;
+            const event = await Promise.race([
+              loadEvent(entry.eventSlug),
+              new Promise<null>(resolve => { deadline = window.setTimeout(() => resolve(null), 10_000); }),
+            ]).finally(() => window.clearTimeout(deadline));
+            if (playIntents.get(owner) !== intent || owner.generation !== generation || !event || entry.expiresAt <= Date.now() || eventLiveSource(event, Date.now())?.key !== entry.sourceKey) return;
             const request = eventPlaybackRequest(event);
-            if (request) await owner.play(request);
-          } catch { /* A failed fresh projection cannot authorize playback. */ } finally { setPending(null); }
+            if (request) { setPending(null); await owner.play(request); }
+          } catch { /* A failed fresh projection cannot authorize playback. */ } finally { if (lookup.current === intent) setPending(null); }
         }}>{playing ? <Pause aria-hidden="true" size={17} fill="currentColor" /> : <Play aria-hidden="true" size={17} fill="currentColor" />}</button>
       </article>;
     })}</div>

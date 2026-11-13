@@ -23,11 +23,16 @@ function setup() {
     imageUrl: "/seed/fixture-avatar-luma.svg", host: { slug: "afterglow", displayName: "Afterglow" }, performer: { slug: "aurora", displayName: "Aurora" }, performerLabel: "Aurora" };
   let entries: LiveEntry[] = [entry];
   let mode = "live";
+  let completedLookups = 0;
   const listeners = new Set<() => void>();
-  const readEvent = () => mode === "removed" ? { ...event, slots: event.slots.map(slot => ({ ...slot, stream: undefined })) } : event;
-  const client = { query: async (query: FunctionReference<"query">) => {
+  const readEvent = (slug = event.slug) => {
+    const matched = /^home-live-fixture-(\d+)$/.exec(slug);
+    const current = matched ? { ...event, id: slug, slug, title: `Harbor Sessions ${Number(matched[1]) + 1}` } : event;
+    return mode === "removed" ? { ...current, slots: current.slots.map(slot => ({ ...slot, stream: undefined })) } : current;
+  };
+  const client = { query: async (query: FunctionReference<"query">, args?: { slug?: string }) => {
     const name = getFunctionName(query);
-    if (name === "events:getPublicBySlug") return readEvent();
+    if (name === "events:getPublicBySlug") { if (mode === "lookup-never") return new Promise<PublicEvent | null>(() => {}); if (mode === "race" && args?.slug?.endsWith("-0")) await new Promise(resolve => setTimeout(resolve, 700)); document.documentElement.dataset.liveLookups = String(++completedLookups); return readEvent(args?.slug); }
     if (name === "eventTimeline:listPublic" || name === "eventTimeline:listPublicRoster") return { items: [], performers: [], cursor: null, complete: true };
     if (name === "eventTimeline:resolveSaved") return [];
     throw new Error(`Unexpected fixture query ${name}`);
@@ -41,7 +46,7 @@ function setup() {
   } } as unknown as ConvexReactClient;
   return { event, entry, client, readEvent, change(next: string, at: number) {
     mode = next;
-    entries = mode === "empty" ? [] : mode === "many" ? Array.from({ length: 5 }, (_, i) => ({ ...entry, eventId: `home-live-${i}` as Id<"events">, title: `Harbor Sessions ${i + 1}` })) : mode === "expiring" ? [
+    entries = mode === "empty" ? [] : (mode === "many" || mode === "race") ? Array.from({ length: 5 }, (_, i) => ({ ...entry, eventId: `home-live-fixture-${i}` as Id<"events">, eventSlug: `home-live-fixture-${i}`, title: `Harbor Sessions ${i + 1}` })) : mode === "expiring" ? [
       { ...entry, expiresAt: at + 1000 },
       { ...entry, eventId: "later-fixture" as Id<"events">, title: "Later event", expiresAt: at + 2200 },
     ] : [{ ...entry, ...(mode === "broken-image" ? { imageUrl: "/test-media/missing-live-art.png" } : {}), expiresAt: mode === "expired" ? at - 1 : entry.expiresAt }];
@@ -57,7 +62,7 @@ export default function Fixture() {
   useEffect(() => {
     const original = window.fetch;
     window.fetch = async (input, init) => {
-      if (typeof input === "string" && new URL(input, location.href).pathname === "/api/query" && typeof init?.body === "string" && JSON.parse(init.body).path === "events:getPublicBySlug") return new Response(JSON.stringify({ status: "success", value: fixture.readEvent() }), { headers: { "Content-Type": "application/json" } });
+      if (typeof input === "string" && new URL(input, location.href).pathname === "/api/query" && typeof init?.body === "string" && JSON.parse(init.body).path === "events:getPublicBySlug") return new Response(JSON.stringify({ status: "success", value: fixture.readEvent(JSON.parse(init.body).args?.[0]?.slug) }), { headers: { "Content-Type": "application/json" } });
       return original(input, init);
     };
     return () => { window.fetch = original; };
@@ -67,7 +72,7 @@ export default function Fixture() {
   const request = eventPlaybackRequest(fixture.event);
   return <ConvexProvider client={fixture.client}>
     <div className="flex flex-wrap gap-4 p-4 text-sm"><span>Live now fixture</span><label>State <select aria-label="Fixture state" value={mode} onChange={event => { const mode = event.target.value, at = Date.now(); fixture.change(mode, at); setScenario({ mode, at }); }}>
-      <option value="live">Live</option><option value="many">Several live events</option><option value="broken-image">Image unavailable</option><option value="expiring">Expiring entries</option><option value="empty">Empty</option><option value="expired">Expired</option><option value="removed">Source removed before Play</option>
+      <option value="live">Live</option><option value="lookup-never">Lookup stalled</option><option value="race">Delayed first selection</option><option value="many">Several live events</option><option value="broken-image">Image unavailable</option><option value="expiring">Expiring entries</option><option value="empty">Empty</option><option value="expired">Expired</option><option value="removed">Source removed before Play</option>
     </select></label><Link href="/playwright/home-live-now">Home view</Link><Link href="/playwright/home-live-now?view=event">Event view</Link><Link href="/playwright/home-live-now?view=dj">DJ view</Link></div>
     {view === "home" ? <HomeSearchPage beforeSchedule={row} /> : <main className="mx-auto w-full max-w-5xl p-6"><h1>{view === "dj" ? "Aurora" : "Harbor Sessions"}</h1>{row}{request && <EventPlaybackInline owner={owner} request={request} />}</main>}
   </ConvexProvider>;

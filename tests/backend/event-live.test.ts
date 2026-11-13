@@ -179,3 +179,18 @@ test("browse expiry stops at the current performer boundary before provider TTL"
   assert.equal(entries.length, 1);
   assert.equal(entries[0].expiresAt, boundary);
 });
+
+test("newer unavailable cache entries do not crowd a live source out of the bounded row", async () => {
+  const { t, events } = await fixture(26);
+  await t.run(async ctx => {
+    const now = Date.now();
+    for (let i = 0; i < events.length; i++) {
+      const sourceKey = i === 0 ? "vrcdn:aurora" : `vrcdn:idle${i}`;
+      await ctx.db.insert("eventLiveObservations", { sourceKey, provider: "vrcdn", identity: i === 0 ? "aurora" : `idle${i}`, status: i === 0 ? "live" : "unavailable", observedAt: now, expiresAt: now + 90_000 });
+      await ctx.db.insert("eventLiveEntries", { eventId: events[i].eventId, sourceKey, expiresAt: now + (i === 0 ? 80_000 : 90_000) });
+    }
+  });
+  const entries = await t.query(api.eventLive.listPublic, {});
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].eventId, events[0].eventId);
+});

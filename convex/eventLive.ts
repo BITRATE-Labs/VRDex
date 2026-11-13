@@ -1,3 +1,4 @@
+import type { Doc } from "./_generated/dataModel";
 import { v, type Infer } from "convex/values";
 import { internalMutation, internalQuery, query, type DatabaseReader } from "./_generated/server";
 import { getPublicEventBySlug } from "./_eventPublic";
@@ -99,14 +100,23 @@ export const finishRefresh = internalMutation({
 async function publicEntries(db: DatabaseReader) {
   if (!enabled()) return { entries: [], complete: true };
   const now = Date.now();
-  const entries = await db.query("eventLiveEntries").withIndex("by_expiresAt", q => q.gt("expiresAt", now)).order("desc").take(25);
+  const entries = await db.query("eventLiveEntries").withIndex("by_expiresAt", q => q.gt("expiresAt", now)).order("desc").take(101);
   const result = [];
-  for (const entry of entries.slice(0, 24)) {
-    const observation = await db.query("eventLiveObservations").withIndex("by_sourceKey", q => q.eq("sourceKey", entry.sourceKey)).unique();
+  const observations = new Map<string, Doc<"eventLiveObservations"> | null>();
+  let complete = entries.length <= 100;
+  let projections = 0;
+  for (const entry of entries.slice(0, 100)) {
+    let observation = observations.get(entry.sourceKey);
+    if (observation === undefined) {
+      observation = await db.query("eventLiveObservations").withIndex("by_sourceKey", q => q.eq("sourceKey", entry.sourceKey)).unique();
+      observations.set(entry.sourceKey, observation);
+    }
     if (!observation || observation.status !== "live" || observation.expiresAt <= now || observation.observedAt > now) continue;
+    if (projections >= 24) { complete = false; break; }
+    projections++;
     const event = await getPublicEventBySlug(db, await db.get(entry.eventId), { includeAssociationMediaKits: false, playbackOnly: true });
     const selected = event && eventLiveSource(event, now);
-    if (!event || !selected || selected.key !== entry.sourceKey) continue;
+    if (!event || !selected || selected.key !== entry.sourceKey || selected.validUntil <= now) continue;
     const slot = event.slots.find(slot => slot.playbackKey === selected.slotKey);
     result.push({ eventId: entry.eventId, eventSlug: event.slug, href: event.communitySlug ? eventPathForSlugs(event.communitySlug, event.slug) : `/events/${event.slug}`,
       title: event.title, sourceKey: selected.key, expiresAt: Math.min(entry.expiresAt, observation.expiresAt, selected.validUntil),
@@ -117,7 +127,7 @@ async function publicEntries(db: DatabaseReader) {
       ...(slot ? { performerLabel: slot.displayLabel } : {}),
     });
   }
-  return { entries: result.sort((a, b) => a.title.localeCompare(b.title) || a.eventId.localeCompare(b.eventId)), complete: entries.length <= 24 };
+  return { entries: result.sort((a, b) => a.title.localeCompare(b.title) || a.eventId.localeCompare(b.eventId)), complete };
 }
 export const listPublic = query({ args: {}, returns: v.array(liveEntryValidator), handler: async ctx => (await publicEntries(ctx.db)).entries });
 export const forPerformer = query({ args: { slug: v.string() }, returns: v.union(v.null(), liveEntryValidator), handler: async (ctx, args) => {
