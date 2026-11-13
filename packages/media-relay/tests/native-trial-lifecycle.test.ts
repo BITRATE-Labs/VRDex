@@ -32,3 +32,30 @@ test("failed HTTP startup cleans the already started runtime", async () => {
     assert.equal(fake.stopped(), 1);
   } finally { await new Promise<void>(resolve => occupied.close(() => resolve())); }
 });
+
+
+import { completeNativeTrialStop } from "../src/trial/runtime";
+test("terminal acknowledgment waits for actual packager cleanup beyond registry stop", async () => {
+  const order: string[] = []; let finish!: () => void;
+  const physical = new Promise<void>(resolve => {finish=resolve;});
+  const stopping = completeNativeTrialStop({ stopWorker: async () => {order.push("registry-stopped");},
+    attempts: [Promise.resolve({stop:()=>physical})], acknowledge:async()=>{order.push("terminal-ack");},close:()=>{order.push("storage-closed");} });
+  await new Promise(resolve=>setImmediate(resolve)); assert.deepEqual(order,["registry-stopped"]);
+  finish(); await stopping; assert.deepEqual(order,["registry-stopped","terminal-ack","storage-closed"]);
+});
+test("failed physical cleanup cannot acknowledge terminal source ownership", async () => {
+  let acknowledged = false;
+  await assert.rejects(completeNativeTrialStop({stopWorker:async()=>{},attempts:[Promise.resolve({stop:async()=>{throw Error("cleanup failed");}})],acknowledge:async()=>{acknowledged=true;},close:()=>{}}));
+  assert.equal(acknowledged,false);
+});
+
+test("failed setup has no acquired handle and still permits exact terminal acknowledgment",async()=>{
+  const order:string[]=[];
+  await completeNativeTrialStop({stopWorker:async()=>{},attempts:[Promise.reject(Error("setup rejected before acquisition"))],acknowledge:async()=>{order.push("ack");},close:()=>{order.push("close");}});
+  assert.deepEqual(order,["ack","close"]);
+});
+test("failed terminal RPC still closes local storage and preserves the failure",async()=>{
+  let closed=false;
+  await assert.rejects(completeNativeTrialStop({stopWorker:async()=>{},attempts:[],acknowledge:async()=>{throw Error("control unavailable");},close:()=>{closed=true;}}),/control unavailable/);
+  assert.equal(closed,true);
+});

@@ -1,3 +1,4 @@
+import { NATIVE_TRIAL_SEGMENT_GRACE_MS } from "./policy";
 import { open } from "node:fs/promises";
 import { constants } from "node:fs";
 import { PublishedSnapshotSchema, StreamKeySchema, snapshotObjectKey, type RenditionSnapshot, type StreamKey } from "../contracts";
@@ -9,7 +10,7 @@ export function createNativeTrialStorage({ streamKey, maxBytes, clock = Date.now
 }) {
   StreamKeySchema.parse(streamKey);
   if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0 || maxBytes > 128 * 1024 ** 2) throw Error("Invalid trial storage limit");
-  const segments = new Map<string, { bytes: Buffer; at: number }>();
+  const segments = new Map<string, { bytes: Buffer; unreferencedAt?: number }>();
   const snapshots = new Map<string, RenditionSnapshot>();
   const recent: Record<"video" | "audio", string[]> = { video: [], audio: [] };
   let bytes = 0, pending = 0, closed = false;
@@ -19,15 +20,19 @@ export function createNativeTrialStorage({ streamKey, maxBytes, clock = Date.now
   }
   function prune(before: number) {
     const retained = new Set([...snapshots.values()].flatMap(snapshot => snapshot.segments.map(segment => segment.objectKey)));
-    for (const [key, value] of segments) if (value.at < before && !retained.has(key)) {
-      bytes -= value.bytes.length; segments.delete(key);
+    for (const [key, value] of segments) {
+      if (retained.has(key)) delete value.unreferencedAt;
+      else {
+        value.unreferencedAt ??= clock();
+        if (value.unreferencedAt < before) { bytes -= value.bytes.length; segments.delete(key); }
+      }
     }
   }
   const storage: RelayStorage = {
     async putSegment(args) {
       args.signal.throwIfAborted();
       if (closed || !validKey(args.objectKey)) throw Error("Trial source/key denied");
-      prune(clock() - 10000);
+      prune(clock() - NATIVE_TRIAL_SEGMENT_GRACE_MS);
       const file = await open(args.filePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
       let reservation = 0;
       try {
@@ -53,7 +58,7 @@ export function createNativeTrialStorage({ streamKey, maxBytes, clock = Date.now
           if (!duplicate.bytes.equals(data)) throw Error("Trial objects are immutable");
           return;
         }
-        segments.set(args.objectKey, { bytes: data, at: clock() }); bytes += data.length;
+        segments.set(args.objectKey, { bytes: data }); bytes += data.length;
       } finally { pending -= reservation; await file.close(); }
     },
     async putSnapshot(args) {
@@ -68,9 +73,9 @@ export function createNativeTrialStorage({ streamKey, maxBytes, clock = Date.now
       const keys = recent[snapshot.rendition];
       if (!keys.includes(args.objectKey)) keys.push(args.objectKey);
       while (keys.length > 2) { const key = keys.shift(); if (key) snapshots.delete(key); }
-      prune(clock() - 10000);
+      prune(clock() - NATIVE_TRIAL_SEGMENT_GRACE_MS);
     },
-    async retire(args) { args.signal.throwIfAborted(); prune(Math.min(args.before, clock() - 10000)); },
+    async retire(args) { args.signal.throwIfAborted(); prune(Math.min(args.before, clock() - NATIVE_TRIAL_SEGMENT_GRACE_MS)); },
   };
   return { ...storage,
     readSegment: (key: string) => closed ? undefined : segments.get(key)?.bytes,

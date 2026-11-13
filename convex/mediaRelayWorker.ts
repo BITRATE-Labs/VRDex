@@ -1,4 +1,5 @@
-import { activeNativeTrial, relayEnabled } from "./_mediaRelayOperations";
+import { NativeTrialConfigSchema } from "../packages/media-relay/src/trial/policy";
+import { activeNativeTrial, relayEnabled, relayOperationState } from "./_mediaRelayOperations";
 import { resolveRelayGrant } from "./mediaRelayPlayback";
 import { GatewayAuthorizationSchema } from "../packages/media-relay/src/contracts";
 import { v } from "convex/values";
@@ -93,6 +94,7 @@ export const observeSource = mutation({
     state: v.string(),
     progressAt: v.number(),
     terminalReason: v.optional(v.string()),
+    trialId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -106,12 +108,22 @@ export const observeSource = mutation({
       throw Error("Invalid terminal reason");
     const terminal = state === "stopped" || state === "unavailable";
     const candidate = await source(ctx, args.streamKey, terminal);
+    let trialCleanup = false;
+    if (args.trialId !== undefined) {
+      const operation = await relayOperationState(ctx.db);
+      const trial = NativeTrialConfigSchema.parse(JSON.parse(operation?.trialConfiguration ?? "null"));
+      if (!terminal || operation?.trialId !== args.trialId || trial.source.streamKey !== args.streamKey ||
+          trial.worker.workerId !== args.workerId || trial.worker.workerEpoch !== args.workerEpoch)
+        throw Error("Finite cleanup identity mismatch");
+      trialCleanup = true;
+      if (!candidate.owner && candidate.epoch === args.epoch && ["stopped", "unavailable"].includes(candidate.state)) return null;
+    }
     // Cleanup acknowledgment is not authority: it can only end this exact old
     // ownership and must preserve the last durable progress timestamp.
     if (
       (state === "stopped" || state === "unavailable") &&
       candidate.leaseExpiresAt !== undefined &&
-      candidate.leaseExpiresAt <= now
+      (candidate.leaseExpiresAt <= now || trialCleanup)
     ) {
       if (
         candidate.owner?.workerId !== args.workerId ||

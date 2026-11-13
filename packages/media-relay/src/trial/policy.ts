@@ -2,6 +2,8 @@ import { z } from "zod";
 import { PublicContextSchema, SourceDescriptorSchema } from "../contracts";
 import { WorkerBindingSchema } from "../worker/deployment";
 
+export const NATIVE_TRIAL_SEGMENT_GRACE_MS = 30000;
+
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const time = z.number().int().nonnegative();
 const origin = z.string().refine(value => {

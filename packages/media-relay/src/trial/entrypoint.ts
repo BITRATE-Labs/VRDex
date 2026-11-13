@@ -46,3 +46,4 @@ export { createNativeTrialSource } from "./source";
 export { createNativeTrialStorage } from "./storage";
 export { verifyNativeTrialScratch } from "./scratch";
 export { createPublisher } from "../worker/publisher";
+export { completeNativeTrialStop } from "./runtime";

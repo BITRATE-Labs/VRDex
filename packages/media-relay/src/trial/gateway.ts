@@ -1,7 +1,7 @@
 import { GatewayAuthorizationSchema, type GatewayAuthorization, type PlaybackMode, type RenditionSnapshot, type StreamKey } from "../contracts";
 import { createManifestHandler } from "../gateway/handler";
 import { hasPlayableWindow, isSnapshotFresh } from "../policy";
-import { matchesTrialContext, type NativeTrialConfig } from "./policy";
+import { matchesTrialContext, NATIVE_TRIAL_SEGMENT_GRACE_MS, type NativeTrialConfig } from "./policy";
 
 type Options = {
   config: NativeTrialConfig;
@@ -16,6 +16,7 @@ type Options = {
 export function createNativeTrialGateway(options: Options) {
   const { config, clock } = options;
   const manifests = new Map<string, ReturnType<typeof createManifestHandler>>();
+  const advertised = new Map<string, number>();
   let requests = 0, payloadBytes = 0, ended = false, busy = 0;
   function end() { if (!ended) { ended = true; options.onExhausted(); } }
   function active() { const now = clock(); return Number.isFinite(now) && now >= config.startsAt && now < config.expiresAt; }
@@ -31,6 +32,7 @@ export function createNativeTrialGateway(options: Options) {
     const empty = (status: number) => new Response(null, { status, headers });
     if (!active()) { end(); return empty(410); }
     if (ended || ++requests > config.limits.requests) { end(); return empty(429); }
+    for (const [key, until] of advertised) if (until <= clock()) advertised.delete(key);
     const origin = request.headers.get("origin");
     if (origin && !config.origins.includes(origin)) return empty(403);
     if (origin) headers.set("Access-Control-Allow-Origin", origin);
@@ -65,7 +67,12 @@ export function createNativeTrialGateway(options: Options) {
             },
             readSnapshot: async ({ objectKey }) => options.readSnapshot(objectKey),
             demand: { recordDemand: options.recordDemand },
-            signSegment: ({ objectKey }) => `${config.origin}/p/${id}/objects/${encodeURIComponent(objectKey)}`,
+            signSegment: ({ objectKey }) => {
+              const key = `${id}:${objectKey}`;
+              if (!advertised.has(key) && advertised.size >= 128) throw Error("Trial advertisement capacity");
+              advertised.set(key, Math.min(config.expiresAt, clock() + NATIVE_TRIAL_SEGMENT_GRACE_MS));
+              return `${config.origin}/p/${id}/objects/${encodeURIComponent(objectKey)}`;
+            },
             clock, origins: config.origins, maxSources: 1, maxConcurrent: 2,
           });
           manifests.set(id, manifest);
@@ -84,7 +91,8 @@ export function createNativeTrialGateway(options: Options) {
         const snapshot = auth.snapshot;
         if (auth.state !== "ready" || !snapshot || snapshot.streamKey !== config.source.streamKey || snapshot.rendition !== rendition ||
           snapshot.epoch !== auth.epoch || auth.leaseExpiresAt === null || auth.leaseExpiresAt <= clock() ||
-          !isSnapshotFresh(snapshot, clock()) || !hasPlayableWindow(snapshot) || !snapshot.segments.some(s => s.objectKey === key)) return empty(403);
+          !isSnapshotFresh(snapshot, clock()) || !hasPlayableWindow(snapshot) ||
+          !key.startsWith(`${config.source.streamKey}/epochs/${auth.epoch}/`) || (advertised.get(`${id}:${key}`) ?? 0) <= clock()) return empty(403);
         const bytes = options.readSegment(key);
         if (!bytes) return empty(404);
         headers.set("Content-Type", "video/mp2t");

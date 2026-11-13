@@ -32,3 +32,29 @@ test("explicit trial admission waits for one eligibility read retained across na
   assert.equal(matchesNativeTrial(optIn.current(),{...request,profileId:"other",href:"/other"}),false);
   assert.deepEqual(await optIn.read(),future); assert.equal(loads,1);
 });
+
+import { createDeferredTrialAdapter } from "../../apps/web/src/lib/native-trial-routing";
+for (const choice of ["matching","other","unavailable"] as const) test(`deferred routing preserves ${choice} playback after eligibility resolves`,async()=>{
+  let resolve!: (value: typeof trial|null)=>void, created = "", plays = 0;
+  const pending = new Promise<typeof trial|null>(done=>{resolve=done;});
+  const chosen = choice === "other" ? {...request,sourceId:"Beta"} : request;
+  const adapter = createDeferredTrialAdapter({load:()=>pending,mode:"video",create:config=>{
+    created = matchesNativeTrial(config,chosen,100) ? "native" : "ordinary";
+    return {play:async()=>{plays++;return true;},pause(){},setVolume(){},setMuted(){},update(){},dispose(){}};
+  }});
+  const playing = adapter.play(); await Promise.resolve(); assert.equal(created,"");
+  resolve(choice === "unavailable" ? null : trial);
+  assert.equal(await playing,true); assert.equal(created,choice === "matching" ? "native":"ordinary");assert.equal(plays,1);adapter.dispose();
+});
+for(const action of ["pause","dispose"] as const) test(`${action} before eligibility cannot create or play a stale transport`,async()=>{
+  let resolve!: (value:typeof trial)=>void,created=0;
+  const pending=new Promise<typeof trial>(done=>{resolve=done;});
+  const adapter=createDeferredTrialAdapter({load:()=>pending,mode:"video",create:()=>{created++;throw Error("Stale transport constructed");}});
+  const playing=adapter.play();adapter[action]();resolve(trial);
+  assert.equal(await playing,false);assert.equal(created,0);
+});
+
+test("deferred adapter preserves real admission errors for the owner recovery UI",async()=>{
+  const adapter=createDeferredTrialAdapter({load:async()=>trial,mode:"video",create:()=>({play:async()=>{throw Error("admission failed");},pause(){},setVolume(){},setMuted(){},update(){},dispose(){}})});
+  await assert.rejects(adapter.play(),/admission failed/);adapter.dispose();
+});

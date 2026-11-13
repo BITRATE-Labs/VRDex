@@ -23,8 +23,10 @@ export function PlaybackFixture({ eventId, twitch, nativeTrial = false }: { even
   }, [eventId, twitch, startAt]);
   if (nativeTrial) {
     const profile = profilePlaybackRequest({ id: "profile", slug: "playwright/event-playback", displayName: "Trial DJ", outboundLinks: [{ type: "vrcdn", url: "https://stream.vrcdn.live/live/Alpha.live.mp4" }] }, "Alpha");
+    const other = profilePlaybackRequest({ id: "profile", slug: "playwright/event-playback", displayName: "Trial DJ", outboundLinks: [{ type: "vrcdn", url: "vrcdn:Beta" }] }, "Beta");
     return <main className="mx-auto w-full max-w-3xl p-6">
       <Link href="/playwright/event-playback?event=b">Browse</Link>
+      <button type="button" onClick={() => { if (owner && other) void owner.play(other); }}>Play other</button>
       <div data-event-playback-inline="profile:profile:Alpha">
         <button type="button" onClick={() => { if (owner && profile) void owner.play(profile); }}>Play trial</button>
       </div>

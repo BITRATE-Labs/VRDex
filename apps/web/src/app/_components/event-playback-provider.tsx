@@ -21,7 +21,7 @@ import {
   relayPlaybackEnabled,
   retainForegroundGrant,
 } from "@/lib/relay-playback-adapter";
-import { matchesNativeTrial, createNativeTrialOptIn } from "@/lib/native-trial-routing";
+import { matchesNativeTrial, createNativeTrialOptIn, createDeferredTrialAdapter, type NativeTrialRouting } from "@/lib/native-trial-routing";
 import { retainNowPlaying } from "@/lib/now-playing";
 import { EventCompactPlayer } from "./event-compact-player";
 
@@ -53,52 +53,50 @@ export function EventPlaybackProvider({ children }: { children: ReactNode }) {
     () =>
       new EventPlaybackOwner((request, notify, mode) => {
         if (!mount.current) throw new Error("Playback mount unavailable");
-        const optIn = trial.current, configuration = optIn?.current() ?? null;
-        const selectedTrial = matchesNativeTrial(configuration, request);
-        const trialEntry = Boolean(optIn && !configuration && request.kind === "vrcdn" && request.href === optIn.href);
-        if (relayPlaybackEnabled() || selectedTrial || trialEntry) {
-          const url = process.env.NEXT_PUBLIC_CONVEX_URL;
-          if (!url) throw Error("Playback unavailable");
-          const client = new ConvexHttpClient(url);
-          return createRetainedPlaybackAdapter(request, mount.current, notify, {
-            mode,
-            providerTrial: selectedTrial || trialEntry,
-            relay: {
-              open: async (context, streamId, preferredMode, continuationGrantId) => {
-                if ((selectedTrial || trialEntry) && optIn) {
-                  const current = await optIn.read();
-                  if (!matchesNativeTrial(current, request)) return { kind: "unavailable", reason: "unavailable" };
-                  const reply = await fetch("/api/media-relay/trial", { method: "POST", signal: AbortSignal.timeout(5000), headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ trialId: current!.trialId, context, streamId, preferredMode }) });
-                  if (!reply.ok) throw Error("Playback unavailable");
-                  return reply.json();
-                }
-                return client.mutation(api.mediaRelayPlayback.openPlayback, {
-                  context, streamId, preferredMode, ...(continuationGrantId ? { continuationGrantId } : {}),
-                });
+        const optIn = trial.current;
+        const create = (configuration: NativeTrialRouting | null, selectedMode: typeof mode) => {
+          const selectedTrial = matchesNativeTrial(configuration, request);
+          if (relayPlaybackEnabled() || selectedTrial) {
+            const url = process.env.NEXT_PUBLIC_CONVEX_URL;
+            if (!url) throw Error("Playback unavailable");
+            const client = new ConvexHttpClient(url);
+            return createRetainedPlaybackAdapter(request, mount.current!, notify, {
+              mode: selectedMode,
+              providerTrial: selectedTrial,
+              relay: {
+                open: async (context, streamId, preferredMode, continuationGrantId) => {
+                  if (selectedTrial && configuration) {
+                    const reply = await fetch("/api/media-relay/trial", { method: "POST", signal: AbortSignal.timeout(5000), headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ trialId: configuration.trialId, context, streamId, preferredMode }) });
+                    if (!reply.ok) throw Error("Playback unavailable");
+                    return reply.json();
+                  }
+                  return client.mutation(api.mediaRelayPlayback.openPlayback, {
+                    context, streamId, preferredMode, ...(continuationGrantId ? { continuationGrantId } : {}),
+                  });
+                },
+                rebind: (grantId, selectedSourceId, expectedSelectedSourceId, expectedContextRevision) =>
+                  client.mutation(api.mediaRelayPlayback.rebindPlayback, { grantId, selectedSourceId, expectedSelectedSourceId, expectedContextRevision }),
+                get: (grantId) =>
+                  client.query(api.mediaRelayPlayback.getPlayback, { grantId }),
+                restart: (grantId) =>
+                  client.mutation(api.mediaRelayPlayback.restartPlayback, {
+                    grantId,
+                  }),
+                refresh: (grantId) =>
+                  client.mutation(api.mediaRelayPlayback.refreshPlayback, {
+                    grantId,
+                  }),
+                release: (grantId) =>
+                  client.mutation(api.mediaRelayPlayback.releasePlayback, {
+                    grantId,
+                  }),
               },
-              rebind: (grantId, selectedSourceId, expectedSelectedSourceId, expectedContextRevision) =>
-                client.mutation(api.mediaRelayPlayback.rebindPlayback, { grantId, selectedSourceId, expectedSelectedSourceId, expectedContextRevision }),
-              get: (grantId) =>
-                client.query(api.mediaRelayPlayback.getPlayback, { grantId }),
-              restart: (grantId) =>
-                client.mutation(api.mediaRelayPlayback.restartPlayback, {
-                  grantId,
-                }),
-              refresh: (grantId) =>
-                client.mutation(api.mediaRelayPlayback.refreshPlayback, {
-                  grantId,
-                }),
-              release: (grantId) =>
-                client.mutation(api.mediaRelayPlayback.releasePlayback, {
-                  grantId,
-                }),
-            },
-          });
-        }
-        return createRetainedPlaybackAdapter(request, mount.current, notify, {
-          mode,
-        });
+            });
+          }
+          return createRetainedPlaybackAdapter(request, mount.current!, notify, { mode: selectedMode });
+        };
+        return optIn && request.kind === "vrcdn" ? createDeferredTrialAdapter({ load: optIn.read, create, mode }) : create(null, mode);
       }),
   );
   const state = useEventPlaybackSnapshot(owner);

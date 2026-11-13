@@ -1,6 +1,6 @@
 # Audio-only and background playback rehearsal
 
-Status: source implementation in progress. The relay is not enabled. Full hosted
+Status: source implemented and under PR review. The relay is not enabled. Full hosted
 release remains blocked by the existing `RELEASE_BLOCKER`.
 
 ## Intended phone test
@@ -24,7 +24,7 @@ The October 28 protected test already established native synthetic audio/video
 and real VRCDN HLS video on BASIC's iPhone. Its copy-AAC rendition passed FFprobe
 and decode checks. This trial finishes integration into the actual product. It
 does not repeat transport discovery or substitute another standalone test page.
-See the [original experiment](../../scripts/mobile-media-spike/hosted/README.md)
+See the [original experiment](https://github.com/BITRATE-Labs/VRDex/blob/139e715b3646fd6e993fd74cc3c8015760ff909e/scripts/mobile-media-spike/hosted/README.md)
 and [approved design](../superpowers/specs/2026-10-28-mobile-vrcdn-playback-design.md).
 
 ## Finite integration contract
@@ -49,10 +49,14 @@ an ordinary filesystem or privileged worker process. The host qualification
 proved a 512 MiB tmpfs rejects a 600 MiB allocation. It did not prove relay delivery.
 
 Memory storage reserves bounded segment reads, verifies completed-file stability,
-and retains finite rolling windows. One source acquisition is allowed. Forwarded
+and retains finite rolling windows plus a thirty-second retirement grace. Gateway
+URLs remain usable for that grace after publication advances, with current grant,
+lease and epoch checks on every read. One source acquisition is allowed. Forwarded
 input bytes, delivered body bytes and request count have independent limits.
 Copied URLs debit the same aggregate delivery allowance. Expiry or budget
-exhaustion stops the worker; the HTTP server also closes at expiry. The VM's
+exhaustion stops the worker. Physical packager cleanup precedes an exact-owner
+terminal observation; acknowledgment failure remains visible while local storage
+closes. The HTTP server also closes at expiry. The VM's
 independent hard deadline is a final containment boundary. Byte allowances do not
 represent a total platform billing cap or prove zero in-flight network overshoot.
 
@@ -81,9 +85,9 @@ binding, limits, cost and cleanup plan. Then test the actual provider and retain
 player before handing the ready URL to BASIC. Physical phone acceptance remains
 separate from desktop browser evidence.
 
-The earlier finite audio producer and delivery components remain proof comparators,
-not the deployed replacement for the approved shared native HLS product. The
-native-request renewal proposal is deferred.
+The earlier finite audio producer and delivery comparison is historical work in
+commit `139e715b3`; those unused components are excluded from this integration.
+The native-request renewal proposal is deferred.
 
 ## Linux synthetic qualification, November 13
 
@@ -92,13 +96,13 @@ verified 512-MiB tmpfs. Both original packager renditions passed codec and decod
 checks. The ordinary case used one acquisition, 338294 forwarded input bytes and
 425632 retained bytes. The 32768-byte input limit case stopped after forwarding
 28741 bytes and hit its limit once. No FFmpeg process or scratch file remained.
-The command completed in 7447 ms. Whole-VM cgroup memory peak was 581939200 bytes
-(including binary setup); Node RSS at the result was 88530944 bytes. These are
-separate from retained media memory. The VM subsequently stopped at its hard
-deadline and its scratch mount was removed. No provider or deployment credential
+The command completed in 7639 ms. Whole-VM cgroup memory peak was 504430592 bytes
+(including binary setup); Node RSS at the result was 88489984 bytes. These are
+separate from retained media memory. The scratch mount was removed; the release owner records the independent VM
+deadline readback separately. No provider or deployment credential
 was present in this synthetic test.
 
-Evidence bundle SHA256: `0a45919c912ac4f1b9450f5ee08c8802bdfc0bdb2197a87e08e7356309d9cabf`.
+Evidence bundle SHA256: `641e437eb4a55f7752bb95503ad71abd72bdfb996469cffbd47695dd192dbdbd`.
 Source changes that affect the bundle require matching artifact qualification.
 Actual public-provider, deployed-Convex, retained-browser and phone results remain
 separate pending steps.

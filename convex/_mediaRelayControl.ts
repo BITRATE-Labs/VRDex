@@ -98,7 +98,7 @@ export async function source(ctx: MutationCtx, streamKey: string, cleanup = fals
   StreamKeySchema.parse(streamKey);
   const trial = await activeNativeTrial(ctx.db);
   if (!cleanup && (!(await relayEnabled(ctx.db)) || (trial && trial.source.streamKey !== streamKey)))
-    throw Error("Source outside active relay authority");
+    throw Error("Relay disabled or source outside finite trial");
   const row = await ctx.db
     .query("mediaRelaySources")
     .withIndex("by_streamKey", (q) => q.eq("streamKey", streamKey))

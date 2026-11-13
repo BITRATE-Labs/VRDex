@@ -5,7 +5,7 @@ import { once } from 'node:events';
 import { readdir, writeFile, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-const { createPackager, createNativeTrialSource, createNativeTrialStorage, createPublisher, verifyNativeTrialScratch } = await import(pathToFileURL(resolve(process.argv[2])).href);
+const { createPackager, createNativeTrialSource, createNativeTrialStorage, createPublisher, verifyNativeTrialScratch, completeNativeTrialStop } = await import(pathToFileURL(resolve(process.argv[2])).href);
 const directory = process.argv[3];
 await verifyNativeTrialScratch(directory);
 const source = { streamKey: 'vrcdn/Alpha/1', streamId: 'Alpha', inputFormat: 'vrcdn_fmp4', packagingVersion: 1 };
@@ -51,7 +51,11 @@ try {
         }
       }
       results.push({ limited, limitHits, acquisitions: input.acquisitions(), forwardedBytes: input.upstreamBytes(), retainedBytes: storage.bytes(), renditions: [...snapshots.keys()] });
-    } finally { clearTimeout(deadline); abort.abort(); await handle?.stop(); storage.close(); }
+    } finally {
+      clearTimeout(deadline); abort.abort();
+      await completeNativeTrialStop({stopWorker:async()=>{},attempts:handle?[Promise.resolve(handle)]:[],
+        acknowledge:async()=>{assert.deepEqual(await readdir(directory),[]);},close:storage.close});
+    }
     for (let i=0;i<20&&children.size;i++) await new Promise(r=>setTimeout(r,50));
     assert.equal(children.size,0); assert.deepEqual(await readdir(directory),[]);
   }

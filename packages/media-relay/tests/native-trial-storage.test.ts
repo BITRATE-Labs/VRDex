@@ -24,3 +24,26 @@ test("trial object storage reserves physical file bytes before concurrent reads 
     assert.equal(storage.readSegment(prefix + "video-0.ts"), undefined);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+import { snapshotObjectKey, type RenditionSnapshot } from "../src/contracts";
+import { NATIVE_TRIAL_SEGMENT_GRACE_MS } from "../src/trial/policy";
+test("storage retains a retired advertised window for the bounded segment grace",async()=>{
+  const directory=await mkdtemp(join(tmpdir(),"native-trial-storage-"));
+  let now=0;
+  const storage=createNativeTrialStorage({streamKey:source.streamKey,maxBytes:4096,clock:()=>now});
+  try {
+    const filePath=join(directory,"segment.ts");await writeFile(filePath,Buffer.alloc(8));
+    const signal=new AbortController().signal;
+    for(let sequence=0;sequence<5;sequence++) await storage.putSegment({objectKey:prefix+`video-${sequence}.ts`,filePath,signal,retireAfterMs:600000});
+    for(let sequence=0;sequence<3;sequence++){
+      now=sequence*2000;
+      const snapshot:RenditionSnapshot={streamKey:source.streamKey,epoch:1,rendition:"video",targetDurationSeconds:2,sequence,discontinuitySequence:0,generatedAt:now,
+        segments:[sequence,sequence+1,sequence+2].map(sequence=>({sequence,objectKey:prefix+`video-${sequence}.ts`,durationSeconds:2,programDateTime:sequence*2000,discontinuity:false}))};
+      await storage.putSnapshot({objectKey:snapshotObjectKey(snapshot),snapshot,signal,retireAfterMs:600000});
+    }
+    assert(storage.readSegment(prefix+"video-0.ts"));
+    now+=NATIVE_TRIAL_SEGMENT_GRACE_MS+1;
+    await storage.retire({before:now,limit:100,signal});
+    assert.equal(storage.readSegment(prefix+"video-0.ts"),undefined);
+  }finally{storage.close();assert(directory.startsWith(join(tmpdir(),"native-trial-storage-")));await rm(directory,{recursive:true,force:true});}
+});

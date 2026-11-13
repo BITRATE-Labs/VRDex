@@ -1551,7 +1551,7 @@ it("finite native trial uses existing grants only for its signed operator and ex
       assert(grants.every(grant => grant.expiresAt === config.expiresAt));
       const source = await ctx.db.query("mediaRelaySources").first();
       assert.ok(source);
-      await ctx.db.patch(source._id, { ...readySource("vrcdn/Alpha/1"), owner: { workerId: config.worker.workerId, workerEpoch: config.worker.workerEpoch } });
+      await ctx.db.patch(source._id, { ...readySource("vrcdn/Alpha/1"), progressAt: now, owner: { workerId: config.worker.workerId, workerEpoch: config.worker.workerEpoch } });
     });
     assert.equal(AdmissionSchema.parse(await h.t.query(get, { grantId: first.grantId })).kind, "ready");
     const gatewayRead = makeFunctionReference<"query">("mediaRelayWorker:readGateway");
@@ -1578,10 +1578,18 @@ it("finite native trial uses existing grants only for its signed operator and ex
     assert.equal(AdmissionSchema.parse(await h.t.query(get, { grantId: first.grantId })).kind, "unavailable");
     await h.t.mutation(enable, { enabled: false });
     assert.equal(AdmissionSchema.parse(await h.t.query(get, { grantId: second.grantId })).kind, "unavailable");
+    const registerTrial = makeFunctionReference<"mutation">("mediaRelayWorker:registerWorker");
+    await h.t.mutation(registerTrial,{credential:"trial-worker-token",observation:{workerId:config.worker.workerId,workerEpoch:config.worker.workerEpoch,allocation:config.worker.allocation,observedAt:now,activeJobs:0,resources:null,jobs:[]}});
+    const observeTrial = makeFunctionReference<"mutation">("mediaRelayWorker:observeSource");
+    const stopArgs = {credential:"trial-worker-token",workerId:config.worker.workerId,workerEpoch:config.worker.workerEpoch,streamKey:config.source.streamKey,epoch:1,state:"stopped",progressAt:0,trialId:config.trialId};
+    await assert.rejects(h.t.mutation(observeTrial,{...stopArgs,trialId:"wrong-trial"}));
+    await assert.rejects(h.t.mutation(observeTrial,{...stopArgs,epoch:2}));
+    await h.t.mutation(observeTrial,stopArgs);
+    await h.t.mutation(observeTrial,stopArgs);
     await h.t.run(async ctx => {
       await ctx.db.patch(h.profileId, { publicationState: "published" });
       const source = await ctx.db.query("mediaRelaySources").first(); assert.ok(source);
-      await ctx.db.patch(source._id, { state: "stopped", owner: undefined, leaseExpiresAt: undefined });
+      assert.equal(source.state,"stopped"); assert.equal(source.owner,undefined); assert.equal(source.progressAt,now);
     });
     const nextConfig = { ...config, trialId: "native-trial-next", worker: { ...config.worker, workerEpoch: 2 } };
     process.env.MEDIA_RELAY_TRIAL_CONFIG = JSON.stringify(nextConfig);

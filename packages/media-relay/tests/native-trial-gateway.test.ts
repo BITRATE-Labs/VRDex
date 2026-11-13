@@ -17,11 +17,18 @@ function fixture() {
       segments: [0,1,2].map(sequence => ({ sequence, objectKey: `vrcdn/Alpha/1/epochs/1/attempt-1-fixture/${rendition}-${sequence}.ts`, durationSeconds: 2, programDateTime: now + sequence * 2000, discontinuity: false })) }]));
   const handler = createNativeTrialGateway({ config, clock: () => now,
     authorize: async ({ rendition }) => { calls++; return revoked ? { kind: "denied" } :
-      { kind: "active", grant, state: "ready", epoch: 1, leaseExpiresAt: 40000, snapshot: snapshots[rendition] }; },
+      { kind: "active", grant, state: "ready", epoch: snapshots[rendition].epoch, leaseExpiresAt: now + 30000, snapshot: snapshots[rendition] }; },
     readSnapshot: key => Object.values(snapshots).find(value => snapshotObjectKey(value) === key),
     readSegment: () => Buffer.alloc(100), recordDemand: async () => {}, onExhausted: () => exhausted++,
   });
-  return { config, handler, revoke: () => { revoked = true; }, expire: () => { now = config.expiresAt; }, calls: () => calls, exhausted: () => exhausted };
+  return { config, handler, advance(rendition: "video" | "audio", takeover = false) {
+    now += 2000;
+    const snapshot = snapshots[rendition];
+    snapshot.sequence++; snapshot.generatedAt = now;
+    const last = snapshot.segments.at(-1)!;
+    snapshot.segments = [...snapshot.segments.slice(1), { ...last, sequence: last.sequence + 1, objectKey: last.objectKey.replace(/-[0-9]+\.ts$/, `-${last.sequence + 1}.ts`) }];
+    if (takeover) { snapshot.epoch++; snapshot.segments = snapshot.segments.map(segment => ({...segment, objectKey: segment.objectKey.replace("/epochs/1/",`/epochs/${snapshot.epoch}/`)})); }
+  }, revoke: () => { revoked = true; }, expire: () => { now = config.expiresAt; }, calls: () => calls, exhausted: () => exhausted };
 }
 
 test("copied native segment URLs share the finite response allowance and recheck real grant authority", async () => {
@@ -47,4 +54,15 @@ test("revoked, expired and cross-source requests fail before media reads; unknow
   const calls = h.calls(); h.expire();
   assert.equal((await h.handler(new Request("https://trial.invalid/p/grant/audio/index.m3u8"))).status, 410);
   assert.equal(h.calls(), calls);
+});
+
+
+test("recently advertised URLs survive rolling publication but never an ownership epoch change", async () => {
+  const h = fixture();
+  const manifest = await h.handler(new Request("https://trial.invalid/p/grant/audio/index.m3u8"));
+  const url = (await manifest.text()).split(/\r?\n/).find(line => line.startsWith("https://")); assert(url);
+  h.advance("audio");
+  assert.equal((await h.handler(new Request(url))).status, 200);
+  h.advance("audio",true);
+  assert.equal((await h.handler(new Request(url))).status, 403);
 });

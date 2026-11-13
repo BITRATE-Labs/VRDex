@@ -58,3 +58,25 @@ test("real root provider waits for trial eligibility and retains audio through n
   await shell.screenshot({path:info.outputPath("native-trial-compact-failure.png")});
   await expect(page.locator("audio,video")).toHaveCount(0);
 });
+
+for(const eligibilityFails of [false,true]) test(`pending trial preserves ordinary other-stream playback when eligibility ${eligibilityFails ? "fails":"matches another source"} @fixture`,async({page,baseURL})=>{
+  let release!:()=>void, requested!:()=>void,opens=0,legacy=0;
+  const gate=new Promise<void>(resolve=>{release=resolve;}),seen=new Promise<void>(resolve=>{requested=resolve;});
+  await page.route("**/api/media-relay/trial",async route=>{
+    if(route.request().method()==="POST"){opens++;await route.abort();return;}
+    requested();await gate;
+    await route.fulfill({json:eligibilityFails ? null : {trialId:"trial",context:{kind:"profile",profileId:"profile",linkId:"Alpha"},streamId:"Alpha",expiresAt:Date.now()+60000,href:"/playwright/event-playback"}});
+  });
+  await page.route("https://stream.vrcdn.live/**",async route=>{
+    expect(route.request().url()).toBe("https://stream.vrcdn.live/live/Beta.live.ts");legacy++;
+    await route.fulfill({contentType:"video/mp2t",path:path.resolve("e2e/fixtures/persistent-synthetic.mpegts"),headers:{"Access-Control-Allow-Origin":"*"}});
+  });
+  await page.route("http://127.0.0.1:3210/api/**",route=>route.fulfill({json:{status:"success",value:route.request().postDataJSON()?.path==="profiles:getPublicBySlug" ? {id:"profile",slug:"playwright/event-playback",displayName:"Trial DJ",outboundLinks:[{type:"vrcdn",url:"vrcdn:Beta"}]}:null}}));
+  await page.goto(`${baseURL}/playwright/event-playback?kind=native-trial&relayTrial=trial`);await seen;
+  await page.getByRole("button",{name:"Play other",exact:true}).click();
+  expect(opens).toBe(0);expect(legacy).toBe(0);release();
+  await expect.poll(()=>page.locator("video").evaluate(node=>(node as HTMLVideoElement).currentTime),{timeout:15000}).toBeGreaterThan(0.5);
+  expect(opens).toBe(0);expect(legacy).toBe(1);
+  await expect(page.getByRole("button",{name:"Audio only",exact:true})).toHaveCount(0);
+  await page.getByRole("button",{name:"Close event playback",exact:true}).click();
+});

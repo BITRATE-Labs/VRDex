@@ -1,7 +1,7 @@
 
 import { NativeTrialRoutingSchema, type NativeTrialRouting } from "@vrdex/media-relay";
 export { NativeTrialRoutingSchema, type NativeTrialRouting } from "@vrdex/media-relay";
-import type { PlaybackRequest } from "./event-playback-owner";
+import type { PlaybackAdapter, PlaybackRequest } from "./event-playback-owner";
 import { relayContext } from "./relay-playback-adapter";
 
 /** A local opt-in never changes routing for another source, context or expired trial. */
@@ -23,5 +23,45 @@ export function createNativeTrialOptIn(expected: string, href: string, load: () 
       value = parsed.success && parsed.data.trialId === expected && parsed.data.expiresAt > Date.now() ? parsed.data : null;
       return value;
     }).catch(() => null),
+  };
+}
+
+import type { PlaybackMode } from "./playback-mode";
+/** Resolve eligibility before choosing native or ordinary playback, without changing the root owner. */
+export function createDeferredTrialAdapter({ load, create, mode: initialMode }: {
+  load: () => Promise<NativeTrialRouting | null>;
+  create: (trial: NativeTrialRouting | null, mode: PlaybackMode) => PlaybackAdapter;
+  mode: PlaybackMode;
+}): PlaybackAdapter {
+  let target: PlaybackAdapter | undefined, pending: Promise<PlaybackAdapter> | undefined;
+  let disposed = false, intent = false, version = 0, mode = initialMode, volume = 1, muted = false;
+  let updated: PlaybackRequest | undefined;
+  const get = () => target ? Promise.resolve(target) : pending ??= load().then(trial => {
+    if (disposed || !intent) throw Error("Playback intent ended");
+    target = create(trial, mode); target.setVolume(volume); target.setMuted(muted);
+    if (updated) target.update(updated);
+    return target;
+  }).catch(error => { pending = undefined; throw error; });
+  const play = async (retry = false) => {
+    intent = true; const token = ++version;
+    try {
+      const adapter = await get();
+      if (disposed || !intent || token !== version) return false;
+      return await (retry && adapter.retry ? adapter.retry() : adapter.play());
+    } catch (error) { if (disposed || !intent || token !== version) return false; throw error; }
+  };
+  return {
+    get supportsAudioOnly() { return target?.supportsAudioOnly === true; },
+    get supportsPictureInPicture() { return target ? target.supportsPictureInPicture !== false : false; },
+    get media() { return target?.media; },
+    play: () => play(), retry: () => play(true),
+    pause() { intent = false; version++; target?.pause(); },
+    setVolume(value) { volume = value; target?.setVolume(value); },
+    setMuted(value) { muted = value; target?.setMuted(value); },
+    async setMode(value) { mode = value; return target?.setMode ? target.setMode(value) : true; },
+    update(value) { updated = value; target?.update(value); },
+    refresh: async () => { await target?.refresh?.(); },
+    setMetadata(value) { target?.setMetadata?.(value); },
+    dispose() { disposed = true; intent = false; version++; target?.dispose(); },
   };
 }
