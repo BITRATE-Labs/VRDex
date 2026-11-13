@@ -1,49 +1,13 @@
-import { createVrcdnStreamLinks } from "../../../../convex/_vrcdnLinks";
-
 import {
-  type VrcdnLiveObservation,
   type VrcdnLiveState,
   type VrcdnLiveStates,
-  vrcdnLiveStateFromStatus,
   vrcdnReportedState,
 } from "./vrcdn-live";
 
 export type VrcdnProbeFreshnessMode = "cached" | "fresh";
 
-export type VrcdnLiveProbeResult = VrcdnLiveObservation & {
-  durationMs: number;
-  status: number;
-};
-
-type ProbeVrcdnLiveStateOptions = {
-  fetchImplementation?: typeof fetch;
-  now?: () => number;
-  signal: AbortSignal;
-};
-
-export async function probeVrcdnLiveState(
-  streamId: string,
-  options: ProbeVrcdnLiveStateOptions,
-): Promise<VrcdnLiveProbeResult> {
-  const stream = createVrcdnStreamLinks(streamId);
-
-  if (stream === null) {
-    throw new Error("Invalid VRCDN stream identifier.");
-  }
-
-  const fetchImplementation = options.fetchImplementation ?? fetch;
-  const now = options.now ?? Date.now;
-  const startedAt = now();
-  const response = await fetchImplementation(stream.questUrl, { signal: options.signal });
-  await response.body?.cancel();
-
-  return {
-    durationMs: now() - startedAt,
-    observedAt: now(),
-    state: vrcdnLiveStateFromStatus(response.status),
-    status: response.status,
-  };
-}
+export { probeVrcdnLiveState, type VrcdnLiveProbeResult } from "../../../../convex/_vrcdnLiveProbe";
+import type { VrcdnLiveProbeResult } from "../../../../convex/_vrcdnLiveProbe";
 
 export function vrcdnProbeLog(input: {
   durationMs: number;

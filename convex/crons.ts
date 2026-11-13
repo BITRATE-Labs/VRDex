@@ -4,6 +4,8 @@ import { cronJobs } from "convex/server";
 import { internal } from "./_generated/api";
 
 const crons = cronJobs();
+// Inert until the documented provider/capacity activation gate is accepted.
+crons.interval("refresh event Live now", { minutes: 1 }, internal.eventLiveActions.refresh, {});
 crons.hourly("prune completed broadcast connection tests", {minuteUTC: 35}, internal.eventBroadcastConnectionTests.pruneConnectionTests, {});
 crons.interval("refresh admission monitoring", { minutes: 1 }, makeFunctionReference<"mutation">("groupObservations:refreshAdmissionMonitoring"), {});
 

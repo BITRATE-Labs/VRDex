@@ -4,6 +4,7 @@ import { unstable_cache } from "next/cache";
 
 import { type LiveClaimLink } from "@/lib/live-claim-sources";
 import { twitchLoginForLiveClaim } from "@/lib/twitch-url";
+import { requestTwitchToken, requestTwitchStreams } from "../../../../../convex/_twitchLiveProbe";
 
 export type TwitchLiveState =
   | {
@@ -18,19 +19,6 @@ export type TwitchLiveState =
 
 export type TwitchLiveObservation = { state: TwitchLiveState; observedAt: number };
 type PublicLink = LiveClaimLink;
-
-type TwitchTokenResponse = {
-  access_token?: string;
-};
-
-type TwitchStreamsResponse = {
-  data?: Array<{
-    game_name?: string;
-    started_at?: string;
-    title?: string;
-    viewer_count?: number;
-  }>;
-};
 
 const staleStateMaxAgeMs = 60_000;
 const staleStates = new Map<string, { fetchedAt: number; state: TwitchLiveState }>();
@@ -59,22 +47,8 @@ const getTwitchAppToken = unstable_cache(
       return null;
     }
 
-    const response = await fetch("https://id.twitch.tv/oauth2/token", {
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        grant_type: "client_credentials",
-      }),
-      method: "POST",
-      signal: AbortSignal.timeout(4000),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Twitch token request returned HTTP ${response.status}.`);
-    }
-
-    const payload = (await response.json()) as TwitchTokenResponse;
-    return payload.access_token ?? null;
+    const token = await requestTwitchToken(clientId, clientSecret);
+    return token?.accessToken ?? null;
   },
   ["twitch-app-token"],
   { revalidate: 3000 },
@@ -90,24 +64,9 @@ const getCachedTwitchLiveState = unstable_cache(
       return observe({ status: "unavailable" });
     }
 
-    const url = new URL("https://api.twitch.tv/helix/streams");
-    url.searchParams.set("user_login", login);
-
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Client-Id": clientId,
-      },
-      signal: AbortSignal.timeout(4000),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Twitch streams request returned HTTP ${response.status}.`);
-    }
-
-    const payload = (await response.json()) as TwitchStreamsResponse;
-    const stream = payload.data?.[0];
-
+    const response = await requestTwitchStreams([login], clientId, token);
+    if (response.unavailable) throw new Error("Twitch stream request rate limited.");
+    const stream = response.streams.find(stream => stream.user_login === login);
     if (!stream) {
       return observe({ status: "offline" });
     }

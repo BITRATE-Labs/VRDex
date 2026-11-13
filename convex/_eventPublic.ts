@@ -763,6 +763,7 @@ async function getPublicEventRecord(
   options: {
     includeAssociationMediaKits?: boolean;
     includeUnpublished?: boolean;
+    playbackOnly?: boolean;
   } = {},
 ): Promise<PublicEventRecord | null> {
   if (event.publicationState !== "published" && options.includeUnpublished !== true) {
@@ -776,8 +777,8 @@ async function getPublicEventRecord(
   };
   const [community, worlds, participants, slots, media, lineupEntries] = await Promise.all([
     getPublishedCommunity(db, event),
-    getPublicEventWorldRecords(db, event),
-    getPublicEventParticipantRecords(db, event, rosterOptions),
+    options.playbackOnly ? Promise.resolve([]) : getPublicEventWorldRecords(db, event),
+    options.playbackOnly ? Promise.resolve([]) : getPublicEventParticipantRecords(db, event, rosterOptions),
     getPublicEventSlotRecords(db, event, rosterOptions),
     getPublicEventMediaRecord(db, event),
     getPublicEventLineupRecords(db, event, rosterOptions),
@@ -791,11 +792,12 @@ async function getPublicEventRecord(
     return null;
   }
 
-  const communityMediaKit = community === undefined
+  const communityMediaKit = community === undefined || options.playbackOnly
     ? undefined
     : await getPublicProfileMediaKit(db, community, { surface: "discovery" });
-  const communityImageUrl = community === undefined || communityMediaKit === undefined
-    ? undefined : publicEventCommunityImage(community, communityMediaKit);
+  const communityImageUrl = options.playbackOnly
+    ? community === undefined ? undefined : publicProfileCardImage(community)
+    : community === undefined || communityMediaKit === undefined ? undefined : publicEventCommunityImage(community, communityMediaKit);
 
   return {
     event,
@@ -813,12 +815,13 @@ async function getPublicEventRecord(
 export async function getPublicEventBySlug(
   db: DatabaseReader,
   event: Doc<"events"> | null,
+  options: { includeAssociationMediaKits?: boolean; playbackOnly?: boolean } = {},
 ): Promise<PublicEvent | null> {
   if (event === null) {
     return null;
   }
 
-  const record = await getPublicEventRecord(db, event);
+  const record = await getPublicEventRecord(db, event, options);
   const projected = record === null ? null : toPublicEvent(record);
   if (projected === null || event.seriesId === undefined) {
     return projected;

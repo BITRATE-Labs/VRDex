@@ -791,3 +791,10 @@ export async function fetchManagedCommunityBySlug(slug: string) {
     return { kind: "error" as const, community: null };
   }
 }
+
+/** Shared cached observations only; never performs provider or media I/O. */
+export async function fetchPublicLiveEvents() {
+  if (!process.env.NEXT_PUBLIC_CONVEX_URL) return [];
+  try { return (await fetchQuery(api.eventLive.listPublic, {})).filter(entry => entry.expiresAt > Date.now()); }
+  catch { return []; }
+}
