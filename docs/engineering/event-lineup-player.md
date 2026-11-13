@@ -1,20 +1,26 @@
 # Event lineup player
 
-Timed public lineups whose current scheduled performer has a public stream are watchable
-without staff enabling performer sequence. The editor's Automatic choice uses
-this local browser viewer; Event stream retains the explicitly enabled event
-source. Automatic requests never open native relay grants or broadcasting tools.
-Enabled performer-sequence events use the same fresh-start rule. A new viewer
-does not enter an empty waiting room or manual selector while the scheduled
-source is missing. Existing started sessions retain their manual controls.
-Fresh Play uses the
-same inferred, unambiguous current slot in the inline surface, standalone surface
-and playback owner. A different past or future performer having a stream does
-not make a missing current source watchable. The viewer clock also refreshes at
-slot starts and inferred/authored ends, so the new-start control changes at the
-boundary without waiting for the normal minute tick or a visibility event.
-Existing playback keeps its
-independent continuation and projection-revalidation rules.
+Timed public lineups with a current public performer stream are watchable without
+staff enabling performer sequence. The editor's Automatic choice uses this local
+browser viewer. Event stream retains the explicitly enabled event source.
+Automatic requests never open native relay grants or broadcasting tools.
+
+Fresh Play uses the same inferred current slot in the inline surface, standalone
+surface and playback owner. A past or future performer's stream does not make a
+unique unlinked current performer watchable. Staff-enabled performer sequences
+use the same rule. Already-started sessions retain manual selection and continuation.
+
+When authored windows overlap or their order is ambiguous, an actually active
+public source keeps the existing manual performer selector reachable. Starting
+that session opens no stream until the viewer selects one. Future-only links,
+gaps and a unique unlinked current performer still do not offer Play.
+
+The viewer clock refreshes at slot starts and inferred/authored ends. The
+new-start control changes at the boundary without waiting for the normal minute
+tick or a visibility event. Existing playback keeps its independent continuation
+and projection-revalidation rules. A retained retry that becomes ineligible after
+its source was released reports Stream unavailable instead of remaining paused
+without feedback.
 
 ## Ownership and updates
 
@@ -123,15 +129,17 @@ added by this change. Established playback must stop progressing for at least
 evidence, including buffered playback after transport failure or clean EOF.
 EOF alone neither releases playback nor advances the lineup.
 
-A newly connected source has up to fifteen seconds to begin decoded playback before
-reconnection. This prevents cold MSE/audio startup from being destroyed every
-second, or repeatedly restarting a source awaiting a slow first keyframe.
-A synthetic seven-second startup regression retains its original connection;
-this does not establish live-provider or physical-phone startup performance.
-Once it progresses, the established one-second failure interval applies.
-The allowance does not make a successor ready or bypass pause/revocation fences.
-An offline or never-progressing cold source can now take ten seconds longer to
-reach its first retry. This is the tradeoff for retaining slow valid initialization.
+A newly connected source has up to fifteen seconds to begin decoded playback
+before destructive reconnection. This prevents repeatedly restarting a source
+awaiting a slow first keyframe. The original five-second cold-start guard still
+controls unavailability status and release to a ready successor at its boundary;
+it does not hold an incoming decoded performer for fifteen seconds. A synthetic
+seven-second startup regression retains its original connection. This does not
+establish live-provider or physical-phone startup performance. Once a source
+progresses, the established one-second failure interval applies. The longer retry
+allowance does not make a successor ready or bypass pause/revocation fences.
+An offline or never-progressing cold source can take ten seconds longer to reach
+its first destructive retry, while status and handoff keep their earlier guard.
 
 Retries use 1, 2, 4, then 10 second intervals. Each successful handoff resets the
 preparation retry count and deadline for the next candidate. Replacing a prepared connection also
@@ -235,7 +243,9 @@ Audio-only availability belongs to the adapter. Native HLS and relay adapters
 declare a separate audio rendition; legacy MPEG-TS adapters do not. Retained
 controls omit Audio only for those legacy adapters while preserving Video
 recovery and saved preferences. A restored audio preference blocks automatic local
-video too, before creating its session; explicit Video and Play recover it.
+video too, before creating its session. The player shows Unsupported and a Video
+choice instead of a repeatable Enable playback action; explicit Video and Play
+recover it.
 Legacy lineup adapters do not implement a mode switch that only hides video.
 Hiding local lineup video is not audio-only
 decoding. See the [investigation and live-index proposal](../planning/player-performance-and-live-index-2026-11-06.md).
@@ -265,3 +275,16 @@ the cancellation RED/GREEN evidence; a clean rerun alone is not the explanation.
 The [final local verification ledger](event-lineup-verification.md) records the
 connected authored-event serialization test, final editor snapshots and remaining
 operational evidence.
+
+## Failed playback presentation
+
+The retained player collapses its media rectangle while playback is unavailable
+or blocked. A blocked Twitch iframe stays visible because its provider recovery
+controls must remain interactive. Event and profile inline placeholders reserve only the controls,
+identity, lineup controls when present, and recovery action. Recovery controls
+use their natural height. Both placeholders use the measured shell height, so
+missing mode/PiP rows leave no reserved strip. The existing media
+node stays mounted and owned by the same transport; a status change alone does
+not revoke, stop or recreate playback. Successful recovery reveals normal media
+again. Unavailable playback keeps an explicit Try again action, source identity,
+controls and Close in both inline and compact presentation.

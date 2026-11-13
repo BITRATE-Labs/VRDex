@@ -225,3 +225,35 @@ test("watch clock stays stable between subscription ticks @flow @fixture", async
   await expect(page.getByRole("region", { name: "Preview Operator preview" })).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+
+test("failed retained playback collapses unused media space inline and compact, then recovers @flow @fixture", async ({ page }, testInfo) => {
+  await playbackAuthorization(page);
+  let failed = true;
+  await page.route("https://stream.vrcdn.live/live/*.webm", route => failed
+    ? route.fulfill({ status: 404, body: "Offline" })
+    : route.fulfill({ contentType: "audio/wav", body: wave() }));
+  await page.goto("/playwright/event-playback");
+  await page.getByRole("button", { name: "Play Event a", exact: true }).click();
+  const shell = page.getByRole("region", { name: "Event playback", exact: true });
+  await expect(shell.getByRole("status")).toHaveText("Stream unavailable");
+  const slot = page.locator('[data-event-playback-inline="a"]');
+  await slot.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("failed-player-inline.png") });
+  expect((await slot.boundingBox())!.height).toBeLessThanOrEqual(180);
+  expect((await shell.boundingBox())!.height).toBeLessThanOrEqual(180);
+  await expect(shell.getByRole("button", { name: "Try again", exact: true })).toBeVisible();
+  await expect(shell.getByRole("button", { name: "Close event playback" })).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(shell).toHaveAttribute("data-presentation", "compact");
+  await shell.screenshot({ path: testInfo.outputPath("failed-player-compact.png") });
+  expect((await shell.boundingBox())!.height).toBeLessThanOrEqual(180);
+  failed = false;
+  await shell.getByRole("button", { name: "Try again", exact: true }).click();
+  const media = page.locator("[data-event-playback-mount] video");
+  await expect.poll(() => media.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(0.1);
+  await expect(media).toBeVisible();
+  await expect(shell.getByRole("status")).toHaveCount(0);
+  await shell.getByRole("button", { name: "Close event playback" }).click();
+  await expect(media).toHaveCount(0);
+});

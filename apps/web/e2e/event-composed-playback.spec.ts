@@ -175,7 +175,8 @@ test('saved audio preference blocks automatic legacy video until explicit Video 
   });
   await page.goto('/playwright/event-lineup-live?composed&automatic&transport=http%3A%2F%2F127.0.0.1%3A6799');
   await page.getByRole('button', { name: 'Play Lineup live', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Enable playback', exact: true })).toBeVisible();
+  await expect(page.getByRole('status')).toHaveText('Unsupported');
+  await expect(page.getByRole('button', { name: 'Enable playback', exact: true })).toHaveCount(0);
   await expect(page.locator('video')).toHaveCount(0);
   expect(opened).toBe(0);
   await expect(page.getByRole('button', { name: 'Audio only', exact: true })).toHaveCount(0);
@@ -206,4 +207,23 @@ test('current-source eligibility updates at the slot boundary without a visibili
   await page.clock.runFor(5100);
   await expect(play).toBeVisible({ timeout: 1000 });
   await expect(page.locator('video')).toHaveCount(0);
+});
+
+
+test('ambiguous active public streams require manual performer selection before connecting @fixture', async ({ page }) => {
+  let opened = 0;
+  await page.route('http://127.0.0.1:6799/**', async route => {
+    opened++;
+    await route.fulfill({ contentType: 'video/mp2t', path: path.resolve('e2e/fixtures/persistent-synthetic.mpegts'), headers: { 'access-control-allow-origin': '*' } });
+  });
+  await page.goto('/playwright/event-lineup-live?composed&automatic&transport=http%3A%2F%2F127.0.0.1%3A6799');
+  await page.getByRole('button', { name: 'duplicate', exact: true }).click();
+  await page.getByRole('button', { name: 'Play Lineup live', exact: true }).click();
+  const performer = page.getByRole('combobox', { name: 'Performer', exact: true });
+  await expect(performer).toBeVisible();
+  await expect(page.locator('video')).toHaveCount(0);
+  expect(opened).toBe(0);
+  await performer.selectOption('x');
+  await expect.poll(() => page.locator('video:not([hidden])').evaluate(node => (node as HTMLVideoElement).currentTime), { timeout: 15000 }).toBeGreaterThan(1);
+  expect(opened).toBe(1);
 });

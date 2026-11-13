@@ -263,7 +263,7 @@ export function ProfileVrcdnStreams({
                 {showPlayer ? (
                   <div className="mt-3 overflow-hidden rounded-control border border-border">
                     <div data-event-playback-inline={`profile:${profileId}:${streamId}`}>
-                      {retained?.streamId === streamId ? <div aria-hidden="true"><div className="aspect-video" /><div className="h-[152px]" />{(retained.status === "blocked" || retained.status === "unavailable") && <div className="h-11" />}</div> : <button type="button" aria-label={`Play ${title}`} className="block w-full" disabled={!playback || !profileId}
+                      {retained?.streamId === streamId ? retained.status === "blocked" || retained.status === "unavailable" ? <div aria-hidden="true" style={{ height: "var(--event-playback-recovery-height, 196px)" }} /> : <div aria-hidden="true"><div className="aspect-video" /><div className="h-[152px]" /></div> : <button type="button" aria-label={`Play ${title}`} className="block w-full" disabled={!playback || !profileId}
                         onClick={()=>{if(playback && profileId)void playback.play({kind:"vrcdn",profileId,profileSlug,title:`${displayName ?? profileSlug} - VRDex`,href:`/${profileSlug}`,sourceId:streamId,src:directVideoUrl??questUrl,transport:directVideoUrl?"video":"mpegts"});}}><WatchPlayPoster /></button>}
                     </div>
                   </div>

@@ -306,3 +306,18 @@ test("fresh Play refuses an unlinked current performer even if a later performer
     adapters[0]?.resolve(false); await pending; owner.close();
   }
 });
+
+
+test("refused retained retry reports unavailable after a released source crosses the event window", async () => {
+  const { owner, adapters } = fixture();
+  const first = owner.play(request());
+  adapters[0].resolve(true); await first;
+  const replacement = { ...request("a", "https://stream/replacement"), endAt: Date.now() - 1 };
+  owner.update(replacement);
+  assert.equal(owner.getSnapshot().status, "paused");
+  await owner.play(replacement);
+  assert.equal(owner.getSnapshot().status, "unavailable");
+  assert.equal(adapters.length, 1);
+  assert.equal(adapters[0].disposed, 1);
+  owner.close();
+});

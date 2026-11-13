@@ -83,3 +83,28 @@ test("direct event streams remain watchable without performer links", () => {
   assert.equal(canStartEventPlayback(request, 1), true);
   assert.equal(canStartEventPlayback(request, 3), false);
 });
+
+
+test("ambiguous active public sources retain manual selection without admitting future-only or missing sources", () => {
+  const request = eventPlaybackRequest({ ...event, endAt: 30, watchSurfaceEnabled: false, slots: [
+    { ...playableSlot, startAt: 1, endAt: 10 },
+    { ...playableSlot, position: 1, playbackKey: "duplicate", startAt: 1, endAt: 10 },
+  ] });
+  assert.ok(request);
+  assert.equal(canStartEventPlayback(request, 5), true);
+  assert.equal(canStartEventPlayback(request, 15), false);
+  const overlap = eventPlaybackRequest({ ...event, endAt: 30, watchSurfaceEnabled: false, slots: [
+    { ...playableSlot, startAt: 1, endAt: 15, stream: undefined },
+    { ...playableSlot, position: 1, playbackKey: "overlap", startAt: 10, endAt: 20 },
+  ] });
+  assert.ok(overlap);
+  assert.equal(canStartEventPlayback(overlap, 12), true);
+  assert.equal(canStartEventPlayback(overlap, 5), false);
+  const outOfOrder = eventPlaybackRequest({ ...event, endAt: 30, watchSurfaceEnabled: false, slots: [
+    { ...playableSlot, startAt: 10, endAt: 20 },
+    { ...playableSlot, position: 1, playbackKey: "earlier", startAt: 1, endAt: 10, stream: undefined },
+  ] });
+  assert.ok(outOfOrder);
+  assert.equal(canStartEventPlayback(outOfOrder, 15), true);
+  assert.equal(canStartEventPlayback(outOfOrder, 25), false);
+});

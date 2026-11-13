@@ -4,6 +4,7 @@ import { Maximize, Minimize, Pause, Play, Volume2, VolumeX, PictureInPicture2 } 
 
 export type VrcdnPlayerControlsProps = {
   fullscreen: boolean;
+  overlay?: boolean;
   mode?: "video" | "audio";
   audioAvailable?: boolean;
   onModeChange?: (mode: "video" | "audio") => void;
@@ -55,6 +56,7 @@ const controlButton =
  */
 export function VrcdnPlayerControls({
   connected,
+  overlay = true,
   mode, audioAvailable = true, onModeChange, pipSupported = false, pipActive = false, onTogglePip,
   fullscreen,
   label,
@@ -70,7 +72,7 @@ export function VrcdnPlayerControls({
   return (
     <div
       aria-label={`${label} controls`}
-      className="absolute inset-x-0 bottom-0 flex flex-col bg-gradient-to-t from-black/70 to-transparent px-2 py-1"
+      className={`${overlay ? "absolute inset-x-0 bottom-0" : "relative"} flex flex-col bg-gradient-to-t from-black/70 to-transparent px-2 py-1`}
       role="group"
     >
       <div className="flex w-full items-center gap-1">

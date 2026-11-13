@@ -27,6 +27,8 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
   });
   const request = state.request;
   const twitch = request?.kind === "twitch";
+  const unsupportedAudio = state.status === "blocked" && state.mode === "audio" && !twitch && !owner.supportsAudioOnly;
+  const recovery = state.status === "unavailable" || (state.status === "blocked" && !twitch);
   useLayoutEffect(() => {
     if (!request) return;
     let frame = 0;
@@ -40,6 +42,7 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
       setLimited(tooSmall);
       if (twitch && tooSmall && (mount.current?.childElementCount || owner.getSnapshot().status !== "paused")) owner.suspend();
       const slot = Array.from(document.querySelectorAll<HTMLElement>("[data-event-playback-inline]")).find(node => node.dataset.eventPlaybackInline === ("profileId" in request ? `profile:${request.profileId}:${request.sourceId}` : request.eventId));
+      if (recovery && slot && shell.current) slot.style.setProperty("--event-playback-recovery-height", `${shell.current.offsetHeight}px`);
       const box = slot?.getBoundingClientRect();
       const inline = box && box.top >= bounds.top && box.bottom <= bounds.top + bounds.height && box.left >= bounds.left && box.right <= bounds.left + bounds.width && box.width >= (twitch ? 400 : 280);
       const next = inline ? { top: box.top, left: box.left, width: box.width } : undefined;
@@ -60,7 +63,7 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
     window.visualViewport?.addEventListener("scroll", schedule);
     measure();
     return () => { cancelAnimationFrame(frame); resize.disconnect(); mutations.disconnect(); window.removeEventListener("resize", schedule); document.removeEventListener("scroll", schedule, true); window.visualViewport?.removeEventListener("resize", schedule); window.visualViewport?.removeEventListener("scroll", schedule); };
-  }, [twitch, mount, owner, request]);
+  }, [twitch, mount, owner, request, recovery]);
   useEffect(() => {
     const sync = () => setFullscreen(document.fullscreenElement === shell.current);
     document.addEventListener("fullscreenchange", sync);
@@ -99,18 +102,18 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
     <div aria-hidden="true" style={{ height: request ? height + 24 : 0, paddingBottom: request ? "env(safe-area-inset-bottom)" : 0 }} />
     <section ref={shell} aria-label="Event playback" hidden={!request} data-event-id={request?.eventId} data-presentation={compact ? "compact" : "inline"}
       className={`event-retained-player fixed z-50 overflow-hidden rounded-card ${twitch ? "" : "border border-border"} bg-media text-white shadow-panel`} style={style}>
-      <div ref={mount} hidden={state.mode === "audio" && !twitch} data-event-playback-mount className={fallback ? "" : "event-retained-media"} style={twitch && !fallback ? { minHeight: 300 } : undefined} />
-      {request && state.mode === "audio" && request.kind !== "twitch" && <div className="flex aspect-video flex-col items-center justify-center gap-3 bg-media p-4 text-center">
+      <div ref={mount} hidden={recovery || (state.mode === "audio" && !twitch)} data-event-playback-mount className={fallback ? "" : "event-retained-media"} style={twitch && !fallback ? { minHeight: 300 } : undefined} />
+      {request && !recovery && state.mode === "audio" && request.kind !== "twitch" && <div className="flex aspect-video flex-col items-center justify-center gap-3 bg-media p-4 text-center">
         {artwork ? <Image unoptimized width={96} height={96} src={artwork} alt="" className="size-24 rounded-control object-contain" /> : <span aria-hidden="true" className="flex size-24 items-center justify-center rounded-control bg-white/5 text-white/60"><Music2 className="size-8" /></span>}
         {state.metadata?.displayName && <span className="text-sm font-medium">{state.metadata.displayName}</span>}
       </div>}
       {request && <>
-        {!fallback && <div className={`relative ${request.kind === "twitch" ? "h-[52px]" : "h-[100px]"} shrink-0`}><VrcdnPlayerControls mode={request.kind !== "twitch" ? state.mode : undefined} audioAvailable={owner.supportsAudioOnly} onModeChange={value => void owner.setMode(value)} pipSupported={pip.supported} pipActive={pip.active}
+        {!fallback && <div className={`relative ${recovery ? "" : request.kind === "twitch" ? "h-[52px]" : "h-[100px]"} shrink-0`}>{unsupportedAudio ? <button type="button" className="min-h-11 cursor-pointer px-3 text-sm underline" onClick={() => void owner.setMode("video")}>Video</button> : <VrcdnPlayerControls overlay={!recovery} mode={request.kind !== "twitch" ? state.mode : undefined} audioAvailable={owner.supportsAudioOnly} onModeChange={value => void owner.setMode(value)} pipSupported={pip.supported} pipActive={pip.active}
           onTogglePip={() => { const media = owner.media; if (media instanceof HTMLVideoElement && state.mode === "video") void togglePictureInPicture(media).catch(() => {}); }}
           label={request.title} connected={state.status === "playing" && (request.kind !== "performer_sequence" || Boolean(state.lineup?.connected))} paused={state.status !== "playing" && state.status !== "loading"} fullscreen={fullscreen} volume={state.volume} muted={state.muted} volumeSettable={volumeSettable}
           onTogglePlay={() => state.status === "playing" || state.status === "loading" ? owner.pause() : void owner.play(request)}
           onToggleMute={() => owner.setMuted(!state.muted)} onVolumeChange={value => owner.setVolume(value)}
-          onToggleFullscreen={() => { if (document.fullscreenElement) void document.exitFullscreen().catch(() => {}); else void shell.current?.requestFullscreen?.().catch(() => {}); }} /></div>}
+          onToggleFullscreen={() => { if (document.fullscreenElement) void document.exitFullscreen().catch(() => {}); else void shell.current?.requestFullscreen?.().catch(() => {}); }} />}</div>}
         <div className="flex min-h-[52px] shrink-0 items-center gap-2 border-t border-white/10 px-3">
           <Link aria-label={`Return to ${request.title}`} href={request.href} className="flex min-w-0 flex-1 items-center gap-2 py-2 text-sm font-medium hover:underline"><span className="min-w-0 truncate">{request.title}{source && <span className="block truncate text-xs font-normal text-white/65">{source}</span>}</span><ArrowUpRight aria-hidden className="size-4 shrink-0" /></Link>
           <button type="button" className="flex size-11 shrink-0 items-center justify-center rounded-control hover:bg-white/10" aria-label="Close event playback" onClick={() => owner.close()}><X aria-hidden className="size-5" /></button>
@@ -123,8 +126,8 @@ export function EventCompactPlayer({ owner, state, mount }: { owner: EventPlayba
           {state.lineup?.following ? <span>Following lineup</span> : <button type="button" onClick={() => owner.live()}>Return to live</button>}
           {state.lineup?.nextPlaybackBlocked && <button type="button" aria-label="Enable next performer playback" onClick={() => owner.retryNextPlayback()}>Enable playback</button>}
         </div>}
-        {(state.status === "unavailable" || fallback) && <div className="flex min-h-11 items-center justify-between gap-3 border-t border-white/10 px-3 text-sm"><span role="status">{fallback ? "External playback" : state.unavailableReason === "unsupported" ? "Unsupported" : state.unavailableReason === "ended" ? "Playback stopped" : "Stream unavailable"}</span>{state.unavailableReason === "ended" && <button type="button" className="min-h-11 py-3 underline" onClick={() => void owner.play(request)}>Try again</button>}{request.kind === "twitch" && request.sourceId.startsWith("https://") && <a href={request.sourceId} target="_blank" rel="noreferrer" className="py-3 underline">Open stream</a>}</div>}
-        {state.status === "blocked" && <button type="button" className="min-h-11 px-3 text-sm underline" onClick={() => void owner.play(request)}>Enable playback</button>}
+        {(state.status === "unavailable" || fallback) && <div className="flex min-h-11 items-center justify-between gap-3 border-t border-white/10 px-3 text-sm"><span role="status">{fallback ? "External playback" : state.unavailableReason === "unsupported" ? "Unsupported" : state.unavailableReason === "ended" ? "Playback stopped" : "Stream unavailable"}</span>{!fallback && <button type="button" className="min-h-11 py-3 underline" onClick={() => void owner.play(request)}>Try again</button>}{request.kind === "twitch" && request.sourceId.startsWith("https://") && <a href={request.sourceId} target="_blank" rel="noreferrer" className="py-3 underline">Open stream</a>}</div>}
+        {state.status === "blocked" && (unsupportedAudio ? <div role="status" className="flex min-h-11 items-center border-t border-white/10 px-3 text-sm">Unsupported</div> : <button type="button" className="min-h-11 px-3 text-sm underline" onClick={() => void owner.play(request)}>Enable playback</button>)}
       </>}
     </section>
   </>;

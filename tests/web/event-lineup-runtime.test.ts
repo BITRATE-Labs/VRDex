@@ -308,7 +308,7 @@ test("a valid slow-starting source is not restarted before its first decoded pro
   });
 });
 
-test("a cold source that never progresses has a bounded fifteen-second startup allowance", async () => {
+test("a cold source that never progresses has a bounded fifteen-second retry allowance", async () => {
   await runtimeFixture([repeated[0]], async ({ sources, step, progress }) => {
     progress(false); await step(at(20), 14900);
     assert.equal(sources.length, 1);
@@ -408,5 +408,24 @@ test("untimed canonical barriers prevent preparation and identity catchup", asyn
   await runtimeFixture([{ ...repeated[0], endAt: undefined, followingBlocked: true }, repeated[1]], async ({ session, sources, step, silence }) => {
     silence(); await step(at(21), 16000);
     assert.equal(session.state.current, "a"); assert.equal(sources.length, 1);
+  });
+});
+
+
+test("a cold source reports unavailable at five seconds without restarting before fifteen", async () => {
+  await runtimeFixture([repeated[0]], async ({ session, sources, step, progress }) => {
+    progress(false); await step(at(20), 5100);
+    assert.equal(session.state.unavailable, true);
+    assert.equal(sources.length, 1);
+  });
+});
+
+test("a reconnecting cold current source does not hold a ready boundary handoff for fifteen seconds", async () => {
+  await runtimeFixture([repeated[0], { ...repeated[1], stream: stream("different") }], async ({ session, sources, step, progress }) => {
+    progress(false, "different"); await step(at(20, 58), 400);
+    progress(false); await step(at(20, 59), 1200);
+    assert.equal(sources.filter(source => source.id === "shared").length, 2);
+    progress(true, "different"); await step(at(21), 6000);
+    assert.equal(session.state.current, "b");
   });
 });
