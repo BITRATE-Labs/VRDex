@@ -377,7 +377,7 @@ async function getPublishedCommunityBySlug(
   return profile;
 }
 
-async function getPublishedWorldBySlug(
+export async function getPublishedWorldBySlug(
   db: DatabaseReader,
   slug: string | undefined,
 ) {
@@ -476,7 +476,7 @@ async function canManageCommunityEvents(
   ) || subjectHasCommunityCapability(db, communityProfileId, subject, "manage_events");
 }
 
-async function requireBrowserManagedCommunity(
+export async function requireBrowserManagedCommunity(
   db: DatabaseReader,
   communitySlug: string | undefined,
   subject: AuthSubject,
@@ -1084,7 +1084,7 @@ async function updateCommunityEventForApiOwnerRecord(
 
 type OwnerEventUpdateAuthority =
   | { kind: "api_owner"; ownerUserId: Id<"users">; actorSurface: "api" | "mcp" }
-  | { kind: "staff"; actorUserId: Id<"users"> };
+  | { kind: "staff"; actorUserId: Id<"users">; preserveSlotAssociationIds?: Id<"eventSlots">[]; preserveParticipantAssociationIds?: Id<"eventParticipants">[]; preserveLineupConfirmation?: boolean };
 
 async function applyOwnerEventUpdate(
   ctx: MutationCtx,
@@ -1148,7 +1148,8 @@ async function applyOwnerEventUpdate(
   const world = updateFields.has("worldSlug")
     ? await getPublishedWorldBySlug(db, input.worldSlug)
     : await linkedPublishedEventWorld(db, event._id);
-  const result = await updateCommunityEventRecord(ctx, { event, input, community, world, updateFields });
+  const result = await updateCommunityEventRecord(ctx, { event, input, community, world, updateFields,
+    ...(authority.kind === "staff" ? { preserveSlotAssociationIds: authority.preserveSlotAssociationIds, preserveParticipantAssociationIds: authority.preserveParticipantAssociationIds, preserveLineupConfirmation: authority.preserveLineupConfirmation } : {}) });
   await recordEventAuditEvent(db, {
     eventId: event._id,
     ...(authority.kind === "api_owner"
@@ -3337,7 +3338,7 @@ export function validStaffPatch<T>(validate: () => T): T {
 // Field-level: only the patch keys that differ from the canonical record reach the owner update path.
 export async function patchCommunityEventFieldsAsStaffRecord(
   ctx: MutationCtx,
-  args: { actorUserId: Id<"users">; slug: string; expectedUpdatedAt: number; patch: unknown },
+  args: { actorUserId: Id<"users">; slug: string; expectedUpdatedAt: number; patch: unknown; preserveUnchangedLineup?: boolean },
 ): Promise<{ eventId: Id<"events">; updatedAt: number; changed: boolean }> {
   const { db } = ctx;
   const event = await getEventBySlug(db, args.slug);
@@ -3388,7 +3389,19 @@ export async function patchCommunityEventFieldsAsStaffRecord(
   if (has("worldSlug")) update.worldSlug = patch.worldSlug || null;
   if (Object.keys(update).length === 0) return { eventId: event._id, updatedAt: event.updatedAt, changed: false };
 
-  await applyOwnerEventUpdate(ctx, event, update, { kind: "staff", actorUserId: args.actorUserId });
+  let preserveSlotAssociationIds: Id<"eventSlots">[] | undefined;
+  let preserveParticipantAssociationIds: Id<"eventParticipants">[] | undefined;
+  if (args.preserveUnchangedLineup && patch.lineup) {
+    const retained = patch.lineup.filter(row => current.lineup?.some(old => old.clientKey === row.clientKey && old.performerLabel === row.performerLabel && old.personSlug === row.personSlug));
+    const keys = new Set(retained.map(row => row.clientKey));
+    const slots = await db.query("eventSlots").withIndex("by_eventId", q => q.eq("eventId", event._id)).collect();
+    const untimed = await db.query("eventLineupEntries").withIndex("by_eventId_position", q => q.eq("eventId", event._id)).collect();
+    preserveSlotAssociationIds = slots.filter(row => keys.has(row.clientKey ?? row._id)).map(row => row._id);
+    const retainedPeople = new Set([...slots.filter(row => keys.has(row.clientKey ?? row._id)), ...untimed.filter(row => keys.has(row.clientKey))].map(row => row.personProfileId));
+    preserveParticipantAssociationIds = (await db.query("eventParticipants").withIndex("by_eventId", q => q.eq("eventId", event._id)).collect())
+      .filter(row => keys.has(row._id) || retainedPeople.has(row.personProfileId)).map(row => row._id);
+  }
+  await applyOwnerEventUpdate(ctx, event, update, { kind: "staff", actorUserId: args.actorUserId, preserveSlotAssociationIds, preserveParticipantAssociationIds, preserveLineupConfirmation: args.preserveUnchangedLineup });
   const stored = (await db.get(event._id))!;
   return { eventId: event._id, updatedAt: stored.updatedAt, changed: true };
 }

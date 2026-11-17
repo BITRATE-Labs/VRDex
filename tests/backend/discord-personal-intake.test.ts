@@ -104,6 +104,34 @@ it("preparation is actor-bound, runs once, and refuses a late result after manua
   assert.equal(draft!.fields.tentative, undefined);
 });
 
+it("an abandoned preparation becomes retryable after its lease expires", async () => {
+  const { t, authorityUserId, clerkUserId } = await fixture();
+  const captured = await t.mutation(internal.discordPersonalIntake.captureSelectedMessage, capture);
+  if (captured.kind !== "draft") throw new Error("Expected draft");
+  const args = { actorUserId: authorityUserId, draftId: captured.draftId, expectedVersion: 1 };
+  const first = await t.mutation(internal.discordPersonalIntake.claimPreparation, args);
+  await t.run(async ctx => {
+    const source = await ctx.db.query("discordPersonalIntakeSubmissions").withIndex("by_draftId", q => q.eq("draftId", captured.draftId)).unique();
+    await ctx.db.patch(source!._id, { preparationExpiresAt: Date.now() - 1 });
+  });
+  const actor = t.withIdentity(clerkTestIdentity(clerkUserId));
+  assert.equal((await actor.query(api.discordPersonalIntake.getSubmission, { draftId: captured.draftId })).status, "failed");
+  const retry = await t.mutation(internal.discordPersonalIntake.claimPreparation, { ...args, retry: true });
+  assert.equal(retry.kind, "run");
+  assert.notEqual(retry.token, first.token);
+});
+
+it("retrying after explicit poster removal does not require or restore a captured image", async () => {
+  const { t, authorityUserId, clerkUserId } = await fixture();
+  const images = ["500000000000000001", "500000000000000002"].map(id => ({ id, url: `https://cdn.discordapp.com/attachments/${CHANNEL}/${id}/poster.png`, contentType: "image/png", byteLength: 1234 }));
+  const captured = await t.mutation(internal.discordPersonalIntake.captureSelectedMessage, { ...capture, message: { ...capture.message, attachments: images } });
+  if (captured.kind !== "draft") throw new Error("Expected draft");
+  await t.withIdentity(clerkTestIdentity(clerkUserId)).mutation(api.eventIntake.saveEventIntakeDraft, { draftId: captured.draftId, expectedVersion: 1, patch: { posterSourceId: null } });
+  const claim = await t.mutation(internal.discordPersonalIntake.claimPreparation, { actorUserId: authorityUserId, draftId: captured.draftId, expectedVersion: 2, retry: true });
+  assert.equal(claim.kind, "run");
+  assert.equal(claim.attachment, undefined);
+});
+
 it("completed preparation is replayed without another extraction and discard clears private input", async () => {
   const { t, authorityUserId, clerkUserId } = await fixture();
   const result = await t.mutation(internal.discordPersonalIntake.captureSelectedMessage, capture);
@@ -118,4 +146,87 @@ it("completed preparation is replayed without another extraction and discard cle
   const draft = await t.run(ctx => ctx.db.get(result.draftId));
   assert.equal(draft!.fields.sourceText, undefined);
   assert.equal(draft!.fields.tentative, undefined);
+});
+
+async function ownedDraft() {
+  const context = await fixture();
+  await context.t.run(ctx => ctx.db.insert("profileOwners", { profileId: context.communityProfileId, userId: context.authorityUserId, roleKey: "owner", state: "active", grantedAt: Date.now(), updatedAt: Date.now() }));
+  const captured = await context.t.mutation(internal.discordPersonalIntake.captureSelectedMessage, capture);
+  if (captured.kind !== "draft") throw new Error("Expected draft");
+  const actor = context.t.withIdentity(clerkTestIdentity(context.clerkUserId));
+  const saved = await actor.mutation(api.eventIntake.saveEventIntakeDraft, { draftId: captured.draftId, expectedVersion: 1,
+    patch: { communitySlug: "night-club", title: "Harbor Sessions", eventDate: "2026-12-01", timezone: "Etc/UTC", start: { time: "22:00" }, lineup: [{ clientKey: "set-ivy", position: 0, performerLabel: "JustIvy" }] } });
+  return { ...context, actor, draftId: captured.draftId, version: saved.version };
+}
+
+it("owner publication uses official commands, is idempotent and clears private text without contribution receipts", async () => {
+  const { t, actor, draftId, version } = await ownedDraft();
+  const args = { draftId, expectedVersion: version, idempotencyKey: "owner-create-1", operation: { kind: "owner_create" as const, communitySlug: "night-club" } };
+  const first = await actor.mutation(api.discordPersonalIntake.publishReviewedDraft, args);
+  assert.deepEqual(await actor.mutation(api.discordPersonalIntake.publishReviewedDraft, args), first);
+  const event = await t.run(ctx => ctx.db.get(first.eventId));
+  assert.equal(event!.sourceType, "community");
+  assert.equal(event!.sourceUrl, undefined);
+  assert.equal((await t.run(ctx => ctx.db.query("eventContributionReceipts").collect())).length, 0);
+  assert.equal((await t.run(ctx => ctx.db.query("events").collect())).length, 1);
+  assert.equal((await t.run(ctx => ctx.db.get(draftId)))!.fields.sourceText, undefined);
+  await assert.rejects(actor.mutation(api.discordPersonalIntake.publishReviewedDraft, { ...args, operation: { ...args.operation, communitySlug: "other" } }), /IDEMPOTENCY_CONFLICT/);
+});
+
+it("revoked owner authority stops publication instead of downgrading it to a contribution", async () => {
+  const { t, actor, draftId, version } = await ownedDraft();
+  await t.run(async ctx => { for (const owner of await ctx.db.query("profileOwners").collect()) await ctx.db.delete(owner._id); });
+  await assert.rejects(actor.mutation(api.discordPersonalIntake.publishReviewedDraft, { draftId, expectedVersion: version, idempotencyKey: "revoked-create", operation: { kind: "owner_create", communitySlug: "night-club" } }), /permission/);
+  await assert.rejects(actor.action(api.eventIntake.publishEventIntake, { draftId, expectedVersion: version, idempotencyKey: "forbidden-fallback" }), /OWNER_OPERATION_REQUIRED/);
+  assert.equal((await t.run(ctx => ctx.db.query("events").collect())).length, 0);
+  assert.equal((await t.run(ctx => ctx.db.query("eventContributionReceipts").collect())).length, 0);
+});
+
+it("changing a role in a reviewed lineup retains the existing private person association", async () => {
+  const { t, actor, draftId, version } = await ownedDraft();
+  const original = await actor.mutation(api.events.createCommunityEvent, { communitySlug: "night-club", title: "Private lineup event", startAt: Date.UTC(2026, 11, 1, 22), timezone: "Etc/UTC", published: true, lineup: [{ clientKey: "private-row", position: 0, performerLabel: "Private DJ" }] });
+  const personId = await t.run(async ctx => {
+    const personId = await ctx.db.insert("profiles", { slug: "private-person", displayName: "Private DJ", sortName: "private dj", profileType: "person", person: { roleTags: [] }, aliases: [], tags: [], claimState: "claimed_verified", publicationState: "draft_private", publicSurfacingState: "public", creationSource: "community", updatedAt: Date.now() });
+    const row = await ctx.db.query("eventLineupEntries").withIndex("by_eventId_position", q => q.eq("eventId", original.eventId)).first();
+    await ctx.db.patch(row!._id, { personProfileId: personId });
+    await ctx.db.insert("eventParticipants", { eventId: original.eventId, personProfileId: personId, roleLabel: "DJ", sourceType: "community", sourceLabel: "Original", confirmationState: "unconfirmed", eventPublicationState: "published", eventStatus: "scheduled", updatedAt: Date.now() });
+    return personId;
+  });
+  const event = await t.run(ctx => ctx.db.get(original.eventId));
+  await actor.mutation(api.discordPersonalIntake.publishReviewedDraft, { draftId, expectedVersion: version, idempotencyKey: "private-lineup-update", operation: { kind: "owner_update", eventId: original.eventId, expectedUpdatedAt: event!.updatedAt, artwork: "keep", patch: { lineup: [{ clientKey: "private-row", position: 0, performerLabel: "Private DJ", roleLabel: "Host" }] } } });
+  const row = await t.run(ctx => ctx.db.query("eventLineupEntries").withIndex("by_eventId_position", q => q.eq("eventId", original.eventId)).first());
+  assert.equal(row!.personProfileId, personId);
+  assert.equal(row!.roleLabel, "Host");
+  const participant = await t.run(ctx => ctx.db.query("eventParticipants").withIndex("by_eventId", q => q.eq("eventId", original.eventId)).first());
+  assert.equal(participant!.confirmationState, "unconfirmed");
+});
+
+it("reviewed partial owner update preserves existing lineup and source labels and rejects a stale event", async () => {
+  const { t, actor, draftId, version } = await ownedDraft();
+  const original = await actor.mutation(api.events.createCommunityEvent, { communitySlug: "night-club", title: "Existing event", startAt: Date.UTC(2026, 11, 1, 22), timezone: "Etc/UTC", published: true, sourceLabel: "Original organizer", lineup: [{ clientKey: "original-set", position: 0, performerLabel: "Original DJ" }] });
+  const event = await t.run(ctx => ctx.db.get(original.eventId));
+  const lineup = await t.run(ctx => ctx.db.query("eventLineupEntries").withIndex("by_eventId_position", q => q.eq("eventId", original.eventId)).collect());
+  const operation = { kind: "owner_update" as const, eventId: original.eventId, expectedUpdatedAt: event!.updatedAt, patch: { venueLabel: "New room" }, artwork: "keep" as const };
+  await assert.rejects(actor.mutation(api.discordPersonalIntake.publishReviewedDraft, { draftId, expectedVersion: version, idempotencyKey: "update-stale", operation: { ...operation, expectedUpdatedAt: event!.updatedAt - 1 } }), /VERSION_CONFLICT/);
+  await actor.mutation(api.discordPersonalIntake.publishReviewedDraft, { draftId, expectedVersion: version, idempotencyKey: "update-good", operation });
+  const updated = await t.run(ctx => ctx.db.get(original.eventId));
+  assert.equal(updated!.venueLabel, "New room");
+  assert.equal(updated!.title, "Existing event");
+  assert.equal(updated!.sourceLabel, "Original organizer");
+  assert.deepEqual(await t.run(ctx => ctx.db.query("eventLineupEntries").withIndex("by_eventId_position", q => q.eq("eventId", original.eventId)).collect()), lineup);
+});
+
+it("selecting an update target saves its baseline and clears accepted fields absent from that event", async () => {
+  const { t, actor, draftId, version } = await ownedDraft();
+  const created = await actor.mutation(api.events.createCommunityEvent, { communitySlug: "night-club", title: "Canonical baseline", startAt: Date.UTC(2026, 11, 2, 22), timezone: "Etc/UTC", published: true });
+  const authored = await actor.mutation(api.eventIntake.saveEventIntakeDraft, { draftId, expectedVersion: version, patch: { summary: "Previously accepted import" } });
+  const selected = await actor.mutation(api.discordPersonalIntake.selectUpdateTarget, { draftId, expectedVersion: authored.version, eventId: created.eventId });
+  const draft = await actor.query(api.eventIntake.getEventIntakeDraft, { draftId });
+  assert.equal(draft.version, selected.version);
+  assert.equal(draft.fields.title, "Canonical baseline");
+  assert.equal(draft.fields.summary, undefined);
+  const submission = await actor.query(api.discordPersonalIntake.getSubmission, { draftId });
+  assert.equal(submission.target!.eventId, created.eventId);
+  assert.equal(submission.target!.baseline.title, "Canonical baseline");
+  assert.equal((await t.run(ctx => ctx.db.get(created.eventId)))!.title, "Canonical baseline");
 });

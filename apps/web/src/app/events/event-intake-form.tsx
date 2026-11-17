@@ -2,7 +2,9 @@
 import { authoredSnapshot, hasUnsavedEventChanges, mergeSavedEventFields } from "@/lib/event-editor-persistence";
 import { EventEditorPendingContext, useEventEditorPending, useEventEditorLeaveGuard, usePendingEventInput } from "./use-event-editor-leave-guard";
 import { formatLineupTimeRange } from "@/lib/calendar/event-lineup-display";
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { PersonalIntakeControls } from "./personal-intake-controls";
+import { personalEventUpdatePatch } from "@/lib/calendar/personal-event-intake";
 import { ArrowUpRight, Upload } from "lucide-react";
 import { EventIntakeDialog } from "./event-intake-dialog";
 import { ConvexError } from "convex/values";
@@ -89,7 +91,7 @@ function clearOccurrence(local?: EventIntakeLocalTime | null) {
 }
 export type EventSubmitCompletion = { kind: "saved" } | { kind: "published"; eventId: Id<"events">; eventPath: string };
 
-export function EventIntakeFieldsForm({ initialFields, initialRevision = 0, correction = false, connectorDraft = false, onSave, onPublish, onSource, initialArtworkSourceId, heading, savedTimezonePreference, newDraft = false, onDone, onGuardChange }: { onDone?: () => void; onGuardChange?: (requestLeave: (navigate: () => void) => boolean) => void; savedTimezonePreference?: string | null; newDraft?: boolean; heading?: ReactNode; initialFields: EventIntakeFields; initialRevision?: number; correction?: boolean; connectorDraft?: boolean; onSource?: IntakeSourceAction; initialArtworkSourceId?: string; onSave?: (fields: EventIntakeFields, revision: number) => Promise<void>; onPublish: (fields: EventIntakeFields, revision: number) => Promise<EventSubmitCompletion> }) {
+export function EventIntakeFieldsForm({ initialFields, initialRevision = 0, correction = false, connectorDraft = false, onSave, onPublish, onSource, initialArtworkSourceId, heading, sourceControls, savedTimezonePreference, newDraft = false, onDone, onGuardChange }: { onDone?: () => void; onGuardChange?: (requestLeave: (navigate: () => void) => boolean) => void; savedTimezonePreference?: string | null; newDraft?: boolean; heading?: ReactNode; sourceControls?: ReactNode; initialFields: EventIntakeFields; initialRevision?: number; correction?: boolean; connectorDraft?: boolean; onSource?: IntakeSourceAction; initialArtworkSourceId?: string; onSave?: (fields: EventIntakeFields, revision: number) => Promise<void>; onPublish: (fields: EventIntakeFields, revision: number) => Promise<EventSubmitCompletion> }) {
   const router = useRouter();
   const form = useRef<HTMLFormElement>(null);
   const performers = useEventPerformerEditor();
@@ -330,6 +332,7 @@ export function EventIntakeFieldsForm({ initialFields, initialRevision = 0, corr
       if (invalid) reveal(invalid.closest('[data-step="Lineup"]') ? "Lineup" : "Details", `[name="${invalid.name}"]`);
       else setImportOpen(true);
     }}><Upload aria-hidden="true" className="size-4" />Import poster or text</Button> : undefined} steps={steps} activeStep={activeStep} onSelect={setActiveStep} preview={<EventEditorPreview editingTimezone={editingTimezone} fields={{ ...fields, lineup: fields.lineup?.map(row => ({ ...row, performerLabel: row.performerLabel || performers.person(row.personSlug)?.title })) }} artwork={artwork} community={community} world={world} />}>
+    {sourceControls}
     <fieldset className="grid min-w-0 gap-6">
     <div hidden={activeStep !== "Details"} data-step="Details"><section className="grid gap-4"><h2 className="text-xl font-semibold">Details</h2>{onSource ? <EventIntakeSuggestions fields={fields} onAccept={acceptSuggestion} /> : null}
     {!correction ? <div className="grid gap-2"><span className="text-sm font-medium">Community</span><EventIdentityPicker kind="community" selectedSlug={fields.communitySlug} selectedOption={community} shortcuts={shortcuts} onSelect={option => { setSelectedCommunity(option); set("communitySlug", option.slug); }} onClear={() => { setSelectedCommunity(undefined); set("communitySlug", null); }} /></div> : null}
@@ -412,11 +415,52 @@ function ConnectedIntake({ draftId, initialCommunitySlug, heading }: { draftId?:
   }
   const viewer = useQuery(api.accounts.viewer);
   const loaded = useQuery(api.eventIntake.getEventIntakeDraft, draftId ? { draftId } : "skip");
+  const personal = useQuery(api.discordPersonalIntake.getSubmission, loaded?.personalSubmissionId ? { draftId: loaded._id } : "skip");
+  const managedEvents = useQuery(api.events.listManagedEvents, loaded?.personalSubmissionId ? { limit: 100 } : "skip");
+  const ownerPublish = useMutation(api.discordPersonalIntake.publishReviewedDraft);
+  const selectTarget = useMutation(api.discordPersonalIntake.selectUpdateTarget);
+  const discardPersonal = useMutation(api.discordPersonalIntake.discard);
+  const [personalReady, setPersonalReady] = useState(false);
+  const [personalBusy, setPersonalBusy] = useState(false);
+  const [personalFailed, setPersonalFailed] = useState(false);
+  const [preparationExpired, setPreparationExpired] = useState(false);
+  const [selectingUpdate, setSelectingUpdate] = useState(false);
+  const [artworkChoice, setArtworkChoice] = useState<"keep" | "replace" | "remove" | null>(null);
+  const [formEpoch, setFormEpoch] = useState(0);
+  const prepareRequested = useRef<string | undefined>(undefined);
+  const personalGuard = useRef<((navigate: () => void) => boolean) | undefined>(undefined);
   const save = useMutation(api.eventIntake.saveEventIntakeDraft);
   const publish = useAction(api.eventIntake.publishEventIntake);
   const publishHeld = useMutation(api.eventIntakeHeld.publish);
   const [publishingHeld, setPublishingHeld] = useState(false);
   const saved = useRef<{ draftId: Id<"eventIntakeDrafts">; version: number; fields: string } | null>(null);
+  const preparePersonal = useCallback(async (options: { attachmentId?: string; skipPoster?: boolean; retry?: boolean } = {}) => {
+    if (!loaded) return;
+    setPersonalBusy(true); setPersonalFailed(false); setPreparationExpired(false);
+    try {
+      const current = await convex.query(api.eventIntake.getEventIntakeDraft, { draftId: loaded._id });
+      if (!current) throw new Error("DRAFT_ACCESS");
+      const result = await websiteIntakeCommand("discord_source_prepare", { draftId: loaded._id, expectedVersion: current.version, ...options }, AbortSignal.timeout(300_000));
+      if (result.preparationStatus === "choose_poster" || result.preparationStatus === "processing") return;
+      saved.current = null;
+      setPersonalReady(true); setFormEpoch(value => value + 1);
+      setPersonalFailed(result.preparationStatus === "failed");
+    } catch { setPersonalFailed(true); setPersonalReady(true); }
+    finally { setPersonalBusy(false); }
+  }, [convex, loaded]);
+  useEffect(() => {
+    if (!loaded?.personalSubmissionId || !personal) return;
+    if (personal.status === "ready" || personal.status === "failed") { setPersonalReady(true); return; }
+    if (personal.status === "pending" && personal.attachments.length <= 1 && prepareRequested.current !== loaded._id) {
+      prepareRequested.current = loaded._id;
+      void preparePersonal();
+    }
+  }, [loaded, personal, preparePersonal]);
+  useEffect(() => {
+    if (personal?.status !== "processing" || !personal.preparationExpiresAt) return;
+    const timer = window.setTimeout(() => { setPreparationExpired(true); setPersonalBusy(false); setPersonalFailed(true); setPersonalReady(true); }, Math.max(0, personal.preparationExpiresAt - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [personal?.status, personal?.preparationExpiresAt]);
   const request = useRef<{ key: string; version: number } | null>(null);
   async function saveFields(fields: EventIntakeFields, initialVersion: number) {
     const serialized = JSON.stringify(fields);
@@ -478,9 +522,42 @@ function ConnectedIntake({ draftId, initialCommunitySlug, heading }: { draftId?:
   if (draftId && loaded === null && !publishingHeld) return <>{heading}<Notice>Unavailable</Notice></>;
   // A connector import with no clock is date-only, the same reading row Publish takes.
   const connectorFields = loaded?.connectorId ? { ...loaded.fields, timeTba: heldImportTimeTba(loaded.fields) } : undefined;
-  return <EventIntakeFieldsForm heading={heading} savedTimezonePreference={viewer?.user.defaultEventTimezone} newDraft={!draftId} connectorDraft={Boolean(loaded?.connectorId)} initialFields={connectorFields ?? loaded?.fields ?? { communitySlug: initialCommunitySlug, timeTba: false }} initialRevision={loaded?.version} onSource={sourceAction} initialArtworkSourceId={loaded?.artworkSourceId} onSave={async (fields, revision) => { if (published.current) await correctPublished(fields); else await saveFields(fields, revision); }} onPublish={async (fields, revision) => {
+  const guardPersonal = (action: () => void) => { if (personalGuard.current) personalGuard.current(action); else action(); };
+  const changeTarget = async (eventId?: string) => {
+    if (!loaded) return;
+    setPersonalBusy(true); setPersonalFailed(false);
+    try {
+      const current = await convex.query(api.eventIntake.getEventIntakeDraft, { draftId: loaded._id });
+      if (!current) throw new Error("DRAFT_ACCESS");
+      await selectTarget({ draftId: loaded._id, expectedVersion: current.version, ...(eventId ? { eventId: eventId as Id<"events"> } : {}) });
+      saved.current = null; setFormEpoch(value => value + 1); setSelectingUpdate(Boolean(eventId));
+    } catch { setPersonalFailed(true); }
+    finally { setPersonalBusy(false); }
+  };
+  const personalControls = loaded?.personalSubmissionId ? <PersonalIntakeControls ready={personalReady} busy={personalBusy || personal?.status === "processing" && !preparationExpired} failed={personalFailed || personal?.status === "failed"}
+    attachments={personal?.attachments ?? []} mode={personal?.target || selectingUpdate ? "update" : "create"} eventId={personal?.target?.eventId}
+    events={(managedEvents ?? []).map(event => ({ eventId: event.eventId, title: event.title }))} artwork={artworkChoice ?? (loaded.artworkAssetId ? "replace" : "keep")}
+    onPrepare={options => guardPersonal(() => { void preparePersonal(options); })} onMode={mode => guardPersonal(() => { if (mode === "create") void changeTarget(); else setSelectingUpdate(true); })}
+    onEvent={eventId => guardPersonal(() => { if (eventId) void changeTarget(eventId); })} onArtwork={setArtworkChoice}
+    onDiscard={() => guardPersonal(() => { void discardPersonal({ draftId: loaded._id, expectedVersion: saved.current?.version ?? loaded.version }).then(() => { window.location.assign("/account/events"); }).catch(() => setPersonalFailed(true)); })} /> : null;
+  if (loaded?.personalSubmissionId && (!personal || !personalReady)) return <>{heading}{personalControls}</>;
+  return <EventIntakeFieldsForm key={formEpoch} heading={heading} sourceControls={personalControls} correction={Boolean(personal?.target)} onGuardChange={guard => { personalGuard.current = guard; }} savedTimezonePreference={viewer?.user.defaultEventTimezone} newDraft={!draftId} connectorDraft={Boolean(loaded?.connectorId)} initialFields={connectorFields ?? loaded?.fields ?? { communitySlug: initialCommunitySlug, timeTba: false }} initialRevision={loaded?.version} onSource={sourceAction} initialArtworkSourceId={loaded?.artworkSourceId} onSave={async (fields, revision) => { if (published.current) await correctPublished(fields); else await saveFields(fields, revision); }} onPublish={async (fields, revision) => {
     if (published.current) return correctPublished(fields);
     const current = await saveFields(fields, revision);
+    if (loaded?.personalSubmissionId) {
+      const review = await convex.query(api.discordPersonalIntake.getSubmission, { draftId: current.draftId });
+      if (selectingUpdate && !review.target) throw new Error("Select event");
+      if (review.target || review.ownerCommunitySlug) {
+        setPublishingHeld(true);
+        try {
+          if (request.current?.version !== current.version) request.current = { version: current.version, key: crypto.randomUUID() };
+          const result = await ownerPublish({ draftId: current.draftId, expectedVersion: current.version, idempotencyKey: request.current.key,
+            operation: review.target ? { kind: "owner_update", eventId: review.target.eventId, expectedUpdatedAt: review.target.updatedAt, patch: personalEventUpdatePatch(review.target.baseline, fields), artwork: artworkChoice ?? (fields.posterSourceId ? "replace" : "keep") }
+              : { kind: "owner_create", communitySlug: review.ownerCommunitySlug! } });
+          return { kind: "published", eventId: result.eventId, eventPath: result.eventPath };
+        } catch (error) { setPublishingHeld(false); throw error; }
+      }
+    }
     if (loaded?.connectorId) {
       // The community's listing, not the viewer's contribution: nothing to correct afterwards.
       setPublishingHeld(true);
@@ -502,5 +579,5 @@ export function EventIntakeForm(props: { draftId?: string; initialCommunitySlug?
   const auth = useConvexAuth();
   if (auth.isLoading) return <>{props.heading}<p aria-busy="true">Loading…</p></>;
   if (!auth.isAuthenticated) return <>{props.heading}<Link href={`/sign-in?returnTo=${encodeURIComponent(`/events/new?${new URLSearchParams({ ...(props.draftId ? { draft: props.draftId } : {}), ...(props.initialCommunitySlug ? { community: props.initialCommunitySlug } : {}) })}`)}`}>Sign in</Link></>;
-  return <ConnectedIntake {...props} />;
+  return <div className="ph-no-capture" data-ph-no-capture><ConnectedIntake {...props} /></div>;
 }

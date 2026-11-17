@@ -35,6 +35,39 @@ flowchart LR
 
 ## Draft contract
 
+### Selected Discord messages
+
+The personal message adapter uses the ordinary private intake draft and the same
+website Details, Lineup and Review editor. It is separate from staff-authorized
+announcement connectors. The signed interaction actor must already resolve to
+one verified VRDex Discord account; an unlinked selection stores no message.
+The existing linking flow requires verified email and `identify guilds` consent.
+
+The gateway defers privately and sends only the selected message to the existing
+authenticated intake endpoint. It does not fetch nearby messages or history.
+Text and useful embed text share the extractor's 12,000-character limit. One
+poster is prepared automatically; several supported images require a choice.
+The session-authorized website preparation command reuses private poster
+validation, tentative extraction and the existing model quota. A version-bound
+lease prevents concurrent preparation; failed runs require explicit retry.
+
+Owner creates and explicit existing-event updates use the existing event writers.
+Contributions retain ordinary publication, duplicate and rolling-day quota checks.
+A saved owner intent never falls back to contribution publication after denial.
+Updates retain their loaded event revision, original provenance, untouched fields
+and existing lineup associations. Partial lineup suggestions merge into the
+complete lineup for review. Artwork can be replaced, retained or explicitly
+removed. Discord source IDs and message URLs remain private provenance.
+
+`discordPersonalIntakeSubmissions` binds actor/source identity to its draft and
+event. Selection retries return that draft/event without overwriting accepted
+fields. An edited source reports a changed snapshot for manual correction.
+Resolved personal drafts leave My events' draft inventory; ordinary event
+management and contributor corrections remain the continuation routes.
+
+See [activation and rollback](../deployment/discord-gateway.md#personal-message-command)
+and [source retention](./event-intake-sources.md#personal-discord-sources).
+
 The strict schemas and TypeScript types live in
 `packages/api-contracts/src/event-intake.ts`. Omitted top-level patch fields stay
 unchanged, `null` clears a value, and empty strings normalize to unknown. A cleared

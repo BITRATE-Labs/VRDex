@@ -14,7 +14,7 @@
 
 The user links their account once, selects one message, and receives a private link to the existing Details, Lineup and Review editor. Its poster is selected as artwork by default, with a visible remove option. Missing facts are corrected manually. Publication is always explicit.
 
-For v1, reuse the existing Discord verification flow. It requires verified email and requests `identify guilds`, broader consent than message selection itself needs. This is a recommendation, not a previously approved implementation choice. An identify-only link would avoid that consent but add another OAuth path. Do not build both.
+Locked decision: BASIC approved reusing the existing Discord verification flow for v1. It requires verified email and requests `identify guilds`, broader consent than message selection itself needs. An identify-only link would avoid that consent but add another OAuth path; it remains deferred.
 
 The new work is capture and retry protection, connecting captured posters to the current import action, and committing reviewed drafts through owner commands where appropriate. Existing editors, extraction prompts, quotas and connected-channel automation retain their responsibilities.
 

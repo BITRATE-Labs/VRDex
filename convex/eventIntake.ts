@@ -75,6 +75,13 @@ export const expireDrafts = internalMutation({ args: {}, returns: v.number(), ha
     }
     await ctx.db.delete(draft._id);
   }
+  const pendingSources = await ctx.db.query("discordPersonalIntakeSubmissions").withIndex("by_expiresAt", q => q.lte("expiresAt", Date.now())).take(100);
+  for (const source of pendingSources) {
+    if (source.eventId) continue;
+    const draft = source.draftId ? await ctx.db.get(source.draftId) : null;
+    if (draft && draft.expiresAt > Date.now()) await ctx.db.patch(source._id, { expiresAt: draft.expiresAt });
+    else await ctx.db.delete(source._id);
+  }
   const attempts = await ctx.db.query("eventIntakeModelAttempts").withIndex("by_createdAt", q => q.lt("createdAt", Date.now() - 86_400_000)).take(100);
   for (const attempt of attempts) await ctx.db.delete(attempt._id);
   return expired.length;

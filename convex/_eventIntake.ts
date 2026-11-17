@@ -104,7 +104,11 @@ export async function saveIntakeDraft(db: DatabaseWriter, actorUserId: Id<"users
     ...(posterChanged || patch.posterSourceId === null ? { artworkIntentSourceId: undefined } : {}) };
   if (draft?.personalSubmissionId) {
     const submission = await db.get(draft.personalSubmissionId);
+    const community = fields.communitySlug ? await db.query("profiles").withIndex("by_slug", q => q.eq("slug", fields.communitySlug!)).unique() : null;
+    const ownerCommunitySlug = community && await userHasCommunityPermission(db, community._id, actorUserId, ["manage_events"])
+      ? community.slug : submission && submission.ownerCommunitySlug === fields.communitySlug ? submission.ownerCommunitySlug : undefined;
     if (submission) await db.patch(submission._id, { expiresAt: values.expiresAt, updatedAt: now,
+      ownerCommunitySlug,
       ...(submission.preparationStatus === "processing" ? options.preparationToken && submission.preparationToken === options.preparationToken
         ? { preparationVersion: version }
         : { preparationStatus: "failed" as const, preparationToken: undefined, preparationExpiresAt: undefined } : {}) });
@@ -146,6 +150,11 @@ export async function publishIntakeDraft(ctx: Pick<MutationCtx, "db" | "schedule
     if (recentRequests.length >= 100) throw new ConvexError({ code: "REQUEST_QUOTA" });
   }
   const draft = await getActorIntakeDraft(db, actorUserId, args.draftId, now);
+  if (draft.personalSubmissionId) {
+    const submission = await db.get(draft.personalSubmissionId);
+    if (submission?.reviewTarget || submission?.ownerCommunitySlug === draft.fields.communitySlug && submission?.ownerCommunitySlug) throw new Error("OWNER_OPERATION_REQUIRED");
+    if (draft.fields.sourceUrl && DISCORD_MESSAGE_URL.test(draft.fields.sourceUrl)) throw new Error("PRIVATE_SOURCE_URL");
+  }
   // Connector drafts publish as the community's listing, only through the held path.
   if (!connectorId && draft.connectorId) throw new Error("DRAFT_ACCESS");
   const connector = connectorId ? await db.get(connectorId) : null;
@@ -211,16 +220,36 @@ export async function publishIntakeDraft(ctx: Pick<MutationCtx, "db" | "schedule
     }
     // An explicit selection belongs to this contributor's (or connector's) newly created event only.
     if (draft.artworkAssetId && receipt.draftId === draft._id && (connectorId ? createdEvent : event.contributorUserId === actorUserId)) {
-      const artwork = await db.get(draft.artworkAssetId);
-      if (!artwork || artwork.draftId !== draft._id || artwork.state !== "ready" || (draft.fields.posterSourceId !== undefined && draft.fields.posterSourceId !== artwork.sourceId)) throw new Error("ARTWORK_NOT_READY");
-      await db.patch(artwork._id, { state: "published", eventId: event._id, expiresAt: now + 86_400_000 });
-      const posterImageUrl = `/api/v0/events/${event._id}/artwork/${artwork._id}`;
-      await db.patch(event._id, { posterImageUrl });
-      await reindexEventSearchDocument(db, { ...event, posterImageUrl }, { community, world: checked.world, roleLabels: checked.lineup.flatMap(entry => entry.roleLabel ? [entry.roleLabel] : []) }, now);
+      await attachIntakeArtwork(ctx, draft, event, now);
     }
     await db.patch(draft._id, { publishedReceiptId: receipt._id, ...(draft.connectorId ? { resolvedAt: now } : {}) });
   }
   await db.insert("eventIntakePublishRequests", { actorUserId, draftId: draft._id, draftVersion: draft.version, idempotencyKey: args.idempotencyKey, receiptId: receipt._id, createdAt: now, ...(connectorId ? { connectorId } : {}) });
   await enqueueEventSync(db, ctx.scheduler, receipt.eventId, "upsert");
+  if (draft.personalSubmissionId) await resolvePersonalSubmission(ctx, draft._id, draft.personalSubmissionId, receipt.eventId);
   return { ...await receiptResult(db, receipt), createdEvent };
+}
+
+export async function attachIntakeArtwork(ctx: Pick<MutationCtx, "db">, draft: Doc<"eventIntakeDrafts">, event: Doc<"events">, now = Date.now()) {
+  if (!draft.artworkAssetId) return;
+  const { db } = ctx;
+  const artwork = await db.get(draft.artworkAssetId);
+  if (!artwork || artwork.draftId !== draft._id || artwork.state !== "ready" || (draft.fields.posterSourceId !== undefined && draft.fields.posterSourceId !== artwork.sourceId)) throw new Error("ARTWORK_NOT_READY");
+  await db.patch(artwork._id, { state: "published", eventId: event._id, expiresAt: now + 86_400_000 });
+  const source = await db.get(artwork.sourceId);
+  if (!source || source.actorUserId !== draft.actorUserId || source.draftId !== draft._id) throw new Error("POSTER_DRAFT_MISMATCH");
+  await db.patch(source._id, { eventId: event._id });
+  const posterImageUrl = `/api/v0/events/${event._id}/artwork/${artwork._id}`;
+  await db.patch(event._id, { posterImageUrl });
+  const community = event.communityProfileId ? await db.get(event.communityProfileId) : null;
+  if (community) await reindexEventSearchDocument(db, { ...event, posterImageUrl }, { community, world: await linkedPublishedEventWorld(db, event._id), roleLabels: await eventParticipantRoleLabels(db, event._id) }, now);
+}
+
+export async function resolvePersonalSubmission(ctx: Pick<MutationCtx, "db">, draftId: Id<"eventIntakeDrafts">, submissionId: Id<"discordPersonalIntakeSubmissions">, eventId?: Id<"events">) {
+  await ctx.db.patch(submissionId, { ...(eventId ? { eventId, expiresAt: Number.MAX_SAFE_INTEGER } : {}), attachments: [], reviewTarget: undefined, preparationStatus: "resolved", preparationToken: undefined, preparationExpiresAt: undefined, updatedAt: Date.now() });
+  const draft = await ctx.db.get(draftId);
+  if (draft) {
+    const { sourceText: _text, tentative: _tentative, evidence: _evidence, questions: _questions, posterDeclaration: _declaration, ...fields } = draft.fields;
+    await ctx.db.patch(draftId, { fields, resolvedAt: Date.now() });
+  }
 }

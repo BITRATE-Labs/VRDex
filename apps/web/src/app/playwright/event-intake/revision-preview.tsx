@@ -9,14 +9,18 @@ import { EventContributionControls } from "../../events/event-contribution-contr
 import type { EventIntakePatch } from "../../../../../../packages/api-contracts/src/event-intake";
 
 const fetchAccessToken = async () => "fixture-token";
-const useFixtureAuth = () => ({ isLoading: false, isAuthenticated: true, fetchAccessToken });
+const useFixtureAuth = () => ({ isLoading: false, isAuthenticated: typeof sessionStorage === "undefined" || sessionStorage.getItem("fixture-personal-signed-out") !== "true", fetchAccessToken });
 
 // Exercise the connected forms and reactive queries with a local transport.
 // The matching backend conflict checks have their own Convex tests.
 function revisionFixture(correction: boolean, sourceMode?: string, staff = false, held?: string) {
+  const personalMode = sourceMode?.startsWith("discord");
+  let personalStatus = typeof sessionStorage !== "undefined" && sessionStorage.getItem("fixture-personal-prepared") ? "ready" : "pending";
+  let personalTarget: { eventId: string; updatedAt: number; baseline: EventIntakePatch } | null = null;
   let fields: EventIntakePatch = { communitySlug: "afterglow", title: "Original title", eventDate: "2027-07-15", timeTba: true, venueLabel: "Original venue" };
   if (correction) fields.lineup = [{ clientKey: "private-person", position: 0, performerLabel: "Private performer" }];
   if (sourceMode) fields = {};
+  if (personalMode) fields = { sourceText: "Harbor Sessions Friday, JustIvy 22:00 UTC" };
   const heldImport = { communitySlug: "afterglow", title: "Held night", eventDate: "2027-07-15" };
   if (held === "held") fields = { ...fields, timeTba: false, timezone: "UTC", start: { time: "20:00", dayOffset: 0 } };
   if (held === "held-date-only") fields = { tentative: heldImport };
@@ -27,7 +31,7 @@ function revisionFixture(correction: boolean, sourceMode?: string, staff = false
   let completion: { sourceId: string; version: number } | undefined;
   let droppedCompletion = false;
   if (sourceMode && typeof sessionStorage !== "undefined") { const stored = sessionStorage.getItem("fixture-source-draft"); if (stored) ({fields, version} = JSON.parse(stored)); }
-  let draft = { artworkSourceId: typeof sessionStorage !== "undefined" ? sessionStorage.getItem("fixture-artwork-source") ?? undefined : undefined, _id: "fixture-draft", version, fields, artworkAssetId: typeof sessionStorage !== "undefined" && sessionStorage.getItem("fixture-artwork") ? "art" : undefined, ...(held ? { connectorId: "fixture-connector" } : {}) };
+  let draft = { artworkSourceId: typeof sessionStorage !== "undefined" ? sessionStorage.getItem("fixture-artwork-source") ?? undefined : undefined, _id: "fixture-draft", version, fields, artworkAssetId: typeof sessionStorage !== "undefined" && sessionStorage.getItem("fixture-artwork") ? "art" : undefined, ...(held ? { connectorId: "fixture-connector" } : {}), ...(personalMode ? { personalSubmissionId: "fixture-personal" } : {}) };
   let event = { eventId: "fixture-event", updatedAt: version, fields };
   const listeners = new Set<() => void>();
   let access = { canCorrect: !staff, canSuggest: false, canTakeOver: staff, canRemove: staff };
@@ -39,6 +43,7 @@ function revisionFixture(correction: boolean, sourceMode?: string, staff = false
   if (searchLoading && typeof window !== "undefined") window.addEventListener("release-community-search", () => { searchLoading = false; listeners.forEach(listener => listener()); }, { once: true });
   const people = [{ slug: "aurora", title: "Aurora", imageUrl: "/test-media/event-poster.png" }];
   const viewer = { user: { name: "Fixture contributor", defaultEventTimezone: typeof sessionStorage !== "undefined" ? sessionStorage.getItem("fixture-correction-timezone") ?? undefined : undefined } };
+  const personalProjection = () => ({ status: personalStatus, ownerCommunitySlug: fields.communitySlug === "afterglow" ? "afterglow" : null, target: personalTarget, attachments: personalStatus === "ready" ? [] : (sourceMode === "discord-multiple" ? [1, 2] : [1]).map(index => ({ id: `poster-${index}`, url: "/test-media/event-poster.png", label: `Poster ${index}` })) });
   const refresh = (patch: EventIntakePatch) => {
     fields = { ...fields, ...patch };
     if (draft?.artworkSourceId && "posterSourceId" in patch && fields.posterSourceId !== draft.artworkSourceId) {
@@ -56,6 +61,8 @@ function revisionFixture(correction: boolean, sourceMode?: string, staff = false
     clearAuth() {},
     async query(query: FunctionReference<"query">, args: { query?: string; profileType?: string; entityType?: string; slug?: string }) {
       const name = getFunctionName(query);
+      if (name === "eventIntake:getEventIntakeDraft") return draft;
+      if (name === "discordPersonalIntake:getSubmission") return personalProjection();
       if (name === "eventCorrections:getOwnContributedEvent") { if (held) throw new Error("CONTRIBUTOR_REQUIRED"); return event; }
       if (name === "profiles:lookupPeople") return people.filter(person => person.title.toLowerCase().includes(args.query?.toLowerCase() ?? "")).map(person => ({ slug: person.slug, displayName: person.title, avatarImageUrl: person.imageUrl, profilePath: `/${person.slug}`, roleTags: [], tags: [] }));
       if (name === "profiles:getPublicBySlug") {
@@ -82,6 +89,8 @@ function revisionFixture(correction: boolean, sourceMode?: string, staff = false
       return {
         localQueryResult: () => {
           switch (getFunctionName(query)) {
+            case "discordPersonalIntake:getSubmission": return personalProjection();
+            case "events:listManagedEvents": return [{ eventId: "fixture-existing", title: "Existing harbor event", slug: "existing", communitySlug: "afterglow" }];
             case "eventIntake:getEventIntakeDraft": return draft;
             case "accounts:viewer": return viewer;
             case "events:listManagedCommunities": return communities.map((community, index) => ({ profileId: `community-${index}`, slug: community.slug, displayName: community.title, imageUrl: community.imageUrl, roleLabel: index === 0 ? "Owner" : "Staff" }));
@@ -114,6 +123,19 @@ function revisionFixture(correction: boolean, sourceMode?: string, staff = false
     },
     async mutation(mutation: FunctionReference<"mutation">, args: Record<string, unknown>) {
       const name = getFunctionName(mutation);
+      if (name === "discordPersonalIntake:selectUpdateTarget") {
+        if (args.expectedVersion !== version) throw new ConvexError({ code: "VERSION_CONFLICT" });
+        if (!args.eventId) { personalTarget = null; listeners.forEach(listener => listener()); return { version }; }
+        const baseline: EventIntakePatch = { communitySlug: "afterglow", title: "Existing harbor event", eventDate: "2026-12-01", timezone: "UTC", start: { time: "22:00" }, venueLabel: "Original room", lineup: [{ clientKey: "original-set", position: 0, performerLabel: "Original DJ" }] };
+        personalTarget = { eventId: String(args.eventId), updatedAt: 1, baseline };
+        refresh({ ...baseline });
+        return { version };
+      }
+      if (name === "discordPersonalIntake:publishReviewedDraft") {
+        sessionStorage.setItem("fixture-owner-operation", JSON.stringify(args));
+        if (sessionStorage.getItem("fixture-owner-denied")) throw new ConvexError({ code: "EVENT_STAFF_REQUIRED" });
+        return { eventId: "fixture-event", eventPath: "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions", outcome: "updated" };
+      }
       if (name === "supportRequests:submitSupportRequest" || name === "suppressions:requestProfileSuppression") {
         sessionStorage.setItem("fixture-support-submission", JSON.stringify({ name, args }));
         if (sessionStorage.getItem("fixture-support-defer") === "true") await new Promise<void>(resolve => window.addEventListener("fixture-support-release", () => resolve(), { once: true }));
@@ -155,6 +177,16 @@ function revisionFixture(correction: boolean, sourceMode?: string, staff = false
     const { operation, input: args } = JSON.parse(String(init?.body));
     if ("actorUserId" in args) throw new Error("Browser actor forbidden");
     switch (operation) {
+      case "discord_source_prepare": {
+        sessionStorage.setItem("fixture-personal-preparation-input", JSON.stringify(args));
+        sessionStorage.setItem("fixture-personal-preparations", String(Number(sessionStorage.getItem("fixture-personal-preparations") ?? "0") + 1));
+        personalStatus = "ready";
+        sessionStorage.setItem("fixture-personal-prepared", "true");
+        draft = { ...draft, artworkSourceId: "poster-1", artworkAssetId: "art" };
+        sessionStorage.setItem("fixture-artwork-source", "poster-1"); sessionStorage.setItem("fixture-artwork", "selected");
+        refresh({ posterSourceId: "poster-1", tentative: { title: "Harbor Sessions", communitySlug: "afterglow", eventDate: "2026-12-01", timezone: "UTC", start: { time: "22:00" } } });
+        return Response.json({ ...draft, preparationStatus: "ready" });
+      }
       case "poster_upload_begin": {
         const count = Number(sessionStorage.getItem("fixture-upload-count") ?? "0") + 1;
         sessionStorage.setItem("fixture-upload-count", String(count));

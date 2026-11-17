@@ -27,6 +27,10 @@ export async function preparePersonalDiscordSource(actorUserId: Id<"users">, inp
     }
     const posters = createEventPosterHandlers({ authority: async () => ({ actorUserId }), admin });
     const extract = createEventIntakeExtractor({ authority: async () => ({ actorUserId }), admin, readPoster: id => posters.readPoster(id as Id<"eventPosterSources">), trigger: "web" });
+    if (!claim.sourceText?.trim() && !posterAssetId) {
+      await admin.mutation(internal.discordPersonalIntake.finishPreparation, { actorUserId, draftId: args.draftId, expectedVersion: version, token, patch: {} });
+      return read("ready");
+    }
     const candidate = await extract({ draftId: args.draftId, ...(claim.sourceText ? { sourceText: claim.sourceText } : {}), ...(posterAssetId ? { posterAssetId } : {}) });
     if (candidate.questions.some(question => question.fieldPath === "source")) throw new Error("EXTRACTION_UNAVAILABLE");
     // Discord links remain private evidence, even when a model suggests one as a public source.

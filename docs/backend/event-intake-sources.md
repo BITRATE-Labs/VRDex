@@ -118,6 +118,22 @@ model accuracy.
 
 ## Retention and deletion
 
+### Personal Discord sources
+
+Selected-message text, model evidence, pending signed URLs and the selected
+update baseline are private to the draft actor. Preparation uses the existing
+website source/extraction controls and stores no complete interaction payload or
+conversation history. Its actual download is bounded as well as its declared size.
+
+Pending source metadata follows the draft's rolling 30-day expiry. Publication or
+discard clears source text, suggestions, questions, the update baseline and pending
+URLs. Minimal actor/message/author IDs, hashes and event linkage remain private
+for provenance and replay, like existing contribution receipts. Expired unresolved
+and orphan source metadata is removed by the existing bounded draft sweep.
+Image evidence and intentionally published artwork retain their independent
+storage, expiry and hold rules below. Removing an imported poster retains accepted
+event details; it cannot restore itself through a late preparation response.
+
 Abandoned evidence expires 30 days after draft activity, capped at 180 days after
 upload. Published evidence expires 30 days after the event date/start, with the
 same cap. Date-only events use the end of that UTC calendar date. Reads enforce
