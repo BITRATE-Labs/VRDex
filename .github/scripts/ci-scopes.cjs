@@ -12,7 +12,7 @@ const SURFACES = [
     flows: "(?:profile-|media-contribution|public-media-details).*\\.flow\\.spec\\.ts", public: "(?:public-routes|media-kit)\\.(?:visual|snapshots)\\.spec\\.ts" },
   { name: "events", path: /^apps\/web\/(src\/(app\/(?:(?:events|\[communitySlug\]\/events)\/|_components\/event-)|lib\/event-(?:editor|detail)|components\/event)|e2e\/event-(?!broadcast|host))/,
     flows: "event-.*\\.flow\\.spec\\.ts", public: "(?:public-routes|event-editor|event-held-imports)\\.(?:visual|snapshots)\\.spec\\.ts" },
-  { name: "storybook", path: /^apps\/web\/(src\/(?:components\/ui\/|.*\.stories\.)|\.storybook\/|e2e\/.*storybook)/,
+  { name: "storybook", path: /^apps\/web\/(src\/(?:.*\.stories\.)|\.storybook\/|e2e\/.*storybook)/,
     storybook: true },
 ];
 
@@ -20,7 +20,7 @@ function coreCoverage(files, full) {
   const tooling = file => (!file.includes("/") && !file.endsWith(".md")) || file.startsWith("scripts/");
   return {
     scripts: full || files.some(file => tooling(file) || /^(\.github\/|tests\/scripts\/|workers\/|packages\/|convex\/)/.test(file)),
-    restream: full || files.some(file => tooling(file) || /^(workers\/restream\/|apps\/discord-gateway\/|packages\/|convex\/(?:_?eventMedia|schema|migrations)|tests\/(?:backend|scripts)\/.*(?:broadcast|restream|captured-transport)|infra\/terraform\/(?:restream-worker|media-relay)\/|\.github\/)/.test(file)),
+    restream: full || files.some(file => tooling(file) || /^(workers\/restream\/|apps\/discord-gateway\/|packages\/|convex\/(?:_?eventMedia|schema|migrations)|tests\/(?:backend|scripts)\/.*(?:broadcast|restream|captured-transport|event-media)|infra\/terraform\/(?:restream-worker|media-relay)\/|\.github\/)/.test(file)),
   };
 }
 
@@ -37,7 +37,7 @@ function selectCoverage({ eventName, labels, files }) {
   let storybook = false;
   if (browsers) {
     for (const file of files) {
-      if (/^apps\/web\/.*(?:broadcast|host-view|\/host\/|\/account\/|\/auth|\/clerk|profile-(?:claim|private-record|link-verification)|operator|stream-settings)/.test(file)) { broad = true; continue; }
+      if (/^apps\/web\/.*(?:broadcast|host-view|\/host\/|\/account\/|\/auth|\/clerk|profile-(?:claim|private-record|link-verification)|ownership|role|permission|verification|operator|stream-settings)/.test(file)) { broad = true; continue; }
       const surfaces = SURFACES.filter(area => area.path.test(file));
       for (const surface of surfaces) {
         if (surface.flows) flows.add(surface.flows);
@@ -60,7 +60,8 @@ function selectCoverage({ eventName, labels, files }) {
     }
     if (flows.size || media) selected.add("playwright-data-flow");
     if (storybook) { selected.add("build-storybook"); selected.add("storybook-component-preview"); }
-    if (visuals && previews.size) { selected.add("playwright-public-preview"); selected.add("playwright-image-diff"); }
+    if (previews.size) selected.add("playwright-public-preview");
+    if (visuals && previews.size) selected.add("playwright-image-diff");
     if (visuals && storybook) selected.add("storybook-image-diff");
   }
   return { browsers, visuals, full, jobs: OPTIONAL_JOBS.filter(job => selected.has(job)),

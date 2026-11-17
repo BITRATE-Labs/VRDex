@@ -16,7 +16,7 @@ import {
   type TimelineNavigation,
 } from "@/lib/timeline/navigation";
 import { localDayBands } from "@/lib/timeline/geometry";
-import { isPastSaved, nextSavedStart, togglePlanAction } from "@/lib/timeline/plan-actions";
+import { nextSavedStart, togglePlanAction } from "@/lib/timeline/plan-actions";
 import { HOUR, inRange, recentEventTime, timelineQueryRange } from "@/lib/timeline/window-cache";
 import { useTimelinePreferences } from "./use-timeline-preferences";
 import { useTimelineData } from "./use-timeline-data";
@@ -131,13 +131,6 @@ function ScheduleContent({
     favoriteProfileIds: preference.preferences.favoriteProfileIds,
     plan: preference.preferences.plan,
   });
-  const { removePlan, wasAddedInSession } = preference;
-  useEffect(() => {
-    if (data.savedState !== "ready") return;
-    for (const item of data.saved) {
-      if (isPastSaved(item, now) && !wasAddedInSession(item.reference)) removePlan(item.reference);
-    }
-  }, [data.saved, data.savedState, now, removePlan, wasAddedInSession]);
   const cancelReplace = useCallback(() => {
     if (pending.current !== null) {
       clearTimeout(pending.current.timer);

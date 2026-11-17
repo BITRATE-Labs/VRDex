@@ -10,7 +10,6 @@ const store = createPreferenceStore({
   eventTarget: () => typeof window === "undefined" ? null : window,
 });
 const actions = {
-  wasAddedInSession: store.wasAddedInSession,
   addPlan: (reference: PlanReference) => store.dispatch({ type: "add-plan", reference }),
   removePlan: (reference: PlanReference) => store.dispatch({ type: "remove-plan", reference }),
   addFavorite: (profileId: string) => store.dispatch({ type: "add-favorite", profileId }),

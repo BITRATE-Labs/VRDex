@@ -1,6 +1,5 @@
 import type { PlanReference } from "../../../../../convex/_eventTimelineTypes";
 import { reducePreferences, type PreferenceAction, type TimelinePreferences } from "./preferences";
-import { referenceKey } from "./window-cache";
 
 export const PREFERENCE_STORAGE_KEY = "vrdex.timeline.preferences.v1";
 type PreferenceStorage = Pick<Storage, "getItem" | "setItem">;
@@ -67,7 +66,6 @@ export function createPreferenceStore(options: Options) {
   let target: EventTarget | null = null;
   let initialized = false;
   const listeners = new Set<() => void>();
-  const sessionAdditions = new Set<string>();
 
   function publish(preferences: TimelinePreferences, persistence: PreferenceSnapshot["persistence"]) {
     if (snapshot.persistence === persistence && JSON.stringify(snapshot.preferences) === JSON.stringify(preferences)) return;
@@ -128,10 +126,6 @@ export function createPreferenceStore(options: Options) {
     if (!initialized) hydrate();
     const result = reducePreferences(snapshot.preferences, action);
     if (result.outcome !== "changed") return result;
-    for (const key of sessionAdditions) {
-      if (!result.state.plan.some(reference => referenceKey(reference) === key)) sessionAdditions.delete(key);
-    }
-    if (action.type === "add-plan") sessionAdditions.add(referenceKey(action.reference));
     let persistence = snapshot.persistence;
     if (persistence === "saved" && storage) {
       try {
@@ -149,7 +143,6 @@ export function createPreferenceStore(options: Options) {
     getServerSnapshot: () => serverSnapshot,
     subscribe,
     dispatch,
-    wasAddedInSession: (reference: PlanReference) => sessionAdditions.has(referenceKey(reference)),
     dispose: () => { detach(); listeners.clear(); },
   };
 }

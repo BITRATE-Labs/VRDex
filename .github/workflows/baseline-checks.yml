@@ -134,6 +134,10 @@ jobs:
 
       - name: Run MCP package verification
         run: pnpm typecheck:vrdex-mcp && pnpm test:vrdex-mcp && pnpm smoke:mcp-compat && pnpm check:mcp-client-matrix
+      - name: Verify web source contracts
+        if: needs.visual-selection.outputs.scripts != 'true'
+        run: pnpm test:scripts:web
+
       - name: Verify affected script contracts
         if: needs.visual-selection.outputs.scripts == 'true'
         run: pnpm test:scripts

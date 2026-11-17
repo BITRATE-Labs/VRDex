@@ -7,7 +7,7 @@ const select = (files, names = ["ci:browsers"]) => selectCoverage({ eventName: "
 test("a small timeline fix selects its flows and requested images without unrelated suites", () => {
   const files = ["apps/web/src/lib/timeline/plan-actions.ts", "apps/web/e2e/home-timeline.flow.spec.ts", "tests/web/timeline-saved-expiry.test.ts"];
   const narrow = select(files);
-  assert.deepEqual(narrow.jobs, ["playwright-data-flow"]);
+  assert.deepEqual(narrow.jobs, ["playwright-data-flow", "playwright-public-preview"]);
   assert.match("home-timeline.flow.spec.ts", new RegExp(narrow.flowPattern));
   assert.doesNotMatch("profile-submission.flow.spec.ts", new RegExp(narrow.flowPattern));
   for (const key of ["scripts", "restream", "media", "claimAuth", "analytics"]) assert.equal(narrow[key], false, key);
@@ -28,12 +28,13 @@ test("profile and event changes select their own flows; host authority keeps bro
   assert.equal(select(["apps/web/src/app/events/[slug]/host/page.tsx"]).claimAuth, true);
 });
 
-test("player and shared controls select media or Storybook without all mutation flows", () => {
+test("player selects media while shared controls retain broad coverage", () => {
   const player = select(["apps/web/src/lib/now-playing.ts"]);
   assert.equal(player.media, true); assert.equal(player.flows, false);
   assert.equal(player.jobs.includes("playwright-hosted-data-flow"), false);
   const controls = select(["apps/web/src/components/ui/button.tsx"], ["ci:visuals"]);
-  assert.deepEqual(controls.jobs, ["build-storybook", "storybook-component-preview", "storybook-image-diff"]);
+  assert.deepEqual(controls.jobs, OPTIONAL_JOBS);
+  assert.equal(controls.claimAuth, true);
 });
 
 test("full opt-in selects every optional job and heavy core checks even for docs", () => {
@@ -119,4 +120,14 @@ test('main selection needs no comparison base or git diff', () => {
     assert.equal(coverage.scripts, true); assert.equal(coverage.restream, true);
     assert.deepEqual(coverage.jobs, []);
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+
+test('authority-adjacent profile files and media control tests retain their checks', () => {
+  for (const file of ['apps/web/src/lib/profile-ownership.ts', 'apps/web/src/app/_components/profile-role-editor.tsx', 'apps/web/src/lib/profile-permissions.ts']) {
+    const coverage = select([file]);
+    assert.equal(coverage.claimAuth, true, file);
+    assert.ok(coverage.jobs.includes('playwright-hosted-data-flow'), file);
+  }
+  assert.equal(select(['tests/backend/event-media-control.test.ts'], []).restream, true);
 });

@@ -13,11 +13,12 @@ Label names and behavior remain defined by the checked-in selector.
 
 | Change | Selected browser coverage with `ci:browsers` |
 | --- | --- |
-| Timeline and home schedule | Home/timeline flows |
-| Profile surface | Profile and media-contribution flows |
-| Event surface | Event flows |
+| Timeline and home schedule | Home/timeline flows and public assertions |
+| Public profile surface | Profile/media-contribution flows and public assertions |
+| Event surface | Event flows and public assertions |
 | Player | Native media acceptance and Storybook |
-| UI primitives or stories | Storybook assertions |
+| Stories | Storybook assertions |
+| Shared UI primitives | Broad existing coverage |
 | Shared, authority-sensitive or unmapped application code | Broad existing coverage |
 
 `ci:visuals` adds the corresponding captures and image comparisons. `ci:full`
@@ -32,7 +33,8 @@ runs and what skips. Renames use both old and new paths in the comparison.
 ## Baseline and evidence
 
 Lint, types, unit tests, docs, API/MCP verification, backend bootstrap and the web
-build remain baseline checks. The broad script-test invocation is selected for
+build remain baseline checks, including the cheap web-source script contracts.
+The broad script-test invocation is selected for
 script, workflow, backend, package or worker changes. Native restream work is
 selected for its runtime, shared dependencies and CI changes. Main retains both.
 
@@ -54,3 +56,7 @@ scope is expanded.
 Observed successful full-browser PR runs before this change took about 42 and
 56 minutes. Selection removes unrelated work; exact savings still need a timed
 hosted run. Broad shared changes intentionally keep substantial coverage.
+
+All local browser lanes use the backend version compatible with the installed
+Convex CLI. This avoids the function-analysis mismatch observed when the CLI
+bootstrapped a newer backend; backend and browser pins must be upgraded together.

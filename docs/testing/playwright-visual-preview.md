@@ -403,7 +403,7 @@ Only selected jobs run. Storybook is not built for an unrelated timeline fix. Au
 
 The local data-flow job has a 45-minute limit for its serial flow suite, composed-media acceptance and artifact upload. Its previous 30-minute limit canceled a run after 257 flow tests and 12 media tests had passed. Individual test timeouts and all selected coverage remain unchanged.
 
-In browsers-only mode, selected Storybook component assertions run with `PLAYWRIGHT_CAPTURE_SCREENSHOTS=false`. Public-route visual assertions and review captures require `ci:visuals` or `ci:full`. Functional flows keep their existing failure screenshots, traces, and videos; those do not establish that review screenshots were collected.
+In browsers-only mode, selected Storybook component assertions run with `PLAYWRIGHT_CAPTURE_SCREENSHOTS=false`. Affected public-route assertions also run without review captures. Review captures and image-diff jobs require `ci:visuals` or `ci:full`. Functional flows keep their existing failure screenshots, traces, and videos; those do not establish that review screenshots were collected.
 
 With `ci:visuals`, selected preview jobs collect review screenshots and their corresponding image-diff jobs compare committed baselines. Requested comparisons fail on mismatches, runtime failures, cancellation or unexpected skips. CI never updates baselines.
 
@@ -662,15 +662,12 @@ cleanup error preserves the primary exception as its cause.
 Compact My night cases check accessible descriptions for overlap, partial lineup
 and favorite markers, plus a heading on mixed fallback removal lists.
 
-My night and Next saved exclude expired selections. After successful resolution,
-confirmed expired references are removed from preferences so they cannot exhaust
-the save limit. Unavailable items, failed resolutions and deliberate additions
-made during the current page session are not pruned. This avoids silently undoing
-a save from a just-ended event's still-available interest control.
+My night and Next saved exclude expired selections without deleting saved history.
 Timed selections expire at their end; open-ended selections use the shared
-six-hour runtime window. Date-only selections use the backend's end-of-date
-grace through UTC-12. The timeline flow regression mixes ended and upcoming saves,
-checks Next saved, then advances three days and checks display and storage cleanup.
+six-hour runtime window for display only. Date-only selections use the backend's
+end-of-date grace through UTC-12. The timeline flow regression mixes ended and
+upcoming saves, checks Next saved, then advances three days and checks that old
+selections stay hidden while the stored history remains intact.
 
 Broadcast Candidate Acceptance first checks changed paths. Schedule-only timeline
 components, helpers, fixtures and documentation skip the expensive browser/native

@@ -29,7 +29,7 @@ test.describe("continuous schedule @flow @fixture", () => {
     ).toBeVisible();
     await loadCompleteSchedule(page);
   });
-  test("past selections disappear and Next saved skips them without retaining expired preferences", async ({ page, timelineFixture }, info) => {
+  test("past selections disappear and Next saved skips them without deleting saved history", async ({ page, timelineFixture }, info) => {
     const plan = [0, 1].map(index => ({ kind: "event", eventId: timelineFixture.eventIds[index] }));
     await page.evaluate(savedPlan => localStorage.setItem("vrdex.timeline.preferences.v1", JSON.stringify({
       version: 1, plan: savedPlan, favoriteProfileIds: [],
@@ -39,7 +39,7 @@ test.describe("continuous schedule @flow @fixture", () => {
     const night = page.getByRole("region", { name: "My night", exact: true });
     await expect(night.getByRole("button", { name: "Remove Soft Focus from My night", exact: true })).toHaveCount(0);
     await expect(night.getByRole("button", { name: "Remove Afterimage from My night", exact: true })).toBeVisible();
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("vrdex.timeline.preferences.v1")!).plan)).toEqual([plan[1]]);
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("vrdex.timeline.preferences.v1")!).plan)).toEqual(plan);
     await page.getByRole("button", { name: "Next saved", exact: true }).click();
     await expect.poll(() => new URL(page.url()).searchParams.get("at")).toBe(String(TIMELINE_NOW + 1.5 * 3600000));
     await expect(page.locator(`[data-night-reference="${timelineFixture.eventIds[1]}"]`)).toHaveCount(1);
@@ -52,7 +52,7 @@ test.describe("continuous schedule @flow @fixture", () => {
     await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready");
     await expect(page.getByRole("heading", { name: "My night", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Next saved", exact: true })).toHaveCount(0);
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("vrdex.timeline.preferences.v1")!).plan)).toEqual([]);
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("vrdex.timeline.preferences.v1")!).plan)).toEqual(plan);
   });
 
   test("a just-ended event deliberately saved this visit stays removable outside My night", async ({ page, timelineFixture }) => {

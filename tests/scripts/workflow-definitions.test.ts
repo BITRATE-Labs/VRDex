@@ -302,6 +302,23 @@ describe("optional browser and visual evidence contract", () => {
       assert.ok(steps[contracts].run.includes(file));
     }
   });
+  it("keeps every web-source script contract in the cheap baseline subset", async () => {
+    const scripts = JSON.parse(readFileSync("package.json", "utf8")).scripts;
+    const subset = scripts["test:scripts:web"];
+    const files = (await readdir("tests/scripts")).filter(file => /\.test\.(?:ts|mjs)$/.test(file));
+    for (const file of files) {
+      if ((await readFile(`tests/scripts/${file}`, "utf8")).includes("apps/web")) assert.ok(subset.includes(`tests/scripts/${file}`), file);
+    }
+    const steps = workflow.jobs["verify-api-mcp"].steps;
+    const cheap = steps.find((step: { name?: string }) => step.name === "Verify web source contracts");
+    const full = steps.find((step: { name?: string }) => step.name === "Verify affected script contracts");
+    assert.equal(cheap.if, "needs.visual-selection.outputs.scripts != 'true'");
+    assert.equal(cheap.run, "pnpm test:scripts:web");
+    assert.equal(full.if, "needs.visual-selection.outputs.scripts == 'true'");
+    assert.equal(full.run, "pnpm test:scripts");
+    assert.equal(workflow.env.CONVEX_LOCAL_BACKEND_VERSION, workflow.jobs["verify-backend-local"].env.CONVEX_LOCAL_BACKEND_VERSION);
+  });
+
   it("broadcast rehearsal uses the shared job selection and pins the compatible backend", () => {
     const job = workflow.jobs["broadcast-native-acceptance"];
     assert.equal(job.env.CONVEX_LOCAL_BACKEND_VERSION, workflow.jobs["verify-backend-local"].env.CONVEX_LOCAL_BACKEND_VERSION);
