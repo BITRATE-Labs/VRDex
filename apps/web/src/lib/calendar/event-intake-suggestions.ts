@@ -94,13 +94,35 @@ function normalizeAcceptedStart(fields: EventIntakePatch): EventIntakePatch {
     : fields;
 }
 
+const importedClockQuestion = /^(event|lineup\.(\d+))\.(start|end|doors): date_timezone_required$/;
+
+export function isImportedTimezoneQuestion(fields: EventIntakePatch, question: string): boolean {
+  const match = importedClockQuestion.exec(question);
+  if (!match) return false;
+  const [, scope, index, field] = match;
+  const clock = scope === "event"
+    ? fields.tentative?.[field as "start" | "end" | "doors"]
+    : field === "doors" ? undefined : fields.tentative?.lineup?.[Number(index)]?.[field as "start" | "end"];
+  // The proposed event date anchors clocks without a separate date.
+  return Boolean(clock && (clock.dayOffset !== undefined || fields.tentative?.eventDate));
+}
+
+export function setImportedEventTimezone(fields: EventIntakePatch, timezone: string): EventIntakePatch {
+  return {
+    ...fields,
+    timezone: fields.timezone ?? timezone,
+    tentative: { ...fields.tentative, timezone },
+    questions: fields.questions?.filter(question => !isImportedTimezoneQuestion(fields, question)),
+  };
+}
+
 /** Resolve source clocks before serializing into the accepted canonical context. */
 function acceptSourceClock(fields: EventIntakePatch, local: EventIntakeLocalTime | null | undefined, proposalDate: EventIntakeFields["eventDate"], path: string) {
   if (!local) return local;
   const sourceZone = fields.tentative && Object.hasOwn(fields.tentative, "timezone") ? fields.tentative.timezone : fields.timezone;
   const sourceDate = proposalDate ?? (local.dayOffset !== undefined ? fields.eventDate : undefined);
   if (!sourceZone || !sourceDate || !fields.timezone || !fields.eventDate) throw new RangeError("Event date must be valid.");
-  if (fields.questions?.some(question => question.startsWith(`${path}:`) && /date_timezone_required|start_date_required/.test(question))) throw new RangeError("Event date must be valid.");
+  if (fields.questions?.some(question => question.startsWith(`${path}:`) && /date_timezone_required|start_date_required|end_date_required/.test(question))) throw new RangeError("Event date must be valid.");
   const instant = selectEventLocalTime(sourceDate, local, sourceZone);
   return intakeLocalFromInstant(fields, instant);
 }

@@ -168,3 +168,35 @@ test("lease expiry keeps an active local recovery disabled until it settles", as
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem("fixture-source-draft") ?? "{}").fields?.title)).toBe("Recovered after lease expiry");
 });
+
+test("one timezone choice unlocks a dated Discord lineup without repeated warnings", async ({ page }, testInfo) => {
+  await page.addInitScript(() => {
+    sessionStorage.setItem("fixture-personal-prepared", "true");
+    sessionStorage.setItem("fixture-source-draft", JSON.stringify({
+      version: 2,
+      fields: {
+        tentative: { eventDate: "2026-11-29", lineup: [
+          { clientKey: "first", position: 0, performerLabel: "First DJ", start: { time: "23:00" } },
+          { clientKey: "second", position: 1, performerLabel: "Second DJ", start: { time: "00:00", dayOffset: 1 } },
+        ] },
+        questions: ["lineup.0.start: date_timezone_required", "lineup.1.start: date_timezone_required"],
+      },
+    }));
+  });
+  await page.goto("/playwright/event-intake?source=discord");
+  const lineup = page.getByRole("button", { name: "Lineup", exact: true });
+  await lineup.click();
+  await expect(page.getByText("Choose a time zone.", { exact: true })).toHaveCount(1);
+  await expect(page.getByText(/date_timezone_required/)).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("discord-lineup-timezone.png"), fullPage: true });
+  await page.getByRole("button", { name: "Details", exact: true }).click();
+  await page.getByRole("button", { name: "Time zone", exact: true }).click();
+  await page.getByRole("combobox", { name: "Time zone", exact: true }).fill("Tokyo");
+  await page.getByRole("option", { name: /Tokyo/ }).click();
+  await page.getByRole("button", { name: "Accept Date", exact: true }).click();
+  await lineup.click();
+  await page.getByRole("button", { name: "Accept Lineup", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Accept Lineup", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem("fixture-source-draft") ?? "{}").fields?.lineup?.map((row: { start?: { dayOffset?: number } }) => row.start?.dayOffset))).toEqual([0, 1]);
+});
