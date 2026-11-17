@@ -16,7 +16,7 @@ import {
   type TimelineNavigation,
 } from "@/lib/timeline/navigation";
 import { localDayBands } from "@/lib/timeline/geometry";
-import { togglePlanAction } from "@/lib/timeline/plan-actions";
+import { nextSavedStart, togglePlanAction } from "@/lib/timeline/plan-actions";
 import { HOUR, inRange, recentEventTime, timelineQueryRange } from "@/lib/timeline/window-cache";
 import { useTimelinePreferences } from "./use-timeline-preferences";
 import { useTimelineData } from "./use-timeline-data";
@@ -157,7 +157,7 @@ function ScheduleContent({
     const next = { ...navigation, timeZone, ...changes };
     if (changes.timeZone) setDisplayTimeZone(changes.timeZone);
     const valid = normalizeTimelineAnchor(next.anchor);
-    next.anchor = valid ?? Date.now() - HOUR;
+    next.anchor = valid ?? now - HOUR;
     setNavigation(next);
     if (push) writeUrl(next, true);
     else {
@@ -232,15 +232,7 @@ function ScheduleContent({
     },
   };
   const nextSaved = () => {
-    const instants = data.saved
-      .flatMap((item) => {
-        if (item.kind !== "available" || item.status === "cancelled") return [];
-        const schedule = item.slot?.schedule ?? item.event.schedule;
-        return schedule.kind === "date_only" ? [] : [schedule.startAt];
-      })
-      .sort((a, b) => a - b);
-    const next =
-      instants.find((instant) => instant > range.endAt) ?? instants[0];
+    const next = nextSavedStart(data.saved, range.endAt, now, range.timeZone);
     if (next !== undefined) navigate({ anchor: next });
   };
   const visible = data.records.filter((event) => inRange(event, range));

@@ -2,7 +2,7 @@ import Image from "next/image";
 import { useId } from "react";
 import { BookmarkCheck, Star, TriangleAlert, X } from "lucide-react";
 import { InterestButton } from "@/components/ui/interest-button";
-import { planSaveState } from "@/lib/timeline/plan-actions";
+import { isPastSaved, planSaveState } from "@/lib/timeline/plan-actions";
 import type {
   SavedResolution,
   TimelineRange,
@@ -48,7 +48,8 @@ export function TimelineNight({
   now: number;
 }) {
   const descriptionId = useId();
-  const visible = saved.filter((item) => {
+  const activeSaved = saved.filter(item => !isPastSaved(item, now, range.timeZone));
+  const visible = activeSaved.filter((item) => {
     if (item.kind !== "available" || item.status === "cancelled") return false;
     const schedule = item.slot?.schedule ?? item.event.schedule;
     return (
@@ -84,7 +85,7 @@ export function TimelineNight({
       ];
     }),
   );
-  const fallback = saved.filter((item) => {
+  const fallback = activeSaved.filter((item) => {
     // Visible public date/start markers already provide open and removal actions.
     if (
       item.kind === "available" && item.status !== "cancelled" && !item.slot &&
@@ -106,7 +107,7 @@ export function TimelineNight({
             My night
           </h3>
           {visible.length === 0 &&
-            saved.some(
+            activeSaved.some(
               (s) =>
                 s.kind === "available" &&
                 s.status !== "cancelled" &&

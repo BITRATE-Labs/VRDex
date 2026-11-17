@@ -659,6 +659,13 @@ cleanup error preserves the primary exception as its cause.
 Compact My night cases check accessible descriptions for overlap, partial lineup
 and favorite markers, plus a heading on mixed fallback removal lists.
 
+Saved selections remain in preferences after their event or set ends, but both
+My night and Next saved exclude expired selections. Timed selections expire at
+their end; open-ended selections use the shared six-hour runtime window.
+Date-only selections remain through their viewer-local calendar day. The timeline
+flow regression mixes ended and upcoming saves, checks Next saved, then advances
+three days and verifies both controls disappear without deleting preferences.
+
 ## Home polish measurement
 
 The October 29 polish uses the five native behavior cases in

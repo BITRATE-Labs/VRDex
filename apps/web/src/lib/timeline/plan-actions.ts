@@ -1,5 +1,25 @@
-import type { PlanReference } from "../../../../../convex/_eventTimelineTypes";
+import type { PlanReference, SavedResolution } from "../../../../../convex/_eventTimelineTypes";
+import { timedEventRuntimeEndAt } from "../../../../../convex/_eventRuntime";
+import { eventDateForInstant } from "../../../../../convex/_eventSchedule";
 import type { PreferenceAction } from "./preferences";
+
+export function isPastSaved(item: SavedResolution, now: number, timeZone: string): boolean {
+  if (item.kind !== "available") return false;
+  const schedule = item.slot?.schedule ?? item.event.schedule;
+  return schedule.kind === "date_only"
+    ? schedule.eventDate < eventDateForInstant(now, timeZone)
+    : timedEventRuntimeEndAt(schedule) <= now;
+}
+
+export function nextSavedStart(saved: SavedResolution[], rangeEndAt: number, now: number, timeZone: string): number | undefined {
+  const instants = saved.flatMap(item => {
+    if (item.kind !== "available" || item.status === "cancelled" || isPastSaved(item, now, timeZone)) return [];
+    const schedule = item.slot?.schedule ?? item.event.schedule;
+    return schedule.kind === "date_only" ? [] : [schedule.startAt];
+  }).sort((a, b) => a - b);
+  return instants.find(instant => instant > rangeEndAt) ?? instants[0];
+}
+
 export function planSaveState(
   plan: ReadonlyArray<PlanReference>,
   reference: PlanReference,

@@ -1,0 +1,59 @@
+import assert from "node:assert/strict";
+import { it } from "node:test";
+import type { SavedResolution, TimelineSchedule } from "../../convex/_eventTimelineTypes";
+import { isPastSaved, nextSavedStart } from "../../apps/web/src/lib/timeline/plan-actions";
+
+const now = Date.UTC(2026, 10, 17, 12);
+const hour = 3_600_000;
+function saved(schedule: TimelineSchedule): SavedResolution {
+  return { kind: "available", reference: { kind: "event", eventId: "event" }, status: "scheduled",
+    event: { id: "event", slug: "event", title: "Event", status: "scheduled", schedule } };
+}
+
+it("expires ended events at the boundary but retains an ongoing event and saved references", () => {
+  const ended = saved({ kind: "timed", startAt: now - 72 * hour, endAt: now - 71 * hour });
+  const ongoing = saved({ kind: "timed", startAt: now - hour, endAt: now + hour });
+  const plan = [ended, ongoing];
+  const before = JSON.stringify(plan);
+  assert.equal(isPastSaved(ended, now, "UTC"), true);
+  assert.equal(isPastSaved(ongoing, now, "UTC"), false);
+  assert.equal(isPastSaved(ongoing, now + hour, "UTC"), true);
+  assert.equal(nextSavedStart(plan, now + 12 * hour, now, "UTC"), now - hour);
+  assert.equal(JSON.stringify(plan), before);
+});
+
+it("Next saved skips expired and cancelled entries when wrapping or looking ahead", () => {
+  const expired = saved({ kind: "timed", startAt: now - 72 * hour, endAt: now - 71 * hour });
+  const future = saved({ kind: "timed", startAt: now + 24 * hour, endAt: now + 25 * hour });
+  const cancelled = { ...saved({ kind: "timed", startAt: now + hour, endAt: now + 2 * hour }), status: "cancelled" } as SavedResolution;
+  const unavailable: SavedResolution = { kind: "unavailable", reference: { kind: "event", eventId: "private" } };
+  assert.equal(nextSavedStart([expired, cancelled, unavailable, future], now, now, "UTC"), now + 24 * hour);
+  assert.equal(nextSavedStart([expired, future], now + 48 * hour, now, "UTC"), now + 24 * hour);
+  assert.equal(nextSavedStart([expired, cancelled, unavailable], now, now, "UTC"), undefined);
+  assert.equal(isPastSaved(unavailable, now, "UTC"), false, "keep removal available when dates cannot be resolved");
+});
+
+it("open-ended selections use the shared six-hour runtime limit", () => {
+  const open = saved({ kind: "open_end", startAt: now - 5 * hour });
+  assert.equal(isPastSaved(open, now, "UTC"), false);
+  assert.equal(isPastSaved(open, now + hour, "UTC"), true);
+  assert.equal(nextSavedStart([open], now, now + hour, "UTC"), undefined);
+});
+
+it("date-only selections expire after their viewer-local calendar day without inventing a start", () => {
+  const day = saved({ kind: "date_only", eventDate: "2026-11-16" });
+  const midnightUTC = Date.UTC(2026, 10, 17, 1);
+  assert.equal(isPastSaved(day, midnightUTC, "America/Indianapolis"), false);
+  assert.equal(isPastSaved(day, midnightUTC, "UTC"), true);
+  assert.equal(nextSavedStart([day], midnightUTC, midnightUTC, "America/Indianapolis"), undefined);
+});
+
+it("selected sets expire at their own end while the parent event remains ongoing", () => {
+  const parent = saved({ kind: "timed", startAt: now - 2 * hour, endAt: now + 2 * hour });
+  if (parent.kind !== "available") throw Error("Expected available event");
+  const set: SavedResolution = { ...parent, reference: { kind: "set", eventId: "event", slotId: "slot" },
+    slot: { id: "slot", eventId: "event", displayLabel: "DJ", schedule: { kind: "timed", startAt: now - hour, endAt: now } } };
+  assert.equal(isPastSaved(parent, now, "UTC"), false);
+  assert.equal(isPastSaved(set, now, "UTC"), true);
+  assert.equal(nextSavedStart([set], now, now, "UTC"), undefined);
+});
