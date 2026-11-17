@@ -1,10 +1,26 @@
 # Event lineup player
 
-Timed public lineups with an available public performer stream are watchable
-without staff enabling performer sequence. The editor's Automatic choice uses
-this local browser viewer; Event stream retains the explicitly enabled event
-source. Automatic requests never open native relay grants or broadcasting tools.
-Existing enabled performer-sequence events remain compatible.
+Timed public lineups with a current public performer stream are watchable without
+staff enabling performer sequence. The editor's Automatic choice uses this local
+browser viewer. Event stream retains the explicitly enabled event source.
+Automatic requests never open native relay grants or broadcasting tools.
+
+Fresh Play uses the same inferred current slot in the inline surface, standalone
+surface and playback owner. A past or future performer's stream does not make a
+unique unlinked current performer watchable. Staff-enabled performer sequences
+use the same rule. Already-started sessions retain manual selection and continuation.
+
+When authored windows overlap or their order is ambiguous, an actually active
+public source keeps the existing manual performer selector reachable. Starting
+that session opens no stream until the viewer selects one. Future-only links,
+gaps and a unique unlinked current performer still do not offer Play.
+
+The viewer clock refreshes at slot starts and inferred/authored ends. The
+new-start control changes at the boundary without waiting for the normal minute
+tick or a visibility event. Existing playback keeps its independent continuation
+and projection-revalidation rules. A retained retry that becomes ineligible after
+its source was released reports Stream unavailable instead of remaining paused
+without feedback.
 
 ## Ownership and updates
 
@@ -113,10 +129,21 @@ added by this change. Established playback must stop progressing for at least
 evidence, including buffered playback after transport failure or clean EOF.
 EOF alone neither releases playback nor advances the lineup.
 
-A newly connected source has up to five seconds to begin decoded playback before
-reconnection. This prevents cold MSE/audio startup from being destroyed every
-second. Once it progresses, the established one-second failure interval applies.
-The allowance does not make a successor ready or bypass pause/revocation fences.
+A newly connected source has up to fifteen seconds to begin decoded playback
+before destructive reconnection. This prevents repeatedly restarting a source
+awaiting a slow first keyframe. The original five-second cold-start guard still
+records unavailability evidence and releases to a ready successor at its boundary;
+it does not hold an incoming decoded performer for fifteen seconds. A synthetic
+seven-second startup regression retains its original connection. This does not
+establish live-provider or physical-phone startup performance. Once a source
+progresses, the established one-second failure interval applies. The longer retry
+allowance does not make a successor ready or bypass pause/revocation fences.
+An offline or never-progressing cold source can take ten seconds longer to reach
+its first destructive retry, while internal failure evidence and handoff keep
+their earlier guard. The retained legacy viewer keeps its loading presentation
+through the first connection's protected cold start. Later offline retries keep
+failure feedback visible. A viewer retry resumes the existing session
+rather than replacing its connection.
 
 Retries use 1, 2, 4, then 10 second intervals. Each successful handoff resets the
 preparation retry count and deadline for the next candidate. Replacing a prepared connection also
@@ -218,8 +245,13 @@ media; it does not measure phone CPU or background playback.
 
 Audio-only availability belongs to the adapter. Native HLS and relay adapters
 declare a separate audio rendition; legacy MPEG-TS adapters do not. Retained
-controls disable Audio only for those legacy adapters while preserving Video
-recovery and saved preferences. Hiding local lineup video is not audio-only
+controls omit Audio only for those legacy adapters while preserving Video
+recovery and saved preferences. A restored audio preference blocks automatic local
+video too, before creating its session. The player shows Unsupported and a Video
+choice instead of a repeatable Enable playback action; explicit Video and Play
+recover it.
+Legacy lineup adapters do not implement a mode switch that only hides video.
+Hiding local lineup video is not audio-only
 decoding. See the [investigation and live-index proposal](../planning/player-performance-and-live-index-2026-11-06.md).
 
 The shared transport uses mpegts.js 1.8.1's supported customLoader interface.
@@ -247,3 +279,53 @@ the cancellation RED/GREEN evidence; a clean rerun alone is not the explanation.
 The [final local verification ledger](event-lineup-verification.md) records the
 connected authored-event serialization test, final editor snapshots and remaining
 operational evidence.
+
+## Failed playback presentation
+
+The retained player collapses its media rectangle while playback is unavailable
+or blocked and the current media has no metadata/frame to present. A transient
+lineup stall with presentable media keeps the picture and automatic recovery;
+it does not offer a destructive session retry. Sequence recovery uses automatic
+reconnection or the existing performer selector. An ambiguous initial selection
+shows that selector without unavailable prose or playback/retry controls only
+until a playable source has ever been selected in that session. The runtime
+records this selection history explicitly. A later revoked selection or return
+to an authored gap retains playback controls and Stream unavailable feedback.
+A blocked or offline Twitch
+iframe stays visible because its provider recovery controls must remain
+interactive. A profile transport-end notification also
+preserves the picture because buffered video may still be playing. Event and
+profile placeholders share the measured controls/status height and a responsive
+picture region. Controls use their natural height; a secondary mode/PiP row
+retains its existing minimum spacing. Missing rows leave no reserved strip.
+The existing media node stays mounted and owned by the same transport; a status
+change alone does not revoke, stop or recreate playback. Successful recovery
+reveals normal media again. Unavailable playback keeps source identity, controls
+and Close in both inline and compact presentation. Try again is available for
+recoverable failures, but not an unsupported transport or a visible Twitch embed.
+Fullscreen geometry never updates the inline reservation or compact clearance.
+Compact chrome reflow keeps the last inline measurement instead of resizing the
+slot that determines placement. Initial source imports keep the picture reserved.
+Media metadata/readiness events refresh recovery visibility without another control action.
+An expired event retry shows Playback stopped without a dead retry button. Profile
+transport EOF keeps its existing buffered-media and retry behavior. Native recovery
+that keeps the same grant still uses the five-second failure guard; the fifteen-second
+fence applies when discarding and reopening a source.
+
+Legacy lineup adapters opt out of Picture-in-Picture because an automatic handoff
+replaces their video element. Exposing the current media for buffered recovery
+does not enable that control. Native and direct-stream controls keep their existing
+capability handling; native PiP continuity across handoffs remains unqualified.
+
+## Asynchronous playback intent
+
+The root owner's `interactionRevision` is separate from its transport generation.
+Playback controls advance the interaction revision even when pause or resume
+retains the same adapter. Metadata revalidation does not create a new viewer intent.
+
+This is a caller contract, not an automatic guard around arbitrary asynchronous
+work: a surface must capture `beginInteraction()` before resolving a source and
+compare both `interactionRevision` and `generation` before accepting the result.
+The homepage consumer and its pending-lookup pause/resume regressions are delivered
+in [PR #468](https://github.com/BITRATE-Labs/VRDex/pull/468). The owner contract alone
+does not add a homepage surface or protect an unmodified caller.

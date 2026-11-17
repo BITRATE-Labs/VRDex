@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { VrcdnPlayerControls } from "@/components/media/vrcdn-player-controls";
 import { EventLineupSession, type LineupEvent, type LineupSnapshot } from "@/lib/event-lineup-runtime";
 import { isInScheduledWatchWindow, useCurrentTimestamp } from "./event-watch-surface";
+import { canStartLineupPlayback } from "@/lib/event-playback-request";
 import { WatchPlayPoster } from "./vrcdn-stream-player";
 
 export function EventLineupPlayer({ event, playbackRequest }: { event: LineupEvent; playbackRequest?: Extract<PlaybackRequest,{eventId:string}> }) {
@@ -20,8 +21,8 @@ function StandaloneEventLineupPlayer({ event }: { event: LineupEvent }) {
   const session = useRef<EventLineupSession>(null);
   const [state, setState] = useState<LineupSnapshot>({ started: false, following: true, paused: true, muted: false, volume: 1, connected: false, unavailable: false });
   const [fullscreen, setFullscreen] = useState(false);
-  const now = useCurrentTimestamp();
-  const visible = state.started || (event.slots.some(slot => slot.stream) && isInScheduledWatchWindow({ ...event, now }));
+  const now = useCurrentTimestamp(event.slots.flatMap(slot => slot.endAt === undefined ? [slot.startAt] : [slot.startAt, slot.endAt]));
+  const visible = state.started || (canStartLineupPlayback(event.slots, now) && isInScheduledWatchWindow({ ...event, now }));
   useEffect(() => {
     if (!mount.current) return;
     const instance = new EventLineupSession(event, mount.current, setState);

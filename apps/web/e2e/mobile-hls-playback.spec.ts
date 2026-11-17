@@ -66,6 +66,7 @@ test("composed grants, decoded media, native controls, retained navigation and s
   const media = page.locator("[data-event-playback-mount] video").first();
   await expect.poll(() => media.evaluate(n => (n as HTMLMediaElement).currentTime), { timeout: 30000 }).toBeGreaterThan(0.5);
   const shell = page.getByRole("region", { name: "Event playback", exact: true }).filter({ visible: true });
+  if (await page.evaluate(() => document.pictureInPictureEnabled)) await expect(shell.getByRole("button", { name: "Picture in picture", exact: true })).toBeVisible();
   await shell.getByRole("button", { name: "Audio only", exact: true }).click();
   const audio = page.locator("[data-event-playback-mount] audio").first();
   await expect.poll(() => audio.evaluate(n => (n as HTMLMediaElement).currentTime), { timeout: 15000 }).toBeGreaterThan(0.5);

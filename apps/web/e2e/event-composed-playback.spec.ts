@@ -24,8 +24,10 @@ for (const mode of ['sequence', 'automatic', 'event-stream']) test(`composed pub
     const video = page.locator('video:not([hidden])');
     await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime), { timeout: 20000 }).toBeGreaterThan(1);
     await expect(page.locator('video')).toHaveCount(1);
-    await expect(page.getByRole('button', { name: 'Audio only', exact: true })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Video', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Audio only', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Video', exact: true })).toHaveCount(0);
+    if (mode !== 'event-stream') await expect(page.getByRole('button', { name: 'Picture in picture', exact: true })).toHaveCount(0);
+    else if (await page.evaluate(() => document.pictureInPictureEnabled)) await expect(page.getByRole('button', { name: 'Picture in picture', exact: true })).toBeVisible();
     if (mode !== 'event-stream') await page.getByRole('button', { name: 'Eligible', exact: true }).click();
     const sourceCount = mode === 'event-stream' ? 1 : 2;
     await expect(page.locator('video')).toHaveCount(sourceCount);
@@ -41,6 +43,10 @@ for (const mode of ['sequence', 'automatic', 'event-stream']) test(`composed pub
     await expect(page.locator('video')).toHaveCount(0);
     expect(await original!.evaluate(node => node.isConnected)).toBe(false);
     expect(opened).toBe(sourceCount);
+  } catch (error) {
+    await testInfo.attach('media-at-failure', { contentType: 'application/json', body: JSON.stringify({ opened, media: await page.locator('video').evaluateAll(nodes => nodes.flatMap(node => node instanceof HTMLVideoElement ? [{ time: node.currentTime, paused: node.paused, readyState: node.readyState, error: node.error?.message, hidden: node.hidden }] : [])) }) });
+    await page.screenshot({ path: testInfo.outputPath('startup-at-failure.png'), fullPage: true });
+    throw error;
   } finally { await page.goto('about:blank'); }
 });
 
@@ -125,4 +131,159 @@ test('event editor defaults to automatic and can select an event stream @fixture
   await mode.selectOption('automatic');
   await mode.scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath('automatic-editor.png') });
+});
+
+
+test('mixed community lineup offers Play only for the actual current linked performer @fixture', async ({ page }, testInfo) => {
+  let mediaRequests = 0;
+  await page.route('http://127.0.0.1:6799/**', route => { mediaRequests++; return route.abort(); });
+  await page.goto('/playwright/event-lineup-live?composed&automatic&transport=http%3A%2F%2F127.0.0.1%3A6799');
+  const play = page.getByRole('button', { name: 'Play Lineup live', exact: true });
+  await expect(play).toBeVisible();
+  await page.getByRole('button', { name: 'missing', exact: true }).click();
+  await page.getByRole('button', { name: 'Next slot', exact: true }).click();
+  await expect(play).toHaveCount(0);
+  await expect(page.locator('[data-event-playback-inline]')).toHaveCount(0);
+  await expect(page.locator('video')).toHaveCount(0);
+  expect(mediaRequests).toBe(0);
+  await page.screenshot({ path: testInfo.outputPath('missing-current-performer.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Before window', exact: true }).click();
+  await expect(play).toBeVisible();
+  expect(mediaRequests).toBe(0);
+});
+
+
+test('a slow valid MPEG-TS response starts on its original connection @fixture', async ({ page }, testInfo) => {
+  test.setTimeout(30000);
+  let opened = 0;
+  await page.route('http://127.0.0.1:6799/**', async route => {
+    opened++;
+    await new Promise(resolve => setTimeout(resolve, 7000));
+    await route.fulfill({ contentType: 'video/mp2t', path: path.resolve('e2e/fixtures/persistent-synthetic.mpegts'), headers: { 'access-control-allow-origin': '*' } });
+  });
+  await page.goto('/playwright/event-lineup-live?composed&automatic&transport=http%3A%2F%2F127.0.0.1%3A6799');
+  await page.getByRole('button', { name: 'Play Lineup live', exact: true }).click();
+  const video = page.locator('video:not([hidden])');
+  await expect.poll(() => opened).toBe(1);
+  await page.waitForTimeout(5500);
+  await expect(page.getByRole('button', { name: 'Try again', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('status')).toHaveCount(0);
+  await expect(page.locator('[data-event-playback-mount]')).toBeVisible();
+  await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime), { timeout: 15000 }).toBeGreaterThan(1);
+  expect(opened).toBe(1);
+  await expect(page.getByRole('button', { name: 'Audio only', exact: true })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('slow-start-legacy-controls.png') });
+  await page.getByRole('button', { name: 'Close event playback', exact: true }).click();
+});
+
+
+test('saved audio preference blocks automatic legacy video until explicit Video recovery @fixture', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('vrdex.playback-mode', 'audio'));
+  let opened = 0;
+  await page.route('http://127.0.0.1:6799/**', async route => {
+    opened++;
+    await route.fulfill({ contentType: 'video/mp2t', path: path.resolve('e2e/fixtures/persistent-synthetic.mpegts'), headers: { 'access-control-allow-origin': '*' } });
+  });
+  await page.goto('/playwright/event-lineup-live?composed&automatic&transport=http%3A%2F%2F127.0.0.1%3A6799');
+  await page.getByRole('button', { name: 'Play Lineup live', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Unsupported');
+  await expect(page.getByRole('button', { name: 'Enable playback', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: 'Performer', exact: true })).toHaveCount(0);
+  await expect(page.locator('video')).toHaveCount(0);
+  expect(opened).toBe(0);
+  await expect(page.getByRole('button', { name: 'Audio only', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Video', exact: true }).click();
+  await page.getByRole('group', { name: 'Lineup live controls', exact: true }).getByRole('button', { name: 'Play', exact: true }).click();
+  await expect.poll(() => page.locator('video:not([hidden])').evaluate(node => (node as HTMLVideoElement).currentTime), { timeout: 15000 }).toBeGreaterThan(1);
+  expect(opened).toBe(1);
+});
+
+
+test('current-source eligibility updates at the slot boundary without a visibility event @fixture', async ({ page }) => {
+  await page.clock.install();
+  await page.goto('/playwright/event-lineup-live?composed&automatic&transport=http%3A%2F%2F127.0.0.1%3A6799');
+  await page.getByRole('button', { name: 'Before window', exact: true }).click();
+  const play = page.getByRole('button', { name: 'Play Lineup live', exact: true });
+  await expect(play).toBeVisible();
+  await page.getByRole('button', { name: 'missing', exact: true }).click();
+  await page.getByRole('button', { name: 'Just before boundary', exact: true }).click();
+  await expect(play).toBeVisible();
+  await page.evaluate(() => { Date.now = () => 1_240_000; });
+  await page.clock.runFor(5100);
+  await expect(play).toHaveCount(0, { timeout: 1000 });
+  await page.getByRole('button', { name: 'Before window', exact: true }).click();
+  await page.getByRole('button', { name: 'missing-first', exact: true }).click();
+  await expect(play).toHaveCount(0);
+  await page.getByRole('button', { name: 'Just before boundary', exact: true }).click();
+  await page.evaluate(() => { Date.now = () => 1_240_000; });
+  await page.clock.runFor(5100);
+  await expect(play).toBeVisible({ timeout: 1000 });
+  await expect(page.locator('video')).toHaveCount(0);
+});
+
+
+test('ambiguous active public streams require manual performer selection before connecting @fixture', async ({ page }, testInfo) => {
+  let opened = 0;
+  await page.route('http://127.0.0.1:6799/**', async route => {
+    opened++;
+    await route.fulfill({ contentType: 'video/mp2t', path: path.resolve('e2e/fixtures/persistent-synthetic.mpegts'), headers: { 'access-control-allow-origin': '*' } });
+  });
+  await page.goto('/playwright/event-lineup-live?composed&automatic&transport=http%3A%2F%2F127.0.0.1%3A6799');
+  await page.getByRole('button', { name: 'duplicate', exact: true }).click();
+  await page.getByRole('button', { name: 'Play Lineup live', exact: true }).click();
+  const performer = page.getByRole('combobox', { name: 'Performer', exact: true });
+  await expect(performer).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Try again', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('group', { name: 'Lineup live controls', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('status')).toHaveCount(0);
+  await expect(page.locator('video')).toHaveCount(0);
+  expect(opened).toBe(0);
+  await page.screenshot({ path: testInfo.outputPath('manual-selection-only.png') });
+  await performer.selectOption('x');
+  await expect.poll(() => page.locator('video:not([hidden])').evaluate(node => (node as HTMLVideoElement).currentTime), { timeout: 15000 }).toBeGreaterThan(1);
+  expect(opened).toBe(1);
+});
+
+for (const scenario of ['replacement', 'return-to-live']) test(`a ${scenario} after playback retains recovery controls instead of initial-selection-only UI @fixture`, async ({ page }, testInfo) => {
+  await page.route('http://127.0.0.1:6799/**', route => route.fulfill({ contentType: 'video/mp2t', path: path.resolve('e2e/fixtures/persistent-synthetic.mpegts'), headers: { 'access-control-allow-origin': '*' } }));
+  await page.goto('/playwright/event-lineup-live?composed&automatic&transport=http%3A%2F%2F127.0.0.1%3A6799');
+  await page.getByRole('button', { name: 'Play Lineup live', exact: true }).click();
+  await expect.poll(() => page.locator('video:not([hidden])').evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(1);
+  const performer = page.getByRole('combobox', { name: 'Performer', exact: true });
+  if (scenario === 'replacement') await page.getByRole('button', { name: 'swap-source', exact: true }).click();
+  else {
+    await performer.selectOption('a');
+    await page.getByRole('button', { name: 'overlap', exact: true }).click();
+    await page.getByRole('button', { name: 'Just before boundary', exact: true }).click();
+    await page.getByRole('button', { name: 'Return to live', exact: true }).click();
+  }
+  const controls = page.getByRole('group', { name: 'Lineup live controls', exact: true });
+  await expect(performer).toHaveValue('');
+  await expect(controls).toBeVisible();
+  await expect(page.getByRole('status')).toHaveText('Stream unavailable');
+  await expect(page.getByRole('button', { name: 'Close event playback', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Try again', exact: true })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('retained-selection-recovery.png') });
+  await performer.selectOption('a');
+  if (scenario === 'replacement') await controls.getByRole('button', { name: 'Play', exact: true }).click();
+  await expect.poll(() => page.locator('video:not([hidden])').evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(1);
+  await page.getByRole('button', { name: 'Close event playback', exact: true }).click();
+});
+
+
+test("lineup import delay keeps the inline picture reserved @fixture", async ({ page }) => {
+  let release!: () => void;
+  const ready = new Promise<void>(resolve => { release = resolve; });
+  let delayed = false;
+  await page.route(/mpegts.*\.js/, async route => { delayed = true; await ready; await route.continue(); });
+  await page.route("http://127.0.0.1:6799/**", route => route.fulfill({ contentType: "video/mp2t", path: path.resolve("e2e/fixtures/persistent-synthetic.mpegts"), headers: { "access-control-allow-origin": "*" } }));
+  try {
+    await page.goto("/playwright/event-lineup-live?composed&automatic&transport=http%3A%2F%2F127.0.0.1%3A6799");
+    await page.getByRole("button", { name: "Play Lineup live", exact: true }).click();
+    await expect.poll(() => delayed).toBe(true);
+    const slot = page.locator("[data-event-playback-inline]");
+    await expect.poll(() => slot.evaluate(node => getComputedStyle(node.firstElementChild!.firstElementChild!).display)).toBe("block");
+    const size = await slot.boundingBox();
+    expect(size!.height).toBeGreaterThan(size!.width * 9 / 16);
+  } finally { release(); }
 });

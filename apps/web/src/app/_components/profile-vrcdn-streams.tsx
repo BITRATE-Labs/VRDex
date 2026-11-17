@@ -5,6 +5,7 @@ import { ExternalLink } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePostHog } from "posthog-js/react";
 
+import { PlaybackInlinePlaceholder } from "./playback-inline-placeholder";
 import { WatchPlayPoster } from "./vrcdn-stream-player";
 import { useEventPlayback } from "./event-playback-provider";
 import { LinkTypeIcon, hostLabel } from "./public-profile-links";
@@ -263,7 +264,7 @@ export function ProfileVrcdnStreams({
                 {showPlayer ? (
                   <div className="mt-3 overflow-hidden rounded-control border border-border">
                     <div data-event-playback-inline={`profile:${profileId}:${streamId}`}>
-                      {retained?.streamId === streamId ? <div aria-hidden="true"><div className="aspect-video" /><div className="h-[152px]" />{(retained.status === "blocked" || retained.status === "unavailable") && <div className="h-11" />}</div> : <button type="button" aria-label={`Play ${title}`} className="block w-full" disabled={!playback || !profileId}
+                      {retained?.streamId === streamId ? <PlaybackInlinePlaceholder /> : <button type="button" aria-label={`Play ${title}`} className="block w-full" disabled={!playback || !profileId}
                         onClick={()=>{if(playback && profileId)void playback.play({kind:"vrcdn",profileId,profileSlug,title:`${displayName ?? profileSlug} - VRDex`,href:`/${profileSlug}`,sourceId:streamId,src:directVideoUrl??questUrl,transport:directVideoUrl?"video":"mpegts"});}}><WatchPlayPoster /></button>}
                     </div>
                   </div>

@@ -24,6 +24,7 @@ test("direct native preview controls acquire foreground before unmute and handle
   try {
     let allowed = false, calls = 0;
     adapter = createEventPlaybackAdapter(request, f.mount, () => {});
+    assert.equal(adapter.media, f.video);
     adapter.enableControls?.(() => { calls++; assert.equal(f.video.muted, true); return allowed; });
     assert.equal(f.video.controls, true); assert.equal(await adapter.play(), true); assert.equal(f.video.src, request.src);
     f.video.muted = false; f.video.dispatchEvent(new Event("volumechange")); assert.equal(f.video.muted, true); assert.equal(calls, 1);

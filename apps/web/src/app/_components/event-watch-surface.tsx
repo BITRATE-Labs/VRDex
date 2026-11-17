@@ -92,9 +92,17 @@ function useBrowserHostname() {
   return useSyncExternalStore(subscribeToLocation, getBrowserHostname, getServerHostname);
 }
 
-export function useCurrentTimestamp() {
+export function useCurrentTimestamp(transitions: readonly number[] = []) {
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => subscribeToNow(() => setNow(Date.now())), []);
+  const nextTransition = transitions.reduce((next, at) => now !== null && at > now && at < next ? at : next, Infinity);
+  useEffect(() => {
+    const delay = nextTransition - Date.now();
+    // The minute subscription brings distant boundaries into this timer's range.
+    if (!Number.isFinite(delay) || delay > 60_000) return;
+    const id = window.setTimeout(() => setNow(Date.now()), Math.max(0, delay));
+    return () => window.clearTimeout(id);
+  }, [nextTransition, now]);
   return now;
 }
 

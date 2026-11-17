@@ -319,3 +319,15 @@ for (const action of ["pause", "mode", "hidden", "hidden-cancel", "supersede", "
 },true));
 
 import { playbackArtwork } from "../../apps/web/src/lib/playback-metadata";
+
+
+test("cold native recovery keeps its five-second non-destructive cadence", () => fixture(async ({ sources, step }) => {
+  let recoveries = 0;
+  sources[0].progressing = false;
+  sources[0].recover = async () => { recoveries++; return true; };
+  await step(0, 4900); assert.equal(recoveries, 0);
+  await step(0, 200); assert.equal(recoveries, 1);
+  await step(0, 5100); assert.equal(recoveries, 2);
+  assert.equal(sources.filter(source => source.grantId === "grant-a").length, 1);
+  assert.equal(sources[0].released, false);
+}));

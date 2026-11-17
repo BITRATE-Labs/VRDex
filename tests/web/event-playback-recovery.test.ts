@@ -174,3 +174,21 @@ test("automatic community playback never opens a relay even when one is availabl
     assert.equal(calls, 0);
   } finally { Object.defineProperty(globalThis, "document", { configurable: true, value: previous }); }
 });
+
+
+test("automatic saved audio creates neither a hidden-video session nor relay admission", async () => {
+  const { createRetainedPlaybackAdapter } = await import("../../apps/web/src/lib/event-playback-adapters");
+  const previous = globalThis.document;
+  let subscriptions = 0, admissions = 0;
+  Object.defineProperty(globalThis, "document", { configurable: true, value: { addEventListener() { subscriptions++; }, removeEventListener() {} } });
+  const unexpected = async () => { admissions++; throw Error("Unexpected relay request"); };
+  const relay = { open: unexpected, get: unexpected, refresh: unexpected, restart: unexpected, release: unexpected };
+  const local: PlaybackRequest = { kind: "performer_sequence", localOnly: true, eventId: "community", eventSlug: "community", title: "Community", href: "/community", startAt: 0, event: { title: "Community", startAt: 0, slots: [] } };
+  let adapter: ReturnType<typeof createRetainedPlaybackAdapter> | undefined;
+  try {
+    adapter = createRetainedPlaybackAdapter(local, {} as HTMLElement, () => {}, { mode: "audio", relay });
+    assert.equal(subscriptions, 0, "unsupported saved audio must not initialize the legacy video session");
+    assert.equal(await adapter.play(), false);
+    assert.equal(admissions, 0);
+  } finally { adapter?.dispose(); Object.defineProperty(globalThis, "document", { configurable: true, value: previous }); }
+});
