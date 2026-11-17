@@ -151,6 +151,21 @@ it("completed preparation is replayed without another extraction and discard cle
   assert.equal(draft!.fields.tentative, undefined);
 });
 
+it("discarded imports free active-draft quota and can be explicitly selected again", async () => {
+  const { t, clerkUserId } = await fixture();
+  const actor = t.withIdentity(clerkTestIdentity(clerkUserId));
+  const seen = new Set<string>();
+  for (let index = 0; index < 20; index++) {
+    const result = await t.mutation(internal.discordPersonalIntake.captureSelectedMessage, capture);
+    if (result.kind !== "draft") throw new Error("Expected fresh private draft");
+    assert.ok(!seen.has(result.draftId)); seen.add(result.draftId);
+    await actor.mutation(api.discordPersonalIntake.discard, { draftId: result.draftId, expectedVersion: 1 });
+  }
+  await actor.mutation(api.eventIntake.saveEventIntakeDraft, { patch: { title: "Ordinary event" } });
+  await t.mutation(internal.eventIntake.expireDrafts, {});
+  assert.equal((await t.run(ctx => ctx.db.query("eventIntakeDrafts").collect())).length, 1);
+});
+
 async function ownedDraft() {
   const context = await fixture();
   await context.t.run(ctx => ctx.db.insert("profileOwners", { profileId: context.communityProfileId, userId: context.authorityUserId, roleKey: "owner", state: "active", grantedAt: Date.now(), updatedAt: Date.now() }));
@@ -197,6 +212,13 @@ it("owner publication uses official commands, is idempotent and clears private t
   const rebuilt = await t.run(ctx => ctx.db.query("searchDocuments").filter(q => q.eq(q.field("eventId"), first.eventId)).first());
   assert.equal(rebuilt?.imageUrl, "https://example.com/banner.png");
   assert.equal(rebuilt?.publicState, "public");
+  await t.mutation(internal.eventIntake.expireDrafts, {});
+  assert.equal(await t.run(ctx => ctx.db.get(draftId)), null);
+  assert.deepEqual(await actor.mutation(api.discordPersonalIntake.publishReviewedDraft, args), first);
+  await t.run(ctx => ctx.db.patch(first.eventId, { eventStatus: "cancelled" }));
+  assert.equal((await t.mutation(internal.discordPersonalIntake.captureSelectedMessage, capture)).kind, "unavailable");
+  await t.run(ctx => ctx.db.patch(first.eventId, { eventStatus: "scheduled", moderationRemovedAt: Date.now() }));
+  assert.equal((await t.mutation(internal.discordPersonalIntake.captureSelectedMessage, capture)).kind, "unavailable");
 });
 
 it("revoked owner authority stops publication instead of downgrading it to a contribution", async () => {

@@ -13,7 +13,7 @@ not been activated on the live Discord application or deployed by this task.
 | Event regression checkpoint | 164 owner, contribution, correction, lineup and inventory tests passed; the later private-lineup/confirmation checkpoint passed 30 tests |
 | Web suite | All 1,218 tests passed after the review fixes |
 | Discord gateway | All 44 tests passed |
-| Browser journeys | 24 desktop/mobile checks passed, including light/dark overflow checks, source replay masking, poster choice/removal and failed-download recovery, sign-in return, resume, delayed version handoff/retry, resolved contribution navigation, operation switching and owner denial |
+| Browser journeys | 28 desktop/mobile checks passed, including light/dark overflow checks, source replay masking, poster choice/removal and failed-download recovery, sign-in return, resume, delayed version handoff/retry, resolved contribution navigation, operation switching and owner denial |
 | Types | Backend, web, gateway and API contracts passed |
 | Docs and lint | Markdown lint, Docusaurus build and web ESLint passed |
 | Local backend | Anonymous bootstrap/health passed using the existing CI-pinned backend version and isolated ports |
@@ -56,7 +56,7 @@ revocation still stops publication without falling back to a contribution.
 The editor waits for the prepared draft version before remounting. Retry disables
 editing through that handoff, so extraction cannot discard newly typed changes.
 The delayed-subscription and delayed-retry browser regressions passed on desktop
-and mobile. The affected backend checkpoint passed all 206 tests, and independent
+and mobile. The affected backend checkpoint passed all 207 tests, and independent
 re-review found no remaining major issues.
 
 Artwork changes update only the image on an existing search document, preserving
@@ -74,6 +74,15 @@ regressions. The final local browser checkpoint passed all 24 checks.
 Repeated imports retain existing row keys and order, normalize lineup positions,
 and allocate unused short keys for appended rows. A regression covers collisions
 with earlier imports and repeated incoming keys. All 87 API contract tests passed.
+
+Failed preparation re-reads the saved draft and uses the same version handoff as
+success, including a failure after poster adoption. The recovery regression saves
+manual edits and checks the adopted poster preview. A controlled lease-expiry
+check keeps an active local recovery disabled until it settles, preventing a late
+remount from discarding edits. Resolved private drafts expire
+immediately, releasing quota; 20 discard/reselect cycles still allow an ordinary
+draft. Publication replay survives the existing sweep. Cancelled/moderated source
+records remain protected against creating a replacement event through reselection.
 
 ## Visual evidence
 

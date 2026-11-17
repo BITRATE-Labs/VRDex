@@ -128,3 +128,43 @@ test("returning to New event restores the import instead of copying the update t
   await page.getByLabel("Operation", { exact: true }).selectOption("create");
   await expect(title).toHaveValue("Fresh import");
 });
+
+
+test("a failed extraction after poster adoption leaves a fresh editable draft", async ({ page }) => {
+  await page.goto("/playwright/event-intake?source=discord-multiple");
+  const controls = page.getByRole("region", { name: "Discord import" });
+  await page.evaluate(() => sessionStorage.setItem("fixture-personal-fail-once", "true"));
+  await controls.getByLabel("Poster", { exact: true }).selectOption("poster-1");
+  await controls.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(controls.getByText("Unavailable", { exact: true })).toBeVisible();
+  await page.evaluate(() => sessionStorage.setItem("fixture-personal-fail-after-adoption", "true"));
+  await controls.getByLabel("Poster", { exact: true }).selectOption("poster-2");
+  await controls.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("fixture-personal-preparations"))).toBe("2");
+  const title = page.getByRole("textbox", { name: "Event title", exact: true });
+  await expect(title).toBeEnabled();
+  await title.fill("Manual recovery");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem("fixture-source-draft") ?? "{}").fields?.title)).toBe("Manual recovery");
+  await page.getByRole("button", { name: "Import poster or text", exact: true }).click();
+  await expect(page.getByAltText("Source poster")).toBeVisible();
+});
+
+
+test("lease expiry keeps an active local recovery disabled until it settles", async ({ page }) => {
+  await page.clock.install();
+  await page.addInitScript(() => sessionStorage.setItem("fixture-personal-fail-once", "true"));
+  await page.goto("/playwright/event-intake?source=discord");
+  const title = page.getByRole("textbox", { name: "Event title", exact: true });
+  await expect(title).toBeEnabled();
+  await page.evaluate(() => sessionStorage.setItem("fixture-personal-preparation-defer", "true"));
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Importing" })).toBeVisible();
+  await page.clock.fastForward(1100);
+  await expect(title).toBeDisabled();
+  await page.evaluate(() => window.dispatchEvent(new Event("release-personal-preparation")));
+  await expect(title).toBeEnabled();
+  await title.fill("Recovered after lease expiry");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem("fixture-source-draft") ?? "{}").fields?.title)).toBe("Recovered after lease expiry");
+});

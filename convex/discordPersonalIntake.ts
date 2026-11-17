@@ -47,8 +47,9 @@ export const captureSelectedMessage = internalMutation({
         return { kind: "unavailable" as const };
       }
       const draft = prior.draftId ? await ctx.db.get(prior.draftId) : null;
-      if (!draft || draft.expiresAt <= Date.now() || draft.resolvedAt) return { kind: "unavailable" as const };
-      return { kind: "draft" as const, draftId: draft._id, changed: prior.fingerprint !== fingerprint };
+      if (draft && draft.expiresAt > Date.now() && draft.resolvedAt === undefined) return { kind: "draft" as const, draftId: draft._id, changed: prior.fingerprint !== fingerprint };
+      if (prior.expiresAt > Date.now()) return { kind: "unavailable" as const };
+      await ctx.db.delete(prior._id);
     }
     const now = Date.now();
     const submissionId = await ctx.db.insert("discordPersonalIntakeSubmissions", {

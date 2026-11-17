@@ -129,9 +129,14 @@ to diagnostics without request or response content.
 
 Pending source metadata follows the draft's rolling 30-day expiry. Publication or
 discard clears source text, suggestions, questions, the update baseline and pending
-URLs. Minimal actor/message/author IDs, hashes and event linkage remain private
-for provenance and replay, like existing contribution receipts. Expired unresolved
-and orphan source metadata is removed by the existing bounded draft sweep.
+URLs. Resolved personal drafts expire immediately and stop consuming active-draft
+quota. Event-linked actor/message/author IDs and hashes remain private for
+provenance and replay, like existing contribution receipts. Eventless discarded
+metadata expires immediately; explicitly selecting that message again replaces it
+with a fresh draft. Old discarded links remain unavailable. The existing bounded
+draft sweep removes expired eventless and orphan metadata. Completed sources for
+cancelled or moderated events cannot create another event through reselection;
+existing-event management remains the recovery path.
 Image evidence and intentionally published artwork retain their independent
 storage, expiry and hold rules below. Removing an imported poster retains accepted
 event details; it cannot restore itself through a late preparation response.

@@ -447,17 +447,25 @@ function ConnectedIntake({ draftId, initialCommunitySlug, heading }: { draftId?:
       saved.current = null;
       setPreparationVersion(result.version);
       setPersonalFailed(result.preparationStatus === "failed");
-    } catch { setPersonalFailed(true); setPersonalReady(true); }
+    } catch {
+      setPersonalFailed(true); saved.current = null;
+      try {
+        const current = await convex.query(api.eventIntake.getEventIntakeDraft, { draftId: loaded._id });
+        if (current) setPreparationVersion(current.version);
+        else setPersonalReady(true);
+      } catch { setPersonalReady(true); }
+    }
     finally { setPersonalBusy(false); }
   }, [convex, loaded]);
   useEffect(() => {
     if (!loaded?.personalSubmissionId || !personal) return;
-    if (personal.status === "ready" || personal.status === "failed") {
-      if (personalBusy || preparationVersion !== undefined && loaded.version < preparationVersion) return;
-      setPersonalReady(true);
-      if (preparationVersion !== undefined) { setFormEpoch(value => value + 1); setPreparationVersion(undefined); }
+    if (personalBusy) return;
+    if (preparationVersion !== undefined) {
+      if (loaded.version < preparationVersion) return;
+      setPersonalReady(true); setFormEpoch(value => value + 1); setPreparationVersion(undefined);
       return;
     }
+    if (personal.status === "ready" || personal.status === "failed") { setPersonalReady(true); return; }
     if (personal.status === "pending" && personal.attachments.length <= 1 && prepareRequested.current !== loaded._id) {
       prepareRequested.current = loaded._id;
       void preparePersonal();
@@ -465,7 +473,7 @@ function ConnectedIntake({ draftId, initialCommunitySlug, heading }: { draftId?:
   }, [loaded, personal, personalBusy, preparationVersion, preparePersonal]);
   useEffect(() => {
     if (personal?.status !== "processing" || !personal.preparationExpiresAt) return;
-    const timer = window.setTimeout(() => { setPreparationExpired(true); setPersonalBusy(false); setPersonalFailed(true); setPersonalReady(true); }, Math.max(0, personal.preparationExpiresAt - Date.now()));
+    const timer = window.setTimeout(() => { setPreparationExpired(true); setPersonalFailed(true); setPersonalReady(true); }, Math.max(0, personal.preparationExpiresAt - Date.now()));
     return () => window.clearTimeout(timer);
   }, [personal?.status, personal?.preparationExpiresAt]);
   const request = useRef<{ key: string; version: number } | null>(null);

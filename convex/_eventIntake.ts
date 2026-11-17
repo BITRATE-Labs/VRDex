@@ -244,10 +244,11 @@ export async function attachIntakeArtwork(ctx: Pick<MutationCtx, "db">, draft: D
 }
 
 export async function resolvePersonalSubmission(ctx: Pick<MutationCtx, "db">, draftId: Id<"eventIntakeDrafts">, submissionId: Id<"discordPersonalIntakeSubmissions">, eventId?: Id<"events">) {
-  await ctx.db.patch(submissionId, { ...(eventId ? { eventId, expiresAt: Number.MAX_SAFE_INTEGER } : {}), attachments: [], reviewTarget: undefined, preparationStatus: "resolved", preparationToken: undefined, preparationExpiresAt: undefined, updatedAt: Date.now() });
+  const now = Date.now();
+  await ctx.db.patch(submissionId, { ...(eventId ? { eventId } : {}), expiresAt: eventId ? Number.MAX_SAFE_INTEGER : now, attachments: [], reviewTarget: undefined, preparationStatus: "resolved", preparationToken: undefined, preparationExpiresAt: undefined, updatedAt: Date.now() });
   const draft = await ctx.db.get(draftId);
   if (draft) {
     const { sourceText: _text, tentative: _tentative, evidence: _evidence, questions: _questions, posterDeclaration: _declaration, ...fields } = draft.fields;
-    await ctx.db.patch(draftId, { fields, resolvedAt: Date.now() });
+    await ctx.db.patch(draftId, { fields, resolvedAt: now, expiresAt: now });
   }
 }
