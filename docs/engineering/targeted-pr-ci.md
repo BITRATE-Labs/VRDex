@@ -13,9 +13,9 @@ Label names and behavior remain defined by the checked-in selector.
 
 | Change | Selected browser coverage with `ci:browsers` |
 | --- | --- |
-| Timeline and home schedule | Home/timeline flows and public assertions |
-| Public profile surface | Profile/media-contribution flows and public assertions |
-| Event surface | Event flows and public assertions |
+| Timeline and home schedule | Home/timeline flows, home baseline and public assertions |
+| Public profile surface | Profile/media-contribution flows, claim checks, public and Storybook assertions |
+| Event surface | Event flows, claim checks and public assertions |
 | Player | Native media acceptance, public watch assertions and Storybook |
 | Stories | Storybook assertions |
 | Shared UI primitives | Broad existing coverage |
@@ -25,6 +25,7 @@ Label names and behavior remain defined by the checked-in selector.
 selects every existing optional job, all flows, native media, script contracts
 and restream acceptance. Docs-only changes do not select browser jobs unless the
 full suite is explicitly requested. Mixed changes union their affected surfaces.
+Story imports retain component comparisons, including shared preference helpers.
 
 The path map lives in `.github/scripts/ci-scopes.cjs`. Unknown application paths
 remain broad. Narrowing a new surface requires a mapping and a test proving what

@@ -5,14 +5,14 @@ const OPTIONAL_JOBS = ["build-storybook", "playwright-public-smoke", "playwright
 // Unknown application changes retain broad coverage; narrow only known surfaces.
 const SURFACES = [
   { name: "timeline", path: /^(apps\/web\/(src\/(app\/(?:page\.tsx|_components\/(timeline\/|home-browse-provider\.))|lib\/timeline\/)|e2e\/(home-timeline|home-discovery|homepage-search))|tests\/web\/timeline-)/,
-    flows: "(?:home-timeline|home-discovery|homepage-search).*\\.flow\\.spec\\.ts", public: "home-timeline\\.visual\\.spec\\.ts" },
+    flows: "(?:home-timeline|home-discovery|homepage-search).*\\.flow\\.spec\\.ts", public: "home-timeline\\.visual\\.spec\\.ts|public-routes\\.(?:visual|snapshots)\\.spec\\.ts" },
   { name: "player", path: /^apps\/web\/(src\/(components\/media\/|lib\/(?:event-playback|event-lineup|native-hls|now-playing|playback-|media-element)|app\/_components\/event-(?:compact-player|playback|watch-surface|live-watch|lineup-player))|e2e\/(mobile-hls|event-lineup-live|native-trial-routing|event-playback))/,
     media: true, storybook: true, public: "(?:public-routes|media-kit)\\.(?:visual|snapshots)\\.spec\\.ts" },
   { name: "profiles", path: /^apps\/web\/(src\/(app\/(?:(?:profiles?|people|\[slug\])\/|_components\/(?:profile-|public-profile-links))|components\/profile|lib\/profile)|e2e\/(?:profile-|public-media-details|media-contribution))/,
-    flows: "(?:profile-|media-contribution|public-media-details).*\\.flow\\.spec\\.ts", public: "(?:public-routes|media-kit)\\.(?:visual|snapshots)\\.spec\\.ts" },
+    claimAuth: true, storybook: true, flows: "(?:profile-|media-contribution|public-media-details).*\\.flow\\.spec\\.ts", public: "(?:public-routes|media-kit)\\.(?:visual|snapshots)\\.spec\\.ts" },
   { name: "events", path: /^apps\/web\/(src\/(app\/(?:(?:events|\[communitySlug\]\/events)\/|_components\/event-)|lib\/event-(?:editor|detail)|components\/event)|e2e\/event-(?!broadcast|host))/,
-    flows: "event-.*\\.flow\\.spec\\.ts", public: "(?:public-routes|event-editor|event-held-imports)\\.(?:visual|snapshots)\\.spec\\.ts" },
-  { name: "storybook", path: /^apps\/web\/(src\/(?:.*\.stories\.)|\.storybook\/|e2e\/.*storybook)/,
+    claimAuth: true, flows: "event-.*\\.flow\\.spec\\.ts", public: "(?:public-routes|event-editor|event-held-imports)\\.(?:visual|snapshots)\\.spec\\.ts" },
+  { name: "storybook", path: /^apps\/web\/(src\/(?:.*\.stories\.|lib\/timeline\/(?:plan-actions|preferences)\.ts$)|\.storybook\/|e2e\/.*storybook)/,
     storybook: true },
 ];
 
@@ -35,15 +35,17 @@ function selectCoverage({ eventName, labels, files }) {
   let broad = full;
   let media = false;
   let storybook = false;
+  let claimAuth = false;
   if (browsers) {
     for (const file of files) {
-      if (/^apps\/web\/.*(?:broadcast|host-view|\/host\/|\/account\/|\/auth|\/clerk|profile-(?:claim|private-record|link-verification)|ownership|role|permission|verification|operator|stream-settings)/.test(file)) { broad = true; continue; }
+      if (/^apps\/web\/.*(?:broadcast|host-view|\/host\/|\/account\/|\/auth|\/clerk|profile-(?:claim|private-record|link-verification)|claim|invit|member|ownership|role|permission|verification|operator|stream-settings)/.test(file)) { broad = true; continue; }
       const surfaces = SURFACES.filter(area => area.path.test(file));
       for (const surface of surfaces) {
         if (surface.flows) flows.add(surface.flows);
         if (surface.public) previews.add(surface.public);
         media ||= Boolean(surface.media);
         storybook ||= Boolean(surface.storybook);
+        claimAuth ||= Boolean(surface.claimAuth);
       }
       if (!surfaces.length && !/^(docs\/|tests\/web\/|[^/]+\.md$)/.test(file)) {
         broad = true;
@@ -66,7 +68,7 @@ function selectCoverage({ eventName, labels, files }) {
   }
   return { browsers, visuals, full, jobs: OPTIONAL_JOBS.filter(job => selected.has(job)),
     flows: flows.size > 0, flowPattern: [...flows].join("|"), publicPattern: [...previews].join("|"),
-    media, claimAuth: browsers && broad, analytics: browsers && broad, ...core };
+    media, claimAuth: browsers && (broad || claimAuth), analytics: browsers && broad, ...core };
 }
 
 module.exports = { OPTIONAL_JOBS, selectCoverage };

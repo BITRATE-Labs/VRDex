@@ -5,7 +5,7 @@ const { OPTIONAL_JOBS, selectCoverage } = require("./ci-scopes.cjs");
 const select = (files, names = ["ci:browsers"]) => selectCoverage({ eventName: "pull_request", labels: names.map(name => ({ name })), files });
 
 test("a small timeline fix selects its flows and requested images without unrelated suites", () => {
-  const files = ["apps/web/src/lib/timeline/plan-actions.ts", "apps/web/e2e/home-timeline.flow.spec.ts", "tests/web/timeline-saved-expiry.test.ts"];
+  const files = ["apps/web/src/lib/timeline/geometry.ts", "apps/web/e2e/home-timeline.flow.spec.ts", "tests/web/timeline-saved-expiry.test.ts"];
   const narrow = select(files);
   assert.deepEqual(narrow.jobs, ["playwright-data-flow", "playwright-public-preview"]);
   assert.match("home-timeline.flow.spec.ts", new RegExp(narrow.flowPattern));
@@ -19,12 +19,12 @@ test("profile and event changes select their own flows; host authority keeps bro
   assert.match("profile-submission.flow.spec.ts", new RegExp(profile.flowPattern));
   assert.doesNotMatch("home-timeline.flow.spec.ts", new RegExp(profile.flowPattern));
   assert.equal(profile.media, false);
-  assert.equal(select(["apps/web/src/app/_components/profile-public-page.tsx"]).claimAuth, false);
+  assert.equal(select(["apps/web/src/app/_components/profile-public-page.tsx"]).claimAuth, true);
   assert.equal(select(["apps/web/src/lib/profile-claim.ts"]).claimAuth, true);
   const event = select(["apps/web/src/app/events/event-editor.tsx", "apps/web/e2e/event-editor-end.flow.spec.ts"]);
   assert.match("event-editor-end.flow.spec.ts", new RegExp(event.flowPattern));
-  assert.equal(event.claimAuth, false);
-  assert.equal(select(["apps/web/src/app/_components/event-public-page.tsx"]).claimAuth, false);
+  assert.equal(event.claimAuth, true);
+  assert.equal(select(["apps/web/src/app/_components/event-public-page.tsx"]).claimAuth, true);
   assert.equal(select(["apps/web/src/app/events/[slug]/host/page.tsx"]).claimAuth, true);
 });
 
@@ -87,8 +87,8 @@ test("a narrow run's report requires exactly its selected jobs and rejects malfo
     assert.match(evaluateVerification({ needs, artifacts }).errors.join(" "), /selection/i);
   }
 });
-const { readdirSync, readFileSync, mkdtempSync, writeFileSync, rmSync } = require('node:fs');
-const { join } = require('node:path');
+const { readdirSync, readFileSync, mkdtempSync, writeFileSync, rmSync, existsSync } = require('node:fs');
+const { join, resolve, dirname, relative } = require('node:path');
 const { tmpdir } = require('node:os');
 const { spawnSync } = require('node:child_process');
 
@@ -104,7 +104,7 @@ test('mapped flow and public patterns select existing tagged specifications', ()
   const specs = readdirSync(directory).filter(file => file.endsWith('.spec.ts'));
   for (const file of ['apps/web/src/lib/timeline/plan-actions.ts', 'apps/web/src/app/[slug]/page.tsx', 'apps/web/src/app/events/event-editor.tsx']) {
     const coverage = select([file], ['ci:visuals']);
-    for (const [key, tag] of [['flowPattern', '@flow'], ['publicPattern', '@visual']]) {
+    for (const [key, tag] of [['flowPattern', '@flow'], ['publicPattern', '@visual'], ['publicPattern', '@snapshot']]) {
       assert.ok(specs.some(spec => new RegExp(coverage[key]).test(spec) && readFileSync(join(directory, spec), 'utf8').includes(tag)), `${file}: ${key}`);
     }
   }
@@ -133,4 +133,24 @@ test('authority-adjacent profile files and media control tests retain their chec
     assert.ok(coverage.jobs.includes('playwright-hosted-data-flow'), file);
   }
   assert.equal(select(['tests/backend/event-media-control.test.ts'], []).restream, true);
+});
+
+
+test('timeline comparisons retain the full home baseline and every current story import retains Storybook', () => {
+  const timeline = select(['apps/web/src/app/_components/timeline/timeline.module.css'], ['ci:visuals']);
+  assert.match('public-routes.snapshots.spec.ts', new RegExp(timeline.publicPattern));
+  const root = 'apps/web/src';
+  const stories = readdirSync(root, { recursive: true }).filter(file => /\.stories\.tsx?$/.test(file));
+  for (const file of stories) {
+    const story = join(root, file);
+    for (const match of readFileSync(story, 'utf8').matchAll(/from\s+["']([^"']+)["']/g)) {
+      const specifier = match[1];
+      if (!specifier.startsWith('@/') && !specifier.startsWith('.')) continue;
+      let imported = relative(process.cwd(), specifier.startsWith('@/') ? resolve(root, specifier.slice(2)) : resolve(dirname(story), specifier)).replaceAll('\\', '/');
+      if (!imported.startsWith(`${root}/`)) continue;
+      imported = [imported, `${imported}.tsx`, `${imported}.ts`, `${imported}/index.tsx`, `${imported}/index.ts`].find(existsSync);
+      assert.ok(imported, `${story}: unresolved ${specifier}`);
+      assert.ok(select([imported], ['ci:visuals']).jobs.includes('storybook-image-diff'), `${story}: ${imported}`);
+    }
+  }
 });
