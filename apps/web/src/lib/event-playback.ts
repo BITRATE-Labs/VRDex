@@ -1,4 +1,3 @@
-import { inferLineupEnds } from "@vrdex/api-contracts";
 import { AUDIO_OBSERVATION_FRESHNESS_MS } from "./event-audio-observation";
 
 export const HANDOFF_PREPARE_MS = 120_000;
@@ -48,40 +47,7 @@ function validTimestamp(value: number): boolean {
   return Number.isFinite(value);
 }
 
-/** Selects the single slot whose derived half-open interval contains scheduleNow. */
-export function joinSlot(
-  slots: readonly PlaybackSlot[],
-  scheduleNow: number,
-): PlaybackSlot | undefined {
-  if (!validTimestamp(scheduleNow)) return undefined;
-
-  let match: PlaybackSlot | undefined;
-  const effective = inferLineupEnds(slots);
-  for (let index = 0; index < effective.length; index += 1) {
-    const slot = effective[index];
-    const next = effective[index + 1];
-    if (
-      !validTimestamp(slot.startAt) ||
-      (slot.endAt !== undefined &&
-        (!validTimestamp(slot.endAt) || slot.endAt < slot.startAt)) ||
-      (next !== undefined &&
-        (!validTimestamp(next.startAt) || next.startAt < slot.startAt))
-    ) {
-      return undefined;
-    }
-
-    // A join selects the scheduled performer; following still stops at untimed rows.
-    const effectiveEnd = slot.endAt ?? next?.startAt;
-    const active =
-      scheduleNow >= slot.startAt &&
-      (effectiveEnd === undefined || scheduleNow < effectiveEnd);
-    if (!active) continue;
-    if (match !== undefined) return undefined;
-    match = slot;
-  }
-
-  return match;
-}
+export { joinLineupSlot as joinSlot } from "../../../../packages/api-contracts/src/lineup-timing";
 
 /** Returns the first wall-clock instant at which the next source may be prepared. */
 export function handoffEligibleAt(

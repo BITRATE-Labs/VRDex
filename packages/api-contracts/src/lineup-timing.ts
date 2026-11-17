@@ -20,3 +20,37 @@ export function inferLineupEnds<T extends TimedLineupRow>(rows: readonly T[], ev
     return finite(end) && end > row.startAt ? { ...copy, endAt: end } : copy;
   });
 }
+
+/** Selects the single slot whose derived half-open interval contains scheduleNow. */
+export function joinLineupSlot<T extends { startAt: number; endAt?: number; followingBlocked?: boolean }>(
+  slots: readonly T[],
+  scheduleNow: number,
+): T | undefined {
+  if (!Number.isFinite(scheduleNow)) return undefined;
+
+  let match: T | undefined;
+  const effective = inferLineupEnds(slots);
+  for (const [index, slot] of effective.entries()) {
+    const next = effective[index + 1];
+    if (
+      !Number.isFinite(slot.startAt) ||
+      (slot.endAt !== undefined &&
+        (!Number.isFinite(slot.endAt) || slot.endAt < slot.startAt)) ||
+      (next !== undefined &&
+        (!Number.isFinite(next.startAt) || next.startAt < slot.startAt))
+    ) {
+      return undefined;
+    }
+
+    // A join selects the scheduled performer; following still stops at untimed rows.
+    const effectiveEnd = slot.endAt ?? next?.startAt;
+    const active =
+      scheduleNow >= slot.startAt &&
+      (effectiveEnd === undefined || scheduleNow < effectiveEnd);
+    if (!active) continue;
+    if (match !== undefined) return undefined;
+    match = slot;
+  }
+
+  return match;
+}
