@@ -13,7 +13,7 @@ not been activated on the live Discord application or deployed by this task.
 | Event regression checkpoint | 164 owner, contribution, correction, lineup and inventory tests passed; the later private-lineup/confirmation checkpoint passed 30 tests |
 | Web suite | All 1,217 tests passed after the review fixes |
 | Discord gateway | All 44 tests passed |
-| Browser journeys | 18 desktop/mobile checks passed, including light/dark overflow checks, source replay masking, poster choice/removal and failed-download recovery, sign-in return, resume, delayed version handoff/retry and owner denial |
+| Browser journeys | 24 desktop/mobile checks passed, including light/dark overflow checks, source replay masking, poster choice/removal and failed-download recovery, sign-in return, resume, delayed version handoff/retry, resolved contribution navigation, operation switching and owner denial |
 | Types | Backend, web, gateway and API contracts passed |
 | Docs and lint | Markdown lint, Docusaurus build and web ESLint passed |
 | Local backend | Anonymous bootstrap/health passed using the existing CI-pinned backend version and isolated ports |
@@ -58,6 +58,16 @@ editing through that handoff, so extraction cannot discard newly typed changes.
 The delayed-subscription and delayed-retry browser regressions passed on desktop
 and mobile. The affected backend checkpoint passed all 206 tests, and independent
 re-review found no remaining major issues.
+
+The next review pass also covered held connector publications, whose unconfirmed
+associations need the original publication search context when artwork is attached.
+Personal contribution publication keeps the editor mounted until navigation and
+uses the returned event path even when deduplication finds someone else's event.
+Returning from an update target to New event restores the original accepted import
+fields and suggestions while preserving a later explicit poster removal. Switching
+between update targets rebases suggestions on the import, without carrying another
+target's lineup into the new event. These paths have backend or desktop/mobile
+regressions. The final local browser checkpoint passed all 24 checks.
 
 ## Visual evidence
 

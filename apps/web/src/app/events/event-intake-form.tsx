@@ -525,7 +525,7 @@ function ConnectedIntake({ draftId, initialCommunitySlug, heading }: { draftId?:
     return { fields: next, candidate };
   };
   if (draftId && loaded === undefined) return <>{heading}<p aria-busy="true">Loading draft…</p></>;
-  // A published held draft reads as null for any manager but its actor; the form still has a redirect to run.
+  // Published imports can read as null before their redirect runs.
   if (draftId && loaded === null && !publishingHeld) return <>{heading}<Notice>Unavailable</Notice></>;
   // A connector import with no clock is date-only, the same reading row Publish takes.
   const connectorFields = loaded?.connectorId ? { ...loaded.fields, timeTba: heldImportTimeTba(loaded.fields) } : undefined;
@@ -536,8 +536,8 @@ function ConnectedIntake({ draftId, initialCommunitySlug, heading }: { draftId?:
     try {
       const current = await convex.query(api.eventIntake.getEventIntakeDraft, { draftId: loaded._id });
       if (!current) throw new Error("DRAFT_ACCESS");
-      await selectTarget({ draftId: loaded._id, expectedVersion: current.version, ...(eventId ? { eventId: eventId as Id<"events"> } : {}) });
-      saved.current = null; setFormEpoch(value => value + 1); setSelectingUpdate(Boolean(eventId));
+      const selected = await selectTarget({ draftId: loaded._id, expectedVersion: current.version, ...(eventId ? { eventId: eventId as Id<"events"> } : {}) });
+      saved.current = null; setPreparationVersion(selected.version); setSelectingUpdate(Boolean(eventId));
     } catch { setPersonalFailed(true); }
     finally { setPersonalBusy(false); }
   };
@@ -574,12 +574,16 @@ function ConnectedIntake({ draftId, initialCommunitySlug, heading }: { draftId?:
       } catch (error) { setPublishingHeld(false); throw error; }
     }
     if (request.current?.version !== current.version) request.current = { version: current.version, key: crypto.randomUUID() };
-    const result = await publish({ draftId: current.draftId, expectedVersion: current.version, idempotencyKey: request.current.key });
-    const completion = { kind: "published" as const, eventId: result.eventId, eventPath: result.eventPath };
-    published.current = { completion, fields };
-    // Capture the authorized revision now; subsequent submits never adopt a refreshed revision.
-    published.current.revision = (await convex.query(api.eventCorrections.getOwnContributedEvent, { eventId: result.eventId })).updatedAt;
-    return completion;
+    if (loaded?.personalSubmissionId) setPublishingHeld(true);
+    try {
+      const result = await publish({ draftId: current.draftId, expectedVersion: current.version, idempotencyKey: request.current.key });
+      const completion = { kind: "published" as const, eventId: result.eventId, eventPath: result.eventPath };
+      published.current = { completion, fields };
+      if (loaded?.personalSubmissionId) return completion;
+      // Capture the authorized revision now; subsequent submits never adopt a refreshed revision.
+      published.current.revision = (await convex.query(api.eventCorrections.getOwnContributedEvent, { eventId: result.eventId })).updatedAt;
+      return completion;
+    } catch (error) { setPublishingHeld(false); throw error; }
   }} /></fieldset>;
 }
 export function EventIntakeForm(props: { draftId?: string; initialCommunitySlug?: string; heading?: ReactNode }) {

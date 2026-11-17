@@ -154,15 +154,26 @@ export const selectUpdateTarget = mutation({
     const { user, subject } = await requireActiveBrowserSessionSubject(ctx);
     const { draft, submission } = await ownSubmission(ctx, user._id, args.draftId);
     if (draft.version !== args.expectedVersion) throw new ConvexError({ code: "VERSION_CONFLICT" });
-    if (!args.eventId) { await ctx.db.patch(submission._id, { reviewTarget: undefined }); return { version: draft.version }; }
+    if (!args.eventId) {
+      let version = draft.version;
+      if (submission.reviewTarget) {
+        const original = submission.reviewTarget.createFields ?? {};
+        const patch = { ...Object.fromEntries(Object.keys(submission.reviewTarget.baseline).map(key => [key, null])), ...original };
+        version = (await saveIntakeDraft(ctx.db, user._id, { draftId: draft._id, expectedVersion: draft.version, patch })).version;
+      }
+      await ctx.db.patch(submission._id, { reviewTarget: undefined });
+      return { version };
+    }
     const event = await ctx.db.get(args.eventId);
     if (!event || !await canUpdateEvent(ctx.db, event, subject, user._id)) throw new Error("You do not have permission to update this event.");
     const baseline = await correctionFields(ctx.db, event);
+    const createFields = submission.reviewTarget ? submission.reviewTarget.createFields ?? {} : { ...Object.fromEntries(Object.keys(baseline).map(key => [key, draft.fields[key as keyof typeof draft.fields] ?? null])), tentative: draft.fields.tentative ?? null };
+    const imported = createFields.tentative;
     const fields = { ...Object.fromEntries(Object.entries(baseline).map(([key, value]) => [key, value ?? null])), sourceText: draft.fields.sourceText, posterSourceId: draft.fields.posterSourceId,
-      tentative: { ...draft.fields.tentative, ...(draft.fields.tentative?.lineup ? { lineup: mergePersonalLineupSuggestions(baseline.lineup ?? [], draft.fields.tentative.lineup) } : {}) },
+      tentative: { ...imported, ...(imported?.lineup ? { lineup: mergePersonalLineupSuggestions(baseline.lineup ?? [], imported.lineup) } : {}) },
       evidence: draft.fields.evidence, questions: draft.fields.questions };
     const saved = await saveIntakeDraft(ctx.db, user._id, { draftId: draft._id, expectedVersion: draft.version, patch: fields });
-    await ctx.db.patch(submission._id, { reviewTarget: { eventId: event._id, updatedAt: event.updatedAt, baseline } });
+    await ctx.db.patch(submission._id, { reviewTarget: { eventId: event._id, updatedAt: event.updatedAt, baseline, createFields } });
     return { version: saved.version };
   },
 });

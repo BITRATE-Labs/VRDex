@@ -101,3 +101,30 @@ test("retry disables editing until its prepared version reaches the editor", asy
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem("fixture-source-draft") ?? "{}").fields?.title)).toBe("Reviewed retry");
 });
+
+
+for (const foreign of [false, true]) test(`personal contribution survives resolution and navigates to ${foreign ? "another contributor existing event" : "its new event"}`, async ({ page }) => {
+  if (foreign) await page.addInitScript(() => sessionStorage.setItem("fixture-publication-foreign", "true"));
+  await page.goto("/playwright/event-intake?source=discord-contribution");
+  await expect(page.getByRole("textbox", { name: "Event title", exact: true })).toHaveValue("Harbor Sessions");
+  await page.getByRole("navigation", { name: "Event editor" }).getByRole("button", { name: "Review", exact: true }).click();
+  await page.getByRole("button", { name: "Publish event", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("fixture-personal-resolved"))).toBe("true");
+  await expect(page.locator("main").getByText("Unavailable", { exact: true })).toHaveCount(0);
+  await page.evaluate(() => window.dispatchEvent(new Event("release-personal-publication")));
+  await expect(page).toHaveURL(/playwright-afterglow-social\/events\/playwright-afterglow-harbor-sessions/);
+});
+
+
+test("returning to New event restores the import instead of copying the update target", async ({ page }) => {
+  await page.goto("/playwright/event-intake?source=discord");
+  const title = page.getByRole("textbox", { name: "Event title", exact: true });
+  await title.fill("Fresh import");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem("fixture-source-draft") ?? "{}").fields?.title)).toBe("Fresh import");
+  await page.getByLabel("Operation", { exact: true }).selectOption("update");
+  await page.getByLabel("Existing event", { exact: true }).selectOption("fixture-existing");
+  await expect(title).toHaveValue("Existing harbor event");
+  await page.getByLabel("Operation", { exact: true }).selectOption("create");
+  await expect(title).toHaveValue("Fresh import");
+});

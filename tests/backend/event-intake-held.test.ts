@@ -131,9 +131,12 @@ it("a second manager replaces the poster with their own upload", async () => {
   const selected = await t.mutation(internal.eventIntakeSources.selectPosterArtwork, { actorUserId, draftId, posterAssetId, expectedVersion: version });
   await t.mutation(internal.eventIntakeSources.completeArtwork, { actorUserId, artworkAssetId: selected.artworkAssetId!, expectedVersion: version, sha256: "b".repeat(64), byteLength: 100 });
   assert.equal((await as("second").query(api.eventIntake.getEventIntakeDraft, { draftId }))?.artworkSourceId, posterAssetId);
-  await as("second").mutation(api.eventIntake.saveEventIntakeDraft, { draftId, expectedVersion: version + 1, patch: publishable });
+  await t.run(({ db }) => db.insert("worlds", { slug: "connector-world", displayName: "Connectorworldneedle", sortName: "connectorworldneedle", tags: ["connectortagneedle"], publicationState: "published", visibilityStatus: "public", platformCompatibility: [], media: [], creatorAttributions: [], outboundLinks: [], creationSource: "community", updatedAt: Date.now() }));
+  await as("second").mutation(api.eventIntake.saveEventIntakeDraft, { draftId, expectedVersion: version + 1, patch: { ...publishable, worldSlug: "connector-world", lineup: [{ clientKey: "host", position: 0, performerLabel: "Host", roleLabel: "Connectorroleneedle" }] } });
   const published = await t.run(ctx => publishIntakeDraft(ctx, ids.second, { draftId, expectedVersion: version + 2, idempotencyKey: "manager-poster" }, Date.now(), "browser", { connectorId: ids.discord }));
   assert.ok((await t.run(({ db }) => db.get(published.eventId)))?.posterImageUrl);
+  const search = await t.run(({ db }) => db.query("searchDocuments").filter(q => q.eq(q.field("eventId"), published.eventId)).first());
+  for (const term of ["connectorworldneedle", "connectortagneedle", "connectorroleneedle"]) assert.ok(search?.searchText.toLowerCase().includes(term), `connector artwork must retain ${term}`);
   // Back on the draft owner, who holds no manage_events.
   assert.equal((await t.query(internal.eventIntakeSources.readActorSource, { actorUserId: ids.authority, posterAssetId })).draftId, draftId);
 });

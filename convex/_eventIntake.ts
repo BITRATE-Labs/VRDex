@@ -219,7 +219,7 @@ export async function publishIntakeDraft(ctx: Pick<MutationCtx, "db" | "schedule
     }
     // An explicit selection belongs to this contributor's (or connector's) newly created event only.
     if (draft.artworkAssetId && receipt.draftId === draft._id && (connectorId ? createdEvent : event.contributorUserId === actorUserId)) {
-      await attachIntakeArtwork(ctx, draft, event, now);
+      await attachIntakeArtwork(ctx, draft, event, now, { world: checked.world, roleLabels: checked.lineup.flatMap(row => row.roleLabel ? [row.roleLabel] : []) });
     }
     await db.patch(draft._id, { publishedReceiptId: receipt._id, ...(draft.connectorId ? { resolvedAt: now } : {}) });
   }
@@ -229,7 +229,7 @@ export async function publishIntakeDraft(ctx: Pick<MutationCtx, "db" | "schedule
   return { ...await receiptResult(db, receipt), createdEvent };
 }
 
-export async function attachIntakeArtwork(ctx: Pick<MutationCtx, "db">, draft: Doc<"eventIntakeDrafts">, event: Doc<"events">, now = Date.now()) {
+export async function attachIntakeArtwork(ctx: Pick<MutationCtx, "db">, draft: Doc<"eventIntakeDrafts">, event: Doc<"events">, now = Date.now(), searchAssociations?: { world?: Doc<"worlds">; roleLabels: string[] }) {
   if (!draft.artworkAssetId) return;
   const { db } = ctx;
   const artwork = await db.get(draft.artworkAssetId);
@@ -241,7 +241,7 @@ export async function attachIntakeArtwork(ctx: Pick<MutationCtx, "db">, draft: D
   const posterImageUrl = `/api/v0/events/${event._id}/artwork/${artwork._id}`;
   await db.patch(event._id, { posterImageUrl });
   const community = event.communityProfileId ? await db.get(event.communityProfileId) : null;
-  if (community) await reindexEventSearchDocument(db, { ...event, posterImageUrl }, { community, ...await eventSearchAssociations(db, event) }, now);
+  if (community) await reindexEventSearchDocument(db, { ...event, posterImageUrl }, { community, ...(searchAssociations ?? await eventSearchAssociations(db, event)) }, now);
 }
 
 export async function resolvePersonalSubmission(ctx: Pick<MutationCtx, "db">, draftId: Id<"eventIntakeDrafts">, submissionId: Id<"discordPersonalIntakeSubmissions">, eventId?: Id<"events">) {

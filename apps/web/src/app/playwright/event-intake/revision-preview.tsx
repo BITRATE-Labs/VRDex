@@ -16,6 +16,7 @@ const useFixtureAuth = () => ({ isLoading: false, isAuthenticated: typeof sessio
 function revisionFixture(correction: boolean, sourceMode?: string, staff = false, held?: string) {
   const personalMode = sourceMode?.startsWith("discord");
   let personalStatus = typeof sessionStorage !== "undefined" && sessionStorage.getItem("fixture-personal-prepared") ? "ready" : "pending";
+  let personalCreateFields: EventIntakePatch | undefined;
   let personalTarget: { eventId: string; updatedAt: number; baseline: EventIntakePatch } | null = null;
   let fields: EventIntakePatch = { communitySlug: "afterglow", title: "Original title", eventDate: "2027-07-15", timeTba: true, venueLabel: "Original venue" };
   if (correction) fields.lineup = [{ clientKey: "private-person", position: 0, performerLabel: "Private performer" }];
@@ -44,7 +45,7 @@ function revisionFixture(correction: boolean, sourceMode?: string, staff = false
   if (searchLoading && typeof window !== "undefined") window.addEventListener("release-community-search", () => { searchLoading = false; listeners.forEach(listener => listener()); }, { once: true });
   const people = [{ slug: "aurora", title: "Aurora", imageUrl: "/test-media/event-poster.png" }];
   const viewer = { user: { name: "Fixture contributor", defaultEventTimezone: typeof sessionStorage !== "undefined" ? sessionStorage.getItem("fixture-correction-timezone") ?? undefined : undefined } };
-  const personalProjection = () => ({ status: personalStatus, ownerCommunitySlug: fields.communitySlug === "afterglow" ? "afterglow" : null, target: personalTarget, attachments: personalStatus === "ready" ? [] : (sourceMode === "discord-multiple" ? [1, 2] : [1]).map(index => ({ id: `poster-${index}`, url: "/test-media/event-poster.png", label: `Poster ${index}` })) });
+  const personalProjection = () => ({ status: personalStatus, ownerCommunitySlug: sourceMode !== "discord-contribution" && fields.communitySlug === "afterglow" ? "afterglow" : null, target: personalTarget, attachments: personalStatus === "ready" ? [] : (sourceMode === "discord-multiple" ? [1, 2] : [1]).map(index => ({ id: `poster-${index}`, url: "/test-media/event-poster.png", label: `Poster ${index}` })) });
   const refresh = (patch: EventIntakePatch) => {
     fields = { ...fields, ...patch };
     if (draft?.artworkSourceId && "posterSourceId" in patch && fields.posterSourceId !== draft.artworkSourceId) {
@@ -64,7 +65,7 @@ function revisionFixture(correction: boolean, sourceMode?: string, staff = false
       const name = getFunctionName(query);
       if (name === "eventIntake:getEventIntakeDraft") return draft;
       if (name === "discordPersonalIntake:getSubmission") return personalProjection();
-      if (name === "eventCorrections:getOwnContributedEvent") { if (held) throw new Error("CONTRIBUTOR_REQUIRED"); return event; }
+      if (name === "eventCorrections:getOwnContributedEvent") { if (sessionStorage.getItem("fixture-publication-foreign")) throw new Error("CONTRIBUTOR_REQUIRED"); if (held) throw new Error("CONTRIBUTOR_REQUIRED"); return event; }
       if (name === "profiles:lookupPeople") return people.filter(person => person.title.toLowerCase().includes(args.query?.toLowerCase() ?? "")).map(person => ({ slug: person.slug, displayName: person.title, avatarImageUrl: person.imageUrl, profilePath: `/${person.slug}`, roleTags: [], tags: [] }));
       if (name === "profiles:getPublicBySlug") {
         if (args.profileType === "person") {
@@ -120,14 +121,21 @@ function revisionFixture(correction: boolean, sourceMode?: string, staff = false
       sessionStorage.setItem("fixture-publication-count", String(Number(sessionStorage.getItem("fixture-publication-count") ?? "0") + 1));
       if (sessionStorage.getItem("fixture-publication-defer") === "true") await new Promise<void>(resolve => window.addEventListener("release-publication", () => resolve(), { once: true }));
       sessionStorage.setItem("fixture-published", JSON.stringify(fields));
+      if (sourceMode === "discord-contribution") {
+        draft = null as unknown as typeof draft;
+        listeners.forEach(listener => listener());
+        sessionStorage.setItem("fixture-personal-resolved", "true");
+        await new Promise<void>(resolve => window.addEventListener("release-personal-publication", () => resolve(), { once: true }));
+      }
       return { eventId: "fixture-event", eventPath: "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions" };
     },
     async mutation(mutation: FunctionReference<"mutation">, args: Record<string, unknown>) {
       const name = getFunctionName(mutation);
       if (name === "discordPersonalIntake:selectUpdateTarget") {
         if (args.expectedVersion !== version) throw new ConvexError({ code: "VERSION_CONFLICT" });
-        if (!args.eventId) { personalTarget = null; listeners.forEach(listener => listener()); return { version }; }
+        if (!args.eventId) { const clear = Object.fromEntries(Object.keys(personalTarget?.baseline ?? {}).map(key => [key, null])); personalTarget = null; refresh({ ...clear, ...personalCreateFields }); return { version }; }
         const baseline: EventIntakePatch = { communitySlug: "afterglow", title: "Existing harbor event", eventDate: "2026-12-01", timezone: "UTC", start: { time: "22:00" }, venueLabel: "Original room", lineup: [{ clientKey: "original-set", position: 0, performerLabel: "Original DJ" }] };
+        if (!personalTarget) personalCreateFields = { ...Object.fromEntries(Object.keys(baseline).map(key => [key, fields[key as keyof EventIntakePatch] ?? null])), tentative: fields.tentative };
         personalTarget = { eventId: String(args.eventId), updatedAt: 1, baseline };
         refresh({ ...baseline });
         return { version };
@@ -196,6 +204,7 @@ function revisionFixture(correction: boolean, sourceMode?: string, staff = false
         draft = { ...draft, artworkSourceId: "poster-1", artworkAssetId: "art" };
         sessionStorage.setItem("fixture-artwork-source", "poster-1"); sessionStorage.setItem("fixture-artwork", "selected");
         refresh({ posterSourceId: "poster-1", tentative: { title: "Harbor Sessions", communitySlug: "afterglow", eventDate: "2026-12-01", timezone: "UTC", start: { time: "22:00" } } });
+        if (sourceMode === "discord-contribution") refresh({ communitySlug: "afterglow", title: "Harbor Sessions", eventDate: "2026-12-01", timezone: "UTC", start: { time: "22:00" }, tentative: null });
         return Response.json({ ...draft, preparationStatus: "ready" });
       }
       case "poster_upload_begin": {

@@ -229,8 +229,8 @@ it("reviewed partial owner update preserves existing lineup and source labels an
 
 it("selecting an update target saves its baseline and clears accepted fields absent from that event", async () => {
   const { t, actor, draftId, version } = await ownedDraft();
-  const created = await actor.mutation(api.events.createCommunityEvent, { communitySlug: "night-club", title: "Canonical baseline", startAt: Date.UTC(2026, 11, 2, 22), timezone: "Etc/UTC", published: true });
-  const authored = await actor.mutation(api.eventIntake.saveEventIntakeDraft, { draftId, expectedVersion: version, patch: { summary: "Previously accepted import" } });
+  const created = await actor.mutation(api.events.createCommunityEvent, { communitySlug: "night-club", title: "Canonical baseline", startAt: Date.UTC(2026, 11, 2, 22), timezone: "Etc/UTC", published: true, lineup: [{ clientKey: "a-only", position: 0, performerLabel: "A only" }] });
+  const authored = await actor.mutation(api.eventIntake.saveEventIntakeDraft, { draftId, expectedVersion: version, patch: { summary: "Previously accepted import", tentative: { lineup: [{ clientKey: "imported", position: 0, performerLabel: "Imported DJ" }] } } });
   const selected = await actor.mutation(api.discordPersonalIntake.selectUpdateTarget, { draftId, expectedVersion: authored.version, eventId: created.eventId });
   const draft = await actor.query(api.eventIntake.getEventIntakeDraft, { draftId });
   assert.equal(draft.version, selected.version);
@@ -240,6 +240,19 @@ it("selecting an update target saves its baseline and clears accepted fields abs
   assert.equal(submission.target!.eventId, created.eventId);
   assert.equal(submission.target!.baseline.title, "Canonical baseline");
   assert.equal((await t.run(ctx => ctx.db.get(created.eventId)))!.title, "Canonical baseline");
+  const other = await actor.mutation(api.events.createCommunityEvent, { communitySlug: "night-club", title: "Other target", startAt: Date.UTC(2026, 11, 3, 22), timezone: "Etc/UTC", published: true, lineup: [{ clientKey: "b-only", position: 0, performerLabel: "B only" }] });
+  const switched = await actor.mutation(api.discordPersonalIntake.selectUpdateTarget, { draftId, expectedVersion: selected.version, eventId: other.eventId });
+  const switchedDraft = await actor.query(api.eventIntake.getEventIntakeDraft, { draftId });
+  assert.deepEqual(switchedDraft.fields.tentative?.lineup?.map(row => row.performerLabel), ["B only", "Imported DJ"]);
+  const removed = await actor.mutation(api.eventIntake.saveEventIntakeDraft, { draftId, expectedVersion: switched.version, patch: { posterSourceId: null } });
+  const cleared = await actor.mutation(api.discordPersonalIntake.selectUpdateTarget, { draftId, expectedVersion: removed.version });
+  const restored = await actor.query(api.eventIntake.getEventIntakeDraft, { draftId });
+  assert.equal(restored.version, cleared.version);
+  assert.equal(restored.fields.title, "Harbor Sessions");
+  assert.equal(restored.fields.summary, "Previously accepted import");
+  assert.equal(restored.fields.lineup?.[0].clientKey, "set-ivy");
+  assert.equal(restored.fields.posterSourceId, null);
+  assert.equal((await actor.query(api.discordPersonalIntake.getSubmission, { draftId })).target, null);
 });
 
 
