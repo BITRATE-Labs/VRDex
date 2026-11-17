@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
 import { api, internal } from "../../convex/_generated/api";
+import { refreshEventArtworkSearch } from "../../convex/events";
 import { clerkTestIdentity } from "./_clerkTestIdentity";
 import { newClerkUserId } from "./_clerkTestIdentity";
 import { AUTHOR_A, CHANNEL, M1, seedDiscordIntake } from "./helpers/discord-intake";
@@ -162,17 +163,40 @@ async function ownedDraft() {
 }
 
 it("owner publication uses official commands, is idempotent and clears private text without contribution receipts", async () => {
-  const { t, actor, draftId, version } = await ownedDraft();
-  const args = { draftId, expectedVersion: version, idempotencyKey: "owner-create-1", operation: { kind: "owner_create" as const, communitySlug: "night-club" } };
+  const { t, actor, draftId, version, authorityUserId } = await ownedDraft();
+  const saved = await actor.mutation(api.eventIntake.saveEventIntakeDraft, { draftId, expectedVersion: version, patch: { lineup: [{ clientKey: "host", position: 0, performerLabel: "Host", roleLabel: "Ownerroleneedle" }] } });
+  const upload = await t.mutation(internal.eventIntakeSources.beginPosterUpload, { actorUserId: authorityUserId, draftId, contentType: "image/png", byteLength: 128, sha256: "a".repeat(64) });
+  await t.mutation(internal.eventIntakeSources.completePosterUpload, { actorUserId: authorityUserId, posterAssetId: upload.posterAssetId, sha256: "a".repeat(64) });
+  const selection = await t.mutation(internal.eventIntakeSources.selectPosterArtwork, { actorUserId: authorityUserId, draftId, posterAssetId: upload.posterAssetId, expectedVersion: saved.version });
+  const artwork = await t.mutation(internal.eventIntakeSources.completeArtwork, { actorUserId: authorityUserId, artworkAssetId: selection.artworkAssetId, expectedVersion: saved.version, sha256: "b".repeat(64), byteLength: 100 });
+  const args = { draftId, expectedVersion: artwork.version, idempotencyKey: "owner-create-1", operation: { kind: "owner_create" as const, communitySlug: "night-club" } };
   const first = await actor.mutation(api.discordPersonalIntake.publishReviewedDraft, args);
   assert.deepEqual(await actor.mutation(api.discordPersonalIntake.publishReviewedDraft, args), first);
   const event = await t.run(ctx => ctx.db.get(first.eventId));
   assert.equal(event!.sourceType, "community");
+  const document = await t.run(ctx => ctx.db.query("searchDocuments").filter(q => q.eq(q.field("eventId"), first.eventId)).first());
+  assert.ok(document?.searchText.toLowerCase().includes("ownerroleneedle"), "owner artwork must retain authored role terms");
+  assert.equal(document?.imageUrl, event!.posterImageUrl);
   assert.equal(event!.sourceUrl, undefined);
   assert.equal((await t.run(ctx => ctx.db.query("eventContributionReceipts").collect())).length, 0);
   assert.equal((await t.run(ctx => ctx.db.query("events").collect())).length, 1);
   assert.equal((await t.run(ctx => ctx.db.get(draftId)))!.fields.sourceText, undefined);
   await assert.rejects(actor.mutation(api.discordPersonalIntake.publishReviewedDraft, { ...args, operation: { ...args.operation, communitySlug: "other" } }), /IDEMPOTENCY_CONFLICT/);
+  await t.run(ctx => ctx.db.patch(first.eventId, { thumbnailImageUrl: "https://example.com/thumbnail.png", bannerImageUrl: "https://example.com/banner.png" }));
+  const next = await t.mutation(internal.discordPersonalIntake.captureSelectedMessage, { ...capture, message: { ...capture.message, messageId: "300000000000000099" } });
+  if (next.kind !== "draft") throw new Error("Expected draft");
+  await actor.mutation(api.discordPersonalIntake.publishReviewedDraft, { draftId: next.draftId, expectedVersion: 1, idempotencyKey: "owner-remove-artwork", operation: { kind: "owner_update", eventId: first.eventId, expectedUpdatedAt: event!.updatedAt, patch: {}, artwork: "remove" } });
+  const removed = await t.run(ctx => ctx.db.query("searchDocuments").filter(q => q.eq(q.field("eventId"), first.eventId)).first());
+  assert.ok(removed?.searchText.toLowerCase().includes("ownerroleneedle"));
+  assert.equal(removed?.imageUrl, "https://example.com/thumbnail.png");
+  await t.run(async ctx => {
+    await ctx.db.patch(first.eventId, { thumbnailImageUrl: undefined });
+    await ctx.db.delete(removed!._id);
+    await refreshEventArtworkSearch(ctx.db, (await ctx.db.get(first.eventId))!, Date.now());
+  });
+  const rebuilt = await t.run(ctx => ctx.db.query("searchDocuments").filter(q => q.eq(q.field("eventId"), first.eventId)).first());
+  assert.equal(rebuilt?.imageUrl, "https://example.com/banner.png");
+  assert.equal(rebuilt?.publicState, "public");
 });
 
 it("revoked owner authority stops publication instead of downgrading it to a contribution", async () => {

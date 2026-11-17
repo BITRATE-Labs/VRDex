@@ -59,8 +59,10 @@ The delayed-subscription and delayed-retry browser regressions passed on desktop
 and mobile. The affected backend checkpoint passed all 206 tests, and independent
 re-review found no remaining major issues.
 
-The next review pass also covered held connector publications, whose unconfirmed
-associations need the original publication search context when artwork is attached.
+Artwork changes update only the image on an existing search document, preserving
+the publication's world, role and vocabulary terms for contributions, held connector
+publications and owner-created events. Missing search documents use the existing
+full reindex fallback. Regressions cover artwork attachment and removal.
 Personal contribution publication keeps the editor mounted until navigation and
 uses the returned event path even when deduplication finds someone else's event.
 Returning from an update target to New event restores the original accepted import

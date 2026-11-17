@@ -930,6 +930,16 @@ export async function eventSearchAssociations(db: DatabaseReader, event: Doc<"ev
   return { world, roleLabels: [...slots, ...untimed].map(row => row.roleLabel ?? "").filter(Boolean) };
 }
 
+export async function refreshEventArtworkSearch(db: DatabaseWriter, event: Doc<"events">, now: number) {
+  const document = await db.query("searchDocuments").withIndex("by_eventId", q => q.eq("eventId", event._id)).unique();
+  if (document) {
+    await db.patch(document._id, { imageUrl: firstSafePublicImageUrl(event.thumbnailImageUrl, event.posterImageUrl, event.bannerImageUrl), updatedAt: event.updatedAt });
+    return;
+  }
+  const community = event.communityProfileId ? await db.get(event.communityProfileId) : null;
+  await reindexEventSearchDocument(db, event, { community: community ?? undefined, ...await eventSearchAssociations(db, event) }, now);
+}
+
 function suppliedEventDraftFields(input: EventDraftUpdateInput) {
   const fields = new Set<keyof EventOwnerDraftInput>();
 

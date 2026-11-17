@@ -9,8 +9,7 @@ import { sanitizeEventDraftInput } from "./_eventInputs";
 import { canUpdateEvent, getPublishedWorldBySlug, insertCommunityEventRecord, patchCommunityEventFieldsAsStaffRecord, requireBrowserManagedCommunity } from "./events";
 import { correctionFields } from "./eventCorrections";
 import { enqueueEventSync } from "./_eventSync";
-import { recordEventAuditEvent, eventSearchAssociations } from "./events";
-import { reindexEventSearchDocument } from "./_searchDocuments";
+import { recordEventAuditEvent, refreshEventArtworkSearch } from "./events";
 import { DISCORD_SNOWFLAKE, resolveDiscordUserId } from "./_discordIntake";
 import { attachIntakeArtwork, getActorIntakeDraft, resolvePersonalSubmission, saveIntakeDraft, EVENT_INTAKE_DRAFT_TTL_MS } from "./_eventIntake";
 import { eventPathForRecord } from "./_eventPaths";
@@ -228,8 +227,7 @@ export const publishReviewedDraft = mutation({
       const updatedAt = Math.max(Date.now(), event.updatedAt + 1);
       await ctx.db.patch(eventId, { updatedAt });
       const current = (await ctx.db.get(eventId))!;
-      const community = current.communityProfileId ? await ctx.db.get(current.communityProfileId) : null;
-      if (community) await reindexEventSearchDocument(ctx.db, current, { community, ...await eventSearchAssociations(ctx.db, current) }, updatedAt);
+      await refreshEventArtworkSearch(ctx.db, current, updatedAt);
       await recordEventAuditEvent(ctx.db, { eventId, actorUserId: user._id, actorSurface: "browser", action: "updated", changedFields: ["posterImageUrl"], now: updatedAt });
     }
     await ctx.db.patch(submission._id, { ownerKey: args.idempotencyKey, ownerFingerprint: fingerprint, ownerVersion: args.expectedVersion, ownerOutcome: outcome });
