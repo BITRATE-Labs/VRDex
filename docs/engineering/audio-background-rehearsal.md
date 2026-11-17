@@ -108,3 +108,7 @@ Evidence bundle SHA256: `aca5962d99562a9769024b5326e75df544e25b73b12eab8e7ca97de
 Source changes that affect the bundle require matching artifact qualification.
 Actual public-provider, deployed-Convex, retained-browser and phone results remain
 separate pending steps.
+
+## VRCDN startup timestamp correction
+
+A live BASICBIT rehearsal exposed equal decoding timestamps on the first two video packets. The worker now advances only the second equal timestamp by one time-base tick, preserving presentation order. Later duplicate or reset timestamps still reach the existing fatal timestamp check. Audio remains copied AAC. Verify the replacement bundle before any new trial; the earlier aca5962d evidence does not qualify changed bytes.

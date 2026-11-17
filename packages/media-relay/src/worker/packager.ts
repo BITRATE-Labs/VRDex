@@ -45,6 +45,8 @@ export type PackagerOptions = {
   ): void | Promise<void>;
   onFailure(failure: PackagerFailure): void;
 };
+// VRCDN may repeat the first video DTS; repair only packet 1, leaving later resets visible.
+export const STARTUP_VIDEO_TIMESTAMPS = "setts=dts='if(eq(N,1)*eq(DTS,PREV_OUTDTS),DTS+1,DTS)':pts='if(eq(N,1)*eq(DTS,PREV_OUTDTS),max(PTS,DTS+1),PTS)'";
 const modes = ["video", "audio"] as const;
 const probeSchema = z.object({
   streams: z.array(
@@ -523,6 +525,7 @@ export function createPackager({
             : ["-map", "0:a:0", "-vn"]),
           "-c",
           "copy",
+          ...(rendition === "video" ? ["-bsf:v", STARTUP_VIDEO_TIMESTAMPS] : []),
           "-avoid_negative_ts",
           "make_zero",
           "-f",
