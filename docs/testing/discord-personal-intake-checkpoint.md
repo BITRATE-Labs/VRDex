@@ -9,11 +9,11 @@ not been activated on the live Discord application or deployed by this task.
 
 | Check | Evidence |
 | --- | --- |
-| Personal intake backend | 15 transaction tests passed: actor isolation, ambiguity, replay, poster-only quota, leases, removal/retry, discard, owner authority, revision conflicts and preserved private lineup identity/confirmation |
+| Personal intake backend | 16 transaction tests passed: actor isolation, ambiguity, replay, poster-only quota, leases, removal/retry, discard, owner authority, revision conflicts and preserved private lineup identity/confirmation |
 | Event regression checkpoint | 164 owner, contribution, correction, lineup and inventory tests passed; the later private-lineup/confirmation checkpoint passed 30 tests |
 | Web suite | All 1,217 tests passed after the review fixes |
 | Discord gateway | All 44 tests passed |
-| Browser journeys | 14 desktop/mobile checks passed, including light/dark overflow checks, source replay masking, poster choice/removal and failed-download recovery, sign-in return, resume and owner denial |
+| Browser journeys | 18 desktop/mobile checks passed, including light/dark overflow checks, source replay masking, poster choice/removal and failed-download recovery, sign-in return, resume, delayed version handoff/retry and owner denial |
 | Types | Backend, web, gateway and API contracts passed |
 | Docs and lint | Markdown lint, Docusaurus build and web ESLint passed |
 | Local backend | Anonymous bootstrap/health passed using the existing CI-pinned backend version and isolated ports |
@@ -33,7 +33,8 @@ The first PR run failed before broadcast browser acceptance: its unpinned local
 Convex backend returned component-analysis data incompatible with CLI 1.32.0.
 The main workflow now shares the backend-verification job's existing version pin
 with browser bootstraps. This matches the successful isolated local bootstrap.
-The updated Linux run must still establish acceptance.
+The pinned Linux run passed all selected checks. Later review fixes receive their
+own current-head CI and review on the PR.
 
 ## Independent review
 
@@ -42,6 +43,21 @@ and removal of legacy participant-only performers during lineup edits. Each has
 a regression that failed before its fix and passed afterward. Private source
 status comes from the stored draft, so manual extraction also omits trace content.
 The focused intake, correction and lineup checkpoint passed all 205 tests.
+
+## PR review corrections
+
+Automated review found shared-flow regressions in manager poster publication and
+contributor search terms, an owner-authority mismatch, and a preparation/version
+race. The fixes keep poster access bound to the authorized draft, reuse the
+contributor-aware search projection in artwork and legacy-route updates, and
+compute owner intent with the owner writer's permission predicate. Genuine owner
+revocation still stops publication without falling back to a contribution.
+
+The editor waits for the prepared draft version before remounting. Retry disables
+editing through that handoff, so extraction cannot discard newly typed changes.
+The delayed-subscription and delayed-retry browser regressions passed on desktop
+and mobile. The affected backend checkpoint passed all 206 tests, and independent
+re-review found no remaining major issues.
 
 ## Visual evidence
 
@@ -60,8 +76,8 @@ and suggestions are inside the existing replay-blocking selector.
 
 ## Activation remains separate
 
-Review the exact new three-word utility labels `Continue without poster` and
-`Keep current artwork` before shipping. Existing short utility labels are reused
+BASIC approved the exact utility labels `Continue without poster` and
+`Keep current artwork` on 2026-11-17. Existing short utility labels are reused
 for the other controls. The [gateway runbook](../deployment/discord-gateway.md#personal-message-command)
 describes the command registration, portal setting, deployment and rollback.
 

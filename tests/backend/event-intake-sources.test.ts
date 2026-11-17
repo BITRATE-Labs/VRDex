@@ -111,7 +111,8 @@ it("publishes private evidence without artwork and attaches only a separately va
   const{t,actorUserId,draftId}=await fixture();
   await t.run(async ctx=>{
    await ctx.db.insert("profiles",{slug:"club",displayName:"Club",sortName:"club",profileType:"community",community:{categoryTags:[]},aliases:[],tags:[],claimState:"unclaimed",publicationState:"published",publicSurfacingState:"public",creationSource:"community",updatedAt:Date.now()});
-   await ctx.db.patch(draftId,{fields:{title:"Night",communitySlug:"club",eventDate:"2027-10-15",timeTba:true}});
+   await ctx.db.insert("worlds", { slug: "public-world", displayName: "Worldneedle", sortName: "worldneedle", tags: ["worldtagneedle"], publicationState: "published", visibilityStatus: "public", platformCompatibility: [], media: [], creatorAttributions: [], outboundLinks: [], creationSource: "community", updatedAt: Date.now() });
+   await ctx.db.patch(draftId,{fields:{title:"Night",communitySlug:"club",worldSlug:"public-world",eventDate:"2027-10-15",timeTba:true,lineup:[{clientKey:"host",position:0,performerLabel:"Host",roleLabel:"Roleneedle"}]}});
   });
   const source=await t.mutation(ref("beginPosterUpload"),{actorUserId,draftId,contentType:"image/png",byteLength:128,sha256:"a".repeat(64)});
   await t.mutation(ref("completePosterUpload"),{actorUserId,posterAssetId:source.posterAssetId,sha256:"a".repeat(64)});
@@ -129,6 +130,10 @@ it("publishes private evidence without artwork and attaches only a separately va
    assert.equal(publicEvent?.posterImageUrl,event?.posterImageUrl);
    const searchDoc=await t.run(ctx=>ctx.db.query("searchDocuments").first());
    assert.equal(searchDoc?.imageUrl,event?.posterImageUrl);
+   for (const term of ["worldneedle", "worldtagneedle", "roleneedle"]) assert.ok(searchDoc?.searchText.toLowerCase().includes(term), `artwork reindex must retain ${term}`);
+   assert.match(searchDoc!.searchText, /worldneedle/i);
+   assert.match(searchDoc!.searchText, /worldtagneedle/i);
+   assert.match(searchDoc!.searchText, /roleneedle/i);
    assert.equal((await t.query(makeFunctionReference<"query">("eventIntakeSources:publicArtwork"),{artworkAssetId:artwork.artworkAssetId})).storageKey,artwork.storageKey);
    assert.equal(await t.query(makeFunctionReference<"query">("eventIntakeSources:publicArtwork"),{artworkAssetId:"not-a-convex-id"}),null);
    await t.run(ctx=>ctx.db.patch(published.eventId,{posterImageUrl:undefined}));

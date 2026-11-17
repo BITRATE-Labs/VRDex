@@ -465,7 +465,7 @@ async function canViewEventOperations(
   ]);
 }
 
-async function canManageCommunityEvents(
+export async function canManageCommunityEvents(
   db: DatabaseReader,
   communityProfileId: Id<"profiles">,
   subject: AuthSubject,

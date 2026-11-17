@@ -73,3 +73,31 @@ test("signed-out review preserves the draft return path and does not expose sour
   await expect(signIn).toHaveAttribute("href", /returnTo=.*events.*new.*draft/);
   await expect(page.locator("main")).not.toContainText("JustIvy");
 });
+
+
+test("preparation waits for its returned version before mounting the shared editor", async ({ page }) => {
+  await page.goto("/playwright/event-intake?source=discord-delayed");
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("fixture-personal-prepared"))).toBe("true");
+  await expect(page.getByRole("textbox", { name: "Event title", exact: true })).toHaveCount(0);
+  await page.evaluate(() => window.dispatchEvent(new Event("release-personal-draft")));
+  await expect(page.getByText("Harbor Sessions", { exact: true })).toBeVisible();
+  await page.getByRole("textbox", { name: "Event title", exact: true }).fill("Reviewed delayed draft");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem("fixture-source-draft") ?? "{}").fields?.title)).toBe("Reviewed delayed draft");
+});
+
+
+test("retry disables editing until its prepared version reaches the editor", async ({ page }) => {
+  await page.addInitScript(() => sessionStorage.setItem("fixture-personal-fail-once", "true"));
+  await page.goto("/playwright/event-intake?source=discord-delayed");
+  const title = page.getByRole("textbox", { name: "Event title", exact: true });
+  await expect(title).toBeEnabled();
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("fixture-personal-prepared"))).toBe("true");
+  await expect(title).toBeDisabled();
+  await page.evaluate(() => window.dispatchEvent(new Event("release-personal-draft")));
+  await expect(title).toBeEnabled();
+  await title.fill("Reviewed retry");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem("fixture-source-draft") ?? "{}").fields?.title)).toBe("Reviewed retry");
+});

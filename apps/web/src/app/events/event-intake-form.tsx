@@ -422,6 +422,7 @@ function ConnectedIntake({ draftId, initialCommunitySlug, heading }: { draftId?:
   const discardPersonal = useMutation(api.discordPersonalIntake.discard);
   const [personalReady, setPersonalReady] = useState(false);
   const [personalBusy, setPersonalBusy] = useState(false);
+  const [preparationVersion, setPreparationVersion] = useState<number>();
   const [personalFailed, setPersonalFailed] = useState(false);
   const [preparationExpired, setPreparationExpired] = useState(false);
   const [selectingUpdate, setSelectingUpdate] = useState(false);
@@ -441,22 +442,27 @@ function ConnectedIntake({ draftId, initialCommunitySlug, heading }: { draftId?:
       const current = await convex.query(api.eventIntake.getEventIntakeDraft, { draftId: loaded._id });
       if (!current) throw new Error("DRAFT_ACCESS");
       const result = await websiteIntakeCommand("discord_source_prepare", { draftId: loaded._id, expectedVersion: current.version, ...options }, AbortSignal.timeout(300_000));
-      if (result.preparationStatus === "choose_poster") { setPersonalFailed(true); return; }
+      if (result.preparationStatus === "choose_poster") { setPersonalReady(false); return; }
       if (result.preparationStatus === "processing") return;
       saved.current = null;
-      setPersonalReady(true); setFormEpoch(value => value + 1);
+      setPreparationVersion(result.version);
       setPersonalFailed(result.preparationStatus === "failed");
     } catch { setPersonalFailed(true); setPersonalReady(true); }
     finally { setPersonalBusy(false); }
   }, [convex, loaded]);
   useEffect(() => {
     if (!loaded?.personalSubmissionId || !personal) return;
-    if (personal.status === "ready" || personal.status === "failed") { setPersonalReady(true); return; }
+    if (personal.status === "ready" || personal.status === "failed") {
+      if (personalBusy || preparationVersion !== undefined && loaded.version < preparationVersion) return;
+      setPersonalReady(true);
+      if (preparationVersion !== undefined) { setFormEpoch(value => value + 1); setPreparationVersion(undefined); }
+      return;
+    }
     if (personal.status === "pending" && personal.attachments.length <= 1 && prepareRequested.current !== loaded._id) {
       prepareRequested.current = loaded._id;
       void preparePersonal();
     }
-  }, [loaded, personal, preparePersonal]);
+  }, [loaded, personal, personalBusy, preparationVersion, preparePersonal]);
   useEffect(() => {
     if (personal?.status !== "processing" || !personal.preparationExpiresAt) return;
     const timer = window.setTimeout(() => { setPreparationExpired(true); setPersonalBusy(false); setPersonalFailed(true); setPersonalReady(true); }, Math.max(0, personal.preparationExpiresAt - Date.now()));
@@ -542,7 +548,7 @@ function ConnectedIntake({ draftId, initialCommunitySlug, heading }: { draftId?:
     onEvent={eventId => guardPersonal(() => { if (eventId) void changeTarget(eventId); })} onArtwork={setArtworkChoice}
     onDiscard={() => guardPersonal(() => { void discardPersonal({ draftId: loaded._id, expectedVersion: saved.current?.version ?? loaded.version }).then(() => { window.location.assign("/account/events"); }).catch(() => setPersonalFailed(true)); })} /> : null;
   if (loaded?.personalSubmissionId && (!personal || !personalReady)) return <>{heading}{personalControls}</>;
-  return <EventIntakeFieldsForm key={formEpoch} heading={heading} sourceControls={personalControls} correction={Boolean(personal?.target)} onGuardChange={guard => { personalGuard.current = guard; }} savedTimezonePreference={viewer?.user.defaultEventTimezone} newDraft={!draftId} connectorDraft={Boolean(loaded?.connectorId)} initialFields={connectorFields ?? loaded?.fields ?? { communitySlug: initialCommunitySlug, timeTba: false }} initialRevision={loaded?.version} onSource={sourceAction} initialArtworkSourceId={loaded?.artworkSourceId} onSave={async (fields, revision) => { if (published.current) await correctPublished(fields); else await saveFields(fields, revision); }} onPublish={async (fields, revision) => {
+  return <fieldset disabled={personalBusy || preparationVersion !== undefined || personal?.status === "processing" && !preparationExpired} className="m-0 min-w-0 border-0 p-0"><EventIntakeFieldsForm key={formEpoch} heading={heading} sourceControls={personalControls} correction={Boolean(personal?.target)} onGuardChange={guard => { personalGuard.current = guard; }} savedTimezonePreference={viewer?.user.defaultEventTimezone} newDraft={!draftId} connectorDraft={Boolean(loaded?.connectorId)} initialFields={connectorFields ?? loaded?.fields ?? { communitySlug: initialCommunitySlug, timeTba: false }} initialRevision={loaded?.version} onSource={sourceAction} initialArtworkSourceId={loaded?.artworkSourceId} onSave={async (fields, revision) => { if (published.current) await correctPublished(fields); else await saveFields(fields, revision); }} onPublish={async (fields, revision) => {
     if (published.current) return correctPublished(fields);
     const current = await saveFields(fields, revision);
     if (loaded?.personalSubmissionId) {
@@ -574,7 +580,7 @@ function ConnectedIntake({ draftId, initialCommunitySlug, heading }: { draftId?:
     // Capture the authorized revision now; subsequent submits never adopt a refreshed revision.
     published.current.revision = (await convex.query(api.eventCorrections.getOwnContributedEvent, { eventId: result.eventId })).updatedAt;
     return completion;
-  }} />;
+  }} /></fieldset>;
 }
 export function EventIntakeForm(props: { draftId?: string; initialCommunitySlug?: string; heading?: ReactNode }) {
   const auth = useConvexAuth();

@@ -131,6 +131,9 @@ it("a second manager replaces the poster with their own upload", async () => {
   const selected = await t.mutation(internal.eventIntakeSources.selectPosterArtwork, { actorUserId, draftId, posterAssetId, expectedVersion: version });
   await t.mutation(internal.eventIntakeSources.completeArtwork, { actorUserId, artworkAssetId: selected.artworkAssetId!, expectedVersion: version, sha256: "b".repeat(64), byteLength: 100 });
   assert.equal((await as("second").query(api.eventIntake.getEventIntakeDraft, { draftId }))?.artworkSourceId, posterAssetId);
+  await as("second").mutation(api.eventIntake.saveEventIntakeDraft, { draftId, expectedVersion: version + 1, patch: publishable });
+  const published = await t.run(ctx => publishIntakeDraft(ctx, ids.second, { draftId, expectedVersion: version + 2, idempotencyKey: "manager-poster" }, Date.now(), "browser", { connectorId: ids.discord }));
+  assert.ok((await t.run(({ db }) => db.get(published.eventId)))?.posterImageUrl);
   // Back on the draft owner, who holds no manage_events.
   assert.equal((await t.query(internal.eventIntakeSources.readActorSource, { actorUserId: ids.authority, posterAssetId })).draftId, draftId);
 });

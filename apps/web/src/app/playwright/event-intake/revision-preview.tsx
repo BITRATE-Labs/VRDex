@@ -32,6 +32,7 @@ function revisionFixture(correction: boolean, sourceMode?: string, staff = false
   let droppedCompletion = false;
   if (sourceMode && typeof sessionStorage !== "undefined") { const stored = sessionStorage.getItem("fixture-source-draft"); if (stored) ({fields, version} = JSON.parse(stored)); }
   let draft = { artworkSourceId: typeof sessionStorage !== "undefined" ? sessionStorage.getItem("fixture-artwork-source") ?? undefined : undefined, _id: "fixture-draft", version, fields, artworkAssetId: typeof sessionStorage !== "undefined" && sessionStorage.getItem("fixture-artwork") ? "art" : undefined, ...(held ? { connectorId: "fixture-connector" } : {}), ...(personalMode ? { personalSubmissionId: "fixture-personal" } : {}) };
+  let delayedDraft: typeof draft | undefined;
   let event = { eventId: "fixture-event", updatedAt: version, fields };
   const listeners = new Set<() => void>();
   let access = { canCorrect: !staff, canSuggest: false, canTakeOver: staff, canRemove: staff };
@@ -91,7 +92,7 @@ function revisionFixture(correction: boolean, sourceMode?: string, staff = false
           switch (getFunctionName(query)) {
             case "discordPersonalIntake:getSubmission": return personalProjection();
             case "events:listManagedEvents": return [{ eventId: "fixture-existing", title: "Existing harbor event", slug: "existing", communitySlug: "afterglow" }];
-            case "eventIntake:getEventIntakeDraft": return draft;
+            case "eventIntake:getEventIntakeDraft": return delayedDraft ?? draft;
             case "accounts:viewer": return viewer;
             case "events:listManagedCommunities": return communities.map((community, index) => ({ profileId: `community-${index}`, slug: community.slug, displayName: community.title, imageUrl: community.imageUrl, roleLabel: index === 0 ? "Owner" : "Staff" }));
             case "search:searchUniversal": {
@@ -186,6 +187,10 @@ function revisionFixture(correction: boolean, sourceMode?: string, staff = false
             listeners.forEach(listener => listener());
             return Response.json({ status: 502 }, { status: 502 });
           }
+        if (sourceMode === "discord-delayed") {
+          delayedDraft = draft;
+          window.addEventListener("release-personal-draft", () => { delayedDraft = undefined; listeners.forEach(listener => listener()); }, { once: true });
+        }
         personalStatus = "ready";
         sessionStorage.setItem("fixture-personal-prepared", "true");
         draft = { ...draft, artworkSourceId: "poster-1", artworkAssetId: "art" };

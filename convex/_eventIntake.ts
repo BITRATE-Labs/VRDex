@@ -8,7 +8,8 @@ import { replaceEventLineup } from "./_eventLineup";
 import { reindexEventSearchDocument } from "./_searchDocuments";
 import { ensureShortLinkForTarget } from "./_shortLinks";
 import { eventPathForRecord, eventPathForSlugs } from "./_eventPaths";
-import { eventParticipantRoleLabels, linkedPublishedEventWorld, recordEventAuditEvent, replaceEventWorldLink } from "./events";
+import { canManageCommunityEvents, eventSearchAssociations, recordEventAuditEvent, replaceEventWorldLink } from "./events";
+import { canReadProfile } from "./_profilePermissions";
 import { enqueueEventSync } from "./_eventSync";
 import { userAuthSubject, userHasCommunityPermission } from "./_eventConnectors";
 
@@ -105,7 +106,8 @@ export async function saveIntakeDraft(db: DatabaseWriter, actorUserId: Id<"users
   if (draft?.personalSubmissionId) {
     const submission = await db.get(draft.personalSubmissionId);
     const community = fields.communitySlug ? await db.query("profiles").withIndex("by_slug", q => q.eq("slug", fields.communitySlug!)).unique() : null;
-    const ownerCommunitySlug = community && await userHasCommunityPermission(db, community._id, actorUserId, ["manage_events"])
+    const subject = await userAuthSubject(db, actorUserId);
+    const ownerCommunitySlug = community?.profileType === "community" && canReadProfile("public", community) && subject && await canManageCommunityEvents(db, community._id, subject, actorUserId)
       ? community.slug : submission && submission.ownerCommunitySlug === fields.communitySlug ? submission.ownerCommunitySlug : undefined;
     if (submission) await db.patch(submission._id, { expiresAt: values.expiresAt, updatedAt: now,
       ownerCommunitySlug,
@@ -201,10 +203,7 @@ export async function publishIntakeDraft(ctx: Pick<MutationCtx, "db" | "schedule
       const link = await ensureShortLinkForTarget(db, { targetType: "event", targetId: event._id }, now);
       await db.patch(event._id, { slug: link.code });
       event = { ...event, slug: link.code };
-      const [world, roleLabels] = await Promise.all([
-        linkedPublishedEventWorld(db, event._id), eventParticipantRoleLabels(db, event._id),
-      ]);
-      await reindexEventSearchDocument(db, event, { community, world, roleLabels }, now);
+      await reindexEventSearchDocument(db, event, { community, ...await eventSearchAssociations(db, event) }, now);
     }
     if (event.slug === undefined) throw new Error("Published event requires a canonical route.");
     receipt = await db.query("eventContributionReceipts").withIndex("by_eventId", q => q.eq("eventId", event!._id)).unique();
@@ -237,12 +236,12 @@ export async function attachIntakeArtwork(ctx: Pick<MutationCtx, "db">, draft: D
   if (!artwork || artwork.draftId !== draft._id || artwork.state !== "ready" || (draft.fields.posterSourceId !== undefined && draft.fields.posterSourceId !== artwork.sourceId)) throw new Error("ARTWORK_NOT_READY");
   await db.patch(artwork._id, { state: "published", eventId: event._id, expiresAt: now + 86_400_000 });
   const source = await db.get(artwork.sourceId);
-  if (!source || source.actorUserId !== draft.actorUserId || source.draftId !== draft._id) throw new Error("POSTER_DRAFT_MISMATCH");
+  if (!source || source.draftId !== draft._id) throw new Error("POSTER_DRAFT_MISMATCH");
   await db.patch(source._id, { eventId: event._id });
   const posterImageUrl = `/api/v0/events/${event._id}/artwork/${artwork._id}`;
   await db.patch(event._id, { posterImageUrl });
   const community = event.communityProfileId ? await db.get(event.communityProfileId) : null;
-  if (community) await reindexEventSearchDocument(db, { ...event, posterImageUrl }, { community, world: await linkedPublishedEventWorld(db, event._id), roleLabels: await eventParticipantRoleLabels(db, event._id) }, now);
+  if (community) await reindexEventSearchDocument(db, { ...event, posterImageUrl }, { community, ...await eventSearchAssociations(db, event) }, now);
 }
 
 export async function resolvePersonalSubmission(ctx: Pick<MutationCtx, "db">, draftId: Id<"eventIntakeDrafts">, submissionId: Id<"discordPersonalIntakeSubmissions">, eventId?: Id<"events">) {

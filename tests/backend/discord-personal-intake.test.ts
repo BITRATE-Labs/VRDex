@@ -241,3 +241,22 @@ it("selecting an update target saves its baseline and clears accepted fields abs
   assert.equal(submission.target!.baseline.title, "Canonical baseline");
   assert.equal((await t.run(ctx => ctx.db.get(created.eventId)))!.title, "Canonical baseline");
 });
+
+
+it("super-admin imports remain contributions and later owner artwork updates preserve search roles", async () => {
+  const { t, authorityUserId, clerkUserId, communityProfileId } = await fixture();
+  await t.run(ctx => ctx.db.insert("accountFeatureGrants", { userId: authorityUserId, feature: "super_admin", state: "active", grantedBy: { subject: "root", issuer: "test", tokenIdentifier: "test|root" }, grantedAt: Date.now(), updatedAt: Date.now() }));
+  const captured = await t.mutation(internal.discordPersonalIntake.captureSelectedMessage, capture);
+  if (captured.kind !== "draft") throw new Error("Expected draft");
+  const actor = t.withIdentity(clerkTestIdentity(clerkUserId));
+  const saved = await actor.mutation(api.eventIntake.saveEventIntakeDraft, { draftId: captured.draftId, expectedVersion: 1, patch: { communitySlug: "night-club", title: "Contribution", eventDate: "2026-12-01", timezone: "Etc/UTC", start: { time: "22:00" }, lineup: [{clientKey:"host",position:0,performerLabel:"Host",roleLabel:"Roleneedle"}] } });
+  assert.equal((await actor.query(api.discordPersonalIntake.getSubmission, { draftId: captured.draftId })).ownerCommunitySlug, null);
+  const published = await actor.action(api.eventIntake.publishEventIntake, { draftId: captured.draftId, expectedVersion: saved.version, idempotencyKey: "admin-contribution" });
+  await t.run(ctx => ctx.db.insert("profileOwners", { profileId: communityProfileId, userId: authorityUserId, roleKey: "owner", state: "active", grantedAt: Date.now(), updatedAt: Date.now() }));
+  const next = await t.mutation(internal.discordPersonalIntake.captureSelectedMessage, { ...capture, message: { ...capture.message, messageId: "300000000000000090" } });
+  if (next.kind !== "draft") throw new Error("Expected draft");
+  const event = await t.run(ctx => ctx.db.get(published.eventId));
+  await actor.mutation(api.discordPersonalIntake.publishReviewedDraft, { draftId: next.draftId, expectedVersion: 1, idempotencyKey: "remove-artwork", operation: { kind: "owner_update", eventId: published.eventId, expectedUpdatedAt: event!.updatedAt, patch: {}, artwork: "remove" } });
+  const document = await t.run(ctx => ctx.db.query("searchDocuments").filter(q => q.eq(q.field("eventId"), published.eventId)).first());
+  assert.ok(document?.searchText.toLowerCase().includes("roleneedle"), "owner artwork changes retain contributor role terms");
+});
