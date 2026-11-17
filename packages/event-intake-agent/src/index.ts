@@ -13,7 +13,7 @@ export type EventIntakeRunContext = {
 export type EventIntakeAgentInput = { draftId: string; sourceText?: string; posterAssetId?: string; context?: EventIntakeRunContext };
 export type EventListRow = { slug: string; title: string; eventDate: string | null; start: string | null; lineupSummary: string };
 export type EventIntakeAgentDependencies = {
-  authorize: (input: EventIntakeAgentInput, reserveQuota: boolean) => Promise<{ actorUserId: string; version: number }>;
+  authorize: (input: EventIntakeAgentInput, reserveQuota: boolean) => Promise<{ actorUserId: string; version: number; privateSource?: boolean }>;
   search_people: (query: string, limit: number) => Promise<PublicMatch[]>;
   search_communities: (query: string, limit: number) => Promise<PublicMatch[]>;
   list_events?: (limit: number) => Promise<EventListRow[]>;
@@ -147,8 +147,8 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
       const turnInput = Number(data.usage?.input_tokens ?? 0), turnOutput = Number(data.usage?.output_tokens ?? 0);
       inputTokens += turnInput; outputTokens += turnOutput;
       if (handle) try {
-        handle.generation({ turn: turns, model, request: JSON.parse(body, function (this: { type?: unknown }, key, value) { return key === "image_url" && this.type === "input_image" ? "[image]" : value; }),
-          response: data, inputTokens: turnInput, outputTokens: turnOutput, latencyMs });
+        handle.generation({ turn: turns, model, request: authority.privateSource ? undefined : JSON.parse(body, function (this: { type?: unknown }, key, value) { return key === "image_url" && this.type === "input_image" ? "[image]" : value; }),
+          response: authority.privateSource ? undefined : data, inputTokens: turnInput, outputTokens: turnOutput, latencyMs });
       } catch { /* sinks never affect a run */ }
       if (data.status !== "completed" || !Array.isArray(data.output)) throw new Error("incomplete_response");
       if (data.output.some((item: { content?: { type: string }[] }) => item.content?.some(part => part.type === "refusal"))) throw new Error("refusal");

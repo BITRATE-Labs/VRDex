@@ -4,8 +4,10 @@ import { convexAuthToken, viewerQuery } from "./auth";
 import { convexHttpClient } from "./convex-http";
 import { createEventIntakeCommands, eventIntakeErrorResponse } from "./event-intake-api";
 import { createEventPosterHandlers } from "./event-poster-storage";
+import { preparePersonalDiscordSource, type PersonalPreparationInput } from "./discord-personal-intake";
 
-const envelope = z.strictObject({ operation: z.enum(["extract", "poster_upload_begin", "poster_upload_complete", "artwork_select", "poster_read"]), input: z.unknown() });
+const envelope = z.strictObject({ operation: z.enum(["extract", "poster_upload_begin", "poster_upload_complete", "artwork_select", "poster_read", "discord_source_prepare"]), input: z.unknown() });
+const personalPreparation = z.strictObject({ draftId: z.string().min(1).max(200), expectedVersion: z.number().int().positive(), attachmentId: z.string().min(1).max(30).optional(), skipPoster: z.boolean().optional(), retry: z.boolean().optional() });
 const source = z.strictObject({ posterAssetId: z.string().min(1).max(200) });
 const headers = { "cache-control": "private, no-store" };
 const problem = (status: number) => Response.json({ status }, { status, headers });
@@ -17,6 +19,7 @@ async function sessionActor() {
   return (await client.query(viewerQuery, {}))?.user.id ?? null;
 }
 export function createWebsiteEventIntakeHandler(deps: {
+  prepareDiscord?: (actorUserId: Id<"users">, input: PersonalPreparationInput) => Promise<unknown>;
   actor?: typeof sessionActor;
   commands?: (actorUserId: Id<"users">) => (operation: EventIntakeOperation, input: unknown) => Promise<unknown>;
   readPoster?: (actorUserId: Id<"users">, posterAssetId: Id<"eventPosterSources">) => Promise<string>;
@@ -42,8 +45,9 @@ export function createWebsiteEventIntakeHandler(deps: {
       let input: unknown;
       try {
         command = envelope.parse(JSON.parse(Buffer.concat(chunks).toString("utf8")));
-        input = command.operation === "poster_read" ? source.parse(command.input) : eventIntakeOperations[command.operation].input.parse(command.input);
+        input = command.operation === "poster_read" ? source.parse(command.input) : command.operation === "discord_source_prepare" ? personalPreparation.parse(command.input) : eventIntakeOperations[command.operation].input.parse(command.input);
       } catch { return problem(400); }
+      if (command.operation === "discord_source_prepare") return Response.json(await (deps.prepareDiscord ?? preparePersonalDiscordSource)(actor, personalPreparation.parse(input)), { headers });
       if (command.operation === "poster_read") {
         const { posterAssetId } = source.parse(input);
         const dataUrl = await (deps.readPoster ?? ((id, poster) => createEventPosterHandlers({ authority: async () => ({ actorUserId: id }) }).readPoster(poster)))(actor, posterAssetId as Id<"eventPosterSources">);

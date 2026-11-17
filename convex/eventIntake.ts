@@ -68,7 +68,20 @@ export const publishEventIntake = action({
 });
 export const expireDrafts = internalMutation({ args: {}, returns: v.number(), handler: async ctx => {
   const expired = await ctx.db.query("eventIntakeDrafts").withIndex("by_expiresAt", q => q.lte("expiresAt", Date.now())).take(100);
-  for (const draft of expired) await ctx.db.delete(draft._id);
+  for (const draft of expired) {
+    if (draft.personalSubmissionId) {
+      const submission = await ctx.db.get(draft.personalSubmissionId);
+      if (submission && !submission.eventId) await ctx.db.delete(submission._id);
+    }
+    await ctx.db.delete(draft._id);
+  }
+  const pendingSources = await ctx.db.query("discordPersonalIntakeSubmissions").withIndex("by_expiresAt", q => q.lte("expiresAt", Date.now())).take(100);
+  for (const source of pendingSources) {
+    if (source.eventId) continue;
+    const draft = source.draftId ? await ctx.db.get(source.draftId) : null;
+    if (draft && draft.expiresAt > Date.now()) await ctx.db.patch(source._id, { expiresAt: draft.expiresAt });
+    else await ctx.db.delete(source._id);
+  }
   const attempts = await ctx.db.query("eventIntakeModelAttempts").withIndex("by_createdAt", q => q.lt("createdAt", Date.now() - 86_400_000)).take(100);
   for (const attempt of attempts) await ctx.db.delete(attempt._id);
   return expired.length;

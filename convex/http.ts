@@ -432,6 +432,36 @@ http.route({ path: "/discord-intake/relay", method: "POST", handler: httpAction(
   }
 }) });
 
+http.route({ path: "/discord-intake/selected-message", method: "POST", handler: httpAction(async (ctx, request) => {
+  const denied = discordIntakeGate(request);
+  if (denied) return denied;
+  try {
+    const reader = request.body?.getReader();
+    if (!reader) return json({ error: "invalid_request" }, 400);
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > 64_000) { await reader.cancel(); return json({ error: "invalid_request" }, 413); }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+    const input = JSON.parse(new TextDecoder().decode(bytes));
+    const result = await ctx.runMutation(internal.discordPersonalIntake.captureSelectedMessage, input);
+    const site = new URL(process.env.SITE_URL!);
+    const path = result.kind === "link_required" ? "/api/discord/verify/start?returnTo=%2Faccount%2Fconnections"
+      : result.kind === "draft" ? `/events/new?draft=${encodeURIComponent(result.draftId)}`
+        : result.kind === "event" ? result.eventPath : null;
+    return json({ ...result, ...(path ? { url: new URL(path, site.origin).toString() } : {}) });
+  } catch {
+    return json({ error: "invalid_request" }, 400);
+  }
+}) });
+
 http.route({ path: "/discord-intake/command", method: "POST", handler: httpAction(async (ctx, request) => {
   const denied = discordIntakeGate(request);
   if (denied) return denied;

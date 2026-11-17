@@ -45,8 +45,8 @@ export function candidatePatch(candidate: EventIntakeCandidate): EventIntakePatc
   });
   return { tentative, evidence: candidate.evidence, questions };
 }
-export async function websiteIntakeCommand(operation: string, input: unknown) {
-  const response = await fetch("/api/event-intake", { method: "POST", credentials: "same-origin", cache: "no-store", headers: { "content-type": "application/json" }, body: JSON.stringify({ operation, input }) });
+export async function websiteIntakeCommand(operation: string, input: unknown, signal?: AbortSignal) {
+  const response = await fetch("/api/event-intake", { method: "POST", credentials: "same-origin", cache: "no-store", signal, headers: { "content-type": "application/json" }, body: JSON.stringify({ operation, input }) });
   if (response.status === 409) throw new ConvexError({ code: "VERSION_CONFLICT" });
   if (!response.ok) throw new Error("INTAKE_UNAVAILABLE");
   return response.json();

@@ -172,3 +172,20 @@ export const EventPosterBytesSchema = z.strictObject({
   draftId: intakeId, contentType: EventPosterDeclarationSchema.shape.contentType,
   base64: z.string().min(4).max(EVENT_POSTER_MAX_BASE64_LENGTH).refine(validPosterBase64, "Invalid base64"),
 });
+/** Merge a partial import into the complete lineup before an owner reviews it. */
+export function mergePersonalLineupSuggestions(current: NonNullable<EventIntakePatch["lineup"]>, imported: NonNullable<EventIntakePatch["lineup"]>) {
+  const result = current.map((row, position) => ({ ...row, position }));
+  for (const row of imported) {
+    const matches = result.map((item, index) => ({ item, index })).filter(({ item }) =>
+      row.personSlug ? item.personSlug === row.personSlug : item.performerLabel?.trim().toLowerCase() === row.performerLabel?.trim().toLowerCase());
+    if (matches.length === 1) {
+      const { item, index } = matches[0]!;
+      result[index] = { ...item, ...row, clientKey: item.clientKey, position: item.position };
+    } else {
+      let suffix = result.length;
+      while (result.some(item => item.clientKey === `import-${suffix}`)) suffix++;
+      result.push({ ...row, clientKey: `import-${suffix}`, position: result.length });
+    }
+  }
+  return result;
+}

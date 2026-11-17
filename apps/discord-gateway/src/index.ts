@@ -4,6 +4,7 @@ import { Client, Events, GatewayIntentBits, Partials, type GatewayDispatchPayloa
 
 import { catchUpMissedMessages } from "./catchUp";
 import { handleVrdexInteraction } from "./commands";
+import { handlePersonalIntake, personalEventCommand } from "./personalIntake";
 import { createConnectorCache } from "./connectorCache";
 import { routeMediaInteraction, type DiscordMediaInteractionRoute } from "./mediaControlRouting";
 import { fetchConnectors, logFailure, logRejections, relay, relayBulkDelete, relayConnected, sendHeartbeat, toMessagePayload } from "./relay";
@@ -47,6 +48,10 @@ client.on(Events.Raw, logRejections("discord_gateway_scheduled_event_failed", as
 client.on(Events.Error, error => logFailure("discord_gateway_client_error", error));
 
 client.on(Events.InteractionCreate, logRejections("discord_gateway_interaction_failed", async (interaction: Interaction) => {
+  if (interaction.isMessageContextMenuCommand() && interaction.commandName === personalEventCommand.name) {
+    await handlePersonalIntake(interaction);
+    return;
+  }
   if ((interaction.isChatInputCommand() || interaction.isAutocomplete()) && interaction.commandName === "vrdex") {
     await handleVrdexInteraction(interaction);
     return;

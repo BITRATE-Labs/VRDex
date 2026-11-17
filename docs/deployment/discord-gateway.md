@@ -1,5 +1,53 @@
 # Discord Gateway Service
 
+## Personal message command
+
+The personal message entry uses this same Gateway connection and intake service
+credential. It adds the global message command `Add event`, supporting user
+installation in guilds, bot DMs, other DMs and group DMs. Existing `/vrdex`
+management commands remain guild-only and require Manage Server. No additional
+gateway intents or channel permissions are needed for a selected message.
+
+This feature's implementation does not establish that user installation or its
+command has been activated on the live app. Before activation, check the app's
+current installation settings and command registration. Enable User Install with
+`applications.commands` only, preserving Guild Install and existing permissions.
+Keep the HTTP Interactions Endpoint URL unset for this Gateway-first app.
+Record the portal setting and application identity in the operator handoff, since
+it is not managed by the existing Terraform. Do not collect actual private messages
+as an installation test without the user's authorization.
+
+The gateway calls `POST /discord-intake/selected-message` through the existing
+`DISCORD_INTAKE_SECRET` and `VRDEX_DISCORD_INTAKE_ENABLED` gate. Convex's existing
+`SITE_URL` builds the private website link; the gateway needs no new environment
+variable. Unlinked selections retain no source text and link to the existing
+Discord verification flow, which requires verified email and `identify guilds`.
+The user returns to Discord and invokes the command again after linking.
+
+The draft opens the existing intake editor. A single supported poster is selected
+by default; multiple posters require a choice. The website prepares private bytes
+and tentative extraction with a five-minute version-bound lease. Failed or expired
+preparation can be retried or continued through manual editing. Discord interaction
+tokens do not determine draft lifetime. Replies and logs never echo message content
+or signed URLs. Source edits/deletions do not synchronize automatically.
+
+Activation requires the reviewed command-registration diff and separately approved
+provider/deployment actions. `register-commands` replaces the global command list,
+so confirm both `vrdexCommand` and `personalEventCommand` are present before running
+it. Test only owned fixtures in a guild without bot membership, a DM and a group
+DM, including denied public external-app replies, on desktop/browser, iOS and Android.
+Local browser screenshots do not prove those Discord-client behaviors.
+
+Rollback removes the personal command from registration and disables its handler
+through the normal release process. Preserve `/vrdex`, announcement connectors,
+the existing intake flag and saved private drafts. Do not switch off all intake to
+roll back this one entry point. Saved drafts retain the documented expiry rules.
+
+The new utility labels longer than two words requiring exact-copy review before
+shipping are `Continue without poster` and `Keep current artwork`. Other new
+controls use short utility labels, including `Add event`, `Link Discord`, `Review`,
+`Source changed`, `New event`, `Update event`, `Select poster` and `Remove artwork`.
+
 ## Status
 
 Deployed by `infra/terraform/discord-gateway`, production only. Staging has no gateway.
