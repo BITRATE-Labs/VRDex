@@ -7,7 +7,7 @@ const SURFACES = [
   { name: "timeline", path: /^(apps\/web\/(src\/(app\/(?:page\.tsx|_components\/(timeline\/|home-browse-provider\.))|lib\/timeline\/)|e2e\/(home-timeline|home-discovery|homepage-search))|tests\/web\/timeline-)/,
     flows: "(?:home-timeline|home-discovery|homepage-search).*\\.flow\\.spec\\.ts", public: "home-timeline\\.visual\\.spec\\.ts" },
   { name: "player", path: /^apps\/web\/(src\/(components\/media\/|lib\/(?:event-playback|event-lineup|native-hls|now-playing|playback-|media-element)|app\/_components\/event-(?:compact-player|playback|watch-surface|live-watch|lineup-player))|e2e\/(mobile-hls|event-lineup-live|native-trial-routing|event-playback))/,
-    media: true, storybook: true },
+    media: true, storybook: true, public: "(?:public-routes|media-kit)\\.(?:visual|snapshots)\\.spec\\.ts" },
   { name: "profiles", path: /^apps\/web\/(src\/(app\/(?:(?:profiles?|people|\[slug\])\/|_components\/(?:profile-|public-profile-links))|components\/profile|lib\/profile)|e2e\/(?:profile-|public-media-details|media-contribution))/,
     flows: "(?:profile-|media-contribution|public-media-details).*\\.flow\\.spec\\.ts", public: "(?:public-routes|media-kit)\\.(?:visual|snapshots)\\.spec\\.ts" },
   { name: "events", path: /^apps\/web\/(src\/(app\/(?:(?:events|\[communitySlug\]\/events)\/|_components\/event-)|lib\/event-(?:editor|detail)|components\/event)|e2e\/event-(?!broadcast|host))/,

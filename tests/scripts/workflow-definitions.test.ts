@@ -305,7 +305,7 @@ describe("optional browser and visual evidence contract", () => {
   it("keeps every web-source script contract in the cheap baseline subset", async () => {
     const scripts = JSON.parse(readFileSync("package.json", "utf8")).scripts;
     const subset = scripts["test:scripts:web"];
-    const files = (await readdir("tests/scripts")).filter(file => /\.test\.(?:ts|mjs)$/.test(file));
+    const files = (await readdir("tests/scripts", { recursive: true })).map(file => file.replaceAll("\\", "/")).filter(file => /\.test\.(?:ts|mjs)$/.test(file));
     for (const file of files) {
       if ((await readFile(`tests/scripts/${file}`, "utf8")).includes("apps/web")) assert.ok(subset.includes(`tests/scripts/${file}`), file);
     }

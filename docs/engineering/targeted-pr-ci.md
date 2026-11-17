@@ -16,7 +16,7 @@ Label names and behavior remain defined by the checked-in selector.
 | Timeline and home schedule | Home/timeline flows and public assertions |
 | Public profile surface | Profile/media-contribution flows and public assertions |
 | Event surface | Event flows and public assertions |
-| Player | Native media acceptance and Storybook |
+| Player | Native media acceptance, public watch assertions and Storybook |
 | Stories | Storybook assertions |
 | Shared UI primitives | Broad existing coverage |
 | Shared, authority-sensitive or unmapped application code | Broad existing coverage |
@@ -60,3 +60,9 @@ hosted run. Broad shared changes intentionally keep substantial coverage.
 All local browser lanes use the backend version compatible with the installed
 Convex CLI. This avoids the function-analysis mismatch observed when the CLI
 bootstrapped a newer backend; backend and browser pins must be upgraded together.
+
+The selector is a prerequisite of the core jobs that consume its scope outputs.
+A selector failure intentionally withholds those jobs and deployment, rather than
+silently claiming an unknown scope. Inspect the failed selector step, correct a
+contract failure or rerun an infrastructure failure, then require a successful
+current-head verification run before release.

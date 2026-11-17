@@ -32,6 +32,9 @@ test("player selects media while shared controls retain broad coverage", () => {
   const player = select(["apps/web/src/lib/now-playing.ts"]);
   assert.equal(player.media, true); assert.equal(player.flows, false);
   assert.equal(player.jobs.includes("playwright-hosted-data-flow"), false);
+  assert.ok(player.jobs.includes("playwright-public-preview"));
+  assert.match("public-routes.visual.spec.ts", new RegExp(player.publicPattern));
+  assert.ok(select(["apps/web/src/components/media/player.tsx"], ["ci:visuals"]).jobs.includes("playwright-image-diff"));
   const controls = select(["apps/web/src/components/ui/button.tsx"], ["ci:visuals"]);
   assert.deepEqual(controls.jobs, OPTIONAL_JOBS);
   assert.equal(controls.claimAuth, true);
