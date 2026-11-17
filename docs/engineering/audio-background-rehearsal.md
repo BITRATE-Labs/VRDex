@@ -91,7 +91,10 @@ The earlier finite audio producer and delivery comparison is historical work in
 commit `139e715b3`; those unused components are excluded from this integration.
 The native-request renewal proposal is deferred.
 
-## Linux synthetic qualification, November 13
+## Historical Linux synthetic qualification, November 13
+
+Superseded for activation by the November 17 replacement qualification below.
+These results describe only the earlier artifact.
 
 The exact bundled artifact passed on the selected one-vCPU/2-GiB target with a
 verified 512-MiB tmpfs. Both original packager renditions passed codec and decode
@@ -112,3 +115,19 @@ separate pending steps.
 ## VRCDN startup timestamp correction
 
 A live BASICBIT rehearsal exposed equal decoding timestamps on the first two video packets. The worker now advances only the second equal timestamp by one time-base tick, preserving presentation order. Later duplicate or reset timestamps still reach the existing fatal timestamp check. Audio remains copied AAC. Verify the replacement bundle before any new trial; the earlier aca5962d evidence does not qualify changed bytes.
+
+## Replacement qualification, November 17
+
+The startup correction requires FFmpeg 5 or later with the `setts` bitstream filter.
+The finite host pins and verifies FFmpeg 6.0 and FFprobe 6.0 before starting.
+Self-hosted workers must provide that capability before using this bundle.
+
+Replacement bundle SHA256: `901df11a945968305d7349d27fb173102d824b8770f159fc0cb413db4f759b40`.
+It passed the Linux dual-rendition codec/decode, source byte limit, request limit
+and cleanup qualification on the same one-vCPU/2-GiB host class. Peak whole-host
+memory was 506560512 bytes, below the 70-percent admission limit. No FFmpeg child
+or scratch file remained. The qualification VM subsequently stopped.
+
+The real BASICBIT provider test also played the audio-only rendition through the
+retained web player across page navigation, while the video transport stopped.
+Physical iPhone background acceptance remains separate from this desktop result.
