@@ -18,6 +18,7 @@ export const SECRET = "s".repeat(40);
 
 export const modules = {
   ...connectorModules,
+  "../../convex/discordPersonalIntake.ts": () => import("../../../convex/discordPersonalIntake"),
   "../../convex/discordIntake.ts": () => import("../../../convex/discordIntake"),
   "../../convex/discordIntakeRun.ts": () => import("../../../convex/discordIntakeRun"),
   "../../convex/http.ts": () => import("../../../convex/http"),

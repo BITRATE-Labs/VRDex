@@ -7,13 +7,14 @@ import { createEventPosterHandlers } from "./event-poster-storage";
 import { createProfileAssetReadUrl, isProfileAssetStorageConfigured, profileAssetUploadChecksum, putProfileAssetObject } from "./profile-asset-storage";
 
 type Admin = Pick<ReturnType<typeof convexAdminHttpClient>, "mutation" | "query">;
-type StoreInput = { actorUserId: Id<"users">; draftId: Id<"eventIntakeDrafts">; url: string; contentType: string; byteLength: number };
+type StoreInput = { actorUserId: Id<"users">; draftId: Id<"eventIntakeDrafts">; url: string; contentType: string; byteLength: number; expectedVersion?: number };
 type ReadInput = { actorUserId: Id<"users">; posterAssetId: Id<"eventPosterSources"> };
 // Convex fetches the link straight away. The copy sits under the quarantine prefix, whose bucket lifecycle rule deletes it within two days.
 const READ_LINK_SECONDS = 60;
 
 /** Moves Discord poster bytes into private storage for Convex runs, which cannot reach the bucket themselves. */
 export function createDiscordPosterBridge(deps: {
+  authorize?: (input: StoreInput) => Promise<void>;
   admin?: Admin;
   fetch?: typeof fetch;
   put?: typeof putProfileAssetObject;
@@ -36,15 +37,30 @@ export function createDiscordPosterBridge(deps: {
       if (!response.ok) throw new Error("POSTER_FETCH_FAILED");
       const declared = response.headers.get("content-length");
       if (declared !== null && Number(declared) !== input.byteLength) throw new Error("POSTER_SOURCE_MISMATCH");
-      const body = new Uint8Array(await response.arrayBuffer());
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("POSTER_FETCH_FAILED");
+      const chunks: Uint8Array[] = [];
+      let length = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        length += value.byteLength;
+        if (length > input.byteLength) { await reader.cancel(); throw new Error("POSTER_SOURCE_MISMATCH"); }
+        chunks.push(value);
+      }
+      const body = new Uint8Array(length);
+      let offset = 0;
+      for (const chunk of chunks) { body.set(chunk, offset); offset += chunk.length; }
       if (body.byteLength !== input.byteLength) throw new Error("POSTER_SOURCE_MISMATCH");
+      await deps.authorize?.(input);
       const reserved = await (deps.admin ?? convexAdminHttpClient()).mutation(internal.eventIntakeSources.beginPosterUpload, {
         actorUserId: input.actorUserId, draftId: input.draftId, contentType: input.contentType, byteLength: input.byteLength, sha256: profileAssetUploadChecksum(body),
       });
       await put({ storageKey: reserved.uploadStorageKey, body, contentType: input.contentType, cacheControl: "private, no-store" });
       // Validates, freezes, and auto-selects artwork exactly as a browser upload does.
-      await handlers(input.actorUserId).completePosterUpload({ posterAssetId: reserved.posterAssetId });
-      return { posterAssetId: reserved.posterAssetId as Id<"eventPosterSources"> };
+      await deps.authorize?.(input);
+      const completed = await handlers(input.actorUserId).completePosterUpload({ posterAssetId: reserved.posterAssetId, ...(input.expectedVersion === undefined ? {} : { expectedVersion: input.expectedVersion }) });
+      return { posterAssetId: reserved.posterAssetId as Id<"eventPosterSources">, ...(completed.version === undefined ? {} : { version: completed.version }) };
     },
     /** A prepared poster can exceed the 4.5 MB response cap, so this returns a short-lived link to its bytes, not a data URL. */
     async read(input: ReadInput) {

@@ -1202,7 +1202,16 @@ export default defineSchema({
   eventIntakeModelAttempts: defineTable({
     actorUserId: v.id("users"), draftId: v.id("eventIntakeDrafts"), createdAt: v.number(),
   }).index("by_actor_createdAt", ["actorUserId", "createdAt"]).index("by_createdAt", ["createdAt"]),
+  discordPersonalIntakeSubmissions: defineTable({
+    actorUserId: v.id("users"), discordUserId: v.string(), channelId: v.string(), messageId: v.string(), interactionId: v.string(),
+    fingerprint: v.string(), authorId: v.optional(v.string()), guildId: v.optional(v.string()), draftId: v.optional(v.id("eventIntakeDrafts")), eventId: v.optional(v.id("events")),
+    attachments: v.array(v.object({ id: v.string(), url: v.string(), contentType: v.string(), byteLength: v.number() })),
+    preparationStatus: v.union(v.literal("pending"), v.literal("processing"), v.literal("ready"), v.literal("failed"), v.literal("resolved")),
+    preparationToken: v.optional(v.string()), preparationVersion: v.optional(v.number()), preparationExpiresAt: v.optional(v.number()),
+    createdAt: v.number(), updatedAt: v.number(), expiresAt: v.number(),
+  }).index("by_actor_source", ["actorUserId", "channelId", "messageId"]).index("by_draftId", ["draftId"]).index("by_expiresAt", ["expiresAt"]),
   eventIntakeDrafts: defineTable({
+    personalSubmissionId: v.optional(v.id("discordPersonalIntakeSubmissions")),
     artworkAssetId: v.optional(v.id("eventPosterArtwork")),
     artworkIntentSourceId: v.optional(v.id("eventPosterSources")),
     actorUserId: v.id("users"), version: v.number(),

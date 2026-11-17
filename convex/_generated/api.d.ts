@@ -203,6 +203,7 @@ import type * as contributionUploads from "../contributionUploads.js";
 import type * as crons from "../crons.js";
 import type * as discordIntake from "../discordIntake.js";
 import type * as discordIntakeRun from "../discordIntakeRun.js";
+import type * as discordPersonalIntake from "../discordPersonalIntake.js";
 import type * as discordVerification from "../discordVerification.js";
 import type * as e2e from "../e2e.js";
 import type * as e2eClubStaff from "../e2eClubStaff.js";
@@ -483,6 +484,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   discordIntake: typeof discordIntake;
   discordIntakeRun: typeof discordIntakeRun;
+  discordPersonalIntake: typeof discordPersonalIntake;
   discordVerification: typeof discordVerification;
   e2e: typeof e2e;
   e2eClubStaff: typeof e2eClubStaff;
