@@ -4,6 +4,41 @@ import { EventPlaybackOwner, type PlaybackSnapshot } from "../../apps/web/src/li
 import { nowPlayingIdentity, applyNowPlaying, clearNowPlaying, retainNowPlaying } from "../../apps/web/src/lib/now-playing";
 import { playbackArtwork } from "../../apps/web/src/lib/playback-metadata";
 
+test("automatic PiP follows active video and clears on audio mode or Close", async () => {
+  const handlers = new Map<string, (() => void) | null>();
+  const originalVideo = Object.getOwnPropertyDescriptor(globalThis, "HTMLVideoElement");
+  const originalDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+  let requests = 0;
+  class Video { async requestPictureInPicture() { requests++; } }
+  Object.defineProperty(globalThis, "HTMLVideoElement", { configurable: true, value: Video });
+  Object.defineProperty(globalThis, "document", { configurable: true, value: { pictureInPictureEnabled: true, pictureInPictureElement: null } });
+  Object.defineProperty(globalThis, "navigator", { configurable: true, value: { mediaSession: {
+    setActionHandler(action: string, handler: (() => void) | null) { handlers.set(action, handler); },
+  } } });
+  Object.defineProperty(globalThis, "MediaMetadata", { configurable: true, value: class {} });
+  const owner = new EventPlaybackOwner(() => ({ media: new Video() as HTMLVideoElement, play: async () => true, pause() {}, setVolume() {}, setMuted() {}, update() {}, dispose() {} }));
+  try {
+    await owner.play({ kind: "vrcdn", profileId: "p", profileSlug: "dj", title: "DJ", href: "/dj", sourceId: "AA", src: "url", transport: "mpegts" });
+    await owner.setMode("video");
+    const apply = (mode: "video" | "audio") => applyNowPlaying({ identity: { displayName: "DJ", artwork: undefined }, mode, actions: { owner, generation: owner.generation } });
+    apply("video");
+    const enter = handlers.get("enterpictureinpicture")!;
+    enter();
+    assert.equal(requests, 1);
+    owner.pause(); enter();
+    assert.equal(requests, 1, "paused video must not open a window");
+    apply("audio");
+    assert.equal(handlers.get("enterpictureinpicture"), null);
+    owner.close(); clearNowPlaying(); enter();
+    assert.equal(requests, 1, "stale callbacks cannot reopen closed playback");
+    assert.equal(handlers.get("enterpictureinpicture"), null);
+  } finally {
+    owner.close();
+    if (originalVideo) Object.defineProperty(globalThis, "HTMLVideoElement", originalVideo); else Reflect.deleteProperty(globalThis, "HTMLVideoElement");
+    if (originalDocument) Object.defineProperty(globalThis, "document", originalDocument); else Reflect.deleteProperty(globalThis, "document");
+  }
+});
+
 test("authoritative raw name formats once and revision changes artwork URL", () => {
   const state = { status: "playing", mode: "audio", volume: 1, muted: false, request: { kind: "vrcdn", profileId: "p", profileSlug: "dj", title: "DJ - VRDex", href: "/dj", sourceId: "AA", src: "url", transport: "mpegts" }, metadata: { displayName: "DJ", artworkAssetId: "asset", artworkRevision: "1" } } as const;
   assert.equal(nowPlayingIdentity(state)?.displayName, "DJ");
