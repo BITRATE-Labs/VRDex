@@ -135,6 +135,44 @@ it("retrying after explicit poster removal does not require or restore a capture
   assert.equal(claim.attachment, undefined);
 });
 
+for (const expired of [false, true]) for (const completed of [false, true]) it(`${expired ? "expired" : "failed"} poster preparation recovers ${completed ? "completed artwork without another upload" : "an unfinished artwork intent"}`, async () => {
+  const { t, authorityUserId } = await fixture();
+  const captured = await t.mutation(internal.discordPersonalIntake.captureSelectedMessage, { ...capture, message: { ...capture.message, attachments: [{ id: "500000000000000001", url: `https://cdn.discordapp.com/attachments/${CHANNEL}/500000000000000001/poster.png`, contentType: "image/png", byteLength: 128 }] } });
+  if (captured.kind !== "draft") throw new Error("Expected draft");
+  const args = { actorUserId: authorityUserId, draftId: captured.draftId, expectedVersion: 1 };
+  const claim = await t.mutation(internal.discordPersonalIntake.claimPreparation, args);
+  const upload = await t.mutation(internal.eventIntakeSources.beginPosterUpload, { actorUserId: authorityUserId, draftId: captured.draftId, contentType: "image/png", byteLength: 128, sha256: "a".repeat(64) });
+  await t.mutation(internal.eventIntakeSources.completePosterUpload, { actorUserId: authorityUserId, posterAssetId: upload.posterAssetId, sha256: "a".repeat(64), expectedVersion: 1 });
+  const selection = await t.mutation(internal.eventIntakeSources.selectPosterArtwork, { ...args, posterAssetId: upload.posterAssetId, automatic: true });
+  if (completed) await t.mutation(internal.eventIntakeSources.completeArtwork, { actorUserId: authorityUserId, artworkAssetId: selection.artworkAssetId, expectedVersion: 1, sha256: "b".repeat(64), byteLength: 100, automatic: true });
+  if (expired) await t.run(async ctx => {
+    const submission = await ctx.db.query("discordPersonalIntakeSubmissions").withIndex("by_draftId", q => q.eq("draftId", captured.draftId)).unique();
+    await ctx.db.patch(submission!._id, { preparationExpiresAt: Date.now() - 1 });
+  });
+  else await t.mutation(internal.discordPersonalIntake.failPreparation, { actorUserId: authorityUserId, draftId: captured.draftId, token: claim.token });
+  const failed = await t.run(ctx => ctx.db.get(captured.draftId));
+  if (!expired) assert.equal(failed!.artworkIntentSourceId, undefined, "failed preparation must not block manual publication");
+  const retry = await t.mutation(internal.discordPersonalIntake.claimPreparation, { ...args, expectedVersion: failed!.version, retry: true });
+  assert.equal(retry.kind, "run");
+  assert.ok(retry.version > failed!.version || failed!.version > args.expectedVersion, "recovery must invalidate the interrupted writer");
+  await assert.rejects(t.mutation(internal.eventIntakeSources.selectPosterArtwork, { ...args, posterAssetId: upload.posterAssetId, automatic: true }), /VERSION_CONFLICT/);
+  await assert.rejects(t.mutation(internal.eventIntakeSources.completeArtwork, { actorUserId: authorityUserId, artworkAssetId: selection.artworkAssetId, expectedVersion: 1, sha256: "b".repeat(64), byteLength: 100, automatic: true }), /VERSION_CONFLICT/);
+  assert.equal((await t.run(ctx => ctx.db.get(captured.draftId)))!.artworkIntentSourceId, undefined);
+  await t.mutation(internal.discordPersonalIntake.failPreparation, { actorUserId: authorityUserId, draftId: captured.draftId, token: claim.token });
+  assert.equal((await t.run(async ctx => (await ctx.db.query("discordPersonalIntakeSubmissions").withIndex("by_draftId", q => q.eq("draftId", captured.draftId)).unique())!)).preparationToken, retry.token, "late failure must not invalidate the retry");
+  if (completed) {
+    assert.equal(retry.posterSourceId, upload.posterAssetId);
+    assert.equal(retry.attachment, undefined);
+    assert.equal((await t.run(ctx => ctx.db.get(captured.draftId)))!.artworkAssetId, selection.artworkAssetId);
+    await t.mutation(internal.discordPersonalIntake.finishPreparation, { ...args, expectedVersion: retry.version, token: retry.token, patch: {} });
+    assert.equal((await t.run(ctx => ctx.db.query("eventPosterSources").collect())).length, 1);
+  } else {
+    const next = await t.mutation(internal.eventIntakeSources.beginPosterUpload, { actorUserId: authorityUserId, draftId: captured.draftId, contentType: "image/png", byteLength: 128, sha256: "a".repeat(64) });
+    const result = await t.mutation(internal.eventIntakeSources.completePosterUpload, { actorUserId: authorityUserId, posterAssetId: next.posterAssetId, sha256: "a".repeat(64), expectedVersion: retry.version });
+    assert.equal(result.autoSourceId, next.posterAssetId, "retry must be able to select the replacement artwork");
+  }
+});
+
 it("completed preparation is replayed without another extraction and discard clears private input", async () => {
   const { t, authorityUserId, clerkUserId } = await fixture();
   const result = await t.mutation(internal.discordPersonalIntake.captureSelectedMessage, capture);
@@ -219,6 +257,28 @@ it("owner publication uses official commands, is idempotent and clears private t
   assert.equal((await t.mutation(internal.discordPersonalIntake.captureSelectedMessage, capture)).kind, "unavailable");
   await t.run(ctx => ctx.db.patch(first.eventId, { eventStatus: "scheduled", moderationRemovedAt: Date.now() }));
   assert.equal((await t.mutation(internal.discordPersonalIntake.captureSelectedMessage, capture)).kind, "unavailable");
+});
+
+it("owner update replaces artwork without changing other event fields and replays safely", async () => {
+  const { t, actor, authorityUserId, draftId, version } = await ownedDraft();
+  const original = await actor.mutation(api.events.createCommunityEvent, { communitySlug: "night-club", title: "Existing event", startAt: Date.UTC(2026, 11, 1, 22), timezone: "Etc/UTC", published: true, sourceLabel: "Original organizer", posterImageUrl: "https://example.com/old.png" });
+  const event = await t.run(ctx => ctx.db.get(original.eventId));
+  const upload = await t.mutation(internal.eventIntakeSources.beginPosterUpload, { actorUserId: authorityUserId, draftId, contentType: "image/png", byteLength: 128, sha256: "a".repeat(64) });
+  await t.mutation(internal.eventIntakeSources.completePosterUpload, { actorUserId: authorityUserId, posterAssetId: upload.posterAssetId, sha256: "a".repeat(64) });
+  const selection = await t.mutation(internal.eventIntakeSources.selectPosterArtwork, { actorUserId: authorityUserId, draftId, posterAssetId: upload.posterAssetId, expectedVersion: version });
+  const artwork = await t.mutation(internal.eventIntakeSources.completeArtwork, { actorUserId: authorityUserId, artworkAssetId: selection.artworkAssetId, expectedVersion: version, sha256: "b".repeat(64), byteLength: 100 });
+  const args = { draftId, expectedVersion: artwork.version, idempotencyKey: "owner-replace-artwork", operation: { kind: "owner_update" as const, eventId: original.eventId, expectedUpdatedAt: event!.updatedAt, patch: {}, artwork: "replace" as const } };
+  const result = await actor.mutation(api.discordPersonalIntake.publishReviewedDraft, args);
+  assert.deepEqual(await actor.mutation(api.discordPersonalIntake.publishReviewedDraft, args), result);
+  const updated = await t.run(ctx => ctx.db.get(original.eventId));
+  assert.equal(updated!.posterImageUrl, `/api/v0/events/${original.eventId}/artwork/${selection.artworkAssetId}`);
+  assert.equal(updated!.title, event!.title);
+  assert.equal(updated!.sourceLabel, event!.sourceLabel);
+  const derivative = await t.run(ctx => ctx.db.get(selection.artworkAssetId));
+  assert.equal(derivative!.state, "published");
+  assert.equal(derivative!.eventId, original.eventId);
+  assert.equal((await t.run(ctx => ctx.db.get(upload.posterAssetId)))!.eventId, original.eventId);
+  assert.equal((await t.run(ctx => ctx.db.query("events").collect())).length, 1);
 });
 
 it("revoked owner authority stops publication instead of downgrading it to a contribution", async () => {

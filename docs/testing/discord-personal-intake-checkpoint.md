@@ -84,6 +84,13 @@ immediately, releasing quota; 20 discard/reselect cycles still allow an ordinary
 draft. Publication replay survives the existing sweep. Cancelled/moderated source
 records remain protected against creating a replacement event through reselection.
 
+Poster interruption regressions cover failed and expired attempts before and
+after artwork completion. Completed artwork is reused without another upload;
+unfinished selections are cleared. Older selection/completion writes are refused
+after recovery, and an old failure callback cannot invalidate the new lease.
+Owner update coverage also replaces an existing event's artwork, preserving its
+other fields and safely replaying the publication.
+
 ## Visual evidence
 
 The screenshots use fictional fixture content and production editor components.

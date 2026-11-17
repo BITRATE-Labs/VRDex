@@ -91,10 +91,20 @@ export const getSubmission = query({
 export const claimPreparation = internalMutation({
   args: { ...prepareArgs, attachmentId: v.optional(v.string()), skipPoster: v.optional(v.boolean()), retry: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
-    const { draft, submission } = await ownSubmission(ctx, args.actorUserId, args.draftId);
+    let { draft, submission } = await ownSubmission(ctx, args.actorUserId, args.draftId);
     if (draft.version !== args.expectedVersion) throw new ConvexError({ code: "VERSION_CONFLICT" });
     if (submission.preparationStatus === "ready" || (submission.preparationStatus === "failed" && !args.retry)) return { kind: submission.preparationStatus, version: draft.version };
     if (submission.preparationStatus === "processing" && (submission.preparationExpiresAt ?? 0) > Date.now()) return { kind: "processing" as const, version: draft.version };
+    // Shared poster writes use the draft version, so invalidate an expired worker before retrying.
+    if (submission.preparationStatus === "processing" || (draft.artworkIntentSourceId && draft.fields.posterSourceId === undefined)) {
+      await ctx.db.patch(draft._id, { version: draft.version + 1, updatedAt: Date.now(), ...(draft.fields.posterSourceId === undefined ? { artworkIntentSourceId: undefined } : {}) });
+      ({ draft, submission } = await ownSubmission(ctx, args.actorUserId, args.draftId));
+    }
+    // Recover completed artwork if the previous run stopped before saving its source field.
+    if (draft.fields.posterSourceId === undefined && draft.artworkSourceId) {
+      await saveIntakeDraft(ctx.db, args.actorUserId, { draftId: draft._id, expectedVersion: draft.version, patch: { posterSourceId: draft.artworkSourceId } });
+      ({ draft, submission } = await ownSubmission(ctx, args.actorUserId, args.draftId));
+    }
     const needsPoster = !args.skipPoster && draft.fields.posterSourceId === undefined;
     if (needsPoster && submission.attachments.length > 1 && !args.attachmentId) return { kind: "choose_poster" as const, version: draft.version };
     const selected = !needsPoster ? undefined : args.attachmentId ? submission.attachments.find(item => item.id === args.attachmentId) : submission.attachments[0];
@@ -133,8 +143,11 @@ export const finishPreparation = internalMutation({
 export const failPreparation = internalMutation({
   args: { actorUserId: v.id("users"), draftId: v.id("eventIntakeDrafts"), token: v.string() },
   handler: async (ctx, args) => {
-    const { submission } = await ownSubmission(ctx, args.actorUserId, args.draftId);
-    if (submission.preparationToken === args.token) await ctx.db.patch(submission._id, { preparationStatus: "failed", preparationToken: undefined, preparationExpiresAt: undefined });
+    const { draft, submission } = await ownSubmission(ctx, args.actorUserId, args.draftId);
+    if (submission.preparationToken === args.token) {
+      await ctx.db.patch(draft._id, { version: draft.version + 1, updatedAt: Date.now(), ...(draft.fields.posterSourceId === undefined ? { artworkIntentSourceId: undefined } : {}) });
+      await ctx.db.patch(submission._id, { preparationStatus: "failed", preparationToken: undefined, preparationExpiresAt: undefined });
+    }
     return null;
   },
 });

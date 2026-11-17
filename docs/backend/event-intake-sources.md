@@ -127,6 +127,15 @@ conversation history. Its actual download is bounded as well as its declared siz
 Extraction of these drafts, including later manual retries, sends usage metrics
 to diagnostics without request or response content.
 
+Failed or expired preparation invalidates the old draft version before retrying,
+so late poster writes cannot replace the retry's selection. If artwork completed
+before source adoption failed, retry adopts that artwork without downloading
+another copy. An unfinished, unsaved artwork selection is cleared, allowing a
+fresh upload or manual publication. Its abandoned source keeps the normal cleanup
+lifecycle. After text-only preparation or explicit removal, another poster can
+be uploaded through the existing source editor. Captured signed URLs are cleared
+when preparation succeeds.
+
 Pending source metadata follows the draft's rolling 30-day expiry. Publication or
 discard clears source text, suggestions, questions, the update baseline and pending
 URLs. Resolved personal drafts expire immediately and stop consuming active-draft
