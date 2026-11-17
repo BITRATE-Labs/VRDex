@@ -16,20 +16,21 @@ test("broadcast acceptance skips schedule-only changes but selects its runtime a
     "apps/web/src/app/events/[slug]/host/page.tsx", "apps/web/src/app/layout.tsx",
     "apps/web/src/lib/auth.ts", "apps/web/e2e/event-broadcast-native.flow.spec.ts",
     "packages/media-relay/src/worker/packager.ts", "pnpm-lock.yaml",
-    ".github/workflows/baseline-checks.yml", ".github/scripts/visual-ci.cjs"]) {
+    ".github/workflows/baseline-checks.yml", ".github/scripts/visual-ci.cjs", "tsconfig.base.json", "scripts/dev-helper.mjs"]) {
     assert.equal(broadcastRelevant([file]), true, file);
   }
 });
 
 test("an unselected broadcast rehearsal needs a successful selector but no native artifact", () => {
   const input = fixture({ browsers: true });
-  input.needs["broadcast-native-acceptance"].outputs = { selected: "false" };
+  input.needs["broadcast-native-acceptance"].result = "skipped";
+  input.needs["visual-selection"].outputs.jobs = JSON.stringify(JSON.parse(input.needs["visual-selection"].outputs.jobs).filter(job => job !== "broadcast-native-acceptance"));
   input.artifacts = input.artifacts.filter(a => a.name !== "broadcast-native-acceptance");
   assert.deepEqual(evaluateVerification(input).errors, []);
   input.needs["broadcast-native-acceptance"].result = "failure";
   assert.match(evaluateVerification(input).errors.join(" "), /broadcast-native-acceptance/);
   input.needs["broadcast-native-acceptance"].result = "success";
-  input.needs["broadcast-native-acceptance"].outputs.selected = "true";
+  input.needs["visual-selection"].outputs.jobs = JSON.stringify([...JSON.parse(input.needs["visual-selection"].outputs.jobs), "broadcast-native-acceptance"]);
   assert.match(evaluateVerification(input).errors.join(" "), /broadcast-native-acceptance.*artifact/);
 });
 const coreJobs = ["lint-web", "verify-docs", "verify-api-mcp", "typecheck-web", "typecheck-backend", "verify-backend-local", "restream-local-checks", "build-web"];
@@ -37,7 +38,7 @@ const browserJobs = ["playwright-public-smoke", "playwright-data-flow", "broadca
 const comparisons = ["playwright-image-diff", "storybook-image-diff"];
 function fixture({ browsers = false, visuals = false } = {}) {
   const needs = Object.fromEntries(coreJobs.map(job => [job, { result: "success" }]));
-  needs["visual-selection"] = { result: "success", outputs: { browsers: String(browsers), visuals: String(visuals) } };
+  needs["visual-selection"] = { result: "success", outputs: { full: "false", flows: String(browsers), media: String(browsers), claimAuth: String(browsers), analytics: String(browsers), scripts: "true", restream: "true", flowPattern: ".*", publicPattern: ".*", browsers: String(browsers), visuals: String(visuals), jobs: JSON.stringify([...(browsers ? [...browserJobs, "build-storybook"] : []), ...(visuals ? ["playwright-image-diff", "storybook-image-diff"] : [])]) } };
   needs["build-storybook"] = { result: browsers ? "success" : "skipped" };
   for (const job of browserJobs) needs[job] = { result: browsers ? "success" : "skipped" };
   for (const job of comparisons) needs[job] = { result: visuals ? "success" : "skipped" };
@@ -61,7 +62,7 @@ test("PR labels select three modes, with visuals implying browsers", () => {
 });
 
 test("default runs require core checks and expect all browsers and Storybook build to skip", () => {
-  assert.deepEqual(evaluateVerification(fixture()), { browsers: false, visuals: false, errors: [] });
+  assert.deepEqual(evaluateVerification(fixture()), { browsers: false, visuals: false, errors: [], jobs: [] });
   for (const job of [...coreJobs, "visual-selection"]) {
     for (const result of ["failure", "cancelled", "skipped", ""]) {
       const input = fixture(); input.needs[job].result = result;
@@ -142,8 +143,8 @@ test("CLI snapshots event labels into both workflow outputs", () => {
       const event = path.join(directory, "event.json"), output = path.join(directory, "output");
       fs.writeFileSync(event, JSON.stringify({ pull_request: { labels: names.map(name => ({ name })) } }));
       fs.writeFileSync(output, "");
-      execFileSync(process.execPath, [path.join(__dirname, "visual-ci.cjs")], { env: { ...process.env, GITHUB_EVENT_NAME: "pull_request", GITHUB_EVENT_PATH: event, GITHUB_OUTPUT: output } });
-      assert.equal(fs.readFileSync(output, "utf8"), expected);
+      execFileSync(process.execPath, [path.join(__dirname, "visual-ci.cjs")], { env: { ...process.env, BASE_SHA: execFileSync("git", ["rev-parse", "HEAD"], {encoding:"utf8"}).trim(), GITHUB_EVENT_NAME: "pull_request", GITHUB_EVENT_PATH: event, GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: path.join(directory, String(names.length)) } });
+      assert.ok(fs.readFileSync(output, "utf8").startsWith(expected));
     }
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });

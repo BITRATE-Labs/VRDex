@@ -30,7 +30,7 @@ test('the owner keeps all four files, 90 outcomes and its original serialization
   for (const file of files) assert.equal(manifest.filter(path => path === file).length, 1, file);
 });
 
-test('every PR path retains unconditional setup, build and full native gate in the existing required job', async () => {
+test('selected restream changes retain the full native gate and required job dependency', async () => {
   const workflow = await read('.github/workflows/baseline-checks.yml');
   const job = workflow.split('  restream-local-checks:\n')[1].split('\n  build-web:')[0];
   assert.match(job, /timeout-minutes: 20/);
@@ -38,7 +38,7 @@ test('every PR path retains unconditional setup, build and full native gate in t
   const named = name => steps.find(step => step.startsWith(name + '\n'));
   for (const name of ['Setup pnpm', 'Setup Node.js', 'Check native CI contracts', 'Build hosted restream worker image', 'Run required native transport gate', 'Verify captured transport with packaged runtime']) {
     const step = named(name); assert.ok(step, name);
-    assert.doesNotMatch(step, /\n        if:|continue-on-error/);
+    assert.doesNotMatch(step, /continue-on-error/);
   }
   const gate = named('Run required native transport gate');
   assert.match(gate, /timeout-minutes: 8/);
@@ -55,7 +55,9 @@ test('every PR path retains unconditional setup, build and full native gate in t
   assert.doesNotMatch(captured, /(?:-v|--volume|--mount)[^\n]*:\/app(?:[:\s]|$)/);
   assert.match(named('Build hosted restream worker image'), /docker build -f workers\/restream\/Dockerfile -t vrdex-restream-worker:ci \./);
   assert.match(workflow.split('  build-web:')[1].split('    steps:')[0], /- restream-local-checks/);
-  assert.match(workflow, /run: pnpm verify:vrdex-mcp/);
+  assert.match(workflow, /run: pnpm typecheck:vrdex-mcp && pnpm test:vrdex-mcp && pnpm smoke:mcp-compat && pnpm check:mcp-client-matrix/);
+  assert.match(workflow, /name: Verify affected script contracts\s+if: needs.visual-selection.outputs.scripts == 'true'\s+run: pnpm test:scripts/);
+  for (const name of ['Build hosted restream worker image', 'Run required native transport gate', 'Verify captured transport with packaged runtime']) assert.match(named(name), /if: steps.changes.outputs.enabled == 'true'/);
 });
 
 test('name manifest is independent F1 evidence with 132 unique identities and the original wall-rate contract', async () => {

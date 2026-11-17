@@ -131,13 +131,13 @@ function ScheduleContent({
     favoriteProfileIds: preference.preferences.favoriteProfileIds,
     plan: preference.preferences.plan,
   });
-  const { removePlan } = preference;
+  const { removePlan, wasAddedInSession } = preference;
   useEffect(() => {
     if (data.savedState !== "ready") return;
     for (const item of data.saved) {
-      if (isPastSaved(item, now)) removePlan(item.reference);
+      if (isPastSaved(item, now) && !wasAddedInSession(item.reference)) removePlan(item.reference);
     }
-  }, [data.saved, data.savedState, now, removePlan]);
+  }, [data.saved, data.savedState, now, removePlan, wasAddedInSession]);
   const cancelReplace = useCallback(() => {
     if (pending.current !== null) {
       clearTimeout(pending.current.timer);

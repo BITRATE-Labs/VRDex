@@ -145,10 +145,9 @@ function buildReport({
     const artifact = row.artifact ? artifactByName.get(row.artifact) : null;
     const result = job.result || "unknown";
 
-    const broadcastUnselected = row.job === "broadcast-native-acceptance" && job.outputs?.selected === "false";
-    const expected = broadcastUnselected ? false : COMPARISON_JOBS.has(row.job) ? evaluation.visuals
-      : BROWSER_JOBS.includes(row.job) || row.job === "build-storybook" ? evaluation.browsers : null;
-    if (expected === false && (job.result === "skipped" || (broadcastUnselected && job.result === "success"))) {
+    const optional = COMPARISON_JOBS.has(row.job) || BROWSER_JOBS.includes(row.job) || row.job === "build-storybook";
+    const expected = optional && evaluation.jobs !== null ? evaluation.jobs.includes(row.job) : null;
+    if (expected === false && job.result === "skipped") {
       return `| ${row.label.replace("screenshots", "preview")} | NOT SELECTED | Not requested |`;
     }
     const label = evaluation.visuals === false && evaluation.browsers === true
@@ -179,7 +178,7 @@ function buildReport({
 
   return [
     REPORT_MARKER,
-    `<!-- vrdex-test-selection:${JSON.stringify({ head: headSha, browsers: evaluation.browsers, visuals: evaluation.visuals })} -->`,
+    `<!-- vrdex-test-selection:${JSON.stringify({ head: headSha, browsers: evaluation.browsers, visuals: evaluation.visuals, jobs: evaluation.jobs, full: needs["visual-selection"]?.outputs?.full === "true" })} -->`,
     "## PR verification report",
     "",
     needsAttention
@@ -188,6 +187,9 @@ function buildReport({
     "",
     `Browsers selected for this run: ${evaluation.browsers === null ? "UNKNOWN" : evaluation.browsers ? "yes" : "no"}.`,
     `Visuals selected for this run: ${evaluation.visuals === null ? "UNKNOWN" : evaluation.visuals ? "yes" : "no"}.`,
+    `Full suite selected: ${needs["visual-selection"]?.outputs?.full === "true" ? "yes" : "no"}.`,
+    `Broad script contracts selected: ${needs["visual-selection"]?.outputs?.scripts === "true" ? "yes" : "no"}.`,
+    `Native restream acceptance selected: ${needs["visual-selection"]?.outputs?.restream === "true" ? "yes" : "no"}.`,
     ...(selectionChanged ? ["Test selection changed since this run. Run results below describe the original selection; request a new normal PR run for current selected coverage.", ""] : []),
     ...(needsAttention ? evaluation.errors.map(error => `- ${error}`) : []),
     "",
@@ -260,7 +262,8 @@ async function updatePrVerificationReport({ core, context, github, needs }) {
   }
   const currentSelection = selectEvidence("pull_request", latest.labels || []);
   const selectionChanged = evaluation.browsers !== null && evaluation.visuals !== null
-    && (currentSelection.browsers !== evaluation.browsers || currentSelection.visuals !== evaluation.visuals);
+    && (currentSelection.browsers !== evaluation.browsers || currentSelection.visuals !== evaluation.visuals
+      || latest.labels.some(label => label.name === "ci:full") !== (needs["visual-selection"]?.outputs?.full === "true"));
   const body = buildReport({
     artifacts,
     files,

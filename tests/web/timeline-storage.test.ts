@@ -16,6 +16,22 @@ function external(target: EventTarget, value: string | null, key: string | null 
 }
 
 describe("timeline preference storage", () => {
+  it("distinguishes deliberate current-session additions from imported saves without persisting metadata", () => {
+    const storage = new MemoryStorage();
+    storage.setItem(PREFERENCE_STORAGE_KEY, JSON.stringify(saved));
+    const store = createPreferenceStore({ storage, eventTarget: new EventTarget() });
+    const unsubscribe = store.subscribe(() => {});
+    const previous = { kind: "event", eventId: "A" } as const;
+    const added = { kind: "event", eventId: "ended" } as const;
+    assert.equal(store.wasAddedInSession(previous), false);
+    store.dispatch({ type: "add-plan", reference: added });
+    assert.equal(store.wasAddedInSession(added), true);
+    assert.deepEqual(JSON.parse(storage.getItem(PREFERENCE_STORAGE_KEY)!), store.getSnapshot().preferences);
+    store.dispatch({ type: "remove-plan", reference: added });
+    assert.equal(store.wasAddedInSession(added), false);
+    unsubscribe(); store.dispose();
+  });
+
   it("renders the actual hook on the server without reading browser APIs", async () => {
     const requireWeb = createRequire(path.resolve("apps/web/package.json"));
     const React = requireWeb("react");

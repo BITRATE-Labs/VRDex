@@ -6,7 +6,7 @@ const coreJobs = ["lint-web", "verify-docs", "verify-api-mcp", "typecheck-web", 
 const browserJobs = ["playwright-public-smoke", "playwright-data-flow", "broadcast-native-acceptance", "playwright-hosted-data-flow", "playwright-public-preview", "storybook-component-preview"];
 function fixture(browsers = true, visuals = true) {
   const needs = Object.fromEntries(coreJobs.map(job => [job, { result: "success" }]));
-  needs["visual-selection"] = { result: "success", outputs: { browsers: String(browsers), visuals: String(visuals) } };
+  needs["visual-selection"] = { result: "success", outputs: { full: "false", flows: String(browsers), media: String(browsers), claimAuth: String(browsers), analytics: String(browsers), scripts: "true", restream: "true", flowPattern: ".*", publicPattern: ".*", browsers: String(browsers), visuals: String(visuals), jobs: JSON.stringify([...(browsers ? [...browserJobs, "build-storybook"] : []), ...(visuals ? ["playwright-image-diff", "storybook-image-diff"] : [])]) } };
   needs["build-storybook"] = { result: browsers ? "success" : "skipped" };
   for (const job of browserJobs) needs[job] = { result: browsers ? "success" : "skipped" };
   for (const job of ["playwright-image-diff", "storybook-image-diff"]) needs[job] = { result: visuals ? "success" : "skipped" };
@@ -16,7 +16,8 @@ function fixture(browsers = true, visuals = true) {
 
 test("unrelated broadcast changes report NOT SELECTED without claiming native acceptance", () => {
   const input = fixture(true, false);
-  input.needs["broadcast-native-acceptance"].outputs = { selected: "false" };
+  input.needs["broadcast-native-acceptance"].result = "skipped";
+  input.needs["visual-selection"].outputs.jobs = JSON.stringify(JSON.parse(input.needs["visual-selection"].outputs.jobs).filter(job => job !== "broadcast-native-acceptance"));
   input.artifacts = input.artifacts.filter(a => a.name !== "broadcast-native-acceptance");
   const report = buildReport(input);
   assert.match(report, /Candidate broadcast acceptance \| NOT SELECTED/);

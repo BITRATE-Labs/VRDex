@@ -55,6 +55,19 @@ test.describe("continuous schedule @flow @fixture", () => {
     await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("vrdex.timeline.preferences.v1")!).plan)).toEqual([]);
   });
 
+  test("a just-ended event deliberately saved this visit stays removable outside My night", async ({ page, timelineFixture }) => {
+    const past = page.getByTestId(`event-${timelineFixture.eventIds[0]}`);
+    await past.getByRole("button", { name: "Interested: Soft Focus", exact: true }).click();
+    await page.getByLabel("Schedule date", { exact: true }).fill("2026-11-02");
+    await loadCompleteSchedule(page);
+    await page.getByRole("button", { name: "Now", exact: true }).click();
+    await loadCompleteSchedule(page);
+    await expect(past.getByRole("button", { name: "Remove interest: Soft Focus", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "My night", exact: true })).toHaveCount(0);
+    await past.getByRole("button", { name: "Remove interest: Soft Focus", exact: true }).click();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("vrdex.timeline.preferences.v1")!).plan)).toEqual([]);
+  });
+
   test("dateOnlyRecordsRemainDiscoverableWithoutAgenda", async ({ page, timelineFixture }) => {
     await page.goto(`/?at=${TIMELINE_NOW - 3600000}&tz=America%2FNew_York&scheduleView=agenda&tag=a&tag=b`);
     await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready");

@@ -10,6 +10,9 @@ on:
 permissions:
   contents: read
 
+env:
+  CONVEX_LOCAL_BACKEND_VERSION: precompiled-2026-09-28-5c7cb5b
+
 concurrency:
   group: baseline-checks-${{ github.ref }}
   cancel-in-progress: true
@@ -17,19 +20,32 @@ concurrency:
 jobs:
   visual-selection:
     name: Select Visual Evidence
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       browsers: ${{ steps.selection.outputs.browsers }}
       visuals: ${{ steps.selection.outputs.visuals }}
+      full: ${{ steps.selection.outputs.full }}
+      jobs: ${{ steps.selection.outputs.jobs }}
+      flows: ${{ steps.selection.outputs.flows }}
+      flowPattern: ${{ steps.selection.outputs.flowPattern }}
+      publicPattern: ${{ steps.selection.outputs.publicPattern }}
+      media: ${{ steps.selection.outputs.media }}
+      claimAuth: ${{ steps.selection.outputs.claimAuth }}
+      analytics: ${{ steps.selection.outputs.analytics }}
+      scripts: ${{ steps.selection.outputs.scripts }}
+      restream: ${{ steps.selection.outputs.restream }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - name: Test selection and verification contracts
-        run: node --test scripts/candidate-preview-acceptance.test.mjs .github/scripts/visual-ci.test.cjs
+        run: node --test scripts/candidate-preview-acceptance.test.mjs .github/scripts/ci-scopes.test.cjs .github/scripts/visual-ci.test.cjs
       - name: Select visual evidence
         id: selection
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: node .github/scripts/visual-ci.cjs
 
   lint-web:
@@ -82,6 +98,7 @@ jobs:
 
   verify-api-mcp:
     name: Verify API and MCP
+    needs: [visual-selection]
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -102,7 +119,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Test CI selection and report contracts
-        run: node --test .github/scripts/visual-ci.test.cjs .github/scripts/pr-verification-report.test.cjs .github/scripts/visual-label-removal.test.cjs
+        run: node --test .github/scripts/ci-scopes.test.cjs .github/scripts/visual-ci.test.cjs .github/scripts/pr-verification-report.test.cjs .github/scripts/visual-label-removal.test.cjs
 
       - name: Run API contract verification
         run: pnpm verify:api-contracts
@@ -116,7 +133,10 @@ jobs:
           ffmpeg -version
 
       - name: Run MCP package verification
-        run: pnpm verify:vrdex-mcp
+        run: pnpm typecheck:vrdex-mcp && pnpm test:vrdex-mcp && pnpm smoke:mcp-compat && pnpm check:mcp-client-matrix
+      - name: Verify affected script contracts
+        if: needs.visual-selection.outputs.scripts == 'true'
+        run: pnpm test:scripts
 
       - name: Verify media relay package
         run: |
@@ -270,6 +290,7 @@ jobs:
 
   restream-local-checks:
     name: Restream Local Checks
+    needs: [visual-selection]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -283,32 +304,10 @@ jobs:
         id: changes
         env:
           BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          RESTREAM_SELECTED: ${{ needs.visual-selection.outputs.restream }}
         run: |
-          set -euo pipefail
-
-          base="$BASE_SHA"
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
-            base="HEAD^"
-          fi
-
-          changed_files="$(git diff --name-only "$base" HEAD)"
-          restream_files="$(printf '%s\n' "$changed_files" | grep -E '^(\.github/workflows/(baseline-checks|terraform)\.yml|apps/discord-gateway/.*|workers/restream/.*|scripts/restream-(ffmpeg-proof\.mjs|local-validation\.ts)|convex/(_eventMediaControl|schema)\.ts|convex/README\.md|tests/backend/event-media-control\.test\.ts|docs/(backend/event-schema\.md|deployment/(discord-gateway|restream-worker)\.md|engineering/restream-ffmpeg-proof\.md)|infra/terraform/(README\.md|restream-worker/.*)|package\.json|pnpm-lock\.yaml)$' || true)"
-
-          if [ -z "$restream_files" ]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            {
-              echo "## Restream Local Checks"
-              echo "Optional gateway and host validation skipped; image build and native transport gate remain required."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          echo "enabled=true" >> "$GITHUB_OUTPUT"
-          {
-            echo "## Restream Local Checks"
-            echo "Changed restream-relevant files:"
-            printf -- '- `%s`\n' $restream_files
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "enabled=$RESTREAM_SELECTED" >> "$GITHUB_OUTPUT"
+          echo "Native restream acceptance selected: $RESTREAM_SELECTED" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -323,13 +322,16 @@ jobs:
         run: node --test .github/scripts/restream-native*.test.mjs
 
       - name: Build hosted restream worker image
+        if: steps.changes.outputs.enabled == 'true'
         run: docker build -f workers/restream/Dockerfile -t vrdex-restream-worker:ci .
 
       - name: Run required native transport gate
+        if: steps.changes.outputs.enabled == 'true'
         timeout-minutes: 8
         run: node .github/scripts/restream-native.mjs
 
       - name: Verify captured transport with packaged runtime
+        if: steps.changes.outputs.enabled == 'true'
         timeout-minutes: 5
         run: |
           docker run --rm --network none --read-only --cap-drop ALL \
@@ -414,7 +416,7 @@ jobs:
 
   build-storybook:
     name: Build Storybook
-    if: github.event_name == 'pull_request' && needs.visual-selection.outputs.browsers == 'true'
+    if: github.event_name == 'pull_request' && needs.visual-selection.outputs.browsers == 'true' && contains(fromJSON(needs.visual-selection.outputs.jobs || '[]'), 'build-storybook')
     needs: [lint-web, verify-docs, typecheck-web, visual-selection]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -512,7 +514,7 @@ jobs:
 
   playwright-public-smoke:
     name: Playwright Public Smoke
-    if: github.event_name == 'pull_request' && needs.visual-selection.outputs.browsers == 'true'
+    if: github.event_name == 'pull_request' && needs.visual-selection.outputs.browsers == 'true' && contains(fromJSON(needs.visual-selection.outputs.jobs || '[]'), 'playwright-public-smoke')
     needs: [build-web, visual-selection]
     # Pinned: ubuntu-latest moved to 26.04, where this Playwright version cannot install chromium.
     # Revert to ubuntu-latest once Playwright is upgraded to a release that supports 26.04.
@@ -559,6 +561,7 @@ jobs:
         run: pnpm --filter web exec playwright test public-routes.smoke.spec.ts --project=desktop-chromium --project=mobile-chromium --workers=1
 
       - name: Verify synthetic analytics and disabled presentation
+        if: needs.visual-selection.outputs.analytics == 'true'
         run: |
           pnpm --filter web exec playwright test --config playwright.analytics.config.mjs --workers=1
           NEXT_PUBLIC_POSTHOG_FOUNDATION_ENABLED=false pnpm --filter web exec playwright test --config playwright.analytics.config.mjs --workers=1
@@ -578,7 +581,7 @@ jobs:
 
   playwright-data-flow:
     name: Playwright Data Flow
-    if: github.event_name == 'pull_request' && needs.visual-selection.outputs.browsers == 'true'
+    if: github.event_name == 'pull_request' && needs.visual-selection.outputs.browsers == 'true' && contains(fromJSON(needs.visual-selection.outputs.jobs || '[]'), 'playwright-data-flow')
     needs: [build-web, visual-selection]
     # Pinned: ubuntu-latest moved to 26.04, where this Playwright version cannot install chromium.
     # Revert to ubuntu-latest once Playwright is upgraded to a release that supports 26.04.
@@ -613,7 +616,7 @@ jobs:
 
       - name: Run current-branch signed-in claim and host regressions
         id: claim-auth
-        if: github.event.pull_request.head.repo.fork == false
+        if: needs.visual-selection.outputs.claimAuth == 'true' && github.event.pull_request.head.repo.fork == false
         env:
           PLAYWRIGHT_RECORD_VIDEO: "true"
           PLAYWRIGHT_OUTPUT_DIR: test-results-claim-auth
@@ -649,16 +652,19 @@ jobs:
           console.log("Current-branch signed-in claim and host coverage:", stats);
           NODE
 
-      - name: Run mutation-backed profile submission flow
+      - name: Run selected mutation-backed flows
         id: flow
+        if: needs.visual-selection.outputs.flows == 'true'
         env:
           PLAYWRIGHT_RECORD_VIDEO: "true"
+          CI_FLOW_PATTERN: ${{ needs.visual-selection.outputs.flowPattern }}
           VRDEX_ENABLE_E2E_HELPERS: "true"
           VRDEX_E2E_BROWSER_TOKEN: local-playwright-token
           VRDEX_E2E_CONVEX_SECRET: local-convex-e2e-secret
-        run: pnpm --filter web exec playwright test --grep @flow --project=desktop-chromium --workers=1
+        run: pnpm --filter web exec playwright test "$CI_FLOW_PATTERN" --grep @flow --project=desktop-chromium --workers=1
 
       - name: Install synthetic media tools
+        if: needs.visual-selection.outputs.media == 'true'
         timeout-minutes: 10
         run: |
           sudo "$(command -v node)" .github/scripts/configure-ubuntu-mirror.mjs
@@ -666,9 +672,11 @@ jobs:
           pnpm --filter web exec playwright install --with-deps firefox
 
       - name: Prepare local browser audio backend
+        if: needs.visual-selection.outputs.media == 'true'
         run: node scripts/playwright-audio-backend.mjs prepare
 
       - name: Run isolated composed media acceptance
+        if: needs.visual-selection.outputs.media == 'true'
         env:
           MOBILE_MEDIA_ACCEPTANCE: "true"
           EVENT_PLAYBACK_PROOF: "true"
@@ -681,7 +689,7 @@ jobs:
         run: pnpm --filter web exec playwright test mobile-hls-playback.spec.ts event-lineup-live.spec.ts native-trial-routing.spec.ts --project=desktop-chromium --workers=1
 
       - name: Stop job-owned browser audio backend
-        if: always()
+        if: always() && needs.visual-selection.outputs.media == 'true'
         run: node scripts/playwright-audio-backend.mjs cleanup
 
       - name: Write data-flow summary
@@ -700,13 +708,8 @@ jobs:
           Current-branch signed-in claim and host regressions: ${CLAIM_AUTH_OUTCOME:-not run}
           Forks do not receive development keys. A skipped regression is not acceptance.
 
-          Captured flow:
-          - test-gated profile submission form
-          - gated helper rejection without the Playwright token
-          - Convex profile creation
-          - submission success state
-          - public profile page readback
-          - discovery search readback
+          Selected flows: ${{ needs.visual-selection.outputs.flowPattern }}
+          Media acceptance selected: ${{ needs.visual-selection.outputs.media }}
 
           Run: ${RUN_URL}
           EOF
@@ -730,7 +733,7 @@ jobs:
     name: Candidate Preview Acceptance
     # Upper bound for the reusable manual-report jobs; its PR build/test jobs
     # explicitly restrict their own tokens to read-only.
-    if: github.event_name == 'pull_request' && needs.visual-selection.outputs.browsers == 'true' && github.event.pull_request.head.repo.fork == false
+    if: github.event_name == 'pull_request' && needs.visual-selection.outputs.browsers == 'true' && github.event.pull_request.head.repo.fork == false && contains(fromJSON(needs.visual-selection.outputs.jobs || '[]'), 'playwright-hosted-data-flow')
     needs: [build-web, visual-selection]
     permissions:
       contents: read
@@ -754,7 +757,7 @@ jobs:
 
   playwright-public-preview:
     name: Playwright Public Preview
-    if: github.event_name == 'pull_request' && needs.visual-selection.outputs.browsers == 'true'
+    if: github.event_name == 'pull_request' && needs.visual-selection.outputs.browsers == 'true' && contains(fromJSON(needs.visual-selection.outputs.jobs || '[]'), 'playwright-public-preview')
     needs: [build-web, visual-selection]
     # Pinned: ubuntu-latest moved to 26.04, where this Playwright version cannot install chromium.
     # Revert to ubuntu-latest once Playwright is upgraded to a release that supports 26.04.
@@ -764,6 +767,7 @@ jobs:
       contents: read
 
     env:
+      CI_PUBLIC_PATTERN: ${{ needs.visual-selection.outputs.publicPattern }}
       PLAYWRIGHT_CAPTURE_SCREENSHOTS: ${{ needs.visual-selection.outputs.visuals }}
 
     steps:
@@ -792,7 +796,7 @@ jobs:
       - name: Run public route assertions and selected captures
         id: visual
         run: |
-          pnpm test:e2e:visual
+          pnpm --filter web exec playwright test "$CI_PUBLIC_PATTERN" --grep @visual
           node .github/scripts/visual-ci.cjs --check-captures apps/web/playwright-artifacts/screenshots
 
       - name: Write visual summary
@@ -882,7 +886,7 @@ jobs:
 
   playwright-image-diff:
     name: Playwright Image Diff
-    if: github.event_name == 'pull_request' && needs.visual-selection.outputs.visuals == 'true'
+    if: github.event_name == 'pull_request' && needs.visual-selection.outputs.visuals == 'true' && contains(fromJSON(needs.visual-selection.outputs.jobs || '[]'), 'playwright-image-diff')
     needs: [build-web, visual-selection]
     # Pinned: ubuntu-latest moved to 26.04, where this Playwright version cannot install chromium.
     # Revert to ubuntu-latest once Playwright is upgraded to a release that supports 26.04.
@@ -891,6 +895,8 @@ jobs:
     permissions:
       contents: read
 
+    env:
+      CI_PUBLIC_PATTERN: ${{ needs.visual-selection.outputs.publicPattern }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -916,7 +922,7 @@ jobs:
 
       - name: Compare public route screenshots to baselines
         id: snapshots
-        run: pnpm test:e2e:snapshots
+        run: pnpm --filter web exec playwright test "$CI_PUBLIC_PATTERN" --grep @snapshot --grep-invert @storybook
 
       - name: Write image-diff summary
         if: always()
@@ -963,7 +969,7 @@ jobs:
 
   storybook-component-preview:
     name: Storybook Component Preview
-    if: github.event_name == 'pull_request' && needs.visual-selection.outputs.browsers == 'true'
+    if: github.event_name == 'pull_request' && needs.visual-selection.outputs.browsers == 'true' && contains(fromJSON(needs.visual-selection.outputs.jobs || '[]'), 'storybook-component-preview')
     needs: [build-storybook, visual-selection]
     # Pinned: ubuntu-latest moved to 26.04, where this Playwright version cannot install chromium.
     # Revert to ubuntu-latest once Playwright is upgraded to a release that supports 26.04.
@@ -1038,7 +1044,7 @@ jobs:
 
   storybook-image-diff:
     name: Storybook Image Diff
-    if: github.event_name == 'pull_request' && needs.visual-selection.outputs.visuals == 'true'
+    if: github.event_name == 'pull_request' && needs.visual-selection.outputs.visuals == 'true' && contains(fromJSON(needs.visual-selection.outputs.jobs || '[]'), 'storybook-image-diff')
     needs: [build-storybook, visual-selection]
     # Pinned: ubuntu-latest moved to 26.04, where this Playwright version cannot install chromium.
     # Revert to ubuntu-latest once Playwright is upgraded to a release that supports 26.04.
@@ -1119,7 +1125,7 @@ jobs:
 
   broadcast-native-acceptance:
     name: Broadcast Candidate Acceptance
-    if: github.event_name == 'pull_request' && needs.visual-selection.outputs.browsers == 'true' && github.event.pull_request.head.repo.fork == false
+    if: github.event_name == 'pull_request' && needs.visual-selection.outputs.browsers == 'true' && github.event.pull_request.head.repo.fork == false && contains(fromJSON(needs.visual-selection.outputs.jobs || '[]'), 'broadcast-native-acceptance')
     needs: [visual-selection]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -1137,6 +1143,7 @@ jobs:
         id: changes
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          FORCE_FULL: ${{ needs.visual-selection.outputs.full }}
         run: node .github/scripts/visual-ci.cjs --broadcast
       - uses: pnpm/action-setup@v6
         if: steps.changes.outputs.enabled == 'true'
@@ -1228,7 +1235,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Test PR verification report helper
-        run: node --test .github/scripts/visual-ci.test.cjs .github/scripts/pr-verification-report.test.cjs
+        run: node --test .github/scripts/ci-scopes.test.cjs .github/scripts/visual-ci.test.cjs .github/scripts/pr-verification-report.test.cjs
 
       - name: Update consolidated PR verification report
         uses: actions/github-script@v9

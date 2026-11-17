@@ -187,7 +187,7 @@ describe("fork-aware preview workflows", () => {
 
 describe("optional browser and visual evidence contract", () => {
   const workflow = parseYaml(readFileSync(".github/workflows/baseline-checks.yml", "utf8"));
-  it("selects all browser consumers and Storybook build without changing normal trigger or deploy controls", () => {
+  it("selects browser consumers individually without changing normal triggers or deploy controls", () => {
     assert.deepEqual(workflow.on.pull_request.types, ["opened", "synchronize", "reopened", "ready_for_review"]);
     assert.equal(workflow.on.workflow_dispatch, undefined);
     assert.equal(workflow.jobs["visual-selection"].outputs.browsers, "${{ steps.selection.outputs.browsers }}");
@@ -196,6 +196,7 @@ describe("optional browser and visual evidence contract", () => {
       const job = workflow.jobs[name];
       assert.ok(job.needs.includes("visual-selection"), name);
       assert.ok(job.if.includes("needs.visual-selection.outputs.browsers == 'true'"), name);
+      assert.ok(job.if.includes(`contains(fromJSON(needs.visual-selection.outputs.jobs || '[]'), '${name}')`), name);
       assert.ok(job.if.includes("github.event_name == 'pull_request'"), name);
       assert.equal(job["continue-on-error"], undefined);
     }
@@ -204,14 +205,14 @@ describe("optional browser and visual evidence contract", () => {
     }
     for (const name of ["playwright-image-diff", "storybook-image-diff"]) {
       const job = workflow.jobs[name];
-      assert.equal(job.if, "github.event_name == 'pull_request' && needs.visual-selection.outputs.visuals == 'true'");
+      assert.equal(job.if, `github.event_name == 'pull_request' && needs.visual-selection.outputs.visuals == 'true' && contains(fromJSON(needs.visual-selection.outputs.jobs || '[]'), '${name}')`);
       assert.equal(job["continue-on-error"], undefined);
     }
     for (const name of ["lint-web", "verify-docs", "verify-api-mcp", "typecheck-web", "typecheck-backend", "verify-backend-local", "restream-local-checks", "build-web", "build-storybook"]) {
       assert.ok(workflow.jobs["pr-verification-report"].needs.includes(name), name);
       if (name !== "build-storybook") {
         assert.equal(workflow.jobs[name].if, undefined, name);
-        assert.ok(!(workflow.jobs[name].needs ?? []).includes("visual-selection"), name);
+        assert.equal((workflow.jobs[name].needs ?? []).includes("visual-selection"), ["verify-api-mcp", "restream-local-checks"].includes(name), name);
       }
     }
     assert.equal(workflow.jobs["deploy-convex-production"].if, "github.event_name == 'push' && github.ref == 'refs/heads/main'");
@@ -265,10 +266,10 @@ describe("optional browser and visual evidence contract", () => {
     const media = steps.findIndex((step: { name?: string }) => step.name === "Run isolated composed media acceptance");
     const audioCleanup = steps.findIndex((step: { name?: string }) => step.name === "Stop job-owned browser audio backend");
     assert.ok(audioPrepare >= 0 && audioPrepare < media && audioCleanup > media);
-    assert.equal(steps[audioCleanup].if, "always()");
+    assert.equal(steps[audioCleanup].if, "always() && needs.visual-selection.outputs.media == 'true'");
     const claim = steps.find((step: { id?: string }) => step.id === "claim-auth");
     assert.ok(claim, "The current-branch signed-in claim regression must have a CI execution target");
-    assert.equal(claim.if, "github.event.pull_request.head.repo.fork == false");
+    assert.equal(claim.if, "needs.visual-selection.outputs.claimAuth == 'true' && github.event.pull_request.head.repo.fork == false");
     assert.equal(claim.env.PLAYWRIGHT_BASE_URL, undefined, "Do not route the new contract to stale hosted staging");
     assert.equal(claim.env.VRDEX_ENABLE_E2E_CLERK_AUTH, "true");
     assert.equal(claim.env.VRDEX_ENABLE_E2E_AUTH_HELPERS, "true");
