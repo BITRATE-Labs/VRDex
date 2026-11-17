@@ -38,13 +38,14 @@ function selectCoverage({ eventName, labels, files }) {
   if (browsers) {
     for (const file of files) {
       if (/^apps\/web\/.*(?:broadcast|host-view|\/host\/|\/account\/|\/auth|\/clerk|profile-(?:claim|private-record|link-verification)|operator|stream-settings)/.test(file)) { broad = true; continue; }
-      const surface = SURFACES.find(area => area.path.test(file));
-      if (surface) {
+      const surfaces = SURFACES.filter(area => area.path.test(file));
+      for (const surface of surfaces) {
         if (surface.flows) flows.add(surface.flows);
         if (surface.public) previews.add(surface.public);
         media ||= Boolean(surface.media);
         storybook ||= Boolean(surface.storybook);
-      } else if (!/^(docs\/|tests\/web\/|[^/]+\.md$)/.test(file)) {
+      }
+      if (!surfaces.length && !/^(docs\/|tests\/web\/|[^/]+\.md$)/.test(file)) {
         broad = true;
       }
     }

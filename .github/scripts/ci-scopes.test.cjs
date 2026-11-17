@@ -83,3 +83,40 @@ test("a narrow run's report requires exactly its selected jobs and rejects malfo
     assert.match(evaluateVerification({ needs, artifacts }).errors.join(" "), /selection/i);
   }
 });
+const { readdirSync, readFileSync, mkdtempSync, writeFileSync, rmSync } = require('node:fs');
+const { join } = require('node:path');
+const { tmpdir } = require('node:os');
+const { spawnSync } = require('node:child_process');
+
+test('stories inside mapped surfaces retain component coverage', () => {
+  for (const file of ['apps/web/src/components/event/card.stories.tsx', 'apps/web/src/components/profile/card.stories.tsx']) {
+    const coverage = select([file], ['ci:visuals']);
+    for (const job of ['build-storybook', 'storybook-component-preview', 'storybook-image-diff']) assert.ok(coverage.jobs.includes(job), `${file}: ${job}`);
+  }
+});
+
+test('mapped flow and public patterns select existing tagged specifications', () => {
+  const directory = 'apps/web/e2e';
+  const specs = readdirSync(directory).filter(file => file.endsWith('.spec.ts'));
+  for (const file of ['apps/web/src/lib/timeline/plan-actions.ts', 'apps/web/src/app/[slug]/page.tsx', 'apps/web/src/app/events/event-editor.tsx']) {
+    const coverage = select([file], ['ci:visuals']);
+    for (const [key, tag] of [['flowPattern', '@flow'], ['publicPattern', '@visual']]) {
+      assert.ok(specs.some(spec => new RegExp(coverage[key]).test(spec) && readFileSync(join(directory, spec), 'utf8').includes(tag)), `${file}: ${key}`);
+    }
+  }
+  assert.match(readFileSync(join(directory, 'home-timeline.visual.spec.ts'), 'utf8'), /await captureRouteScreenshot\(page, test\.info\(\)/);
+});
+
+test('main selection needs no comparison base or git diff', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'vrdex-ci-selector-'));
+  try {
+    const event = join(directory, 'event.json');
+    const output = join(directory, 'output');
+    writeFileSync(event, '{}');
+    const result = spawnSync(process.execPath, ['.github/scripts/visual-ci.cjs'], { encoding: 'utf8', env: { ...process.env, GITHUB_EVENT_NAME: 'push', GITHUB_EVENT_PATH: event, GITHUB_OUTPUT: output, BASE_SHA: '0'.repeat(40), GITHUB_STEP_SUMMARY: '' } });
+    assert.equal(result.status, 0, result.stderr);
+    const coverage = JSON.parse(result.stdout);
+    assert.equal(coverage.scripts, true); assert.equal(coverage.restream, true);
+    assert.deepEqual(coverage.jobs, []);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});

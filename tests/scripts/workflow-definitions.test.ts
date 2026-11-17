@@ -302,16 +302,12 @@ describe("optional browser and visual evidence contract", () => {
       assert.ok(steps[contracts].run.includes(file));
     }
   });
-  it("broadcast rehearsal conditionally runs expensive steps and pins the compatible backend", () => {
+  it("broadcast rehearsal uses the shared job selection and pins the compatible backend", () => {
     const job = workflow.jobs["broadcast-native-acceptance"];
     assert.equal(job.env.CONVEX_LOCAL_BACKEND_VERSION, workflow.jobs["verify-backend-local"].env.CONVEX_LOCAL_BACKEND_VERSION);
-    assert.equal(job.outputs.selected, "${{ steps.changes.outputs.enabled }}");
-    const selector = job.steps.findIndex((step: { id?: string }) => step.id === "changes");
-    assert.ok(selector > 0);
-    for (const step of job.steps.slice(selector + 1)) {
-      assert.match(step.if, /steps\.changes\.outputs\.enabled == 'true'/);
-    }
-    assert.equal(job.steps[0].with["fetch-depth"], 0);
+    assert.match(job.if, /contains\(fromJSON\(needs.visual-selection.outputs.jobs/);
+    assert.doesNotMatch(JSON.stringify(job.steps), /--broadcast|steps\.changes/);
+    assert.equal(job.steps.find((step: { name?: string }) => step.name === "Upload candidate broadcast evidence").if, "always()");
   });
 
   it("either selector removal uses trusted inline code and cannot launch the app pipeline", () => {

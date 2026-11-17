@@ -5,10 +5,6 @@ const CORE_JOBS = ["lint-web", "verify-docs", "verify-api-mcp", "typecheck-web",
 const BROWSER_JOBS = ["playwright-public-smoke", "playwright-data-flow", "broadcast-native-acceptance", "playwright-hosted-data-flow", "playwright-public-preview", "storybook-component-preview"];
 const COMPARISON_JOBS = new Set(["playwright-image-diff", "storybook-image-diff"]);
 
-function broadcastRelevant(files) {
-  return files.some(file => !/^(apps\/web\/(src\/(app\/_components\/timeline\/|lib\/timeline\/)|e2e\/home-timeline)|docs\/|tests\/web\/|[^/]+\.md$)/.test(file));
-}
-
 function selectEvidence(eventName, labels) {
   const { browsers, visuals } = selectCoverage({ eventName, labels, files: [] });
   return { browsers, visuals };
@@ -61,19 +57,11 @@ function checkReviewCaptures(directory, selected) {
   return count;
 }
 
-module.exports = { CORE_JOBS, BROWSER_JOBS, COMPARISON_JOBS, selectEvidence, evaluateVerification, checkReviewCaptures, broadcastRelevant };
+module.exports = { CORE_JOBS, BROWSER_JOBS, COMPARISON_JOBS, selectEvidence, evaluateVerification, checkReviewCaptures };
 
 if (require.main === module) {
   const fs = require("node:fs");
-  if (process.argv[2] === "--broadcast") {
-    const { execFileSync } = require("node:child_process");
-    const base = process.env.BASE_SHA;
-    if (!/^[a-f0-9]{40}$/.test(base || "")) throw new Error("Exact broadcast comparison base required.");
-    const files = execFileSync("git", ["diff", "--no-renames", "--name-only", "-z", base, "HEAD"], { encoding: "utf8" }).split("\0").filter(Boolean);
-    const enabled = process.env.FORCE_FULL === "true" || broadcastRelevant(files);
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `enabled=${enabled}\n`);
-    console.log(enabled ? "Broadcast-related changes: native acceptance selected." : "No broadcast-related changes: native acceptance not selected.");
-  } else if (process.argv[2] === "--check-captures") {
+  if (process.argv[2] === "--check-captures") {
     const value = process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS;
     if (!["true", "false"].includes(value)) throw new Error("Capture selection must be explicitly true or false in CI.");
     const count = checkReviewCaptures(process.argv[3], value === "true");
@@ -82,8 +70,11 @@ if (require.main === module) {
     const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"));
     const { execFileSync } = require("node:child_process");
     const base = process.env.BASE_SHA;
-    if (!/^[a-f0-9]{40}$/.test(base || "")) throw new Error("Exact CI comparison base required.");
-    const files = execFileSync("git", ["diff", "--no-renames", "--name-only", "-z", base, "HEAD"], { encoding: "utf8" }).split("\0").filter(Boolean);
+    let files = [];
+    if (process.env.GITHUB_EVENT_NAME === "pull_request") {
+      if (!/^[a-f0-9]{40}$/.test(base || "") || /^0+$/.test(base)) throw new Error("Exact CI comparison base required.");
+      files = execFileSync("git", ["diff", "--no-renames", "--name-only", "-z", base, "HEAD"], { encoding: "utf8" }).split("\0").filter(Boolean);
+    }
     const coverage = selectCoverage({ eventName: process.env.GITHUB_EVENT_NAME, labels: event.pull_request?.labels || [], files });
     for (const [key, value] of Object.entries(coverage)) fs.appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${Array.isArray(value) ? JSON.stringify(value) : value}\n`);
     if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, [

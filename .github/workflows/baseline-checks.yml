@@ -1131,31 +1131,19 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
-    outputs:
-      selected: ${{ steps.changes.outputs.enabled }}
     env:
       CONVEX_LOCAL_BACKEND_VERSION: precompiled-2026-09-28-5c7cb5b
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Select broadcast acceptance
-        id: changes
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          FORCE_FULL: ${{ needs.visual-selection.outputs.full }}
-        run: node .github/scripts/visual-ci.cjs --broadcast
       - uses: pnpm/action-setup@v6
-        if: steps.changes.outputs.enabled == 'true'
       - uses: actions/setup-node@v6
-        if: steps.changes.outputs.enabled == 'true'
         with:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-        if: steps.changes.outputs.enabled == 'true'
       - name: Install native browser prerequisites
-        if: steps.changes.outputs.enabled == 'true'
         timeout-minutes: 10
         run: |
           sudo "$(command -v node)" "${{ github.workspace }}/.github/scripts/configure-ubuntu-mirror.mjs"
@@ -1163,11 +1151,9 @@ jobs:
           sudo apt-get install --no-install-recommends --yes ffmpeg
           pnpm --filter web exec playwright install --with-deps chromium
       - name: Build candidate packaged worker
-        if: steps.changes.outputs.enabled == 'true'
         timeout-minutes: 7
         run: docker build -f workers/restream/Dockerfile -t vrdex-broadcast-native:ci .
       - name: Run isolated candidate broadcast acceptance
-        if: steps.changes.outputs.enabled == 'true'
         timeout-minutes: 24
         env:
           BROADCAST_NATIVE_ACCEPTANCE: "true"
@@ -1189,7 +1175,7 @@ jobs:
           pnpm --filter web exec playwright test event-broadcast-native.flow.spec.ts --project=desktop-chromium --workers=1
           node -e "const r=require('./apps/web/playwright-artifacts/broadcast-native/results.json');if(r.stats.expected!==1||r.stats.skipped||r.stats.unexpected)process.exit(1)"
       - name: Upload candidate broadcast evidence
-        if: always() && steps.changes.outputs.enabled == 'true'
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: broadcast-native-acceptance

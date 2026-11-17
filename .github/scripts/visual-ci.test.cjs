@@ -2,25 +2,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { selectEvidence, evaluateVerification } = require("./visual-ci.cjs");
-const { broadcastRelevant } = require("./visual-ci.cjs");
-
-test("broadcast acceptance skips schedule-only changes but selects its runtime and shared dependencies", () => {
-  assert.equal(broadcastRelevant([
-    "apps/web/src/app/_components/timeline/home-schedule.tsx",
-    "apps/web/src/lib/timeline/plan-actions.ts",
-    "apps/web/e2e/home-timeline.flow.spec.ts",
-    "tests/web/timeline-saved-expiry.test.ts",
-    "docs/testing/playwright-visual-preview.md",
-  ]), false);
-  for (const file of ["convex/events.ts", "convex/schema.ts", "workers/restream/entrypoint.mjs",
-    "apps/web/src/app/events/[slug]/host/page.tsx", "apps/web/src/app/layout.tsx",
-    "apps/web/src/lib/auth.ts", "apps/web/e2e/event-broadcast-native.flow.spec.ts",
-    "packages/media-relay/src/worker/packager.ts", "pnpm-lock.yaml",
-    ".github/workflows/baseline-checks.yml", ".github/scripts/visual-ci.cjs", "tsconfig.base.json", "scripts/dev-helper.mjs"]) {
-    assert.equal(broadcastRelevant([file]), true, file);
-  }
-});
-
 test("an unselected broadcast rehearsal needs a successful selector but no native artifact", () => {
   const input = fixture({ browsers: true });
   input.needs["broadcast-native-acceptance"].result = "skipped";

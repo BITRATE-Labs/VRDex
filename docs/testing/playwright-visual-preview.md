@@ -403,7 +403,7 @@ Only selected jobs run. Storybook is not built for an unrelated timeline fix. Au
 
 The local data-flow job has a 45-minute limit for its serial flow suite, composed-media acceptance and artifact upload. Its previous 30-minute limit canceled a run after 257 flow tests and 12 media tests had passed. Individual test timeouts and all selected coverage remain unchanged.
 
-In browsers-only mode, `Playwright Public Preview` and `Storybook Component Preview` run their existing assertions with `PLAYWRIGHT_CAPTURE_SCREENSHOTS=false`. They skip review PNG writes and attachments. Navigation, stabilization, editing, publication recovery, access checks, and cleanup still execute. Existing functional-flow diagnostic attachments, screenshots, traces, and videos keep their current behavior, including failure evidence. They do not establish that review screenshots were collected.
+In browsers-only mode, selected Storybook component assertions run with `PLAYWRIGHT_CAPTURE_SCREENSHOTS=false`. Public-route visual assertions and review captures require `ci:visuals` or `ci:full`. Functional flows keep their existing failure screenshots, traces, and videos; those do not establish that review screenshots were collected.
 
 With `ci:visuals`, selected preview jobs collect review screenshots and their corresponding image-diff jobs compare committed baselines. Requested comparisons fail on mismatches, runtime failures, cancellation or unexpected skips. CI never updates baselines.
 

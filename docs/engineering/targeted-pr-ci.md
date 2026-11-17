@@ -44,7 +44,9 @@ Label removal preserves historical failures; it does not reclassify an old run.
 ## Validation and limits
 
 Contract tests cover narrow timeline/profile/event/player/Storybook changes,
-mixed and unknown changes, full opt-in, core selection and report handling.
+mixed and unknown changes, nested stories, existing tagged spec matches, full
+opt-in, core selection and report handling. Push runs require no PR comparison
+base. Broadcast acceptance uses the shared job selection without a second gate.
 Workflow tests preserve the build/release dependency graph, auth guards and full
 native checks whenever they are selected. No runtime or preview deploy credential
 scope is expanded.

@@ -31,7 +31,7 @@ test('the owner keeps all four files, 90 outcomes and its original serialization
 });
 
 test('selected restream changes retain the full native gate and required job dependency', async () => {
-  const workflow = await read('.github/workflows/baseline-checks.yml');
+  const workflow = (await read('.github/workflows/baseline-checks.yml')).replace(/\r\n/g, '\n');
   const job = workflow.split('  restream-local-checks:\n')[1].split('\n  build-web:')[0];
   assert.match(job, /timeout-minutes: 20/);
   const steps = job.split('      - name: ').slice(1);
