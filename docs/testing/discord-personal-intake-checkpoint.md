@@ -11,7 +11,7 @@ not been activated on the live Discord application or deployed by this task.
 | --- | --- |
 | Personal intake backend | 16 transaction tests passed: actor isolation, ambiguity, replay, poster-only quota, leases, removal/retry, discard, owner authority, revision conflicts and preserved private lineup identity/confirmation |
 | Event regression checkpoint | 164 owner, contribution, correction, lineup and inventory tests passed; the later private-lineup/confirmation checkpoint passed 30 tests |
-| Web suite | All 1,217 tests passed after the review fixes |
+| Web suite | All 1,218 tests passed after the review fixes |
 | Discord gateway | All 44 tests passed |
 | Browser journeys | 24 desktop/mobile checks passed, including light/dark overflow checks, source replay masking, poster choice/removal and failed-download recovery, sign-in return, resume, delayed version handoff/retry, resolved contribution navigation, operation switching and owner denial |
 | Types | Backend, web, gateway and API contracts passed |
@@ -68,6 +68,10 @@ fields and suggestions while preserving a later explicit poster removal. Switchi
 between update targets rebases suggestions on the import, without carrying another
 target's lineup into the new event. These paths have backend or desktop/mobile
 regressions. The final local browser checkpoint passed all 24 checks.
+
+Repeated imports retain existing row keys and order, normalize lineup positions,
+and allocate unused short keys for appended rows. A regression covers collisions
+with earlier imports and repeated incoming keys. All 87 API contract tests passed.
 
 ## Visual evidence
 
