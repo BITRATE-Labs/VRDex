@@ -2,6 +2,9 @@
 
 ## Personal message command
 
+Production activation and its website extraction repair are recorded in the
+[activation checkpoint](./discord-personal-intake-activation.md).
+
 The personal message entry uses this same Gateway connection and intake service
 credential. It adds the global message command `Add event`, supporting user
 installation in guilds, bot DMs, other DMs and group DMs. Existing `/vrdex`
@@ -23,6 +26,11 @@ The gateway calls `POST /discord-intake/selected-message` through the existing
 variable. Unlinked selections retain no source text and link to the existing
 Discord verification flow, which requires verified email and `identify guilds`.
 The user returns to Discord and invokes the command again after linking.
+
+Personal message preparation runs on the website, so its production environment
+also needs `VRDEX_EVENT_INTAKE_AI_ENABLED=true` and the existing `OPENAI_API_KEY`.
+The Vercel Terraform stack manages the non-secret flag. Redeploy the web app
+after changing it; Convex flags alone do not enable this adapter.
 
 The draft opens the existing intake editor. A single supported poster is selected
 by default; multiple posters require a choice. The website prepares private bytes
@@ -155,8 +163,8 @@ Future media enqueue integration should add a scoped service credential. Do not 
 | `DISCORD_APPLICATION_ID` | Convex production | Same value as Secrets Manager. The Integrations page builds the bot invite from it | Yes |
 | `DISCORD_BOT_TOKEN` | Convex production | The gateway application's bot token | Yes |
 | `VRDEX_DISCORD_POSTER_TOKEN` | Web app first, then Convex production | `openssl rand -base64 32`. Web side is GitHub secret `TERRAFORM_DISCORD_POSTER_TOKEN`, which the Terraform workflow passes to the Vercel stack | For posters. Unset on either side, runs continue with the post text |
-| `OPENAI_API_KEY` | Convex production | OpenAI project API keys | Yes |
-| `VRDEX_EVENT_INTAKE_AI_ENABLED` | Convex production | `true` | Yes |
+| `OPENAI_API_KEY` | Convex production and web production | OpenAI project API keys | Yes |
+| `VRDEX_EVENT_INTAKE_AI_ENABLED` | Convex production and web production | `true` | Yes |
 | `VRDEX_EVENT_INTAKE_MODEL` | Convex production | A model name | No, defaults to `gpt-6-luna` |
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | Convex production | Langfuse project settings | No. Missing keys disable tracing |
 | `VRDEX_EVENT_CONNECTORS_ENABLED` | Convex production | `true`. While it is off, runs close as `connector_inactive` | Yes |

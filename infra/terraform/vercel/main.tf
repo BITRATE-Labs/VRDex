@@ -94,6 +94,24 @@ locals {
 }
 
 
+# Adopt the activation bootstrap. Remove after the first successful Vercel apply.
+import {
+  for_each = var.manage_production_environment ? toset(["production"]) : toset([])
+  to       = vercel_project_environment_variable.event_intake_ai_enabled[0]
+  id       = "team_GoHh5xUc96fAIAqJoG55A71S/prj_Pyki3UJLHa2rRLbAhB1yQP6fmiA0/3hGEaZ7sFNj6Pcx1"
+}
+
+resource "vercel_project_environment_variable" "event_intake_ai_enabled" {
+  count      = var.manage_production_environment ? 1 : 0
+  project_id = data.vercel_project.web.id
+  team_id    = var.vercel_team_id
+  key        = "VRDEX_EVENT_INTAKE_AI_ENABLED"
+  value      = "true"
+  target     = ["production"]
+  sensitive  = false
+  comment    = "Enable the approved website event extraction and personal Discord intake flow."
+}
+
 resource "vercel_project_environment_variable" "posthog_category" {
   for_each   = local.standard_posthog_targets
   project_id = data.vercel_project.web.id

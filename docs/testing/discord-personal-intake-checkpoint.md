@@ -2,8 +2,9 @@
 
 The implementation adds selected-message capture to the existing private event
 intake editor. It retains account linking, tentative extraction, poster removal,
-explicit review and the separate contribution/owner publication paths. It has
-not been activated on the live Discord application or deployed by this task.
+explicit review and the separate contribution/owner publication paths. The
+local evidence below predates the later
+[production activation](../deployment/discord-personal-intake-activation.md).
 
 ## Verified locally
 
