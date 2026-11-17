@@ -178,6 +178,7 @@ describe("browser auth-session authorization boundary", () => {
 
   it("inventories every Next route or server page that forwards a browser JWT to Convex", () => {
     const inventory = new Map<string, string>([
+      ["apps/web/src/app/api/media-relay/trial/route.ts", "api.mediaRelayPlayback.getNativeTrialConfiguration"],
       ["apps/web/src/app/[slug]/events/[eventSlug]/operate/setup/page.tsx", "api.events.getEventMediaControlStatus"],
       ["apps/web/src/app/api/event-broadcast/connections/route.ts", "eventBroadcastConnections:prepareConnection"],
       ["apps/web/src/app/[slug]/events/[eventSlug]/operate/page.tsx", "api.events.getEventMediaControlStatus"],

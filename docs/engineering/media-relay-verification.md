@@ -4,6 +4,10 @@ Status: local implementation verified; **hosted release blocked**. No production
 region, budget, capacity, resource apply, credential creation or enablement is
 approved. The default deployment and persisted operator gate are off.
 
+The narrower [audio/background rehearsal](audio-background-rehearsal.md) develops
+a finite audio-only path without enabling this full dual-rendition relay or
+lifting its release blocker. Its payload bounds and device gates are separate.
+
 ## Run a bounded local proof
 
 Activate the repository toolchain, then run:

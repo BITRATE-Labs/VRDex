@@ -22,6 +22,7 @@ export async function fixture(
   broken: "partial" | "timestamps" | "playlist" | null = null,
   captureChild = false,
   metadataComment?: string,
+  audioCodec = "aac",
 ) {
   const directory = await mkdtemp(join(tmpdir(), "vrdex-packager-"));
   const input = join(directory, "input.mp4");
@@ -48,7 +49,7 @@ export async function fixture(
       "-pix_fmt",
       "yuv420p",
       "-c:a",
-      "aac",
+      audioCodec,
       "-movflags",
       "frag_keyframe+empty_moov+default_base_moof",
       ...(metadataComment ? ["-metadata", `comment=${metadataComment}`] : []),
@@ -106,9 +107,7 @@ http://127.0.0.1:${address.port}/nested.ts
     );
     await chmod(wrapper, 0o700);
   }
-  const start = createPackager({
-    ...(captureChild ? { ffmpegPath: wrapper } : {}),
-    createRelay: () =>
+  const createRelay = () =>
       createSourceRelay({
         inputFormat: "vrcdn_fmp4",
         resolveAddresses: async () => [{ address: "93.184.216.34", family: 4 }],
@@ -123,11 +122,12 @@ http://127.0.0.1:${address.port}/nested.ts
           );
           return request(`http://127.0.0.1:${address.port}`, cb);
         },
-      }),
-  });
+      });
+  const start = createPackager({ ...(captureChild ? { ffmpegPath: wrapper } : {}), createRelay });
   return {
     directory,
     start,
+    createRelay,
     childPid: async () =>
       Number(await readFile(join(directory, "child.pid"), "utf8")),
     disconnect: () => provider.closeAllConnections(),
