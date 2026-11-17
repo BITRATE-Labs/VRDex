@@ -10,6 +10,7 @@ import { EventPreviewCard, type PublicEventPreview } from "./event-public-page";
 import { PublicMediaAssetCard } from "./public-media-asset-card";
 import { EntityImage } from "@/components/ui/entity-image";
 import { ProfileAvatarImage } from "./profile-avatar-image";
+import { HomeLiveNow } from "./home-live-now";
 import { ProfileVrcdnStreams } from "./profile-vrcdn-streams";
 import { ProfilePrivateRecord } from "./profile-private-record";
 import { PublicGroupMembershipChart, type GroupMembership } from "./public-group-membership-chart";
@@ -620,6 +621,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
           </aside>
         ) : null}
 
+        {profile.profileType === "person" && <HomeLiveNow key={profile.slug} performerSlug={profile.slug} />}
         <ProfileVrcdnStreams
           discordHandles={discordHandles.map(({ handle, item }) => ({
             handle,
