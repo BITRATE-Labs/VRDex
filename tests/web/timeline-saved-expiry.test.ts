@@ -15,10 +15,10 @@ it("expires ended events at the boundary but retains an ongoing event and saved 
   const ongoing = saved({ kind: "timed", startAt: now - hour, endAt: now + hour });
   const plan = [ended, ongoing];
   const before = JSON.stringify(plan);
-  assert.equal(isPastSaved(ended, now, "UTC"), true);
-  assert.equal(isPastSaved(ongoing, now, "UTC"), false);
-  assert.equal(isPastSaved(ongoing, now + hour, "UTC"), true);
-  assert.equal(nextSavedStart(plan, now + 12 * hour, now, "UTC"), now - hour);
+  assert.equal(isPastSaved(ended, now), true);
+  assert.equal(isPastSaved(ongoing, now), false);
+  assert.equal(isPastSaved(ongoing, now + hour), true);
+  assert.equal(nextSavedStart(plan, now + 12 * hour, now), now - hour);
   assert.equal(JSON.stringify(plan), before);
 });
 
@@ -27,25 +27,28 @@ it("Next saved skips expired and cancelled entries when wrapping or looking ahea
   const future = saved({ kind: "timed", startAt: now + 24 * hour, endAt: now + 25 * hour });
   const cancelled = { ...saved({ kind: "timed", startAt: now + hour, endAt: now + 2 * hour }), status: "cancelled" } as SavedResolution;
   const unavailable: SavedResolution = { kind: "unavailable", reference: { kind: "event", eventId: "private" } };
-  assert.equal(nextSavedStart([expired, cancelled, unavailable, future], now, now, "UTC"), now + 24 * hour);
-  assert.equal(nextSavedStart([expired, future], now + 48 * hour, now, "UTC"), now + 24 * hour);
-  assert.equal(nextSavedStart([expired, cancelled, unavailable], now, now, "UTC"), undefined);
-  assert.equal(isPastSaved(unavailable, now, "UTC"), false, "keep removal available when dates cannot be resolved");
+  assert.equal(nextSavedStart([expired, cancelled, unavailable, future], now, now), now + 24 * hour);
+  assert.equal(nextSavedStart([expired, future], now + 48 * hour, now), now + 24 * hour);
+  assert.equal(nextSavedStart([expired, cancelled, unavailable], now, now), undefined);
+  assert.equal(isPastSaved(unavailable, now), false, "keep removal available when dates cannot be resolved");
 });
 
 it("open-ended selections use the shared six-hour runtime limit", () => {
   const open = saved({ kind: "open_end", startAt: now - 5 * hour });
-  assert.equal(isPastSaved(open, now, "UTC"), false);
-  assert.equal(isPastSaved(open, now + hour, "UTC"), true);
-  assert.equal(nextSavedStart([open], now, now + hour, "UTC"), undefined);
+  assert.equal(isPastSaved(open, now), false);
+  assert.equal(isPastSaved(open, now + hour), true);
+  assert.equal(nextSavedStart([open], now, now + hour), undefined);
 });
 
-it("date-only selections expire after their viewer-local calendar day without inventing a start", () => {
+it("date-only selections keep the backend global grace without inventing a start", () => {
   const day = saved({ kind: "date_only", eventDate: "2026-11-16" });
   const midnightUTC = Date.UTC(2026, 10, 17, 1);
-  assert.equal(isPastSaved(day, midnightUTC, "America/Indianapolis"), false);
-  assert.equal(isPastSaved(day, midnightUTC, "UTC"), true);
-  assert.equal(nextSavedStart([day], midnightUTC, midnightUTC, "America/Indianapolis"), undefined);
+  assert.equal(isPastSaved(day, midnightUTC), false);
+  assert.equal(isPastSaved(day, midnightUTC), false);
+  const globalEnd = Date.UTC(2026, 10, 17, 12);
+  assert.equal(isPastSaved(day, globalEnd - 1), false);
+  assert.equal(isPastSaved(day, globalEnd), true);
+  assert.equal(nextSavedStart([day], midnightUTC, midnightUTC), undefined);
 });
 
 it("selected sets expire at their own end while the parent event remains ongoing", () => {
@@ -53,7 +56,7 @@ it("selected sets expire at their own end while the parent event remains ongoing
   if (parent.kind !== "available") throw Error("Expected available event");
   const set: SavedResolution = { ...parent, reference: { kind: "set", eventId: "event", slotId: "slot" },
     slot: { id: "slot", eventId: "event", displayLabel: "DJ", schedule: { kind: "timed", startAt: now - hour, endAt: now } } };
-  assert.equal(isPastSaved(parent, now, "UTC"), false);
-  assert.equal(isPastSaved(set, now, "UTC"), true);
-  assert.equal(nextSavedStart([set], now, now, "UTC"), undefined);
+  assert.equal(isPastSaved(parent, now), false);
+  assert.equal(isPastSaved(set, now), true);
+  assert.equal(nextSavedStart([set], now, now), undefined);
 });

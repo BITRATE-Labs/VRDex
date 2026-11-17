@@ -1,19 +1,19 @@
 import type { PlanReference, SavedResolution } from "../../../../../convex/_eventTimelineTypes";
 import { timedEventRuntimeEndAt } from "../../../../../convex/_eventRuntime";
-import { eventDateForInstant } from "../../../../../convex/_eventSchedule";
+import { eventSortEndAt } from "../../../../../convex/_eventSchedule";
 import type { PreferenceAction } from "./preferences";
 
-export function isPastSaved(item: SavedResolution, now: number, timeZone: string): boolean {
+export function isPastSaved(item: SavedResolution, now: number): boolean {
   if (item.kind !== "available") return false;
   const schedule = item.slot?.schedule ?? item.event.schedule;
   return schedule.kind === "date_only"
-    ? schedule.eventDate < eventDateForInstant(now, timeZone)
+    ? eventSortEndAt({ scheduleKind: "date_only", eventDate: schedule.eventDate }) < now
     : timedEventRuntimeEndAt(schedule) <= now;
 }
 
-export function nextSavedStart(saved: SavedResolution[], rangeEndAt: number, now: number, timeZone: string): number | undefined {
+export function nextSavedStart(saved: SavedResolution[], rangeEndAt: number, now: number): number | undefined {
   const instants = saved.flatMap(item => {
-    if (item.kind !== "available" || item.status === "cancelled" || isPastSaved(item, now, timeZone)) return [];
+    if (item.kind !== "available" || item.status === "cancelled" || isPastSaved(item, now)) return [];
     const schedule = item.slot?.schedule ?? item.event.schedule;
     return schedule.kind === "date_only" ? [] : [schedule.startAt];
   }).sort((a, b) => a - b);

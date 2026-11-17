@@ -2,6 +2,36 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { selectEvidence, evaluateVerification } = require("./visual-ci.cjs");
+const { broadcastRelevant } = require("./visual-ci.cjs");
+
+test("broadcast acceptance skips schedule-only changes but selects its runtime and shared dependencies", () => {
+  assert.equal(broadcastRelevant([
+    "apps/web/src/app/_components/timeline/home-schedule.tsx",
+    "apps/web/src/lib/timeline/plan-actions.ts",
+    "apps/web/e2e/home-timeline.flow.spec.ts",
+    "tests/web/timeline-saved-expiry.test.ts",
+    "docs/testing/playwright-visual-preview.md",
+  ]), false);
+  for (const file of ["convex/events.ts", "convex/schema.ts", "workers/restream/entrypoint.mjs",
+    "apps/web/src/app/events/[slug]/host/page.tsx", "apps/web/src/app/layout.tsx",
+    "apps/web/src/lib/auth.ts", "apps/web/e2e/event-broadcast-native.flow.spec.ts",
+    "packages/media-relay/src/worker/packager.ts", "pnpm-lock.yaml",
+    ".github/workflows/baseline-checks.yml", ".github/scripts/visual-ci.cjs"]) {
+    assert.equal(broadcastRelevant([file]), true, file);
+  }
+});
+
+test("an unselected broadcast rehearsal needs a successful selector but no native artifact", () => {
+  const input = fixture({ browsers: true });
+  input.needs["broadcast-native-acceptance"].outputs = { selected: "false" };
+  input.artifacts = input.artifacts.filter(a => a.name !== "broadcast-native-acceptance");
+  assert.deepEqual(evaluateVerification(input).errors, []);
+  input.needs["broadcast-native-acceptance"].result = "failure";
+  assert.match(evaluateVerification(input).errors.join(" "), /broadcast-native-acceptance/);
+  input.needs["broadcast-native-acceptance"].result = "success";
+  input.needs["broadcast-native-acceptance"].outputs.selected = "true";
+  assert.match(evaluateVerification(input).errors.join(" "), /broadcast-native-acceptance.*artifact/);
+});
 const coreJobs = ["lint-web", "verify-docs", "verify-api-mcp", "typecheck-web", "typecheck-backend", "verify-backend-local", "restream-local-checks", "build-web"];
 const browserJobs = ["playwright-public-smoke", "playwright-data-flow", "broadcast-native-acceptance", "playwright-hosted-data-flow", "playwright-public-preview", "storybook-component-preview"];
 const comparisons = ["playwright-image-diff", "storybook-image-diff"];

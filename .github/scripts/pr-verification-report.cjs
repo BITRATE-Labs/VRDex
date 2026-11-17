@@ -145,9 +145,10 @@ function buildReport({
     const artifact = row.artifact ? artifactByName.get(row.artifact) : null;
     const result = job.result || "unknown";
 
-    const expected = COMPARISON_JOBS.has(row.job) ? evaluation.visuals
+    const broadcastUnselected = row.job === "broadcast-native-acceptance" && job.outputs?.selected === "false";
+    const expected = broadcastUnselected ? false : COMPARISON_JOBS.has(row.job) ? evaluation.visuals
       : BROWSER_JOBS.includes(row.job) || row.job === "build-storybook" ? evaluation.browsers : null;
-    if (expected === false && job.result === "skipped") {
+    if (expected === false && (job.result === "skipped" || (broadcastUnselected && job.result === "success"))) {
       return `| ${row.label.replace("screenshots", "preview")} | NOT SELECTED | Not requested |`;
     }
     const label = evaluation.visuals === false && evaluation.browsers === true

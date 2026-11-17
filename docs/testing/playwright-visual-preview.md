@@ -659,12 +659,20 @@ cleanup error preserves the primary exception as its cause.
 Compact My night cases check accessible descriptions for overlap, partial lineup
 and favorite markers, plus a heading on mixed fallback removal lists.
 
-Saved selections remain in preferences after their event or set ends, but both
-My night and Next saved exclude expired selections. Timed selections expire at
-their end; open-ended selections use the shared six-hour runtime window.
-Date-only selections remain through their viewer-local calendar day. The timeline
-flow regression mixes ended and upcoming saves, checks Next saved, then advances
-three days and verifies both controls disappear without deleting preferences.
+My night and Next saved exclude expired selections. After successful resolution,
+confirmed expired references are removed from preferences so they cannot exhaust
+the save limit. Unavailable items and failed resolutions are never pruned.
+Timed selections expire at their end; open-ended selections use the shared
+six-hour runtime window. Date-only selections use the backend's end-of-date
+grace through UTC-12. The timeline flow regression mixes ended and upcoming saves,
+checks Next saved, then advances three days and checks display and storage cleanup.
+
+Broadcast Candidate Acceptance first checks changed paths. Schedule-only timeline
+components, helpers, fixtures and documentation skip the expensive browser/native
+rehearsal. Broadcast/runtime, shared application dependencies, lockfile and its
+CI workflow changes select it. A successful unselected check reports NOT SELECTED
+without requiring native artifacts. Selected runs still require assertions and
+current evidence, and use the same pinned local Convex backend as backend checks.
 
 ## Home polish measurement
 

@@ -16,7 +16,7 @@ import {
   type TimelineNavigation,
 } from "@/lib/timeline/navigation";
 import { localDayBands } from "@/lib/timeline/geometry";
-import { nextSavedStart, togglePlanAction } from "@/lib/timeline/plan-actions";
+import { isPastSaved, nextSavedStart, togglePlanAction } from "@/lib/timeline/plan-actions";
 import { HOUR, inRange, recentEventTime, timelineQueryRange } from "@/lib/timeline/window-cache";
 import { useTimelinePreferences } from "./use-timeline-preferences";
 import { useTimelineData } from "./use-timeline-data";
@@ -131,6 +131,13 @@ function ScheduleContent({
     favoriteProfileIds: preference.preferences.favoriteProfileIds,
     plan: preference.preferences.plan,
   });
+  const { removePlan } = preference;
+  useEffect(() => {
+    if (data.savedState !== "ready") return;
+    for (const item of data.saved) {
+      if (isPastSaved(item, now)) removePlan(item.reference);
+    }
+  }, [data.saved, data.savedState, now, removePlan]);
   const cancelReplace = useCallback(() => {
     if (pending.current !== null) {
       clearTimeout(pending.current.timer);
@@ -232,7 +239,7 @@ function ScheduleContent({
     },
   };
   const nextSaved = () => {
-    const next = nextSavedStart(data.saved, range.endAt, now, range.timeZone);
+    const next = nextSavedStart(data.saved, range.endAt, now);
     if (next !== undefined) navigate({ anchor: next });
   };
   const visible = data.records.filter((event) => inRange(event, range));

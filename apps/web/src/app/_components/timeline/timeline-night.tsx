@@ -48,7 +48,7 @@ export function TimelineNight({
   now: number;
 }) {
   const descriptionId = useId();
-  const activeSaved = saved.filter(item => !isPastSaved(item, now, range.timeZone));
+  const activeSaved = saved.filter(item => !isPastSaved(item, now));
   const visible = activeSaved.filter((item) => {
     if (item.kind !== "available" || item.status === "cancelled") return false;
     const schedule = item.slot?.schedule ?? item.event.schedule;

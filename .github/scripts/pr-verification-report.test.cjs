@@ -14,6 +14,16 @@ function fixture(browsers = true, visuals = true) {
   return { needs, artifacts, headSha: "0123456789abcdef", owner: "BASIC-BIT", repo: "VRDex", runId: 456 };
 }
 
+test("unrelated broadcast changes report NOT SELECTED without claiming native acceptance", () => {
+  const input = fixture(true, false);
+  input.needs["broadcast-native-acceptance"].outputs = { selected: "false" };
+  input.artifacts = input.artifacts.filter(a => a.name !== "broadcast-native-acceptance");
+  const report = buildReport(input);
+  assert.match(report, /Candidate broadcast acceptance \| NOT SELECTED/);
+  assert.match(report, /All required checks and selected coverage passed/);
+  assert.doesNotMatch(report, /Missing evidence/);
+});
+
 test("default report marks every browser and Storybook build NOT SELECTED without claiming browser success", () => {
   const report = buildReport(fixture(false, false));
   assert.match(report, /All required checks and selected coverage passed/);
