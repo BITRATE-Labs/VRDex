@@ -29,6 +29,20 @@ and [approved design](../superpowers/specs/2026-10-28-mobile-vrcdn-playback-desi
 
 ## Finite integration contract
 
+### Automatic video pop-out
+
+The retained player's Media Session registers `enterpictureinpicture` in video
+mode. On supported browsers, switching away can open the active video without
+another button press. Only the current, playing video may respond. Audio mode,
+Close and stale playback generations cannot open a video window.
+
+[Chrome's automatic PiP requirements](https://developer.chrome.com/blog/automatic-picture-in-picture-media-playback)
+include browser permission or sufficient media engagement and audible playback.
+Browsers may reject the action or the request; playback continues normally.
+The existing manual control remains a fallback. Automatic Safari/iPhone behavior
+still needs physical-device qualification and must not be claimed from a desktop
+test or this handler alone.
+
 The trial reuses existing Convex grants, public-source authorization and revision
 checks, worker identity and epoch, source leases, registry, publisher, readiness
 and gateway authorization. Browser opt-in changes only that viewer's routing;
