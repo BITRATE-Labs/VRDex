@@ -127,7 +127,9 @@ In a managed cloud task, discover and read `.agents/skills/vrdex-cloud-start/SKI
 
 - Favor layered verification: lint, typecheck, unit, integration, e2e, visual, and policy checks where appropriate.
 - If UI changes, include visual confidence work.
-- Select `ci:browsers` for UI, authentication, or navigation changes; select `ci:visuals` when visual evidence is needed. Add labels before a normal PR run. See [CI selection](docs/testing/playwright-visual-preview.md#ci-behavior) for coverage and rerun behavior.
+- Select `ci:browsers` for UI, authentication or navigation changes. It runs suites selected by changed paths. Add `ci:visuals` when screenshot evidence or baseline comparisons are needed; this also uses affected surfaces. A small UI fix must not opt into the full suite by default.
+- Use `ci:full` for an explicitly requested complete run or cross-cutting changes whose coverage needs the full matrix. Record the reason in the PR. Check the selection summary against the changed surfaces; shared or unmapped application changes conservatively select broad coverage.
+- Add labels before a normal PR run. Do not remove selectors to hide failures; rerun with the intended coverage. See [CI selection](docs/testing/playwright-visual-preview.md#ci-behavior) for mappings, baseline checks and rerun behavior.
 - If billing, permissions, or verification logic changes, prefer stronger automated coverage.
 - Prefer video/screenshot evidence when asking the human to validate a nearly-mergeable feature.
 

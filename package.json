@@ -155,6 +155,8 @@
     "pretest:vrdex-mcp": "node scripts/guard-main-worktree.mjs",
     "test:vrdex-mcp": "pnpm --filter @basicbit/vrdex-mcp test",
     "pretest:scripts": "node scripts/guard-main-worktree.mjs",
+    "pretest:scripts:web": "node scripts/guard-main-worktree.mjs",
+    "test:scripts:web": "node --import tsx --test tests/scripts/api-mcp-rollout-readiness.test.ts tests/scripts/playwright-local-origin.test.ts tests/scripts/review-capture-boundaries.test.ts tests/scripts/staging-runtime-env.test.ts tests/scripts/verify-event-broadcast-migration-local.test.mjs tests/scripts/production-runtime-health.test.ts tests/scripts/workflow-definitions.test.ts",
     "test:scripts": "node --import tsx --test tests/scripts/**/*.test.ts tests/scripts/*.test.mjs",
     "pretest:discord-gateway": "node scripts/guard-main-worktree.mjs",
     "test:discord-gateway": "pnpm --filter @vrdex/discord-gateway test",

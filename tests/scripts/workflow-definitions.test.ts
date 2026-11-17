@@ -187,7 +187,7 @@ describe("fork-aware preview workflows", () => {
 
 describe("optional browser and visual evidence contract", () => {
   const workflow = parseYaml(readFileSync(".github/workflows/baseline-checks.yml", "utf8"));
-  it("selects all browser consumers and Storybook build without changing normal trigger or deploy controls", () => {
+  it("selects browser consumers individually without changing normal triggers or deploy controls", () => {
     assert.deepEqual(workflow.on.pull_request.types, ["opened", "synchronize", "reopened", "ready_for_review"]);
     assert.equal(workflow.on.workflow_dispatch, undefined);
     assert.equal(workflow.jobs["visual-selection"].outputs.browsers, "${{ steps.selection.outputs.browsers }}");
@@ -196,6 +196,7 @@ describe("optional browser and visual evidence contract", () => {
       const job = workflow.jobs[name];
       assert.ok(job.needs.includes("visual-selection"), name);
       assert.ok(job.if.includes("needs.visual-selection.outputs.browsers == 'true'"), name);
+      assert.ok(job.if.includes(`contains(fromJSON(needs.visual-selection.outputs.jobs || '[]'), '${name}')`), name);
       assert.ok(job.if.includes("github.event_name == 'pull_request'"), name);
       assert.equal(job["continue-on-error"], undefined);
     }
@@ -204,14 +205,14 @@ describe("optional browser and visual evidence contract", () => {
     }
     for (const name of ["playwright-image-diff", "storybook-image-diff"]) {
       const job = workflow.jobs[name];
-      assert.equal(job.if, "github.event_name == 'pull_request' && needs.visual-selection.outputs.visuals == 'true'");
+      assert.equal(job.if, `github.event_name == 'pull_request' && needs.visual-selection.outputs.visuals == 'true' && contains(fromJSON(needs.visual-selection.outputs.jobs || '[]'), '${name}')`);
       assert.equal(job["continue-on-error"], undefined);
     }
     for (const name of ["lint-web", "verify-docs", "verify-api-mcp", "typecheck-web", "typecheck-backend", "verify-backend-local", "restream-local-checks", "build-web", "build-storybook"]) {
       assert.ok(workflow.jobs["pr-verification-report"].needs.includes(name), name);
       if (name !== "build-storybook") {
         assert.equal(workflow.jobs[name].if, undefined, name);
-        assert.ok(!(workflow.jobs[name].needs ?? []).includes("visual-selection"), name);
+        assert.equal((workflow.jobs[name].needs ?? []).includes("visual-selection"), ["verify-api-mcp", "restream-local-checks"].includes(name), name);
       }
     }
     assert.equal(workflow.jobs["deploy-convex-production"].if, "github.event_name == 'push' && github.ref == 'refs/heads/main'");
@@ -265,10 +266,10 @@ describe("optional browser and visual evidence contract", () => {
     const media = steps.findIndex((step: { name?: string }) => step.name === "Run isolated composed media acceptance");
     const audioCleanup = steps.findIndex((step: { name?: string }) => step.name === "Stop job-owned browser audio backend");
     assert.ok(audioPrepare >= 0 && audioPrepare < media && audioCleanup > media);
-    assert.equal(steps[audioCleanup].if, "always()");
+    assert.equal(steps[audioCleanup].if, "always() && needs.visual-selection.outputs.media == 'true'");
     const claim = steps.find((step: { id?: string }) => step.id === "claim-auth");
     assert.ok(claim, "The current-branch signed-in claim regression must have a CI execution target");
-    assert.equal(claim.if, "github.event.pull_request.head.repo.fork == false");
+    assert.equal(claim.if, "needs.visual-selection.outputs.claimAuth == 'true' && github.event.pull_request.head.repo.fork == false");
     assert.equal(claim.env.PLAYWRIGHT_BASE_URL, undefined, "Do not route the new contract to stale hosted staging");
     assert.equal(claim.env.VRDEX_ENABLE_E2E_CLERK_AUTH, "true");
     assert.equal(claim.env.VRDEX_ENABLE_E2E_AUTH_HELPERS, "true");
@@ -301,6 +302,31 @@ describe("optional browser and visual evidence contract", () => {
       assert.ok(steps[contracts].run.includes(file));
     }
   });
+  it("keeps every web-source script contract in the cheap baseline subset", async () => {
+    const scripts = JSON.parse(readFileSync("package.json", "utf8")).scripts;
+    const subset = scripts["test:scripts:web"];
+    const files = (await readdir("tests/scripts", { recursive: true })).map(file => file.replaceAll("\\", "/")).filter(file => /\.test\.(?:ts|mjs)$/.test(file));
+    for (const file of files) {
+      if ((await readFile(`tests/scripts/${file}`, "utf8")).includes("apps/web")) assert.ok(subset.includes(`tests/scripts/${file}`), file);
+    }
+    const steps = workflow.jobs["verify-api-mcp"].steps;
+    const cheap = steps.find((step: { name?: string }) => step.name === "Verify web source contracts");
+    const full = steps.find((step: { name?: string }) => step.name === "Verify affected script contracts");
+    assert.equal(cheap.if, "needs.visual-selection.outputs.scripts != 'true'");
+    assert.equal(cheap.run, "pnpm test:scripts:web");
+    assert.equal(full.if, "needs.visual-selection.outputs.scripts == 'true'");
+    assert.equal(full.run, "pnpm test:scripts");
+    assert.equal(workflow.env.CONVEX_LOCAL_BACKEND_VERSION, workflow.jobs["verify-backend-local"].env.CONVEX_LOCAL_BACKEND_VERSION);
+  });
+
+  it("broadcast rehearsal uses the shared job selection and pins the compatible backend", () => {
+    const job = workflow.jobs["broadcast-native-acceptance"];
+    assert.equal(job.env.CONVEX_LOCAL_BACKEND_VERSION, workflow.jobs["verify-backend-local"].env.CONVEX_LOCAL_BACKEND_VERSION);
+    assert.match(job.if, /contains\(fromJSON\(needs.visual-selection.outputs.jobs/);
+    assert.doesNotMatch(JSON.stringify(job.steps), /--broadcast|steps\.changes/);
+    assert.equal(job.steps.find((step: { name?: string }) => step.name === "Upload candidate broadcast evidence").if, "always()");
+  });
+
   it("either selector removal uses trusted inline code and cannot launch the app pipeline", () => {
     const optOut = parseYaml(readFileSync(".github/workflows/visual-evidence-opt-out.yml", "utf8"));
     assert.deepEqual(optOut.on.pull_request_target.types, ["unlabeled"]);
