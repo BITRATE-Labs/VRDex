@@ -1084,7 +1084,7 @@ async function updateCommunityEventForApiOwnerRecord(
 
 type OwnerEventUpdateAuthority =
   | { kind: "api_owner"; ownerUserId: Id<"users">; actorSurface: "api" | "mcp" }
-  | { kind: "staff"; actorUserId: Id<"users">; preserveSlotAssociationIds?: Id<"eventSlots">[]; preserveParticipantAssociationIds?: Id<"eventParticipants">[]; preserveLineupConfirmation?: boolean };
+  | { kind: "staff"; actorUserId: Id<"users">; preserveSlotAssociationIds?: Id<"eventSlots">[]; preserveParticipantAssociationIds?: Id<"eventParticipants">[]; preserveLineupConfirmation?: boolean; retainedLineupAssociations?: { participantIds: Id<"eventParticipants">[]; slotIds: Id<"eventSlots">[] } };
 
 async function applyOwnerEventUpdate(
   ctx: MutationCtx,
@@ -1149,7 +1149,7 @@ async function applyOwnerEventUpdate(
     ? await getPublishedWorldBySlug(db, input.worldSlug)
     : await linkedPublishedEventWorld(db, event._id);
   const result = await updateCommunityEventRecord(ctx, { event, input, community, world, updateFields,
-    ...(authority.kind === "staff" ? { preserveSlotAssociationIds: authority.preserveSlotAssociationIds, preserveParticipantAssociationIds: authority.preserveParticipantAssociationIds, preserveLineupConfirmation: authority.preserveLineupConfirmation } : {}) });
+    ...(authority.kind === "staff" ? { preserveSlotAssociationIds: authority.preserveSlotAssociationIds, preserveParticipantAssociationIds: authority.preserveParticipantAssociationIds, preserveLineupConfirmation: authority.preserveLineupConfirmation, retainedLineupAssociations: authority.retainedLineupAssociations } : {}) });
   await recordEventAuditEvent(db, {
     eventId: event._id,
     ...(authority.kind === "api_owner"
@@ -3391,6 +3391,7 @@ export async function patchCommunityEventFieldsAsStaffRecord(
 
   let preserveSlotAssociationIds: Id<"eventSlots">[] | undefined;
   let preserveParticipantAssociationIds: Id<"eventParticipants">[] | undefined;
+  let retainedLineupAssociations: { participantIds: Id<"eventParticipants">[]; slotIds: Id<"eventSlots">[] } | undefined;
   if (args.preserveUnchangedLineup && patch.lineup) {
     const retained = patch.lineup.filter(row => current.lineup?.some(old => old.clientKey === row.clientKey && old.performerLabel === row.performerLabel && old.personSlug === row.personSlug));
     const keys = new Set(retained.map(row => row.clientKey));
@@ -3398,10 +3399,12 @@ export async function patchCommunityEventFieldsAsStaffRecord(
     const untimed = await db.query("eventLineupEntries").withIndex("by_eventId_position", q => q.eq("eventId", event._id)).collect();
     preserveSlotAssociationIds = slots.filter(row => keys.has(row.clientKey ?? row._id)).map(row => row._id);
     const retainedPeople = new Set([...slots.filter(row => keys.has(row.clientKey ?? row._id)), ...untimed.filter(row => keys.has(row.clientKey))].map(row => row.personProfileId));
-    preserveParticipantAssociationIds = (await db.query("eventParticipants").withIndex("by_eventId", q => q.eq("eventId", event._id)).collect())
-      .filter(row => keys.has(row._id) || retainedPeople.has(row.personProfileId)).map(row => row._id);
+    const participants = await db.query("eventParticipants").withIndex("by_eventId", q => q.eq("eventId", event._id)).collect();
+    preserveParticipantAssociationIds = participants.filter(row => keys.has(row._id) || retainedPeople.has(row.personProfileId)).map(row => row._id);
+    const representedPeople = new Set([...slots, ...untimed].map(row => row.personProfileId));
+    retainedLineupAssociations = { participantIds: participants.filter(row => !representedPeople.has(row.personProfileId)).map(row => row._id), slotIds: [] };
   }
-  await applyOwnerEventUpdate(ctx, event, update, { kind: "staff", actorUserId: args.actorUserId, preserveSlotAssociationIds, preserveParticipantAssociationIds, preserveLineupConfirmation: args.preserveUnchangedLineup });
+  await applyOwnerEventUpdate(ctx, event, update, { kind: "staff", actorUserId: args.actorUserId, preserveSlotAssociationIds, preserveParticipantAssociationIds, preserveLineupConfirmation: args.preserveUnchangedLineup, retainedLineupAssociations });
   const stored = (await db.get(event._id))!;
   return { eventId: event._id, updatedAt: stored.updatedAt, changed: true };
 }

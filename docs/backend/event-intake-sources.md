@@ -124,6 +124,8 @@ Selected-message text, model evidence, pending signed URLs and the selected
 update baseline are private to the draft actor. Preparation uses the existing
 website source/extraction controls and stores no complete interaction payload or
 conversation history. Its actual download is bounded as well as its declared size.
+Extraction of these drafts, including later manual retries, sends usage metrics
+to diagnostics without request or response content.
 
 Pending source metadata follows the draft's rolling 30-day expiry. Publication or
 discard clears source text, suggestions, questions, the update baseline and pending

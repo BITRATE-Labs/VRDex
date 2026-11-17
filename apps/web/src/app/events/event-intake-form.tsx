@@ -441,7 +441,8 @@ function ConnectedIntake({ draftId, initialCommunitySlug, heading }: { draftId?:
       const current = await convex.query(api.eventIntake.getEventIntakeDraft, { draftId: loaded._id });
       if (!current) throw new Error("DRAFT_ACCESS");
       const result = await websiteIntakeCommand("discord_source_prepare", { draftId: loaded._id, expectedVersion: current.version, ...options }, AbortSignal.timeout(300_000));
-      if (result.preparationStatus === "choose_poster" || result.preparationStatus === "processing") return;
+      if (result.preparationStatus === "choose_poster") { setPersonalFailed(true); return; }
+      if (result.preparationStatus === "processing") return;
       saved.current = null;
       setPersonalReady(true); setFormEpoch(value => value + 1);
       setPersonalFailed(result.preparationStatus === "failed");
@@ -535,7 +536,7 @@ function ConnectedIntake({ draftId, initialCommunitySlug, heading }: { draftId?:
     finally { setPersonalBusy(false); }
   };
   const personalControls = loaded?.personalSubmissionId ? <PersonalIntakeControls ready={personalReady} busy={personalBusy || personal?.status === "processing" && !preparationExpired} failed={personalFailed || personal?.status === "failed"}
-    attachments={personal?.attachments ?? []} mode={personal?.target || selectingUpdate ? "update" : "create"} eventId={personal?.target?.eventId}
+    attachments={loaded.fields.posterSourceId === undefined ? personal?.attachments ?? [] : []} mode={personal?.target || selectingUpdate ? "update" : "create"} eventId={personal?.target?.eventId}
     events={(managedEvents ?? []).map(event => ({ eventId: event.eventId, title: event.title }))} artwork={artworkChoice ?? (loaded.artworkAssetId ? "replace" : "keep")}
     onPrepare={options => guardPersonal(() => { void preparePersonal(options); })} onMode={mode => guardPersonal(() => { if (mode === "create") void changeTarget(); else setSelectingUpdate(true); })}
     onEvent={eventId => guardPersonal(() => { if (eventId) void changeTarget(eventId); })} onArtwork={setArtworkChoice}

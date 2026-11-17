@@ -11,9 +11,9 @@ not been activated on the live Discord application or deployed by this task.
 | --- | --- |
 | Personal intake backend | 15 transaction tests passed: actor isolation, ambiguity, replay, poster-only quota, leases, removal/retry, discard, owner authority, revision conflicts and preserved private lineup identity/confirmation |
 | Event regression checkpoint | 164 owner, contribution, correction, lineup and inventory tests passed; the later private-lineup/confirmation checkpoint passed 30 tests |
-| Web suite | All 1,216 tests passed |
+| Web suite | All 1,217 tests passed after the review fixes |
 | Discord gateway | All 44 tests passed |
-| Browser journeys | 12 desktop/mobile checks passed, including light/dark overflow checks, source replay masking, poster choice/removal, sign-in return, resume and owner denial |
+| Browser journeys | 14 desktop/mobile checks passed, including light/dark overflow checks, source replay masking, poster choice/removal and failed-download recovery, sign-in return, resume and owner denial |
 | Types | Backend, web, gateway and API contracts passed |
 | Docs and lint | Markdown lint, Docusaurus build and web ESLint passed |
 | Local backend | Anonymous bootstrap/health passed using the existing CI-pinned backend version and isolated ports |
@@ -26,6 +26,14 @@ completed with 3,442 passes and one unrelated Windows ESM-path failure in
 for an absolute `C:` import. These results do not establish a green full backend
 suite. The affected intake/event suites passed; Linux CI remains the full-suite
 acceptance check.
+
+## Independent review
+
+The reviewer found private-content tracing, a failed multiple-poster retry path,
+and removal of legacy participant-only performers during lineup edits. Each has
+a regression that failed before its fix and passed afterward. Private source
+status comes from the stored draft, so manual extraction also omits trace content.
+The focused intake, correction and lineup checkpoint passed all 205 tests.
 
 ## Visual evidence
 

@@ -31,10 +31,10 @@ for (const theme of ["light", "dark"]) test(`Discord review fits the ${theme} th
 
 test("multiple selected posters require a choice before the existing editor opens", async ({ page }, testInfo) => {
   await page.goto("/playwright/event-intake?source=discord-multiple");
-  await expect(page.getByLabel("Poster", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Discord import" }).getByLabel("Poster", { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("discord-poster-choice.png"), fullPage: true });
-  await page.getByLabel("Poster", { exact: true }).selectOption("poster-2");
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("region", { name: "Discord import" }).getByLabel("Poster", { exact: true }).selectOption("poster-2");
+  await page.getByRole("region", { name: "Discord import" }).getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page.getByLabel("Operation", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("fixture-personal-preparation-input") ?? "{}").attachmentId)).toBe("poster-2");
 });
@@ -51,6 +51,19 @@ test("owner denial retains update intent and does not invoke contribution public
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem("fixture-owner-operation"))).not.toBeNull();
   await expect(page.getByLabel("Operation", { exact: true })).toHaveValue("update");
   expect(await page.evaluate(() => sessionStorage.getItem("fixture-published"))).toBeNull();
+});
+
+test("a failed multiple-poster download can retry another selected poster", async ({ page }) => {
+  await page.goto("/playwright/event-intake?source=discord-multiple");
+  await page.evaluate(() => sessionStorage.setItem("fixture-personal-fail-once", "true"));
+  await page.getByRole("region", { name: "Discord import" }).getByLabel("Poster", { exact: true }).selectOption("poster-1");
+  await page.getByRole("region", { name: "Discord import" }).getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByText("Unavailable", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Discord import" }).getByLabel("Poster", { exact: true })).toBeVisible();
+  await page.getByRole("region", { name: "Discord import" }).getByLabel("Poster", { exact: true }).selectOption("poster-2");
+  await page.getByRole("region", { name: "Discord import" }).getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByText("Unavailable", { exact: true })).toHaveCount(0);
+  expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("fixture-personal-preparation-input") ?? "{}").attachmentId)).toBe("poster-2");
 });
 
 test("signed-out review preserves the draft return path and does not expose source text", async ({ page }) => {

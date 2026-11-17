@@ -180,6 +180,12 @@ function revisionFixture(correction: boolean, sourceMode?: string, staff = false
       case "discord_source_prepare": {
         sessionStorage.setItem("fixture-personal-preparation-input", JSON.stringify(args));
         sessionStorage.setItem("fixture-personal-preparations", String(Number(sessionStorage.getItem("fixture-personal-preparations") ?? "0") + 1));
+          if (sessionStorage.getItem("fixture-personal-fail-once")) {
+            sessionStorage.removeItem("fixture-personal-fail-once");
+            personalStatus = "failed";
+            listeners.forEach(listener => listener());
+            return Response.json({ status: 502 }, { status: 502 });
+          }
         personalStatus = "ready";
         sessionStorage.setItem("fixture-personal-prepared", "true");
         draft = { ...draft, artworkSourceId: "poster-1", artworkAssetId: "art" };

@@ -37,6 +37,8 @@ it("selection replay preserves accepted edits and keeps the source private", asy
   assert.equal(draft.fields.title, "My corrected title");
   assert.equal(draft.fields.sourceText, capture.message.sourceText);
   assert.equal(draft.connectorId, undefined);
+  const extraction = await t.mutation(internal.eventIntakeSources.authorizeExtraction, { actorUserId: authorityUserId, draftId: first.draftId, reserveQuota: false });
+  assert.equal(extraction.privateSource, true);
   assert.equal((await t.run(ctx => ctx.db.query("eventIntakeDrafts").collect())).length, 1);
 });
 
@@ -206,6 +208,10 @@ it("reviewed partial owner update preserves existing lineup and source labels an
   const original = await actor.mutation(api.events.createCommunityEvent, { communitySlug: "night-club", title: "Existing event", startAt: Date.UTC(2026, 11, 1, 22), timezone: "Etc/UTC", published: true, sourceLabel: "Original organizer", lineup: [{ clientKey: "original-set", position: 0, performerLabel: "Original DJ" }] });
   const event = await t.run(ctx => ctx.db.get(original.eventId));
   const lineup = await t.run(ctx => ctx.db.query("eventLineupEntries").withIndex("by_eventId_position", q => q.eq("eventId", original.eventId)).collect());
+  const standalone = await t.run(async ctx => {
+    const personProfileId = await ctx.db.insert("profiles", { slug: "legacy-person", displayName: "Legacy DJ", sortName: "legacy dj", profileType: "person", person: { roleTags: [] }, aliases: [], tags: [], claimState: "claimed_verified", publicationState: "draft_private", publicSurfacingState: "public", creationSource: "community", updatedAt: Date.now() });
+    return ctx.db.insert("eventParticipants", { eventId: original.eventId, personProfileId, roleLabel: "DJ", sourceType: "community", sourceLabel: "Original", confirmationState: "unconfirmed", eventPublicationState: "published", eventStatus: "scheduled", updatedAt: Date.now() });
+  });
   const operation = { kind: "owner_update" as const, eventId: original.eventId, expectedUpdatedAt: event!.updatedAt, patch: { venueLabel: "New room" }, artwork: "keep" as const };
   await assert.rejects(actor.mutation(api.discordPersonalIntake.publishReviewedDraft, { draftId, expectedVersion: version, idempotencyKey: "update-stale", operation: { ...operation, expectedUpdatedAt: event!.updatedAt - 1 } }), /VERSION_CONFLICT/);
   await actor.mutation(api.discordPersonalIntake.publishReviewedDraft, { draftId, expectedVersion: version, idempotencyKey: "update-good", operation });
@@ -214,6 +220,11 @@ it("reviewed partial owner update preserves existing lineup and source labels an
   assert.equal(updated!.title, "Existing event");
   assert.equal(updated!.sourceLabel, "Original organizer");
   assert.deepEqual(await t.run(ctx => ctx.db.query("eventLineupEntries").withIndex("by_eventId_position", q => q.eq("eventId", original.eventId)).collect()), lineup);
+  // Use a fresh private draft because the first one has already been published.
+  const captured = await t.mutation(internal.discordPersonalIntake.captureSelectedMessage, { ...capture, message: { ...capture.message, messageId: "123456789012345679" }, interactionId: "123456789012345680" });
+  if (captured.kind !== "draft") throw new Error("Expected draft");
+  await actor.mutation(api.discordPersonalIntake.publishReviewedDraft, { draftId: captured.draftId, expectedVersion: 1, idempotencyKey: "lineup-legacy", operation: { kind: "owner_update", eventId: original.eventId, expectedUpdatedAt: updated!.updatedAt, artwork: "keep", patch: { lineup: [{ clientKey: "original-set", position: 0, performerLabel: "Original DJ", roleLabel: "Host" }] } } });
+  assert.ok(await t.run(ctx => ctx.db.get(standalone)), "participant-only performer must survive a lineup edit");
 });
 
 it("selecting an update target saves its baseline and clears accepted fields absent from that event", async () => {
