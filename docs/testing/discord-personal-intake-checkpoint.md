@@ -27,6 +27,14 @@ for an absolute `C:` import. These results do not establish a green full backend
 suite. The affected intake/event suites passed; Linux CI remains the full-suite
 acceptance check.
 
+## CI bootstrap correction
+
+The first PR run failed before broadcast browser acceptance: its unpinned local
+Convex backend returned component-analysis data incompatible with CLI 1.32.0.
+The main workflow now shares the backend-verification job's existing version pin
+with browser bootstraps. This matches the successful isolated local bootstrap.
+The updated Linux run must still establish acceptance.
+
 ## Independent review
 
 The reviewer found private-content tracing, a failed multiple-poster retry path,

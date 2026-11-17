@@ -203,6 +203,7 @@ test("artifact completeness rejects missing proof and symlink sources", () => {
 test("existing backend CI pins both phases, preserves canonical checks and uploads explicit proof on failure", async () => {
   const { parse } = await import("yaml");
   const workflow = parse(readFileSync(new URL("../../.github/workflows/baseline-checks.yml", import.meta.url), "utf8"));
+  assert.equal(workflow.env?.CONVEX_LOCAL_BACKEND_VERSION, "precompiled-2026-09-28-5c7cb5b", "browser acceptance must inherit the same compatible backend as verification");
   const job = workflow.jobs["verify-backend-local"];
   assert.equal(job["timeout-minutes"], 10);
   assert.equal(job.env?.CONVEX_LOCAL_BACKEND_VERSION, "precompiled-2026-09-28-5c7cb5b");
