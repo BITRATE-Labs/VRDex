@@ -220,7 +220,7 @@ function revisionFixture(correction: boolean, sourceMode?: string, staff = false
         if (sourceMode === "discord-lineup") {
           refresh({
             tentative: { title: "Harbor Sessions", communitySlug: "afterglow", eventDate: "2027-07-15", lineup: [
-              { clientKey: "first", position: 0, performerLabel: "First DJ", start: { time: "23:00" } },
+              { clientKey: "first", position: 0, performerLabel: "First DJ", start: { time: "23:00", dayOffset: 0 } },
               { clientKey: "second", position: 1, performerLabel: "Second DJ", start: { time: "00:00", dayOffset: 1 } },
             ] },
             questions: ["lineup.0.start: date_timezone_required", "lineup.1.start: date_timezone_required"],

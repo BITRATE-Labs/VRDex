@@ -266,9 +266,9 @@ jobs:
         if: steps.convex-preview.outputs.convex_url != ''
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PREVIEW }}
-          HOSTED_E2E_AUTH_HELPERS: ${{ steps.pr.outputs.is_fork == 'false' && vars.VRDEX_HOSTED_E2E_AUTH_HELPERS || '' }}
-          HOSTED_E2E_BROWSER_TOKEN: ${{ steps.pr.outputs.is_fork == 'false' && secrets.VRDEX_HOSTED_E2E_BROWSER_TOKEN || '' }}
-          HOSTED_E2E_DEVELOPER_CREDENTIALS: ${{ steps.pr.outputs.is_fork == 'false' && vars.VRDEX_HOSTED_E2E_DEVELOPER_CREDENTIALS || '' }}
+          HOSTED_E2E_AUTH_HELPERS: ${{ !inputs.sandbox && steps.pr.outputs.is_fork == 'false' && vars.VRDEX_HOSTED_E2E_AUTH_HELPERS || '' }}
+          HOSTED_E2E_BROWSER_TOKEN: ${{ !inputs.sandbox && steps.pr.outputs.is_fork == 'false' && secrets.VRDEX_HOSTED_E2E_BROWSER_TOKEN || '' }}
+          HOSTED_E2E_DEVELOPER_CREDENTIALS: ${{ !inputs.sandbox && steps.pr.outputs.is_fork == 'false' && vars.VRDEX_HOSTED_E2E_DEVELOPER_CREDENTIALS || '' }}
           PREVIEW_NAME: ${{ steps.pr.outputs.preview_name }}
         run: |
           set -euo pipefail
@@ -335,6 +335,7 @@ jobs:
       - name: Deploy Vercel preview output
         id: deploy
         env:
+          SANDBOX: ${{ inputs.sandbox }}
           CLERK_JWT_ISSUER_DOMAIN: ${{ secrets.CLERK_JWT_ISSUER_DOMAIN }}
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PREVIEW }}
           CONVEX_PREVIEW_URL: ${{ steps.convex-preview.outputs.convex_url }}
@@ -342,7 +343,7 @@ jobs:
           HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
           PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
           PREVIEW_NAME: ${{ steps.pr.outputs.preview_name }}
-          VRDEX_E2E_BROWSER_TOKEN: ${{ steps.pr.outputs.is_fork == 'false' && secrets.VRDEX_HOSTED_E2E_BROWSER_TOKEN || '' }}
+          VRDEX_E2E_BROWSER_TOKEN: ${{ !inputs.sandbox && steps.pr.outputs.is_fork == 'false' && secrets.VRDEX_HOSTED_E2E_BROWSER_TOKEN || '' }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -356,6 +357,13 @@ jobs:
               --env "VRDEX_DEPLOYMENT_ENV=preview"
               --env "VRDEX_ENABLE_PREVIEW_PERSISTENCE_BRIDGE=true"
               --env "VRDEX_PREVIEW_PERSISTENCE_SECRET=$VRDEX_PREVIEW_PERSISTENCE_SECRET"
+            )
+          fi
+          if [ "$SANDBOX" = "true" ]; then
+            deploy_args+=(
+              --env "VRDEX_ENABLE_E2E_HELPERS=false"
+              --env "VRDEX_ENABLE_E2E_AUTH_HELPERS=false"
+              --env "VRDEX_ENABLE_E2E_ADAPTER_HELPERS=false"
             )
           fi
           if [ "${VRDEX_PREVIEW_E2E_AUTH_ENABLED:-false}" = "true" ]; then
@@ -424,7 +432,7 @@ jobs:
               jq -e --arg sha "$HEAD_SHA" --arg backend "$CONVEX_PREVIEW_URL" '
                 .commit == $sha and .environment == "preview" and
                 .convexBrowser == $backend and .convexServer == $backend and
-                (.clerkFrontendApi | endswith(".clerk.accounts.dev"))' >/dev/null
+                .e2eHelpersEnabled == false and (.clerkFrontendApi | endswith(".clerk.accounts.dev"))' >/dev/null
           }
           verify_preview "$DEPLOYMENT_URL"
           pnpm dlx vercel@54.4.1 alias set "$DEPLOYMENT_URL" sandbox.vrdex.net --token "$VERCEL_TOKEN"

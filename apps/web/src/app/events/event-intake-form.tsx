@@ -229,14 +229,14 @@ export function EventIntakeFieldsForm({ initialFields, initialRevision = 0, corr
     });
     return true;
   }
-  const needsImportedTimezone = personalImport && !correction && !fields.tentative?.timezone
+  const canChooseImportedTimezone = personalImport && !correction
     && Boolean(fields.questions?.some(question => isImportedTimezoneQuestion(fields, question)));
   function changeTimezone(timezone: string | null) {
     if (revealPendingTime()) return false;
     if (!timezone) return false;
     editingTimezoneAuthored.current = true;
     setEditingTimezone(timezone);
-    if (needsImportedTimezone) {
+    if (canChooseImportedTimezone) {
       timezoneAuthored.current = true;
       setFields(current => setImportedEventTimezone(current, timezone));
     } else if (newDraft && !timezoneAuthored.current) setFields(current => ({ ...current, timezone }));
@@ -325,7 +325,7 @@ export function EventIntakeFieldsForm({ initialFields, initialRevision = 0, corr
   }
   let timezoneInstant: number | undefined;
   try { if (!fields.timeTba && fields.eventDate && fields.start && fields.timezone) timezoneInstant = selectEventLocalTime(fields.eventDate, fields.start, fields.timezone); } catch { /* Ambiguous or incomplete time has no offset yet. */ }
-  const startControl = <div className="grid gap-2"><IntakeTime label="Starts" required={requiresStart} eventStart value={fields.start} date={fields.eventDate} timezone={fields.timezone} displayTimezone={editingTimezone} onChange={changeStart} /><EventTimezonePicker name="editingTimezone" value={needsImportedTimezone ? null : editingTimezone} date={fields.eventDate ?? null} instant={timezoneInstant} preferredValue={savedTimezonePreference} onChange={changeTimezone} /></div>;
+  const startControl = <div className="grid gap-2"><IntakeTime label="Starts" required={requiresStart} eventStart value={fields.start} date={fields.eventDate} timezone={fields.timezone} displayTimezone={editingTimezone} onChange={changeStart} /><EventTimezonePicker name="editingTimezone" value={canChooseImportedTimezone ? fields.tentative?.timezone ?? null : editingTimezone} date={fields.eventDate ?? null} instant={timezoneInstant} preferredValue={savedTimezonePreference} onChange={changeTimezone} /></div>;
   return <EventEditorPendingContext.Provider value={pendingInputs.register}><form ref={form} data-event-dirty={dirty} className="grid gap-6" onChangeCapture={event => {
     const target = event.target;
     if (target instanceof HTMLElement && target.closest("[data-intake-time]")) timezoneAuthored.current = true;
@@ -339,7 +339,7 @@ export function EventIntakeFieldsForm({ initialFields, initialRevision = 0, corr
     }}><Upload aria-hidden="true" className="size-4" />Import poster or text</Button> : undefined} steps={steps} activeStep={activeStep} onSelect={setActiveStep} preview={<EventEditorPreview editingTimezone={editingTimezone} fields={{ ...fields, lineup: fields.lineup?.map(row => ({ ...row, performerLabel: row.performerLabel || performers.person(row.personSlug)?.title })) }} artwork={artwork} community={community} world={world} />}>
     {sourceControls}
     <fieldset className="grid min-w-0 gap-6">
-    <div hidden={activeStep !== "Details"} data-step="Details"><section className="grid gap-4"><h2 className="text-xl font-semibold">Details</h2>{onSource ? <EventIntakeSuggestions fields={fields} onAccept={acceptSuggestion} importedTimezone={needsImportedTimezone} /> : null}
+    <div hidden={activeStep !== "Details"} data-step="Details"><section className="grid gap-4"><h2 className="text-xl font-semibold">Details</h2>{onSource ? <EventIntakeSuggestions fields={fields} onAccept={acceptSuggestion} importedTimezone={canChooseImportedTimezone} /> : null}
     {!correction ? <div className="grid gap-2"><span className="text-sm font-medium">Community</span><EventIdentityPicker kind="community" selectedSlug={fields.communitySlug} selectedOption={community} shortcuts={shortcuts} onSelect={option => { setSelectedCommunity(option); set("communitySlug", option.slug); }} onClear={() => { setSelectedCommunity(undefined); set("communitySlug", null); }} /></div> : null}
     <Field>Event title<Input name="title" value={fields.title ?? ""} maxLength={120} onChange={event => set("title", event.target.value)} /></Field>
     <input type="hidden" name="timezone" value={fields.timezone ?? ""} />
@@ -356,7 +356,7 @@ export function EventIntakeFieldsForm({ initialFields, initialRevision = 0, corr
     <details><summary className="cursor-pointer text-sm font-medium">Announcement link</summary><Field className="mt-3">Announcement link<Input type="url" value={fields.sourceUrl ?? ""} onChange={event => set("sourceUrl", event.target.value)} /></Field></details>
     {!correction && !onSource ? <details><summary className="cursor-pointer font-medium">Source text</summary><Textarea aria-label="Source text" className="mt-3" value={fields.sourceText ?? ""} maxLength={12000} onChange={event => set("sourceText", event.target.value)} /></details> : null}
     </section></div>
-    <div hidden={activeStep !== "Lineup"} data-step="Lineup"><section className="grid gap-4"><h2 className="text-xl font-semibold">Lineup</h2>{onSource ? <EventIntakeSuggestions fields={fields} onAccept={acceptSuggestion} importedTimezone={needsImportedTimezone} lineup /> : null}
+    <div hidden={activeStep !== "Lineup"} data-step="Lineup"><section className="grid gap-4"><h2 className="text-xl font-semibold">Lineup</h2>{onSource ? <EventIntakeSuggestions fields={fields} onAccept={acceptSuggestion} importedTimezone={canChooseImportedTimezone} onChooseTimezone={() => reveal("Details", '[aria-label="Time zone"]')} lineup /> : null}
       {!timings.length ? <EventLineupSetup onAddPerformer={() => addUntimed(0)} onGenerate={(count, durationMinutes) => applyTimingEdit(generateLineupTimings({ startAt: eventStartAt ?? 0, count, durationMinutes, keys: Array.from({ length: count }, () => crypto.randomUUID()) }))} /> : insertion(0)}
       {(fields.lineup ?? []).map((row, index) => {
         const timing = timings[index];

@@ -45,17 +45,20 @@ function translateSuggestionTime(local: EventIntakeLocalTime | null | undefined,
   return EventIntakeLocalTimeSchema.safeParse(translated).success ? translated : false;
 }
 
-function translateSuggestionTimes(fields: EventIntakeFields, proposalDate: EventIntakeFields["eventDate"], acceptedDate: EventIntakeFields["eventDate"]): EventIntakeFields | null {
-  const start = translateSuggestionTime(fields.start, proposalDate, acceptedDate);
-  const end = translateSuggestionTime(fields.end, proposalDate, acceptedDate);
-  const doors = translateSuggestionTime(fields.doors, proposalDate, acceptedDate);
+function translateSuggestionTimes(fields: EventIntakeFields, proposalDate: EventIntakeFields["eventDate"], acceptedDate: EventIntakeFields["eventDate"], questions: EventIntakePatch["questions"]): EventIntakeFields | null {
+  const translate = (clock: EventIntakeLocalTime | null | undefined, path: string) =>
+    clock && clock.dayOffset === undefined && questions?.some(question => question.startsWith(`${path}: date_timezone_required`))
+      ? clock : translateSuggestionTime(clock, proposalDate, acceptedDate);
+  const start = translate(fields.start, "event.start");
+  const end = translate(fields.end, "event.end");
+  const doors = translate(fields.doors, "event.doors");
   if (start === false || end === false || doors === false) return null;
   let lineup = fields.lineup;
   if (lineup) {
     const translated: NonNullable<EventIntakeFields["lineup"]> = [];
     for (const row of lineup) {
-      const rowStart = translateSuggestionTime(row.start, proposalDate, acceptedDate);
-      const rowEnd = translateSuggestionTime(row.end, proposalDate, acceptedDate);
+      const rowStart = translate(row.start, `lineup.${translated.length}.start`);
+      const rowEnd = translate(row.end, `lineup.${translated.length}.end`);
       if (rowStart === false || rowEnd === false) return null;
       translated.push({ ...row, start: rowStart, end: rowEnd });
     }
@@ -103,8 +106,7 @@ export function isImportedTimezoneQuestion(fields: EventIntakePatch, question: s
   const clock = scope === "event"
     ? fields.tentative?.[field as "start" | "end" | "doors"]
     : field === "doors" ? undefined : fields.tentative?.lineup?.[Number(index)]?.[field as "start" | "end"];
-  // The proposed event date anchors clocks without a separate date.
-  return Boolean(clock && (clock.dayOffset !== undefined || fields.tentative?.eventDate));
+  return clock?.dayOffset !== undefined;
 }
 
 export function setImportedEventTimezone(fields: EventIntakePatch, timezone: string): EventIntakePatch {
@@ -112,7 +114,6 @@ export function setImportedEventTimezone(fields: EventIntakePatch, timezone: str
     ...fields,
     timezone: fields.timezone ?? timezone,
     tentative: { ...fields.tentative, timezone },
-    questions: fields.questions?.filter(question => !isImportedTimezoneQuestion(fields, question)),
   };
 }
 
@@ -122,7 +123,8 @@ function acceptSourceClock(fields: EventIntakePatch, local: EventIntakeLocalTime
   const sourceZone = fields.tentative && Object.hasOwn(fields.tentative, "timezone") ? fields.tentative.timezone : fields.timezone;
   const sourceDate = proposalDate ?? (local.dayOffset !== undefined ? fields.eventDate : undefined);
   if (!sourceZone || !sourceDate || !fields.timezone || !fields.eventDate) throw new RangeError("Event date must be valid.");
-  if (fields.questions?.some(question => question.startsWith(`${path}:`) && /date_timezone_required|start_date_required|end_date_required/.test(question))) throw new RangeError("Event date must be valid.");
+  if (fields.questions?.some(question => question.startsWith(`${path}:`) && /date_timezone_required|start_date_required|end_date_required/.test(question)
+    && !(fields.tentative?.timezone && isImportedTimezoneQuestion(fields, question)))) throw new RangeError("Event date must be valid.");
   const instant = selectEventLocalTime(sourceDate, local, sourceZone);
   return intakeLocalFromInstant(fields, instant);
 }
@@ -137,18 +139,20 @@ export function acceptIntakeSuggestion({ fields, acceptance }: { fields: EventIn
   if (key === "eventDate") {
     const date = fields.tentative?.eventDate;
     if (!date || !eventLocalDate(date)) return null;
-    const normalized = translateSuggestionTimes(tentative, proposalDate, date);
+    const normalized = translateSuggestionTimes(tentative, proposalDate, date, fields.questions);
     if (!normalized) return null;
     return { ...rebaseIntakeTimes(fields, fields.eventDate, date), tentative: normalized };
   }
+  const remainingQuestions = (prefix: string) => fields.questions?.filter(question =>
+    !question.startsWith(prefix) || !isImportedTimezoneQuestion(fields, question));
   try {
     if (key === "start" || key === "end" || key === "doors") {
-      const updated = { ...fields, ...(key === "start" ? { timeTba: false } : {}), [key]: acceptSourceClock(fields, fields.tentative?.[key], proposalDate, `event.${key}`), tentative };
+      const updated = { ...fields, ...(key === "start" ? { timeTba: false } : {}), [key]: acceptSourceClock(fields, fields.tentative?.[key], proposalDate, `event.${key}`), tentative, questions: remainingQuestions(`event.${key}:`) };
       return key === "start" ? normalizeAcceptedStart(updated) : updated;
     }
     if (key === "lineup") {
       const lineup = fields.tentative?.lineup?.map((row, index) => ({ ...row, personSlug: undefined, start: acceptSourceClock(fields, row.start, proposalDate, `lineup.${index}.start`), end: acceptSourceClock(fields, row.end, proposalDate, `lineup.${index}.end`) }));
-      return { ...fields, lineup, tentative };
+      return { ...fields, lineup, tentative, questions: remainingQuestions("lineup.") };
     }
     if (key === "timezone" && fields.timezone && fields.timezone !== value) {
       const sourceZone = fields.tentative?.timezone;

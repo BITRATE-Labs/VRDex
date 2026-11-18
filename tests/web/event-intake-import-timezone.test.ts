@@ -32,3 +32,20 @@ it("choosing the zone preserves unknown dates and guards ambiguous clocks", () =
     assert.equal(acceptIntakeSuggestion({ fields: resolved, acceptance: { key: "lineup", proposalDate: undefined } }), null);
   }
 });
+
+it("selecting a proposed date and time zone in either order does not date an undated overnight end", () => {
+  for (const timezoneFirst of [true, false]) {
+    const fields = {
+      tentative: { eventDate: "2026-11-29", lineup: [{
+        clientKey: "overnight", position: 0, start: { time: "23:00", dayOffset: 0 }, end: { time: "01:00" },
+      }] },
+      questions: ["lineup.0.start: date_timezone_required", "lineup.0.end: date_timezone_required"],
+    };
+    const chosen = timezoneFirst ? setImportedEventTimezone(fields, "Asia/Tokyo") : fields;
+    const dated = acceptIntakeSuggestion({ fields: chosen, acceptance: { key: "eventDate", proposalDate: "2026-11-29" } });
+    assert.ok(dated);
+    const resolved = timezoneFirst ? dated : setImportedEventTimezone(dated, "Asia/Tokyo");
+    assert.equal(resolved.tentative?.lineup?.[0]?.end?.dayOffset, undefined);
+    assert.equal(acceptIntakeSuggestion({ fields: resolved, acceptance: { key: "lineup", proposalDate: undefined } }), null);
+  }
+});

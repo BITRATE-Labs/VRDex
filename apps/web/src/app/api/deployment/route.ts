@@ -79,6 +79,11 @@ export function GET() {
       convexBrowser: backendUrl(process.env.NEXT_PUBLIC_CONVEX_URL),
       convexServer: backendUrl(process.env.CONVEX_URL ?? process.env.NEXT_PUBLIC_CONVEX_URL),
       clerkFrontendApi: clerkFrontendApi(),
+      e2eHelpersEnabled: [
+        process.env.VRDEX_ENABLE_E2E_HELPERS,
+        process.env.VRDEX_ENABLE_E2E_AUTH_HELPERS,
+        process.env.VRDEX_ENABLE_E2E_ADAPTER_HELPERS,
+      ].includes("true"),
     },
     { headers: { "cache-control": "no-store" } },
   );

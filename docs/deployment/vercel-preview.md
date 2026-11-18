@@ -132,7 +132,7 @@ it does not purchase capacity or fall back to shared staging.
 - [ ] When a PR closes, confirm no active run or operator still uses its CI or
   manual-acceptance backend.
 - [ ] Sweep closed PRs in the Convex dashboard and reclaim their exact
-  `ci-pr-<number>` and `manual-accept-pr-<number>` deployments. Check the recorded
+  `ci-pr-<number>`, `manual-accept-pr-<number>` and unused `sandbox-pr-<number>` deployments. Check the recorded
   name and URL; leave production, staging and ordinary manual previews alone.
 
 The preview deploy implementation is reused by selected same-repository PR browser runs. Two workflows also expose manual requests:
@@ -527,7 +527,7 @@ The on-demand preview workflow posts an `On-demand Vercel preview` comment with 
 
 Use the sandbox URL for manual review of one trusted PR at a time. The workflow
 requires the current PR head SHA and checks the deployed commit, preview
-environment, Convex targets and development Clerk instance before moving
+environment, Convex targets, development Clerk instance and disabled E2E helpers before moving
 [sandbox.vrdex.net](https://sandbox.vrdex.net/events/new).
 
 ```powershell
