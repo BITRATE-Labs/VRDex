@@ -182,6 +182,10 @@ test("one timezone choice unlocks a dated Discord lineup without repeated warnin
   await sourceTimezone.click();
   await page.getByRole("combobox", { name: "Source time zone", exact: true }).fill("Eastern");
   await page.getByRole("option", { name: /America\/New York/ }).click();
+  await lineup.click();
+  await expect(page.getByRole("button", { name: "Accept Lineup", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Date", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Accept Date", exact: true })).toBeFocused();
   await page.getByRole("button", { name: "Accept Date", exact: true }).click();
   await chooseTimezone.click();
   await page.getByRole("combobox", { name: "Time zone", exact: true }).fill("Tokyo");

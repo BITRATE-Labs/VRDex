@@ -531,6 +531,9 @@ Use the sandbox URL for manual review of one trusted PR at a time. The workflow
 requires the current PR head SHA and checks the deployed commit, preview
 environment, Convex targets, development Clerk instance and disabled E2E helpers before moving
 [sandbox.vrdex.net](https://sandbox.vrdex.net/events/new).
+To verify a sandbox before testing, open
+[its deployment identity](https://sandbox.vrdex.net/api/deployment) and check
+that `environment` is `preview` and `commit` matches the PR head.
 
 ```powershell
 $pr = 478 # Replace with the PR you want to try.

@@ -15,7 +15,7 @@ function valueText(value: unknown): string {
   if (value && typeof value === "object" && "time" in value) return String(value.time);
   return value == null ? "" : String(value);
 }
-export function EventIntakeSuggestions({ fields, onAccept, lineup = false, importedTimezone = false, onChooseTimezone, timezoneControl }: { importedTimezone?: boolean; onChooseTimezone?: () => void; timezoneControl?: ReactNode; fields: EventIntakePatch; onAccept: (acceptance: IntakeSuggestionAcceptance) => void; lineup?: boolean }) {
+export function EventIntakeSuggestions({ fields, onAccept, lineup = false, importedTimezone = false, onChooseTimezone, onChooseDate, timezoneControl }: { importedTimezone?: boolean; onChooseTimezone?: () => void; onChooseDate?: () => void; timezoneControl?: ReactNode; fields: EventIntakePatch; onAccept: (acceptance: IntakeSuggestionAcceptance) => void; lineup?: boolean }) {
   const tentative = intakeSuggestionKeys.filter(key => fields.tentative?.[key] != null && (key === "lineup") === lineup && !(importedTimezone && key === "timezone"))
     .map(key => {
       const acceptance = { key, proposalDate: fields.tentative?.eventDate };
@@ -28,6 +28,8 @@ export function EventIntakeSuggestions({ fields, onAccept, lineup = false, impor
     !ready && timezoneQuestions?.some(question => question.startsWith(key === "lineup" ? "lineup." : `event.${key}:`)));
   const prompt = onChooseTimezone && (blockedTime || !fields.tentative?.timezone && timezoneQuestions?.length)
     ? <Button type="button" variant="secondary" className="justify-self-start" onClick={onChooseTimezone}>Time zone</Button>
+    : onChooseDate && fields.tentative?.timezone && !fields.eventDate && timezoneQuestions?.length
+      ? <Button type="button" variant="secondary" className="justify-self-start" onClick={onChooseDate}>Date</Button>
     : timezoneControl;
   const evidence = fields.evidence?.filter(row => row.fieldPath.startsWith("lineup") === lineup);
   return <>
