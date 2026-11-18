@@ -522,3 +522,21 @@ After a preview deployment, visit:
 - `/submit` to confirm signed-out users are routed to sign in before writing
 
 The on-demand preview workflow posts an `On-demand Vercel preview` comment with the preview URL, the `/api/deployment` URL, and a link to the workflow run that carries the hosted MCP smoke result.
+
+### Stable sandbox URL
+
+Use the sandbox URL for manual review of one trusted PR at a time. The workflow
+requires the current PR head SHA and checks the deployed commit, preview
+environment, Convex targets and development Clerk instance before moving
+[sandbox.vrdex.net](https://sandbox.vrdex.net/events/new).
+
+```powershell
+$pr = 478 # Replace with the PR you want to try.
+$sha = gh pr view $pr --json headRefOid --jq .headRefOid
+gh workflow run vercel-preview-deploy.yml --ref main -f pull_number=$pr -f head_sha=$sha -f sandbox=true
+```
+
+Ordinary preview requests and CI do not update the sandbox alias. The hosted
+`web-domains` Terraform stack owns the Route 53 CNAME, and the manual deployment
+owns which build the alias serves. Remove the one-time DNS import after the
+first successful hosted apply adopts the record.

@@ -7,6 +7,10 @@ on:
         description: Pull request number to deploy a preview for.
         required: true
         type: string
+      sandbox:
+        description: Assign the verified preview to sandbox.vrdex.net.
+        type: boolean
+        default: false
       comment_id:
         description: Issue comment id that requested the preview.
         required: false
@@ -117,6 +121,7 @@ jobs:
         env:
           BROWSER_ACCEPTANCE: ${{ inputs.browser_acceptance }}
           ANALYTICS_ACCEPTANCE: ${{ inputs.analytics_acceptance }}
+          SANDBOX: ${{ github.event_name == 'workflow_dispatch' && inputs.sandbox }}
           INPUT_HEAD_SHA: ${{ inputs.head_sha }}
           INPUT_PULL_NUMBER: ${{ inputs.pull_number }}
         with:
@@ -140,6 +145,11 @@ jobs:
 
             const isFork = pull.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`;
             core.setOutput('is_fork', isFork ? 'true' : 'false');
+            if (process.env.SANDBOX === "true" && (context.payload.repository.id !== 1176245711
+                || isFork || process.env.BROWSER_ACCEPTANCE === "true" || !process.env.INPUT_HEAD_SHA?.trim())) {
+              core.setFailed("The sandbox requires a pinned same-repository manual preview.");
+              return;
+            }
             if (isFork) {
               core.notice(`Fork head ${pull.head.repo?.full_name}@${pull.head.sha}: hosted E2E helpers withheld.`);
             }
@@ -396,6 +406,38 @@ jobs:
             echo "- Deployment: $deployment_url"
             echo "- Deployment identity: $deployment_url/api/deployment"
           } >> "$GITHUB_STEP_SUMMARY"
+
+
+      - name: Assign the sandbox domain
+        if: github.event_name == 'workflow_dispatch' && inputs.sandbox
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+          CONVEX_PREVIEW_URL: ${{ steps.convex-preview.outputs.convex_url }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          : "${CONVEX_PREVIEW_URL:?The sandbox requires its own Convex preview}"
+          verify_preview() {
+            curl -fsS --max-time 15 "$1/api/deployment" |
+              jq -e --arg sha "$HEAD_SHA" --arg backend "$CONVEX_PREVIEW_URL" '
+                .commit == $sha and .environment == "preview" and
+                .convexBrowser == $backend and .convexServer == $backend and
+                (.clerkFrontendApi | endswith(".clerk.accounts.dev"))' >/dev/null
+          }
+          verify_preview "$DEPLOYMENT_URL"
+          pnpm dlx vercel@54.4.1 alias set "$DEPLOYMENT_URL" sandbox.vrdex.net --token "$VERCEL_TOKEN"
+          for attempt in {1..12}; do
+            if verify_preview https://sandbox.vrdex.net; then
+              echo "- Sandbox: https://sandbox.vrdex.net/events/new" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Sandbox domain did not serve the selected preview."
+          exit 1
 
 
   preview-comments:

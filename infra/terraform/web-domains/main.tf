@@ -86,3 +86,20 @@ resource "aws_route53_record" "clerk" {
     }
   }
 }
+
+
+resource "aws_route53_record" "sandbox" {
+  count   = var.sandbox_cname_target == null ? 0 : 1
+  zone_id = local.route53_zone_id
+  name    = "sandbox.${var.hosted_zone_name}"
+  type    = "CNAME"
+  ttl     = var.web_dns_record_ttl
+  records = [var.sandbox_cname_target]
+}
+
+# Adopt the DNS bootstrap on the first hosted apply.
+import {
+  for_each = var.sandbox_cname_target == null ? toset([]) : toset(["sandbox"])
+  to       = aws_route53_record.sandbox[0]
+  id       = "${local.route53_zone_id}_sandbox.${var.hosted_zone_name}_CNAME"
+}
