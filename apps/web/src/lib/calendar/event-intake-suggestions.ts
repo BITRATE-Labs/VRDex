@@ -144,8 +144,12 @@ export function acceptIntakeSuggestion({ fields, acceptance }: { fields: EventIn
     if (!normalized) return null;
     return { ...rebaseIntakeTimes(fields, fields.eventDate, date), tentative: normalized };
   }
-  const remainingQuestions = (prefix: string) => fields.questions?.filter(question =>
-    !question.startsWith(prefix) || !isImportedTimezoneQuestion(fields, question));
+  const remainingQuestions = (prefix: string) => {
+    const questions = fields.questions?.filter(question => !question.startsWith(prefix) || !isImportedTimezoneQuestion(fields, question));
+    if (questions?.length !== fields.questions?.length && !tentative.start && !tentative.end && !tentative.doors
+      && !tentative.lineup?.some(row => row.start || row.end)) delete tentative.timezone;
+    return questions;
+  };
   try {
     if (key === "start" || key === "end" || key === "doors") {
       const updated = { ...fields, ...(key === "start" ? { timeTba: false } : {}), [key]: acceptSourceClock(fields, fields.tentative?.[key], proposalDate, `event.${key}`), tentative, questions: remainingQuestions(`event.${key}:`) };
