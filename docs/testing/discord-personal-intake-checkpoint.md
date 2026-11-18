@@ -126,3 +126,26 @@ model evaluation was collected by these checks.
 See the [implementation plan](../superpowers/plans/2026-11-16-discord-personal-event-intake.md),
 [source policy](../backend/event-intake-sources.md#personal-discord-sources) and
 [original scope](../planning/discord-personal-event-intake-scope-2026-11-16.md).
+
+## Fast local Discord intake sandbox
+
+From a VRDex worktree with dependencies installed, run:
+
+```powershell
+pnpm sandbox:event-intake
+```
+
+Open the [Discord intake sandbox](http://127.0.0.1:43148/playwright/event-intake?source=discord-lineup).
+It opens the real editor with a synthetic announcement, poster and two sets.
+The sets span midnight and need a source time zone. Edit the draft or try saving
+and publishing to see the fixture responses. Saved changes stay in that browser
+tab's session. Open a fresh private window to reset the scenario.
+
+Next reloads the editor when the working files change. The server listens only
+on loopback and has no Convex or Clerk binding. Stop it with Ctrl+C.
+
+For a shareable build of a pushed PR, dispatch the existing
+[on-demand Vercel preview](../deployment/vercel-preview.md#on-demand-preview-deploy).
+It runs independently of baseline CI and uses the PR's isolated Convex preview.
+The hosted preview does not mount this local fixture or receive real Discord
+interactions.

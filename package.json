@@ -16,6 +16,8 @@
     "dev:backend:local": "node scripts/run-convex-local.mjs dev --local",
     "predev:web": "node scripts/guard-main-worktree.mjs",
     "dev:web": "pnpm --filter web dev",
+    "presandbox:event-intake": "node scripts/guard-main-worktree.mjs",
+    "sandbox:event-intake": "node scripts/event-intake-sandbox.mjs",
     "predev:discord-gateway": "node scripts/guard-main-worktree.mjs",
     "dev:discord-gateway": "pnpm --filter @vrdex/discord-gateway start",
     "predev:docs": "node scripts/guard-main-worktree.mjs",
