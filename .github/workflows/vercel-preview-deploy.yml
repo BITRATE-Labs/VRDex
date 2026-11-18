@@ -92,8 +92,8 @@ permissions:
 # Keep deployment and its consumers in one group. Manual refreshes replace old
 # manual runs; acceptance queues so a backend writer finishes before reuse.
 concurrency:
-  group: on-demand-vercel-preview-${{ inputs.pull_number }}-${{ inputs.browser_acceptance && 'acceptance' || 'manual' }}-${{ github.event_name }}
-  cancel-in-progress: ${{ !inputs.browser_acceptance }}
+  group: ${{ inputs.sandbox && 'vrdex-sandbox-alias' || format('on-demand-vercel-preview-{0}-{1}-{2}', inputs.pull_number, inputs.browser_acceptance && 'acceptance' || 'manual', github.event_name) }}
+  cancel-in-progress: ${{ !inputs.browser_acceptance && !inputs.sandbox }}
 
 jobs:
   deploy-preview:
@@ -182,9 +182,8 @@ jobs:
             }
 
             const purpose = context.eventName === "pull_request" ? "ci" : "manual-accept";
-            core.setOutput("preview_name", process.env.BROWSER_ACCEPTANCE === "true"
-              ? `${purpose}-pr-${pull.number}`
-              : `pr-${pull.number}`);
+            core.setOutput("preview_name", process.env.SANDBOX === "true" ? `sandbox-pr-${pull.number}`
+              : process.env.BROWSER_ACCEPTANCE === "true" ? `${purpose}-pr-${pull.number}` : `pr-${pull.number}`);
             core.setOutput("head_sha", requestedSha || pull.head.sha);
             core.setOutput("head_ref", pull.head.ref);
             core.setOutput("pr_number", String(pull.number));

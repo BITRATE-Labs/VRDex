@@ -536,7 +536,10 @@ $sha = gh pr view $pr --json headRefOid --jq .headRefOid
 gh workflow run vercel-preview-deploy.yml --ref main -f pull_number=$pr -f head_sha=$sha -f sandbox=true
 ```
 
-Ordinary preview requests and CI do not update the sandbox alias. The hosted
+Sandbox requests run one at a time and reuse a separate `sandbox-pr-<number>`
+Convex deployment. Ordinary previews and CI leave the sandbox alias and backend
+alone. When reclaiming a closed PR preview, first confirm the sandbox alias no
+longer points to it. The hosted
 `web-domains` Terraform stack owns the Route 53 CNAME, and the manual deployment
 owns which build the alias serves. Remove the one-time DNS import after the
 first successful hosted apply adopts the record.
