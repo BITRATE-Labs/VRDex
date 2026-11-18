@@ -132,8 +132,10 @@ it does not purchase capacity or fall back to shared staging.
 - [ ] When a PR closes, confirm no active run or operator still uses its CI or
   manual-acceptance backend.
 - [ ] Sweep closed PRs in the Convex dashboard and reclaim their exact
-  `ci-pr-<number>`, `manual-accept-pr-<number>` and unused `sandbox-pr-<number>` deployments. Check the recorded
-  name and URL; leave production, staging and ordinary manual previews alone.
+  `ci-pr-<number>` and `manual-accept-pr-<number>` deployments. Before reclaiming
+  `sandbox-pr-<number>`, [check or retire the sandbox alias](#stable-sandbox-url).
+  Check the recorded name and URL; leave production, staging and ordinary manual
+  previews alone.
 
 The preview deploy implementation is reused by selected same-repository PR browser runs. Two workflows also expose manual requests:
 
@@ -538,9 +540,14 @@ gh workflow run vercel-preview-deploy.yml --ref main -f pull_number=$pr -f head_
 
 Sandbox requests run one at a time. Each refresh recreates its separate
 `sandbox-pr-<number>` Convex deployment, clearing any drafts saved in that
-sandbox. The URL stays the same. Ordinary previews and CI use their own
-deployments. When reclaiming a closed PR preview, first confirm the sandbox alias
-no longer points to it. The hosted
-`web-domains` Terraform stack owns the Route 53 CNAME, and the manual deployment
-owns which build the alias serves. Remove the one-time DNS import after the
-first successful hosted apply adopts the record.
+sandbox. The URL stays the same. Ordinary previews and CI use their own deployments.
+
+Before reclaiming a closed PR's sandbox backend, compare its Convex URL with
+`https://sandbox.vrdex.net/api/deployment`. If they match, move the alias with
+the next sandbox deployment or retire it from the owning Vercel team with
+`pnpm dlx vercel@54.4.1 alias remove sandbox.vrdex.net`. Confirm the old build
+is no longer served there before deleting its backend.
+
+The hosted `web-domains` Terraform stack owns the Route 53 CNAME. The manual
+deployment owns which build the alias serves. Remove the one-time DNS import
+after the first successful hosted apply adopts the record.

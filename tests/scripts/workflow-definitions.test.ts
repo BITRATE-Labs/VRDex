@@ -230,7 +230,8 @@ describe("optional browser and visual evidence contract", () => {
     assert.ok(preview.concurrency.group.includes("github.event_name"));
     assert.ok(resolve.with.script.includes('context.eventName === "pull_request" ? "ci" : "manual-accept"'));
     assert.ok(resolve.with.script.includes("${purpose}-pr-${pull.number}`"));
-    assert.equal(preview.concurrency["cancel-in-progress"], "${{ !inputs.browser_acceptance }}");
+    assert.ok(preview.concurrency.group.includes("inputs.sandbox && 'vrdex-sandbox-alias'"));
+    assert.equal(preview.concurrency["cancel-in-progress"], "${{ !inputs.browser_acceptance && !inputs.sandbox }}");
     for (const job of [preview.jobs["deploy-preview"], preview.jobs["candidate-browser-acceptance"]]) {
       assert.deepEqual(job.permissions, { contents: "read", "pull-requests": "read" });
     }
