@@ -110,9 +110,10 @@ export function isImportedTimezoneQuestion(fields: EventIntakePatch, question: s
 }
 
 export function setImportedEventTimezone(fields: EventIntakePatch, timezone: string): EventIntakePatch {
+  const hasAcceptedClocks = fields.start || fields.end || fields.doors || fields.lineup?.some(row => row.start || row.end);
   return {
     ...fields,
-    timezone: fields.timezone ?? timezone,
+    timezone: hasAcceptedClocks ? fields.timezone ?? timezone : timezone,
     tentative: { ...fields.tentative, timezone },
   };
 }

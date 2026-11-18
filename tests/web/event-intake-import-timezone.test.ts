@@ -33,6 +33,14 @@ it("choosing the zone preserves unknown dates and guards ambiguous clocks", () =
   }
 });
 
+it("correcting the imported zone keeps already accepted clocks in their original zone", () => {
+  const first = setImportedEventTimezone({ eventDate: "2026-11-29" }, "Asia/Tokyo");
+  assert.equal(setImportedEventTimezone(first, "America/Chicago").timezone, "America/Chicago");
+  const corrected = setImportedEventTimezone({ ...first, start: { time: "23:00" } }, "America/Chicago");
+  assert.equal(corrected.timezone, "Asia/Tokyo");
+  assert.equal(corrected.tentative?.timezone, "America/Chicago");
+});
+
 it("selecting a proposed date and time zone in either order does not date an undated overnight end", () => {
   for (const timezoneFirst of [true, false]) {
     const fields = {

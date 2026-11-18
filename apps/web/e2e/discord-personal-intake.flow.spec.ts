@@ -182,13 +182,14 @@ test("one timezone choice unlocks a dated Discord lineup without repeated warnin
   await page.getByRole("combobox", { name: "Time zone", exact: true }).fill("Tokyo");
   await page.getByRole("option", { name: /Tokyo/ }).click();
   await chooseTimezone.click();
-  await page.getByRole("combobox", { name: "Time zone", exact: true }).fill("Seoul");
-  await page.getByRole("option", { name: /Seoul/ }).click();
-  await expect(chooseTimezone).toContainText("Seoul");
+  await page.getByRole("combobox", { name: "Time zone", exact: true }).fill("Central");
+  await page.getByRole("option", { name: /America\/Chicago/ }).click();
+  await expect(chooseTimezone).toContainText("Central");
   await page.getByRole("button", { name: "Accept Date", exact: true }).click();
   await lineup.click();
   await page.getByRole("button", { name: "Accept Lineup", exact: true }).click();
   await expect(page.getByRole("button", { name: "Accept Lineup", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem("fixture-source-draft") ?? "{}").fields?.timezone)).toBe("America/Chicago");
   await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem("fixture-source-draft") ?? "{}").fields?.lineup?.map((row: { start?: { dayOffset?: number } }) => row.start?.dayOffset))).toEqual([0, 1]);
 });
