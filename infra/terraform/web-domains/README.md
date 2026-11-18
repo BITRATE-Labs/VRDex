@@ -1,12 +1,13 @@
 # Web Domains Terraform
 
-This stack manages production custom domains for the hosted VRDex web app.
+This stack manages custom domain DNS for the hosted VRDex web app.
 
 - Vercel project: `vr-dex-web`
 - Vercel project domain: `vrdex.net`
 - Vercel project domain: `www.vrdex.net`
 - Route 53 `A` record: `vrdex.net -> 76.76.21.21`
 - Route 53 `A` record: `www.vrdex.net -> 76.76.21.21`
+- Route 53 `CNAME` record: `sandbox.vrdex.net` uses the Vercel target in `hosted.tfvars`. The [sandbox preview workflow](../../../docs/deployment/vercel-preview.md#stable-sandbox-url) assigns the alias.
 
 ## Usage
 

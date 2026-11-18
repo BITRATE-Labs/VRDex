@@ -217,6 +217,15 @@ function revisionFixture(correction: boolean, sourceMode?: string, staff = false
           return Response.json({ status: 429 }, { status: 429 });
         }
         refresh({ posterSourceId: "poster-1", tentative: { title: "Harbor Sessions", communitySlug: "afterglow", eventDate: "2026-12-01", timezone: "UTC", start: { time: "22:00" } } });
+        if (sourceMode === "discord-lineup") {
+          refresh({
+            tentative: { title: "Harbor Sessions", communitySlug: "afterglow", eventDate: "2027-11-06", timezone: null, lineup: [
+              { clientKey: "first", position: 0, performerLabel: "First DJ", start: { time: "23:00", dayOffset: 0 } },
+              { clientKey: "second", position: 1, performerLabel: "Second DJ", start: { time: "01:30", dayOffset: 1 } },
+            ] },
+            questions: ["lineup.0.start: date_timezone_required", "lineup.1.start: date_timezone_required"],
+          });
+        }
         if (sourceMode === "discord-contribution") refresh({ communitySlug: "afterglow", title: "Harbor Sessions", eventDate: "2026-12-01", timezone: "UTC", start: { time: "22:00" }, tentative: null });
         return Response.json({ ...draft, preparationStatus: "ready" });
       }

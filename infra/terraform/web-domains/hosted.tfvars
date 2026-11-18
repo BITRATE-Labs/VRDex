@@ -23,3 +23,5 @@ manage_clerk_dns   = true
 clerk_mail_target  = "mail.49kratywlj1f.clerk.services"
 clerk_dkim1_target = "dkim1.49kratywlj1f.clerk.services"
 clerk_dkim2_target = "dkim2.49kratywlj1f.clerk.services"
+
+sandbox_cname_target = "0d67c3b757aeccf9.vercel-dns-016.com."

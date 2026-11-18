@@ -1,11 +1,11 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ConvexError } from "convex/values";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { eventTimezoneLabel } from "@/lib/event-timezones";
 import { BACKEND_ERROR_COPY } from "@/lib/error-copy";
-import { acceptIntakeSuggestion, intakeSuggestionKeys, type IntakeSuggestionAcceptance } from "@/lib/calendar/event-intake-suggestions";
+import { acceptIntakeSuggestion, intakeSuggestionKeys, isImportedTimezoneQuestion, type IntakeSuggestionAcceptance } from "@/lib/calendar/event-intake-suggestions";
 import type { EventIntakePatch, EventIntakeCandidate } from "../../../../../packages/api-contracts/src/event-intake";
 
 export type IntakeSourceAction = (action: "extract" | "upload" | "read" | "remove" | "retry", fields: EventIntakePatch, revision: number, file?: File, onStaged?: (fields: EventIntakePatch) => void) => Promise<{ fields?: EventIntakePatch; preview?: string; candidate?: EventIntakeCandidate; artworkSourceId?: string | null }>;
@@ -15,18 +15,31 @@ function valueText(value: unknown): string {
   if (value && typeof value === "object" && "time" in value) return String(value.time);
   return value == null ? "" : String(value);
 }
-export function EventIntakeSuggestions({ fields, onAccept, lineup = false }: { fields: EventIntakePatch; onAccept: (acceptance: IntakeSuggestionAcceptance) => void; lineup?: boolean }) {
-  const tentative = intakeSuggestionKeys.filter(key => fields.tentative?.[key] != null && (key === "lineup") === lineup);
+export function EventIntakeSuggestions({ fields, onAccept, lineup = false, importedTimezone = false, onChooseTimezone, onChooseDate, timezoneControl }: { importedTimezone?: boolean; onChooseTimezone?: () => void; onChooseDate?: () => void; timezoneControl?: ReactNode; fields: EventIntakePatch; onAccept: (acceptance: IntakeSuggestionAcceptance) => void; lineup?: boolean }) {
+  const tentative = intakeSuggestionKeys.filter(key => fields.tentative?.[key] != null && (key === "lineup") === lineup && !(importedTimezone && key === "timezone"))
+    .map(key => {
+      const acceptance = { key, proposalDate: fields.tentative?.eventDate };
+      return { key, acceptance, ready: acceptIntakeSuggestion({ fields, acceptance }) !== null };
+    });
   const questions = fields.questions?.filter(question => !question.startsWith("source: ") && question.startsWith("lineup") === lineup);
+  const timezoneQuestions = importedTimezone ? questions?.filter(question => isImportedTimezoneQuestion(fields, question)) : undefined;
+  const visibleQuestions = questions?.filter(question => !timezoneQuestions?.includes(question));
+  const blockedTime = fields.tentative?.timezone && fields.eventDate && tentative.some(({ key, ready }) =>
+    !ready && timezoneQuestions?.some(question => question.startsWith(key === "lineup" ? "lineup." : `event.${key}:`)));
+  const prompt = onChooseTimezone && (blockedTime || !fields.tentative?.timezone && timezoneQuestions?.length)
+    ? <Button type="button" variant="secondary" className="justify-self-start" onClick={onChooseTimezone}>Time zone</Button>
+    : onChooseDate && fields.tentative?.timezone && !fields.eventDate && timezoneQuestions?.length
+      ? <Button type="button" variant="secondary" className="justify-self-start" onClick={onChooseDate}>Date</Button>
+    : timezoneControl;
   const evidence = fields.evidence?.filter(row => row.fieldPath.startsWith("lineup") === lineup);
   return <>
     {tentative.length ? <section className="grid gap-3 rounded-control border border-border p-4"><h2 className="text-lg font-semibold">Tentative details</h2>{fields.tentative?.timezone || fields.tentative?.eventDate ? <p className="text-xs text-muted">{[fields.tentative.eventDate, fields.tentative.timezone ? eventTimezoneLabel(fields.tentative.timezone) : null].filter(Boolean).join(" · ")}</p> : null}
-      {tentative.map(key => <div key={key} className="grid min-w-0 gap-2 border-t border-border pt-3 sm:grid-cols-[1fr_auto]">
+      {tentative.map(({ key, acceptance, ready }) => <div key={key} className="grid min-w-0 gap-2 border-t border-border pt-3 sm:grid-cols-[1fr_auto]">
         <div className="min-w-0"><p className="text-sm text-muted">{labels[key] ?? key}</p><p className="whitespace-pre-wrap break-words">{valueText(fields.tentative?.[key])}</p></div>
-        <Button type="button" variant="secondary" aria-label={`Accept ${labels[key] ?? key}`} disabled={!acceptIntakeSuggestion({ fields, acceptance: { key, proposalDate: fields.tentative?.eventDate } })} onClick={() => onAccept({ key, proposalDate: fields.tentative?.eventDate })}>Accept</Button>
+        <Button type="button" variant="secondary" aria-label={`Accept ${labels[key] ?? key}`} disabled={!ready} onClick={() => onAccept(acceptance)}>Accept</Button>
       </div>)}
     </section> : null}
-    {questions?.length ? <section className="grid gap-2"><h2 className="text-lg font-semibold">Questions</h2>{questions.map((question, index) => <p key={index} className="break-words text-sm">{question}</p>)}</section> : null}
+    {prompt || blockedTime || visibleQuestions?.length ? <section className="grid gap-2"><h2 className="text-lg font-semibold">Questions</h2>{blockedTime ? <p className="text-sm">Unresolved time</p> : null}{prompt}{visibleQuestions?.map((question, index) => <p key={index} className="break-words text-sm">{question}</p>)}</section> : null}
     {evidence?.length ? <details><summary className="cursor-pointer text-sm">Source evidence</summary><ul className="mt-2 grid gap-2 text-sm">{evidence.map((row, index) => <li key={index} className="break-words">{labels[row.fieldPath.replace(/^event\./, "")] ?? row.fieldPath}: {row.excerpt} ({row.assessment}{` · ${row.origin}`})</li>)}</ul></details> : null}
   </>;
 }

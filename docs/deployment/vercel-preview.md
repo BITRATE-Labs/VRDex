@@ -132,8 +132,10 @@ it does not purchase capacity or fall back to shared staging.
 - [ ] When a PR closes, confirm no active run or operator still uses its CI or
   manual-acceptance backend.
 - [ ] Sweep closed PRs in the Convex dashboard and reclaim their exact
-  `ci-pr-<number>` and `manual-accept-pr-<number>` deployments. Check the recorded
-  name and URL; leave production, staging and ordinary manual previews alone.
+  `ci-pr-<number>` and `manual-accept-pr-<number>` deployments. Before reclaiming
+  `sandbox-pr-<number>`, [check or retire the sandbox alias](#stable-sandbox-url).
+  Check the recorded name and URL; leave production, staging and ordinary manual
+  previews alone.
 
 The preview deploy implementation is reused by selected same-repository PR browser runs. Two workflows also expose manual requests:
 
@@ -522,3 +524,41 @@ After a preview deployment, visit:
 - `/submit` to confirm signed-out users are routed to sign in before writing
 
 The on-demand preview workflow posts an `On-demand Vercel preview` comment with the preview URL, the `/api/deployment` URL, and a link to the workflow run that carries the hosted MCP smoke result.
+
+### Stable sandbox URL
+
+Use a dedicated browser profile for the sandbox, with a preview Clerk account.
+Keep your production VRDex session in a separate profile. Clerk scopes its session
+JWT to the application hostname, but sibling subdomains can still write cookies
+for the parent domain. See [Clerk's session token documentation](https://clerk.com/docs/guides/how-clerk-works/overview#session-token).
+
+Use the sandbox URL for manual review of one trusted PR at a time. Review the
+exact commit before assigning it to the branded URL. The workflow
+requires the current PR head SHA and checks the deployed commit, preview
+environment, Convex targets, development Clerk instance and disabled E2E helpers before moving
+[sandbox.vrdex.net](https://sandbox.vrdex.net/events/new).
+To verify a sandbox before testing, open
+[its deployment identity](https://sandbox.vrdex.net/api/deployment) and check
+that `environment` is `preview` and `commit` matches the PR head.
+The sandbox is a manual alias outside the Vercel production-domain list. A
+non-preview build rejects app and API requests to that hostname.
+
+```powershell
+$pr = 478 # Replace with the PR you want to try.
+$sha = gh pr view $pr --json headRefOid --jq .headRefOid
+gh workflow run vercel-preview-deploy.yml --ref main -f pull_number=$pr -f head_sha=$sha -f sandbox=true
+```
+
+Sandbox requests run one at a time. Each refresh recreates its separate
+`sandbox-pr-<number>` Convex deployment, clearing any drafts saved in that
+sandbox. The URL stays the same. Ordinary previews and CI use their own deployments.
+
+Before reclaiming a closed PR's sandbox backend, compare its Convex URL with
+`https://sandbox.vrdex.net/api/deployment`. If they match, move the alias with
+the next sandbox deployment or retire it from the owning Vercel team with
+`pnpm dlx vercel@54.4.1 alias remove sandbox.vrdex.net`. Confirm the old build
+is no longer served there before deleting its backend.
+
+The hosted `web-domains` Terraform stack owns the Route 53 CNAME. The manual
+deployment owns which build the alias serves. Remove the one-time DNS import
+after the first successful hosted apply adopts the record.

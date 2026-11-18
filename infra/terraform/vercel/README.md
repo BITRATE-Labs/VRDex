@@ -16,6 +16,14 @@ It manages shared application variables for the existing Vercel project:
 - `NEXT_PUBLIC_POSTHOG_DEPLOYMENT_CATEGORY`, assigned by target rather than `NODE_ENV`
 - `NEXT_PUBLIC_POSTHOG_FOUNDATION_ENABLED=true`, production only
 - `NEXT_PUBLIC_POSTHOG_LIMITED_ENABLED=false`, production only
+- `VRDEX_EVENT_INTAKE_AI_ENABLED=true`, production only
+
+Website event extraction is enabled in production for the approved personal Discord
+intake activation. Its existing `OPENAI_API_KEY` remains in Vercel as a sensitive
+variable. Convex has its own extraction flag; setting only the Convex flag does
+not enable the website adapter. Redeploy the web app after changing this flag.
+The one-time import adopts the activation bootstrap variable. After the first
+successful Vercel stack apply, remove that import block; keep the resource.
 
 Interim Limited collection remains disabled. BASIC approved production analytics
 and replay on November 12, 2026. The production flag was bootstrapped through

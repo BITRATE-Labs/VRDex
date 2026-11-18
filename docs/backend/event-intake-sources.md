@@ -127,6 +127,12 @@ conversation history. Its actual download is bounded as well as its declared siz
 Extraction of these drafts, including later manual retries, sends usage metrics
 to diagnostics without request or response content.
 
+For a new Discord event, choose the source time zone once on Details. A dated
+import shows one time-zone warning per editor step instead of listing the same
+requirement for every set. Once the event date and time zone are set, dated set
+times can be accepted together. Uncertain dates and ambiguous clocks still need
+review. Saved imports can use this flow without running extraction again.
+
 Failed or expired preparation invalidates the old draft version before retrying,
 so late poster writes cannot replace the retry's selection. If artwork completed
 before source adoption failed, retry adopts that artwork without downloading

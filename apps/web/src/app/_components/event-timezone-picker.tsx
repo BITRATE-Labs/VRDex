@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { commonEventTimezones, eventTimezoneLabel, searchEventTimezones } from "@/lib/event-timezones";
 
-export function EventTimezonePicker({ value, date, instant, preferredValue, name = "timezone", onChange }: {
-  value: string | null; date: string | null; instant?: number; preferredValue?: string | null; name?: string; onChange: (value: string | null) => void | boolean;
+export function EventTimezonePicker({ value, date, instant, preferredValue, name = "timezone", ariaLabel = "Time zone", onChange }: {
+  value: string | null; date: string | null; instant?: number; preferredValue?: string | null; name?: string; ariaLabel?: string; onChange: (value: string | null) => void | boolean;
 }) {
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
@@ -19,13 +19,13 @@ export function EventTimezonePicker({ value, date, instant, preferredValue, name
   function close() { setOpen(false); setQuery(""); setActive(-1); root.current?.querySelector<HTMLButtonElement>("button")?.focus(); }
   function select(zone: string) { const accepted = onChange(zone); if (accepted === false) { setOpen(false); setQuery(""); setActive(-1); } else close(); }
   return <div ref={root} className="relative w-full sm:w-fit sm:max-w-md" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) { setOpen(false); setQuery(""); setActive(-1); } }}>
-    <Button type="button" aria-label="Time zone" aria-haspopup="listbox" aria-expanded={open} aria-controls={id} className="w-full justify-between gap-3 text-left" variant="surface"
+    <Button type="button" aria-label={ariaLabel} aria-haspopup="listbox" aria-expanded={open} aria-controls={id} className="w-full justify-between gap-3 text-left" variant="surface"
       onClick={() => { setQuery(""); setActive(-1); setOpen(current => !current); }}>
       <span>{value ? eventTimezoneLabel(value, instant) : "Time zone"}</span><span aria-hidden="true">▾</span>
     </Button>
     <input name={name} type="hidden" value={value ?? ""} />
     {open ? <div className="absolute top-full z-20 mt-1 w-full min-w-0 sm:w-96 sm:max-w-[min(24rem,80vw)] rounded-control border border-border bg-surface-elevated shadow-panel">
-      <div className="p-2"><Input role="combobox" aria-label="Time zone" aria-autocomplete="list" aria-expanded={open} aria-controls={id} aria-activedescendant={active >= 0 ? `${id}-${active}` : undefined}
+      <div className="p-2"><Input role="combobox" aria-label={ariaLabel} aria-autocomplete="list" aria-expanded={open} aria-controls={id} aria-activedescendant={active >= 0 ? `${id}-${active}` : undefined}
         autoComplete="off" value={query} placeholder="City, region or abbreviation"
         onChange={event => { setQuery(event.target.value); setActive(-1); }}
         onKeyDown={event => {

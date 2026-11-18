@@ -20,6 +20,11 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        source: "/:path*",
+        has: [{ type: "host", value: "sandbox.vrdex.net" }],
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      },
+      {
         source: "/brand/now-playing/neutral-wordmark-v1-512.png",
         headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
       },

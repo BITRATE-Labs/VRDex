@@ -123,3 +123,10 @@ variable "clerk_dkim2_target" {
   type        = string
   default     = null
 }
+
+
+variable "sandbox_cname_target" {
+  description = "Optional Vercel CNAME target for sandbox previews. The preview workflow assigns the alias."
+  type        = string
+  default     = null
+}

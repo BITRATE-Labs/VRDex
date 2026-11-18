@@ -28,7 +28,7 @@ import { EventLocationField } from "./event-location-field";
 import type { EventIdentityOption } from "@/lib/event-editor-identity";
 import { EventEditorPreview, EventCommunitySummary, useEventCommunity } from "./event-editor-preview";
 import { eventLocalDate, formatIntakeDateTimeInput, parseIntakeDateTimeInput } from "@/lib/calendar/event-intake-date-time";
-import { acceptIntakeSuggestion, rebaseIntakeTime as rebaseTime, rebaseIntakeTimes, rebaseIntakeSuggestions, type IntakeSuggestionAcceptance } from "@/lib/calendar/event-intake-suggestions";
+import { acceptIntakeSuggestion, rebaseIntakeTime as rebaseTime, rebaseIntakeTimes, rebaseIntakeSuggestions, isImportedTimezoneQuestion, setImportedEventTimezone, type IntakeSuggestionAcceptance } from "@/lib/calendar/event-intake-suggestions";
 import { EventPerformerField, useEventPerformerEditor } from "./event-performer-field";
 import { applyIntakeLineupTimings, intakeLocalFromInstant, readIntakeInstant, readIntakeLineupTimings } from "@/lib/calendar/event-lineup-adapters";
 import { changeLineupDuration, generateLineupTimings, getLineupEndAt, getLineupEndConflict, insertLineupSlot, removeLineupSlot, shiftLineupStart, type LineupEditResult, type LineupTimingRow } from "@/lib/calendar/event-lineup-timing";
@@ -91,7 +91,7 @@ function clearOccurrence(local?: EventIntakeLocalTime | null) {
 }
 export type EventSubmitCompletion = { kind: "saved" } | { kind: "published"; eventId: Id<"events">; eventPath: string };
 
-export function EventIntakeFieldsForm({ initialFields, initialRevision = 0, correction = false, connectorDraft = false, onSave, onPublish, onSource, initialArtworkSourceId, heading, sourceControls, savedTimezonePreference, newDraft = false, onDone, onGuardChange }: { onDone?: () => void; onGuardChange?: (requestLeave: (navigate: () => void) => boolean) => void; savedTimezonePreference?: string | null; newDraft?: boolean; heading?: ReactNode; sourceControls?: ReactNode; initialFields: EventIntakeFields; initialRevision?: number; correction?: boolean; connectorDraft?: boolean; onSource?: IntakeSourceAction; initialArtworkSourceId?: string; onSave?: (fields: EventIntakeFields, revision: number) => Promise<void>; onPublish: (fields: EventIntakeFields, revision: number) => Promise<EventSubmitCompletion> }) {
+export function EventIntakeFieldsForm({ initialFields, initialRevision = 0, correction = false, connectorDraft = false, personalImport = false, onSave, onPublish, onSource, initialArtworkSourceId, heading, sourceControls, savedTimezonePreference, newDraft = false, onDone, onGuardChange }: { onDone?: () => void; onGuardChange?: (requestLeave: (navigate: () => void) => boolean) => void; savedTimezonePreference?: string | null; newDraft?: boolean; heading?: ReactNode; sourceControls?: ReactNode; initialFields: EventIntakeFields; initialRevision?: number; correction?: boolean; connectorDraft?: boolean; personalImport?: boolean; onSource?: IntakeSourceAction; initialArtworkSourceId?: string; onSave?: (fields: EventIntakeFields, revision: number) => Promise<void>; onPublish: (fields: EventIntakeFields, revision: number) => Promise<EventSubmitCompletion> }) {
   const router = useRouter();
   const form = useRef<HTMLFormElement>(null);
   const performers = useEventPerformerEditor();
@@ -229,12 +229,22 @@ export function EventIntakeFieldsForm({ initialFields, initialRevision = 0, corr
     });
     return true;
   }
+  const canChooseImportedTimezone = personalImport && !correction
+    && Boolean(fields.questions?.some(question => isImportedTimezoneQuestion(fields, question)));
   function changeTimezone(timezone: string | null) {
     if (revealPendingTime()) return false;
     if (!timezone) return false;
     editingTimezoneAuthored.current = true;
     setEditingTimezone(timezone);
-    if (newDraft && !timezoneAuthored.current) setFields(current => ({ ...current, timezone }));
+    if (newDraft && !timezoneAuthored.current && !canChooseImportedTimezone) setFields(current => ({ ...current, timezone }));
+    return true;
+  }
+  function changeImportedTimezone(timezone: string | null) {
+    if (revealPendingTime() || !timezone) return false;
+    timezoneAuthored.current = true;
+    editingTimezoneAuthored.current = true;
+    setEditingTimezone(timezone);
+    setFields(current => setImportedEventTimezone(current, timezone));
     return true;
   }
   const timings = readIntakeLineupTimings(fields);
@@ -321,6 +331,10 @@ export function EventIntakeFieldsForm({ initialFields, initialRevision = 0, corr
   let timezoneInstant: number | undefined;
   try { if (!fields.timeTba && fields.eventDate && fields.start && fields.timezone) timezoneInstant = selectEventLocalTime(fields.eventDate, fields.start, fields.timezone); } catch { /* Ambiguous or incomplete time has no offset yet. */ }
   const startControl = <div className="grid gap-2"><IntakeTime label="Starts" required={requiresStart} eventStart value={fields.start} date={fields.eventDate} timezone={fields.timezone} displayTimezone={editingTimezone} onChange={changeStart} /><EventTimezonePicker name="editingTimezone" value={editingTimezone} date={fields.eventDate ?? null} instant={timezoneInstant} preferredValue={savedTimezonePreference} onChange={changeTimezone} /></div>;
+  const importTimezone = canChooseImportedTimezone ? <div className="grid gap-2">
+    <span className="text-sm font-medium">Source timezone</span>
+    <EventTimezonePicker name="importTimezone" ariaLabel="Source time zone" value={fields.tentative?.timezone ?? null} date={fields.tentative?.eventDate ?? fields.eventDate ?? null} preferredValue={savedTimezonePreference} onChange={changeImportedTimezone} />
+  </div> : null;
   return <EventEditorPendingContext.Provider value={pendingInputs.register}><form ref={form} data-event-dirty={dirty} className="grid gap-6" onChangeCapture={event => {
     const target = event.target;
     if (target instanceof HTMLElement && target.closest("[data-intake-time]")) timezoneAuthored.current = true;
@@ -334,7 +348,7 @@ export function EventIntakeFieldsForm({ initialFields, initialRevision = 0, corr
     }}><Upload aria-hidden="true" className="size-4" />Import poster or text</Button> : undefined} steps={steps} activeStep={activeStep} onSelect={setActiveStep} preview={<EventEditorPreview editingTimezone={editingTimezone} fields={{ ...fields, lineup: fields.lineup?.map(row => ({ ...row, performerLabel: row.performerLabel || performers.person(row.personSlug)?.title })) }} artwork={artwork} community={community} world={world} />}>
     {sourceControls}
     <fieldset className="grid min-w-0 gap-6">
-    <div hidden={activeStep !== "Details"} data-step="Details"><section className="grid gap-4"><h2 className="text-xl font-semibold">Details</h2>{onSource ? <EventIntakeSuggestions fields={fields} onAccept={acceptSuggestion} /> : null}
+    <div hidden={activeStep !== "Details"} data-step="Details"><section className="grid gap-4"><h2 className="text-xl font-semibold">Details</h2>{onSource ? <EventIntakeSuggestions fields={fields} onAccept={acceptSuggestion} importedTimezone={canChooseImportedTimezone} timezoneControl={importTimezone} /> : null}
     {!correction ? <div className="grid gap-2"><span className="text-sm font-medium">Community</span><EventIdentityPicker kind="community" selectedSlug={fields.communitySlug} selectedOption={community} shortcuts={shortcuts} onSelect={option => { setSelectedCommunity(option); set("communitySlug", option.slug); }} onClear={() => { setSelectedCommunity(undefined); set("communitySlug", null); }} /></div> : null}
     <Field>Event title<Input name="title" value={fields.title ?? ""} maxLength={120} onChange={event => set("title", event.target.value)} /></Field>
     <input type="hidden" name="timezone" value={fields.timezone ?? ""} />
@@ -351,7 +365,7 @@ export function EventIntakeFieldsForm({ initialFields, initialRevision = 0, corr
     <details><summary className="cursor-pointer text-sm font-medium">Announcement link</summary><Field className="mt-3">Announcement link<Input type="url" value={fields.sourceUrl ?? ""} onChange={event => set("sourceUrl", event.target.value)} /></Field></details>
     {!correction && !onSource ? <details><summary className="cursor-pointer font-medium">Source text</summary><Textarea aria-label="Source text" className="mt-3" value={fields.sourceText ?? ""} maxLength={12000} onChange={event => set("sourceText", event.target.value)} /></details> : null}
     </section></div>
-    <div hidden={activeStep !== "Lineup"} data-step="Lineup"><section className="grid gap-4"><h2 className="text-xl font-semibold">Lineup</h2>{onSource ? <EventIntakeSuggestions fields={fields} onAccept={acceptSuggestion} lineup /> : null}
+    <div hidden={activeStep !== "Lineup"} data-step="Lineup"><section className="grid gap-4"><h2 className="text-xl font-semibold">Lineup</h2>{onSource ? <EventIntakeSuggestions fields={fields} onAccept={acceptSuggestion} importedTimezone={canChooseImportedTimezone} onChooseTimezone={() => reveal("Details", '[aria-label="Source time zone"]')} onChooseDate={() => reveal("Details", '[aria-label="Accept Date"]:not(:disabled), [data-step="Details"] input[type="date"], [name="Starts"]')} lineup /> : null}
       {!timings.length ? <EventLineupSetup onAddPerformer={() => addUntimed(0)} onGenerate={(count, durationMinutes) => applyTimingEdit(generateLineupTimings({ startAt: eventStartAt ?? 0, count, durationMinutes, keys: Array.from({ length: count }, () => crypto.randomUUID()) }))} /> : insertion(0)}
       {(fields.lineup ?? []).map((row, index) => {
         const timing = timings[index];
@@ -556,7 +570,7 @@ function ConnectedIntake({ draftId, initialCommunitySlug, heading }: { draftId?:
     onEvent={eventId => guardPersonal(() => { if (eventId) void changeTarget(eventId); })} onArtwork={setArtworkChoice}
     onDiscard={() => guardPersonal(() => { void discardPersonal({ draftId: loaded._id, expectedVersion: saved.current?.version ?? loaded.version }).then(() => { window.location.assign("/account/events"); }).catch(() => setPersonalFailed(true)); })} /> : null;
   if (loaded?.personalSubmissionId && (!personal || !personalReady)) return <>{heading}{personalControls}</>;
-  return <fieldset disabled={personalBusy || preparationVersion !== undefined || personal?.status === "processing" && !preparationExpired} className="m-0 min-w-0 border-0 p-0"><EventIntakeFieldsForm key={formEpoch} heading={heading} sourceControls={personalControls} correction={Boolean(personal?.target)} onGuardChange={guard => { personalGuard.current = guard; }} savedTimezonePreference={viewer?.user.defaultEventTimezone} newDraft={!draftId} connectorDraft={Boolean(loaded?.connectorId)} initialFields={connectorFields ?? loaded?.fields ?? { communitySlug: initialCommunitySlug, timeTba: false }} initialRevision={loaded?.version} onSource={sourceAction} initialArtworkSourceId={loaded?.artworkSourceId} onSave={async (fields, revision) => { if (published.current) await correctPublished(fields); else await saveFields(fields, revision); }} onPublish={async (fields, revision) => {
+  return <fieldset disabled={personalBusy || preparationVersion !== undefined || personal?.status === "processing" && !preparationExpired} className="m-0 min-w-0 border-0 p-0"><EventIntakeFieldsForm key={formEpoch} heading={heading} sourceControls={personalControls} personalImport={Boolean(loaded?.personalSubmissionId)} correction={Boolean(personal?.target)} onGuardChange={guard => { personalGuard.current = guard; }} savedTimezonePreference={viewer?.user.defaultEventTimezone} newDraft={!draftId} connectorDraft={Boolean(loaded?.connectorId)} initialFields={connectorFields ?? loaded?.fields ?? { communitySlug: initialCommunitySlug, timeTba: false }} initialRevision={loaded?.version} onSource={sourceAction} initialArtworkSourceId={loaded?.artworkSourceId} onSave={async (fields, revision) => { if (published.current) await correctPublished(fields); else await saveFields(fields, revision); }} onPublish={async (fields, revision) => {
     if (published.current) return correctPublished(fields);
     const current = await saveFields(fields, revision);
     if (loaded?.personalSubmissionId) {

@@ -73,6 +73,9 @@ const authMiddleware = !convexConfigured
     };
 
 export default function middleware(request: NextRequest, event: NextFetchEvent) {
+  if (request.headers.get("host") === "sandbox.vrdex.net" && process.env.VERCEL_ENV !== "preview") {
+    return new NextResponse(null, { status: 404 });
+  }
   const preflightResponse = apiV0PreflightResponse(request);
 
   if (preflightResponse !== null) {

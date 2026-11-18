@@ -1,0 +1,59 @@
+import assert from "node:assert/strict";
+import { it } from "node:test";
+import { acceptIntakeSuggestion, setImportedEventTimezone } from "../../apps/web/src/lib/calendar/event-intake-suggestions";
+
+it("one explicit zone unlocks dated imported sets and preserves overnight offsets", () => {
+  const fields = {
+    eventDate: "2026-11-29",
+    tentative: { lineup: [
+      { clientKey: "first", position: 0, start: { time: "23:00", dayOffset: 0 } },
+      { clientKey: "second", position: 1, start: { time: "00:00", dayOffset: 1 } },
+    ] },
+    questions: ["lineup.0.start: date_timezone_required", "lineup.1.start: date_timezone_required", "event.venueLabel: Unknown venue"],
+  };
+  const resolved = setImportedEventTimezone(fields, "Asia/Tokyo");
+  const accepted = acceptIntakeSuggestion({ fields: resolved, acceptance: { key: "lineup", proposalDate: undefined } });
+  assert.deepEqual(accepted?.lineup?.map(row => row.start?.dayOffset), [0, 1]);
+  assert.deepEqual(accepted?.questions, ["event.venueLabel: Unknown venue"]);
+});
+
+it("choosing the zone preserves unknown dates and guards ambiguous clocks", () => {
+  for (const [start, question] of [
+    [{ time: "01:30" }, "lineup.0.start: date_timezone_required"],
+    [{ time: "01:30", dayOffset: 0 }, "lineup.0.start: date_timezone_required (2026-10-08)"],
+    [{ time: "01:30", dayOffset: 0 }, "lineup.0.start: start_date_required"],
+    [{ time: "01:30", dayOffset: 0 }, "lineup.0.start: date_timezone_required"],
+  ] as const) {
+    const resolved = setImportedEventTimezone({
+      eventDate: "2026-11-01",
+      tentative: { lineup: [{ clientKey: "first", position: 0, start }] },
+      questions: [question],
+    }, "America/New_York");
+    assert.equal(acceptIntakeSuggestion({ fields: resolved, acceptance: { key: "lineup", proposalDate: undefined } }), null);
+  }
+});
+
+it("correcting the imported zone keeps already accepted clocks in their original zone", () => {
+  const first = setImportedEventTimezone({ eventDate: "2026-11-29" }, "Asia/Tokyo");
+  assert.equal(setImportedEventTimezone(first, "America/Chicago").timezone, "America/Chicago");
+  const corrected = setImportedEventTimezone({ ...first, start: { time: "23:00" } }, "America/Chicago");
+  assert.equal(corrected.timezone, "Asia/Tokyo");
+  assert.equal(corrected.tentative?.timezone, "America/Chicago");
+});
+
+it("selecting a proposed date and time zone in either order does not date an undated overnight end", () => {
+  for (const timezoneFirst of [true, false]) {
+    const fields = {
+      tentative: { eventDate: "2026-11-29", lineup: [{
+        clientKey: "overnight", position: 0, start: { time: "23:00", dayOffset: 0 }, end: { time: "01:00" },
+      }] },
+      questions: ["lineup.0.start: date_timezone_required", "lineup.0.end: date_timezone_required"],
+    };
+    const chosen = timezoneFirst ? setImportedEventTimezone(fields, "Asia/Tokyo") : fields;
+    const dated = acceptIntakeSuggestion({ fields: chosen, acceptance: { key: "eventDate", proposalDate: "2026-11-29" } });
+    assert.ok(dated);
+    const resolved = timezoneFirst ? dated : setImportedEventTimezone(dated, "Asia/Tokyo");
+    assert.equal(resolved.tentative?.lineup?.[0]?.end?.dayOffset, undefined);
+    assert.equal(acceptIntakeSuggestion({ fields: resolved, acceptance: { key: "lineup", proposalDate: undefined } }), null);
+  }
+});
