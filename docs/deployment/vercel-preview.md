@@ -527,13 +527,21 @@ The on-demand preview workflow posts an `On-demand Vercel preview` comment with 
 
 ### Stable sandbox URL
 
-Use the sandbox URL for manual review of one trusted PR at a time. The workflow
+Use a dedicated browser profile for the sandbox, with a preview Clerk account.
+Keep your production VRDex session in a separate profile. Clerk scopes its session
+JWT to the application hostname, but sibling subdomains can still write cookies
+for the parent domain. See [Clerk's session token documentation](https://clerk.com/docs/guides/how-clerk-works/overview#session-token).
+
+Use the sandbox URL for manual review of one trusted PR at a time. Review the
+exact commit before assigning it to the branded URL. The workflow
 requires the current PR head SHA and checks the deployed commit, preview
 environment, Convex targets, development Clerk instance and disabled E2E helpers before moving
 [sandbox.vrdex.net](https://sandbox.vrdex.net/events/new).
 To verify a sandbox before testing, open
 [its deployment identity](https://sandbox.vrdex.net/api/deployment) and check
 that `environment` is `preview` and `commit` matches the PR head.
+The sandbox is a manual alias outside the Vercel production-domain list. A
+non-preview build rejects app and API requests to that hostname.
 
 ```powershell
 $pr = 478 # Replace with the PR you want to try.
