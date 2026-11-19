@@ -14,3 +14,5 @@ export const ConflictingCounts: Story = { args: { initialScenario: "conflicting"
 export const ConfirmedClosure: Story = { args: { initialScenario: "closure" } };
 
 export const NoQueue: Story = { args: { initialScenario: "noQueue" } };
+
+export const DjChanges: Story = { args: { initialScenario: "lineup" } };

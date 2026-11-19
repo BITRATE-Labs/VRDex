@@ -239,6 +239,11 @@ function InstanceDetailContent({
   fresh: boolean;
 }) {
   const metrics = useInstancePoints(communitySlug, session);
+  const data = useClubWorkspace();
+  const canReadEvent = data.readableCategories.includes("event_recaps") &&
+    (data.actor.kind === "owner" || data.actor.permissions.includes("manage_events"));
+  const association = useQuery(api.communityTelemetry.getInstanceEventAssociation,
+    canReadEvent ? { communitySlug, sessionId: session.id } : "skip");
   return (
     <div className="grid gap-6">
       <Button className="justify-self-start" onClick={onBack}>
@@ -290,7 +295,7 @@ function InstanceDetailContent({
         {!metrics.complete ? (
           <Notice role="status">Loading complete instance history…</Notice>
         ) : (
-          <ClubInstanceChart points={instanceChartPoints(metrics.results)} closedAt={session.closedAt} />
+          <ClubInstanceChart points={instanceChartPoints(metrics.results)} closedAt={session.closedAt} performerChanges={association?.performerChanges ?? []} />
         )}
         <details className="mt-5 border-t border-border pt-4 text-sm">
           <summary className="cursor-pointer">Data completeness</summary>

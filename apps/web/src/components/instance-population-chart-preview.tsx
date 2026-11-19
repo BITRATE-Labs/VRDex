@@ -14,6 +14,7 @@ type Sample = {
 };
 
 const scenarios = {
+  lineup: "DJ changes",
   paired: "Queue and gaps",
   historical: "Missing historical queue",
   noQueue: "No queue",
@@ -35,6 +36,7 @@ const pairedSamples: Sample[] = [
   { minute: 80, population: 12, queueSize: 0, userCount: 12, platforms: { standalonewindows: 9, android: 3 } },
 ];
 const samples: Record<PopulationPreviewScenario, Sample[]> = {
+  lineup: [22, 26, 33, 42, 53, 66, 76, 83, 91, 95, null, 97, 103, 110, 116, 120, 117, 108, 101, 93, 84, 75, 64, 49, 32].map((population, index) => ({ minute: index * 10, population })),
   paired: pairedSamples,
   noQueue: pairedSamples.map((sample) => ({ ...sample, ...(sample.queueSize !== undefined ? { queueSize: 0 } : {}) })),
   historical: pairedSamples.map(({ minute, population }) => ({ minute, population })),
@@ -50,9 +52,10 @@ export function InstancePopulationChartPreview({ initialScenario = "paired" }: {
   const points = samples[scenario].map((point) => ({ at: start + point.minute * 60000, label: "", population: point.population,
     windows: point.platforms?.standalonewindows ?? null, android: point.platforms?.android ?? null,
     queueSize: point.queueSize ?? null, userCount: point.userCount ?? null, platforms: point.platforms ?? null }));
+  const performerChanges = scenario === "lineup" ? ["Aurora", "Neon Harbor", "Juniper", "Nori"].map((performerLabel, index) => ({ at: start + index * 60 * 60000, performerLabel })) : [];
   return <main className="mx-auto grid w-full max-w-5xl gap-6 px-4 py-8 sm:px-8 sm:py-12">
     <header className="flex flex-wrap items-end justify-between gap-5"><div><h1 className="text-2xl font-semibold tracking-tight">Instance population</h1><p className="mt-2 text-sm text-muted">Synthetic sample data</p></div>
-    <Field>Sample case<Select value={scenario} onChange={(event) => { const next = event.target.value; if (next === "paired" || next === "historical" || next === "noQueue" || next === "conflicting" || next === "closure" || next === "unknown") setScenario(next); }}>{Object.entries(scenarios).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</Select></Field></header>
-    <Card><ClubInstanceChart points={points} closedAt={scenario === "closure" ? start + 18 * 60000 : null} /></Card>
+    <Field>Sample case<Select value={scenario} onChange={(event) => { const next = event.target.value; if (next === "lineup" || next === "paired" || next === "historical" || next === "noQueue" || next === "conflicting" || next === "closure" || next === "unknown") setScenario(next); }}>{Object.entries(scenarios).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</Select></Field></header>
+    <Card><ClubInstanceChart points={points} performerChanges={performerChanges} closedAt={scenario === "closure" ? start + 18 * 60000 : null} /></Card>
   </main>;
 }

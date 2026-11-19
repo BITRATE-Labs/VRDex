@@ -1,6 +1,8 @@
 name: On-Demand Vercel Preview
 
 on:
+  push:
+    branches: [codex/sandbox]
   workflow_dispatch:
     inputs:
       pull_number:
@@ -92,8 +94,8 @@ permissions:
 # Keep deployment and its consumers in one group. Manual refreshes replace old
 # manual runs; acceptance queues so a backend writer finishes before reuse.
 concurrency:
-  group: ${{ inputs.sandbox && 'vrdex-sandbox-alias' || format('on-demand-vercel-preview-{0}-{1}-{2}', inputs.pull_number, inputs.browser_acceptance && 'acceptance' || 'manual', github.event_name) }}
-  cancel-in-progress: ${{ !inputs.browser_acceptance && !inputs.sandbox }}
+  group: ${{ (inputs.sandbox || github.ref == 'refs/heads/codex/sandbox') && 'vrdex-sandbox-alias' || format('on-demand-vercel-preview-{0}-{1}-{2}', inputs.pull_number, inputs.browser_acceptance && 'acceptance' || 'manual', github.event_name) }}
+  cancel-in-progress: ${{ !inputs.browser_acceptance && !inputs.sandbox && github.ref != 'refs/heads/codex/sandbox' }}
 
 jobs:
   deploy-preview:
@@ -113,6 +115,7 @@ jobs:
       head_sha: ${{ steps.pr.outputs.head_sha }}
       is_fork: ${{ steps.pr.outputs.is_fork }}
       pr_number: ${{ steps.pr.outputs.pr_number }}
+      sandbox: ${{ steps.pr.outputs.sandbox }}
 
     steps:
       - name: Resolve pull request
@@ -130,6 +133,21 @@ jobs:
               core.setFailed("analytics_acceptance requires browser_acceptance.");
               return;
             }
+            if (context.eventName === "push") {
+              if (context.ref !== "refs/heads/codex/sandbox" || context.payload.repository.id !== 1176245711
+                  || !/^[a-f0-9]{40}$/.test(context.sha)) {
+                core.setFailed("Shared sandbox deploys require the trusted codex/sandbox branch and an exact commit.");
+                return;
+              }
+              core.setOutput("sandbox", "true");
+              core.setOutput("is_fork", "false");
+              core.setOutput("head_sha", context.sha);
+              core.setOutput("head_ref", "codex/sandbox");
+              core.setOutput("pr_number", "");
+              core.setOutput("preview_name", "sandbox-shared");
+              return;
+            }
+            core.setOutput("sandbox", process.env.SANDBOX === "true" ? "true" : "false");
             const raw = String(process.env.INPUT_PULL_NUMBER || "").trim();
             const pullNumber = Number(raw);
             if (!Number.isInteger(pullNumber) || pullNumber <= 0) {
@@ -266,9 +284,9 @@ jobs:
         if: steps.convex-preview.outputs.convex_url != ''
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PREVIEW }}
-          HOSTED_E2E_AUTH_HELPERS: ${{ !inputs.sandbox && steps.pr.outputs.is_fork == 'false' && vars.VRDEX_HOSTED_E2E_AUTH_HELPERS || '' }}
-          HOSTED_E2E_BROWSER_TOKEN: ${{ !inputs.sandbox && steps.pr.outputs.is_fork == 'false' && secrets.VRDEX_HOSTED_E2E_BROWSER_TOKEN || '' }}
-          HOSTED_E2E_DEVELOPER_CREDENTIALS: ${{ !inputs.sandbox && steps.pr.outputs.is_fork == 'false' && vars.VRDEX_HOSTED_E2E_DEVELOPER_CREDENTIALS || '' }}
+          HOSTED_E2E_AUTH_HELPERS: ${{ steps.pr.outputs.sandbox != 'true' && steps.pr.outputs.is_fork == 'false' && vars.VRDEX_HOSTED_E2E_AUTH_HELPERS || '' }}
+          HOSTED_E2E_BROWSER_TOKEN: ${{ steps.pr.outputs.sandbox != 'true' && steps.pr.outputs.is_fork == 'false' && secrets.VRDEX_HOSTED_E2E_BROWSER_TOKEN || '' }}
+          HOSTED_E2E_DEVELOPER_CREDENTIALS: ${{ steps.pr.outputs.sandbox != 'true' && steps.pr.outputs.is_fork == 'false' && vars.VRDEX_HOSTED_E2E_DEVELOPER_CREDENTIALS || '' }}
           PREVIEW_NAME: ${{ steps.pr.outputs.preview_name }}
         run: |
           set -euo pipefail
@@ -335,7 +353,7 @@ jobs:
       - name: Deploy Vercel preview output
         id: deploy
         env:
-          SANDBOX: ${{ inputs.sandbox }}
+          SANDBOX: ${{ steps.pr.outputs.sandbox }}
           CLERK_JWT_ISSUER_DOMAIN: ${{ secrets.CLERK_JWT_ISSUER_DOMAIN }}
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PREVIEW }}
           CONVEX_PREVIEW_URL: ${{ steps.convex-preview.outputs.convex_url }}
@@ -343,7 +361,7 @@ jobs:
           HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
           PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
           PREVIEW_NAME: ${{ steps.pr.outputs.preview_name }}
-          VRDEX_E2E_BROWSER_TOKEN: ${{ !inputs.sandbox && steps.pr.outputs.is_fork == 'false' && secrets.VRDEX_HOSTED_E2E_BROWSER_TOKEN || '' }}
+          VRDEX_E2E_BROWSER_TOKEN: ${{ steps.pr.outputs.sandbox != 'true' && steps.pr.outputs.is_fork == 'false' && secrets.VRDEX_HOSTED_E2E_BROWSER_TOKEN || '' }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -407,7 +425,7 @@ jobs:
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
           {
             echo "## On-demand Vercel preview"
-            echo "- Pull request: #$PR_NUMBER"
+            if [ -n "$PR_NUMBER" ]; then echo "- Pull request: #$PR_NUMBER"; fi
             echo "- Ref: \`$HEAD_REF\`"
             echo "- Commit: \`$HEAD_SHA\`"
             echo "- Deployment: $deployment_url"
@@ -416,7 +434,7 @@ jobs:
 
 
       - name: Assign the sandbox domain
-        if: github.event_name == 'workflow_dispatch' && inputs.sandbox
+        if: steps.pr.outputs.sandbox == 'true'
         env:
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
           HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
@@ -671,7 +689,7 @@ jobs:
     # Gate on a real deployment URL rather than the aggregate job result, so a
     # deploy that succeeded but whose comment step failed is still smoked, and a
     # deploy that produced no URL is correctly skipped.
-    if: ${{ !cancelled() && !inputs.browser_acceptance && needs.deploy-preview.outputs.deployment_url != '' && needs.deploy-preview.outputs.is_fork == 'false' }}
+    if: ${{ !cancelled() && !inputs.browser_acceptance && needs.deploy-preview.outputs.sandbox != 'true' && needs.deploy-preview.outputs.deployment_url != '' && needs.deploy-preview.outputs.is_fork == 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

@@ -7,7 +7,8 @@ import { metricNumber as count } from "./club-chart";
 import type { InstanceChartPoint } from "./club-instance-chart-model";
 
 const exactTime = new Intl.DateTimeFormat(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", timeZoneName: "short" });
-export function ClubInstanceChart({ points, closedAt }: { points: InstanceChartPoint[]; closedAt: number | null }) {
+export type InstancePerformerChange = { at: number; performerLabel: string };
+export function ClubInstanceChart({ points, closedAt, performerChanges = [] }: { points: InstanceChartPoint[]; closedAt: number | null; performerChanges?: InstancePerformerChange[] }) {
   const [showTable, setShowTable] = useState(false);
   const tableId = useId();
   const [showDiagnostics, setShowDiagnostics] = useState(false);
@@ -17,6 +18,8 @@ export function ClubInstanceChart({ points, closedAt }: { points: InstanceChartP
   const first = points[0]?.at, last = points.at(-1)?.at;
   if (first === undefined || last === undefined || !points.some((point) => point.population !== null)) return <Notice variant="dashed">No observations in this range.</Notice>;
   const domain = [Math.min(first, closedAt ?? first), Math.max(last, closedAt ?? last, first + 1)];
+  const lineup = performerChanges.filter(change => Number.isFinite(change.at)).sort((a, b) => a.at - b.at);
+  const changes = lineup.filter(change => change.at >= domain[0]! && change.at <= domain[1]!);
   const multiDay = new Date(first).toDateString() !== new Date(domain[1]!).toDateString();
   const axisTime = new Intl.DateTimeFormat(undefined, { ...(multiDay ? { month: "short", day: "numeric" } : {}), hour: "2-digit", minute: "2-digit" });
   const isolatedDot = (key: "population" | "windows" | "android" | "queueSize", color: string) =>
@@ -36,23 +39,37 @@ export function ClubInstanceChart({ points, closedAt }: { points: InstanceChartP
             {hasQueue ? <span className="flex items-center gap-2">
               <span className="w-5 border-t-2 border-dashed border-muted" />Queue
             </span> : null}
+            {changes.length ? <span className="flex items-center gap-2"><span className="w-5 border-t-2 border-dotted border-muted" />Scheduled DJs</span> : null}
           </div>
         </div>
         <div className="h-72 min-w-0" role="group" aria-label="Instance population chart">
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-            <LineChart data={points} accessibilityLayer margin={{ top: 28, right: 12, bottom: 4, left: 0 }}>
+            <LineChart data={points} accessibilityLayer margin={{ top: changes.length ? 44 : 28, right: 12, bottom: 4, left: 0 }}>
               <CartesianGrid stroke="var(--border)" vertical={false} />
               <XAxis dataKey="at" type="number" scale="time" domain={domain} tickFormatter={(at: number) => axisTime.format(at)} minTickGap={30} tickLine={false} axisLine={false} tick={{ fill: "var(--muted)", fontSize: 11 }} />
               <YAxis width={36} domain={[0, "auto"]} allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: "var(--muted)", fontSize: 11 }} />
               <Tooltip cursor={{ stroke: "var(--border-strong)" }} content={({ active, label }) => {
                 const point = points.find((sample) => sample.at === Number(label));
+                const performer = point ? lineup.findLast(change => change.at <= point.at) : undefined;
                 return active && point ? <div className="rounded-control border border-border bg-surface px-3 py-2 text-sm shadow-lg">
+                  {performer ? <p className="mb-1 font-medium">{performer.performerLabel}</p> : null}
                   <p className="mb-2 text-muted">{exactTime.format(point.at)}</p>
                   <p>Population: {count(point.population)}</p>
                   {hasWindows ? <p>Windows: {count(point.windows)}</p> : null}{hasAndroid ? <p>Android: {count(point.android)}</p> : null}
                   {hasQueue ? <p>Queue: {count(point.queueSize)}</p> : null}
                 </div> : null;
               }} />
+              {changes.map(change => <ReferenceLine key={`${change.at}-${change.performerLabel}`} x={change.at}
+                stroke="var(--foreground)" strokeOpacity={0.4} strokeDasharray="1 5" strokeLinecap="round"
+                label={({ viewBox }) => {
+                  if (!viewBox || !("x" in viewBox) || !("y" in viewBox) || typeof viewBox.x !== "number" || typeof viewBox.y !== "number") return <></>;
+                  const atStart = change.at <= domain[0]! + (domain[1]! - domain[0]!) * 0.06;
+                  const atEnd = change.at >= domain[1]! - (domain[1]! - domain[0]!) * 0.06;
+                  return <text x={viewBox.x + (atStart ? 4 : atEnd ? -4 : 0)} y={viewBox.y - 14}
+                    textAnchor={atStart ? "start" : atEnd ? "end" : "middle"} fill="var(--foreground)" fontSize={12} fontWeight={500}>
+                    {change.performerLabel}
+                  </text>;
+                }} />)}
               {closedAt !== null ? <ReferenceLine x={closedAt} stroke="var(--muted)" strokeDasharray="2 4" ifOverflow="extendDomain" label={{ value: "Closed to new joins", position: closedAt > domain[0]! + (domain[1]! - domain[0]!) * 0.7 ? "insideTopRight" : "top", fill: "var(--muted)", fontSize: 10 }} /> : null}
               <Line name="Population" dataKey="population" type="linear" stroke="var(--accent)" strokeWidth={2} dot={isolatedDot("population", "var(--accent)")} activeDot={{ r: 4 }} connectNulls={false} isAnimationActive={false} />
               {hasWindows ? <Line name="Windows" dataKey="windows" type="linear" stroke="var(--success)" strokeWidth={2} dot={isolatedDot("windows", "var(--success)")} activeDot={{ r: 4 }} connectNulls={false} isAnimationActive={false} /> : null}

@@ -2373,7 +2373,10 @@ export const setEventRecapEnd = mutation({
 
 export const getInstanceEventAssociation = query({
   args: { communitySlug: v.string(), sessionId: v.id("instanceSessions") },
-  returns: v.union(v.null(), v.object({ eventId: v.id("events"), title: v.string() })),
+  returns: v.union(v.null(), v.object({
+    eventId: v.id("events"), title: v.string(),
+    performerChanges: v.array(v.object({ at: v.number(), performerLabel: v.string() })),
+  })),
   handler: async (ctx, args) => {
     const profile = await ctx.db.query("profiles").withIndex("by_slug", q => q.eq("slug", args.communitySlug)).unique();
     if (!profile) throw new Error("You do not have access to this action.");
@@ -2389,7 +2392,14 @@ export const getInstanceEventAssociation = query({
     const association = await ctx.db.query("eventInstanceAssociations").withIndex("by_sessionId_state", q => q.eq("sessionId", session._id).eq("state", "confirmed")).first();
     if (!association) return null;
     const event = await ctx.db.get(association.eventId);
-    return event && event.communityProfileId === profile._id ? { eventId: event._id, title: event.title } : null;
+    if (!event || event.communityProfileId !== profile._id) return null;
+    const slots = await ctx.db.query("eventSlots")
+      .withIndex("by_eventId_reviewState_startAt", q => q.eq("eventId", event._id).eq("reviewState", "confirmed"))
+      .take(100);
+    return {
+      eventId: event._id, title: event.title,
+      performerChanges: slots.map(slot => ({ at: slot.startAt, performerLabel: slot.displayLabel })),
+    };
   },
 });
 

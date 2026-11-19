@@ -532,16 +532,26 @@ Keep your production VRDex session in a separate profile. Clerk scopes its sessi
 JWT to the application hostname, but sibling subdomains can still write cookies
 for the parent domain. See [Clerk's session token documentation](https://clerk.com/docs/guides/how-clerk-works/overview#session-token).
 
-Use the sandbox URL for manual review of one trusted PR at a time. Review the
-exact commit before assigning it to the branded URL. The workflow
-requires the current PR head SHA and checks the deployed commit, preview
+For quick iteration, push to the shared `codex/sandbox` branch. Each push deploys
+that exact commit to the existing preview backend and updates the branded URL.
+No PR, acceptance suite or production release is required. Coordinate writers:
+merge current `main` and feature changes into this branch without force-pushing.
+The latest successful queued deployment owns the URL.
+
+```powershell
+git push origin HEAD:codex/sandbox
+```
+
+The workflow checks the deployed commit, preview
 environment, Convex targets, development Clerk instance and disabled E2E helpers before moving
 [sandbox.vrdex.net](https://sandbox.vrdex.net/events/new).
 To verify a sandbox before testing, open
 [its deployment identity](https://sandbox.vrdex.net/api/deployment) and check
-that `environment` is `preview` and `commit` matches the PR head.
-The sandbox is a manual alias outside the Vercel production-domain list. A
+that `environment` is `preview` and `commit` matches the sandbox branch commit (or the selected PR head).
+The sandbox is a preview alias outside the Vercel production-domain list. A
 non-preview build rejects app and API requests to that hostname.
+
+Manual review of a trusted PR is still available with its exact head SHA:
 
 ```powershell
 $pr = 478 # Replace with the PR you want to try.
@@ -550,7 +560,7 @@ gh workflow run vercel-preview-deploy.yml --ref main -f pull_number=$pr -f head_
 ```
 
 Sandbox requests run one at a time. Each refresh recreates its separate
-`sandbox-pr-<number>` Convex deployment, clearing any drafts saved in that
+`sandbox-shared` (branch) or `sandbox-pr-<number>` (manual PR) Convex deployment, clearing any drafts saved in that
 sandbox. The URL stays the same. Ordinary previews and CI use their own deployments.
 
 Before reclaiming a closed PR's sandbox backend, compare its Convex URL with

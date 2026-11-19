@@ -1150,10 +1150,36 @@ describe("community telemetry control plane", () => {
         communitySlug: "faceless", eventId: seeded.eventId, sessionId,
       }));
     }
+    await t.run(async ctx => {
+      for (const [position, offset, displayLabel, reviewState] of [
+        [0, 180_000, "Neon Harbor", "confirmed"],
+        [1, 60_000, "Aurora", "confirmed"],
+        [2, 120_000, "Unreviewed DJ", "draft"],
+        [3, 150_000, "Disputed DJ", "disputed"],
+      ] as const) {
+        await ctx.db.insert("eventSlots", {
+          eventId: seeded.eventId, position, startAt: dayStart + offset,
+          displayLabel, roleLabel: "DJ", sourceType: "manual", sourceLabel: "test",
+          confidence: 1, reviewState, updatedAt: dayStart,
+        });
+      }
+      await ctx.db.insert("eventSlots", {
+        eventId: seeded.conflictingEventId, position: 0, startAt: dayStart,
+        displayLabel: "Other event DJ", roleLabel: "DJ", sourceType: "manual", sourceLabel: "test",
+        confidence: 1, reviewState: "confirmed", updatedAt: dayStart,
+      });
+    });
     const associationView = await t.withIdentity(identity).query(api.communityTelemetry.getInstanceEventAssociation, {
       communitySlug: "faceless", sessionId: seeded.sessions[0]!,
     });
     assert.equal(associationView?.eventId, seeded.eventId);
+    assert.deepEqual(associationView?.performerChanges, [
+      { at: dayStart + 60_000, performerLabel: "Aurora" },
+      { at: dayStart + 180_000, performerLabel: "Neon Harbor" },
+    ]);
+    assert.equal(await t.withIdentity(identity).query(api.communityTelemetry.getInstanceEventAssociation, {
+      communitySlug: "faceless", sessionId: seeded.sessions[2]!,
+    }), null);
     await assert.rejects(t.query(api.communityTelemetry.getInstanceEventAssociation, {
       communitySlug: "faceless", sessionId: seeded.sessions[0]!,
     }), /access to this action/);
