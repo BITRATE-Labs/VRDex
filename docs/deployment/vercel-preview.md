@@ -562,6 +562,11 @@ gh workflow run vercel-preview-deploy.yml --ref main -f pull_number=$pr -f head_
 Sandbox requests run one at a time. Each refresh recreates its separate
 `sandbox-shared` (branch) or `sandbox-pr-<number>` (manual PR) Convex deployment, clearing any drafts saved in that
 sandbox. The URL stays the same. Ordinary previews and CI use their own deployments.
+Sandbox deploys generate their own API-token and OAuth signing/hash secrets with
+the existing preview secret generator. E2E auth helpers and client-credentials
+bridges remain disabled. These secrets rotate with the fresh backend, so reconnect
+Executor after refreshing the sandbox. The separate `VRDex Sandbox` Executor app
+uses `https://sandbox.vrdex.net/mcp`, never the production connection.
 
 Before reclaiming a closed PR's sandbox backend, compare its Convex URL with
 `https://sandbox.vrdex.net/api/deployment`. If they match, move the alias with

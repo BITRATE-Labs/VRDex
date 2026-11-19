@@ -343,6 +343,10 @@ jobs:
           NEXT_PUBLIC_POSTHOG_DEPLOYMENT_CATEGORY=preview
           ENV
 
+      - name: Generate sandbox OAuth runtime
+        if: steps.pr.outputs.sandbox == 'true'
+        run: node scripts/generate-preview-developer-runtime-secrets.mjs
+
       - name: Build Vercel preview output
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -406,6 +410,19 @@ jobs:
               --env "VRDEX_OAUTH_CLIENT_SECRET_PEPPER=$oauth_client_secret_pepper"
               --env "VRDEX_OAUTH_REFRESH_TOKEN_PEPPER=$oauth_refresh_token_pepper"
             )
+          fi
+          if [ "$SANDBOX" = "true" ]; then
+            for setting in \
+              "VRDEX_API_TOKEN_PEPPER:api-token-pepper" \
+              "VRDEX_OAUTH_ACCESS_TOKEN_SIGNING_KEY:oauth-access-token-signing-key" \
+              "VRDEX_OAUTH_CLIENT_SECRET_PEPPER:oauth-client-secret-pepper" \
+              "VRDEX_OAUTH_REFRESH_TOKEN_PEPPER:oauth-refresh-token-pepper"; do
+              value=$(<".tmp-gh-artifacts/preview-developer-runtime/${setting#*:}")
+              : "${value:?Sandbox OAuth secret was not generated.}"
+              echo "::add-mask::$value"
+              deploy_args+=(--env "${setting%%:*}=$value")
+            done
+            deploy_args+=(--env "VRDEX_OAUTH_ACCESS_TOKEN_SIGNING_KID=vrdex-sandbox")
           fi
           deployment_url=$(pnpm dlx vercel@54.4.1 "${deploy_args[@]}" | tail -n 1)
           if [ -z "$deployment_url" ]; then

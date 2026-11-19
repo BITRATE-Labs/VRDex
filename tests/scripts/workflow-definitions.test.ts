@@ -157,6 +157,20 @@ describe("fork-aware preview workflows", () => {
     }
   });
 
+  it("gives sandbox its own OAuth keys without enabling auth helpers", () => {
+    const generate = deploySteps.find(step => step.name === "Generate sandbox OAuth runtime");
+    assert.equal(generate?.if, "steps.pr.outputs.sandbox == 'true'");
+    assert.equal(generate?.run, "node scripts/generate-preview-developer-runtime-secrets.mjs");
+    const deployScript = deploySteps.find(step => step.name === "Deploy Vercel preview output")?.run ?? "";
+    const sandboxKeys = deployScript.slice(deployScript.indexOf('for setting in'), deployScript.indexOf('deployment_url='));
+    for (const name of ["VRDEX_API_TOKEN_PEPPER", "VRDEX_OAUTH_ACCESS_TOKEN_SIGNING_KEY", "VRDEX_OAUTH_CLIENT_SECRET_PEPPER", "VRDEX_OAUTH_REFRESH_TOKEN_PEPPER"]) {
+      assert.ok(sandboxKeys.includes(name));
+    }
+    assert.ok(sandboxKeys.includes('::add-mask::$value'));
+    assert.ok(!sandboxKeys.includes("E2E"));
+    assert.ok(deployScript.includes('--env "VRDEX_ENABLE_E2E_AUTH_HELPERS=false"'));
+  });
+
   it("withholds hosted e2e secrets from fork heads", () => {
     const hosted = [
       "VRDEX_HOSTED_E2E_BROWSER_TOKEN",
