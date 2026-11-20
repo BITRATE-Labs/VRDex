@@ -165,7 +165,7 @@ describe("fork-aware preview workflows", () => {
     assert.equal(reuse?.if, "steps.pr.outputs.sandbox == 'true' && steps.pr.outputs.head_ref == 'codex/sandbox'");
     const backend = deploySteps.find(step => step.name === "Deploy Convex preview functions");
     const shared = backend?.run?.split("else")[0] ?? "";
-    assert.ok(shared.includes('CONVEX_DEPLOY_KEY="$VRDEX_PREVIEW_ADMIN_TOKEN"'));
+    assert.ok(shared.includes('--url "$VRDEX_PREVIEW_BACKEND_URL" --admin-key "$VRDEX_PREVIEW_ADMIN_TOKEN"'));
     assert.ok(!shared.includes("--preview-create"));
     const deployScript = deploySteps.find(step => step.name === "Deploy Vercel preview output")?.run ?? "";
     const sandboxKeys = deployScript.slice(deployScript.indexOf('for setting in'), deployScript.indexOf('deployment_url='));

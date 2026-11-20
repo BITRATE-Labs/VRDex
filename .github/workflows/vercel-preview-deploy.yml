@@ -290,7 +290,7 @@ jobs:
           set -euo pipefail
           if [ "$REUSE_SANDBOX" = "true" ]; then
             : "${VRDEX_PREVIEW_ADMIN_TOKEN:?Existing sandbox credential is required.}"
-            CONVEX_DEPLOY_KEY="$VRDEX_PREVIEW_ADMIN_TOKEN" pnpm exec convex deploy --yes --typecheck=enable --cmd "node scripts/write-convex-preview-output.mjs" --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL
+            pnpm exec convex deploy --url "$VRDEX_PREVIEW_BACKEND_URL" --admin-key "$VRDEX_PREVIEW_ADMIN_TOKEN" --yes --typecheck=enable --cmd "node scripts/write-convex-preview-output.mjs" --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL
           else
             pnpm exec convex deploy --yes --typecheck=enable --preview-create "$PREVIEW_NAME" --cmd "node scripts/write-convex-preview-output.mjs" --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL
           fi
