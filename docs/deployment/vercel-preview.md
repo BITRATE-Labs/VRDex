@@ -572,7 +572,10 @@ Sandbox server routes receive `CONVEX_ADMIN_TOKEN` for that exact preview only.
 The workflow resolves it through the authorization endpoint used by the pinned Convex CLI,
 checks preview type and URL, masks it, and passes it as a server runtime secret.
 It is recreated with the preview; the project preview-create key is not a server
-runtime credential. No production credential is used.
+runtime credential. No production credential is used. When this server credential
+is configured, OAuth persistence and token validation use normal internal calls
+rather than the restricted test bridge. Ordinary PR previews without it keep their
+existing bridge restrictions.
 Sandbox deploys generate their own API-token and OAuth signing/hash secrets with
 the existing preview secret generator. Shared-branch secrets are stored in that
 preview's environment and reused on later pushes. Provider failures stop deployment

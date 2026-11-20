@@ -33,7 +33,8 @@ export function previewPersistenceBridgeSecret(
     throw new Error("Preview OAuth persistence bridge configuration is incomplete.");
   }
 
-  return secret;
+  // A configured sandbox server uses normal OAuth validation, not the opt-in test bridge.
+  return environment.CONVEX_ADMIN_TOKEN?.trim() ? undefined : secret;
 }
 
 export async function createDynamicMcpClient(input: DynamicMcpClientMutationInput) {

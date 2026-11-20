@@ -26,6 +26,15 @@ describe("web preview OAuth persistence selection", () => {
     );
   });
 
+  it("uses normal server authorization when sandbox has its own admin credential", () => {
+    const environment = {
+      VRDEX_DEPLOYMENT_ENV: "preview", VRDEX_ENABLE_PREVIEW_PERSISTENCE_BRIDGE: "true",
+      VRDEX_PREVIEW_PERSISTENCE_SECRET: "preview-secret",
+    };
+    assert.equal(previewPersistenceBridgeSecret({ ...environment, CONVEX_ADMIN_TOKEN: "sandbox-admin-test" }), undefined);
+    assert.equal(previewPersistenceBridgeSecret({ ...environment, CONVEX_ADMIN_TOKEN: "  " }), "preview-secret");
+  });
+
   it("fails closed when an enabled bridge is incomplete or not preview-scoped", () => {
     assert.throws(
       () =>
