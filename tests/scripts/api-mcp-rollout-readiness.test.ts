@@ -265,7 +265,8 @@ describe("API/MCP rollout readiness checker", () => {
     assert.match(previewWorkflow, /--env "VRDEX_OAUTH_ACCESS_TOKEN_SIGNING_KEY=\$oauth_access_token_signing_key"/);
     assert.match(previewWorkflow, /--env "VRDEX_OAUTH_CLIENT_SECRET_PEPPER=\$oauth_client_secret_pepper"/);
     assert.match(previewWorkflow, /--env "VRDEX_OAUTH_REFRESH_TOKEN_PEPPER=\$oauth_refresh_token_pepper"/);
-    assert.doesNotMatch(previewWorkflow, /--env "CONVEX_ADMIN_TOKEN=/);
+    assert.match(previewWorkflow, /if \[ "\$SANDBOX" = "true" \]; then\s+: "\$\{VRDEX_PREVIEW_ADMIN_TOKEN/);
+    assert.match(previewWorkflow, /--env "CONVEX_ADMIN_TOKEN=\$VRDEX_PREVIEW_ADMIN_TOKEN"/);
 
     // The failure comment and the step that clears it must address the same marker,
     // or a passing rerun silently leaves the stale failure comment behind.

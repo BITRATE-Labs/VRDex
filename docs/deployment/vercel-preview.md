@@ -562,6 +562,11 @@ gh workflow run vercel-preview-deploy.yml --ref main -f pull_number=$pr -f head_
 Sandbox requests run one at a time. Each refresh recreates its separate
 `sandbox-shared` (branch) or `sandbox-pr-<number>` (manual PR) Convex deployment, clearing any drafts saved in that
 sandbox. The URL stays the same. Ordinary previews and CI use their own deployments.
+Sandbox server routes receive `CONVEX_ADMIN_TOKEN` for that exact preview only.
+The workflow resolves it through the pinned Convex CLI's existing authorization,
+checks preview type and URL, masks it, and passes it as a server runtime secret.
+It is recreated with the preview; the project preview-create key is not a server
+runtime credential. No production credential is used.
 Sandbox deploys generate their own API-token and OAuth signing/hash secrets with
 the existing preview secret generator. E2E auth helpers and client-credentials
 bridges remain disabled. These secrets rotate with the fresh backend, so reconnect
