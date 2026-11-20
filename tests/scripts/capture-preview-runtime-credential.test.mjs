@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { assertPreviewRuntimeTarget, resolvePreviewRuntimeCredential } from "../../scripts/capture-preview-runtime-credential.mjs";
+import { assertPreviewRuntimeTarget, resolvePreviewRuntimeCredential, sandboxBackendFromIdentity } from "../../scripts/capture-preview-runtime-credential.mjs";
 
 test("sandbox credential matches the exact preview and rejects production or malformed values", () => {
   const url = "https://example-preview.convex.cloud";
@@ -31,4 +31,12 @@ test("resolves an existing preview without creating or deploying one", async () 
     previewName: "sandbox-shared", previewDeployKey: "prod:test|fake-key", expectedUrl: url,
     fetcher: async () => { throw new Error("must not call the provider"); },
   }), /project preview key/);
+});
+
+test("shared sandbox reuse requires matching isolated backend identity", () => {
+  const identity = { environment: "preview", e2eHelpersEnabled: false, convexBrowser: "https://design-preview.convex.cloud", convexServer: "https://design-preview.convex.cloud", clerkFrontendApi: "https://test.clerk.accounts.dev" };
+  assert.equal(sandboxBackendFromIdentity(identity), identity.convexServer);
+  for (const change of [{ environment: "production" }, { e2eHelpersEnabled: true }, { convexBrowser: "https://other.convex.cloud" }, { clerkFrontendApi: "https://clerk.vrdex.net" }]) {
+    assert.throws(() => sandboxBackendFromIdentity({ ...identity, ...change }));
+  }
 });

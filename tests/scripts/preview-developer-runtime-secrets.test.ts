@@ -9,6 +9,7 @@ import {
   createPreviewDeveloperRuntimeSecrets,
   previewDeveloperRuntimeSecretFiles,
   writePreviewDeveloperRuntimeSecrets,
+  reuseSandboxRuntimeSecrets,
 } from "../../scripts/generate-preview-developer-runtime-secrets.mjs";
 
 describe("preview developer runtime secret generation", () => {
@@ -36,4 +37,20 @@ describe("preview developer runtime secret generation", () => {
       await rm(directory, { force: true, recursive: true });
     }
   });
+});
+
+it("reuses saved shared-sandbox secrets and fails closed on provider errors", () => {
+  const saved = new Map<string, string>();
+  const run = (_command: string, args: string[], options: { input?: string }) => {
+    assert.equal(args.at(-1), "sandbox-shared");
+    const name = args[4]!;
+    if (args[3] === "set") { saved.set(name, options.input!); return { status: 0, stdout: "", stderr: "" }; }
+    return { status: 0, stdout: saved.get(name) ?? "", stderr: saved.has(name) ? "" : `Environment variable "${name}" not found.` };
+  };
+  const first = reuseSandboxRuntimeSecrets("sandbox-shared", run);
+  assert.equal(saved.size, 4);
+  assert.deepEqual(reuseSandboxRuntimeSecrets("sandbox-shared", run), first);
+  assert.throws(() => reuseSandboxRuntimeSecrets("sandbox-shared", () => ({ status: 1, stdout: "", stderr: "provider unavailable" })), /Could not read/);
+  assert.throws(() => reuseSandboxRuntimeSecrets("sandbox-shared", () => ({ status: 0, stdout: "", stderr: "" })), /unexpected response/);
+  assert.throws(() => reuseSandboxRuntimeSecrets("pr-1", run), /restricted/);
 });

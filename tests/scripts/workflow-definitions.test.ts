@@ -160,7 +160,13 @@ describe("fork-aware preview workflows", () => {
   it("gives sandbox its own OAuth keys without enabling auth helpers", () => {
     const generate = deploySteps.find(step => step.name === "Generate sandbox OAuth runtime");
     assert.equal(generate?.if, "steps.pr.outputs.sandbox == 'true'");
-    assert.equal(generate?.run, "node scripts/generate-preview-developer-runtime-secrets.mjs");
+    assert.ok(generate?.run?.includes("generate-preview-developer-runtime-secrets.mjs --reuse-sandbox"));
+    const reuse = deploySteps.find(step => step.name === "Resolve existing shared sandbox backend");
+    assert.equal(reuse?.if, "steps.pr.outputs.sandbox == 'true' && steps.pr.outputs.head_ref == 'codex/sandbox'");
+    const backend = deploySteps.find(step => step.name === "Deploy Convex preview functions");
+    const shared = backend?.run?.split("else")[0] ?? "";
+    assert.ok(shared.includes('CONVEX_DEPLOY_KEY="$VRDEX_PREVIEW_ADMIN_TOKEN"'));
+    assert.ok(!shared.includes("--preview-create"));
     const deployScript = deploySteps.find(step => step.name === "Deploy Vercel preview output")?.run ?? "";
     const sandboxKeys = deployScript.slice(deployScript.indexOf('for setting in'), deployScript.indexOf('deployment_url='));
     for (const name of ["VRDEX_API_TOKEN_PEPPER", "VRDEX_OAUTH_ACCESS_TOKEN_SIGNING_KEY", "VRDEX_OAUTH_CLIENT_SECRET_PEPPER", "VRDEX_OAUTH_REFRESH_TOKEN_PEPPER"]) {

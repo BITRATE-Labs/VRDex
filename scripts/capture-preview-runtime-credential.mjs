@@ -27,15 +27,32 @@ export async function resolvePreviewRuntimeCredential({ previewName, previewDepl
   return deployment.adminKey;
 }
 
+export function sandboxBackendFromIdentity(identity) {
+  if (identity.environment !== "preview" || identity.e2eHelpersEnabled !== false ||
+      identity.convexBrowser !== identity.convexServer ||
+      !/^https:\/\/[a-z0-9-]+\.convex\.cloud$/.test(identity.convexServer ?? "") ||
+      !/^https:\/\/[a-z0-9-]+\.clerk\.accounts\.dev$/.test(identity.clerkFrontendApi ?? "")) {
+    throw new Error("Shared sandbox must already point to an isolated preview backend.");
+  }
+  return identity.convexServer;
+}
+
 async function main() {
   if (!process.env.GITHUB_ENV) throw new Error("GitHub environment file is required.");
+  let expectedUrl = process.env.EXPECTED_CONVEX_PREVIEW_URL;
+  if (process.argv.includes("--existing-sandbox")) {
+    const response = await fetch("https://sandbox.vrdex.net/api/deployment", { redirect: "error", signal: AbortSignal.timeout(20_000) });
+    if (!response.ok) throw new Error("Shared sandbox identity is unavailable.");
+    expectedUrl = sandboxBackendFromIdentity(await response.json());
+  }
   const adminKey = await resolvePreviewRuntimeCredential({
     previewName: process.env.PREVIEW_NAME,
     previewDeployKey: process.env.CONVEX_DEPLOY_KEY,
-    expectedUrl: process.env.EXPECTED_CONVEX_PREVIEW_URL,
+    expectedUrl,
   });
   console.log(`::add-mask::${adminKey}`);
   appendFileSync(process.env.GITHUB_ENV, `VRDEX_PREVIEW_ADMIN_TOKEN=${adminKey}\n`);
+  appendFileSync(process.env.GITHUB_ENV, `VRDEX_PREVIEW_BACKEND_URL=${expectedUrl}\n`);
   console.log("Prepared runtime credential for the verified preview backend.");
 }
 

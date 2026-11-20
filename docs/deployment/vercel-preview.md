@@ -559,19 +559,37 @@ $sha = gh pr view $pr --json headRefOid --jq .headRefOid
 gh workflow run vercel-preview-deploy.yml --ref main -f pull_number=$pr -f head_sha=$sha -f sandbox=true
 ```
 
-Sandbox requests run one at a time. Each refresh recreates its separate
-`sandbox-shared` (branch) or `sandbox-pr-<number>` (manual PR) Convex deployment, clearing any drafts saved in that
-sandbox. The URL stays the same. Ordinary previews and CI use their own deployments.
+Sandbox requests run one at a time. The shared branch reuses its existing
+`sandbox-shared` backend, preserving test data, ownership and OAuth grants across
+pushes. Before updating it, the workflow checks the branded URL's preview/backend
+identity and resolves a matching sandbox credential. If the alias or backend is
+missing or mismatched, it fails instead of creating or replacing a database.
+Bootstrap/recovery requires an operator to create `sandbox-shared` with the
+project preview key and assign a verified sandbox build once.
+Manual PR sandbox requests still recreate `sandbox-pr-<number>` and clear their
+data. Ordinary previews and CI keep their own deployments.
 Sandbox server routes receive `CONVEX_ADMIN_TOKEN` for that exact preview only.
-The workflow resolves it through the pinned Convex CLI's existing authorization,
+The workflow resolves it through the authorization endpoint used by the pinned Convex CLI,
 checks preview type and URL, masks it, and passes it as a server runtime secret.
 It is recreated with the preview; the project preview-create key is not a server
 runtime credential. No production credential is used.
 Sandbox deploys generate their own API-token and OAuth signing/hash secrets with
-the existing preview secret generator. E2E auth helpers and client-credentials
-bridges remain disabled. These secrets rotate with the fresh backend, so reconnect
-Executor after refreshing the sandbox. The separate `VRDex Sandbox` Executor app
+the existing preview secret generator. Shared-branch secrets are stored in that
+preview's environment and reused on later pushes. Provider failures stop deployment
+instead of silently rotating them. E2E auth helpers and client-credentials bridges
+remain disabled. Manual PR sandbox refreshes rotate their secrets and require an
+Executor reconnect. The separate `VRDex Sandbox` Executor app
 uses `https://sandbox.vrdex.net/mcp`, never the production connection.
+
+For BITRATE graph design testing, `sandboxDesignSnapshot:importBitrate` is an
+internal preview-only importer for a bounded copy of event schedules and aggregate
+instance observations. Pass the exact preview URL and the signed-in sandbox
+owner's user ID. It refuses production, a different backend and existing unrelated
+communities. It creates fresh IDs and ownership, retains confirmed associations
+and coverage gaps, pauses collection with no collector assigned, and leaves all
+population publication disabled. Repeating the same fixture does not overwrite
+changes. Membership records, credentials, broadcast settings and live integrations
+are excluded. Keep the private snapshot outside Git. Replacing the backend requires importing it again; ordinary shared-branch pushes preserve it.
 
 Before reclaiming a closed PR's sandbox backend, compare its Convex URL with
 `https://sandbox.vrdex.net/api/deployment`. If they match, move the alias with

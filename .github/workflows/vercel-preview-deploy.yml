@@ -272,13 +272,28 @@ jobs:
       # deployment to exist — so it has to come from the project's preview
       # environment-variable defaults in the Convex dashboard. See
       # docs/deployment/convex-environments.md.
+      - name: Resolve existing shared sandbox backend
+        if: steps.pr.outputs.sandbox == 'true' && steps.pr.outputs.head_ref == 'codex/sandbox'
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PREVIEW }}
+          PREVIEW_NAME: ${{ steps.pr.outputs.preview_name }}
+        run: node scripts/capture-preview-runtime-credential.mjs --existing-sandbox
+
       - name: Deploy Convex preview functions
         if: steps.convex-preview-gate.outputs.enabled == 'true'
         id: convex-preview
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PREVIEW }}
           PREVIEW_NAME: ${{ steps.pr.outputs.preview_name }}
-        run: pnpm exec convex deploy --yes --typecheck=enable --preview-create "$PREVIEW_NAME" --cmd "node scripts/write-convex-preview-output.mjs" --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL
+          REUSE_SANDBOX: ${{ steps.pr.outputs.sandbox == 'true' && steps.pr.outputs.head_ref == 'codex/sandbox' }}
+        run: |
+          set -euo pipefail
+          if [ "$REUSE_SANDBOX" = "true" ]; then
+            : "${VRDEX_PREVIEW_ADMIN_TOKEN:?Existing sandbox credential is required.}"
+            CONVEX_DEPLOY_KEY="$VRDEX_PREVIEW_ADMIN_TOKEN" pnpm exec convex deploy --yes --typecheck=enable --cmd "node scripts/write-convex-preview-output.mjs" --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL
+          else
+            pnpm exec convex deploy --yes --typecheck=enable --preview-create "$PREVIEW_NAME" --cmd "node scripts/write-convex-preview-output.mjs" --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL
+          fi
 
       - name: Configure Convex preview runtime and smoke fixture
         if: steps.convex-preview.outputs.convex_url != ''
@@ -353,7 +368,16 @@ jobs:
 
       - name: Generate sandbox OAuth runtime
         if: steps.pr.outputs.sandbox == 'true'
-        run: node scripts/generate-preview-developer-runtime-secrets.mjs
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PREVIEW }}
+          PREVIEW_NAME: ${{ steps.pr.outputs.preview_name }}
+          REUSE_SANDBOX: ${{ steps.pr.outputs.head_ref == 'codex/sandbox' }}
+        run: |
+          if [ "$REUSE_SANDBOX" = "true" ]; then
+            node scripts/generate-preview-developer-runtime-secrets.mjs --reuse-sandbox
+          else
+            node scripts/generate-preview-developer-runtime-secrets.mjs
+          fi
 
       - name: Build Vercel preview output
         env:
