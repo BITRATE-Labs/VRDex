@@ -1,5 +1,11 @@
 # Contributed event intake checkpoint
 
+Discord timestamp intake converts source epochs deterministically before candidate
+validation. Timestamp-only schedules use UTC without requesting a local timezone;
+dates and overnight offsets come from those instants rather than model arithmetic.
+Mixed wall-clock schedules and ambiguous timestamp evidence retain manual review.
+Regression coverage: `tests/web/event-intake-discord-timestamps.test.ts`.
+
 The 2026-10-13 scheduling follow-up is recorded in the
 [event editor scheduling checkpoint](./event-editor-scheduling-checkpoint.md): explicit
 generation, fixed ends, timezone preferences, prominent Review actions, Linux visual
