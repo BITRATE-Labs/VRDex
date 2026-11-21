@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { discordTimestampFacts, normalizeDiscordTimestampTimes } from "./discord-timestamps";
 import { EventIntakeCandidateSchema, EventIntakeCandidateJsonSchema, resolveEventLocalTime, type EventIntakeCandidate, type EventIntakeDecision, type EventIntakeFields } from "../../api-contracts/src/event-intake";
 
 type PublicMatch = { slug: string; displayName: string };
@@ -129,6 +130,8 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
       if (image.length > 20_000_000) throw new Error("invalid_poster");
       content.push({ type: "input_image", image_url: image, detail: "high" });
     }
+    const timestampFacts = discordTimestampFacts(input.sourceText ?? "");
+    if (timestampFacts.length) content.push({ type: "input_text", text: `Verified Discord timestamp conversions: ${JSON.stringify(timestampFacts)}. These are exact instants, not inferred local clocks. Use UTC dates and clocks from this table, with timezone UTC. For each matching start/end, copy its original <t:epoch:format> token into that field's evidence. Do not ask for a timezone for these instants.` });
     messages.push({ role: "user", content });
     for (; turns < turnBudget;) {
       turns++;
@@ -186,7 +189,7 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
       const parts = data.output.flatMap((item: { content?: { type: string; text?: string }[] }) => item.content ?? []);
       const text = parts.filter((part: { type: string }) => part.type === "output_text").map((part: { text: string }) => part.text).join("");
       const candidate = EventIntakeCandidateSchema.parse(JSON.parse(text));
-      const result = revalidate(candidate, people, communities, events, Boolean(input.context));
+      const result = revalidate(normalizeDiscordTimestampTimes(candidate, input.sourceText ?? ""), people, communities, events, Boolean(input.context));
       decision = result.decision;
       return result;
     }
