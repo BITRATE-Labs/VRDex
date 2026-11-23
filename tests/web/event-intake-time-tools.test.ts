@@ -199,7 +199,7 @@ it("reports runtime loading failures distinctly and leaves poster-only values al
   const poster = createIntakeTimeTools("", []), value = blank(); value.event.start = "18:00";
   assert.equal((await poster.call("resolve_event_time", resolve("November 21 at 18:00 UTC")) as { reason: string }).reason, "text_time_tool_unavailable");
   assert.equal(poster.apply(value).event.start, "18:00");
-  for (const tool of intakeTimeTools) assert.doesNotMatch(JSON.stringify(tool.parameters), /"(?:minLength|oneOf|const|default)":/);
+  for (const tool of intakeTimeTools) assert.doesNotMatch(JSON.stringify(tool.parameters), /"(?:minLength|oneOf|const|default|pattern|maxLength|minimum|maximum)":/);
 });
 
 it("holds the clock rather than discard conflicts when the evidence budget cannot fit both", async () => {
@@ -335,4 +335,37 @@ it("does not borrow a timezone from an unrelated clause, and recovers bracket-fo
   const token = "<t:1795217400:t>", lineup = createIntakeTimeTools(`DJ A ${token}`, []);
   const result = await lineup.call("resolve_event_time", resolve(token, "lineup[0].start", null, null, "DJ A")) as { instant: string };
   assert.equal(result.instant, "2026-11-20T23:30:00Z");
+});
+
+it("keeps established event context when one performer's source context is missing", async () => {
+  for (const text of ["DJ A Tomorrow at 6pm UTC", "DJ A Tomorrow at 6pm"]) {
+    const tools = createIntakeTimeTools(text, []);
+    await tools.call("resolve_event_time", resolve(text.slice(5), "lineup.0.start", null, null, "DJ A"));
+    const value = blank(); Object.assign(value.event, { eventDate: "2026-11-21", timezone: "Europe/Berlin", start: "19:00" });
+    value.lineup = [{ performerLabel: "DJ A", personSlug: null, roleLabel: null, start: "18:00", end: null, startDate: null, endDate: null }];
+    const result = tools.apply(value, { eventDate: "2026-11-21", timezone: "Europe/Berlin" });
+    assert.equal(result.event.eventDate, "2026-11-21");
+    assert.equal(result.event.timezone, "Europe/Berlin");
+    assert.equal(result.lineup[0].start, "18:00");
+    assert.ok(result.questions.length);
+  }
+});
+
+it("clears a superseded date hold after a complete start resolves", async () => {
+  const text = "November 21, 2026 at 18:00 UTC", tools = createIntakeTimeTools(text, []);
+  await tools.call("resolve_event_time", resolve("November 21", "event.eventDate", null, "UTC"));
+  await tools.call("resolve_event_time", resolve(text));
+  const result = tools.apply(blank());
+  assert.equal(result.event.eventDate, "2026-11-21");
+  assert.equal(result.event.start, "18:00");
+  assert.ok(!result.questions.some(item => item.fieldPath === "event.eventDate"));
+});
+
+it("keeps an authored clock for review when an absolute date excerpt also says next", () => {
+  const text = "Next Saturday, November 22, doors 10 PM", tools = createIntakeTimeTools(text, []);
+  const value = blank(); value.event.start = "22:00";
+  value.evidence = [{ fieldPath: "event.start", origin: "text", excerpt: text, assessment: "explicit" }];
+  const result = tools.apply(value);
+  assert.equal(result.event.start, "22:00");
+  assert.ok(result.questions.some(item => item.reason === "source_reference_time_required"));
 });

@@ -4,7 +4,7 @@ Intake exposes bounded `resolve_event_time`, `shift_event_time` and
 `set_event_clock` tools using the existing temporal runtime. Resolutions bind
 server-held candidates to event/lineup fields; the final response cannot replace
 their arithmetic with model-generated clocks. Relative phrases use the original
-message timestamp, supplied separately per trigger post. Personal Discord imports
+message timestamp (the edit timestamp for edited connector posts), supplied separately per trigger post. Personal Discord imports
 derive that anchor from the captured message snowflake. Missing source timezone,
 ambiguous clocks and date-only results remain unresolved until corrected.
 

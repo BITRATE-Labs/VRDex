@@ -96,7 +96,7 @@ it("passes prior events from discordIntakeSources to the agent", async () => {
   assert.deepEqual(claim.context, { trigger: "discord", communitySlug: "night-club", connectorId, mode: "hold", priorEvents: [{ sourceMessageId: M1, eventSlug: "night-at-ari" }] });
   assert.equal(claim.sourceUrl, `https://discord.com/channels/${GUILD}/${CHANNEL}/${M1}`);
   const original = await t.run(async ctx => (await ctx.db.query("discordIntakeMessages").collect()).find(row => row.messageId === M1)!);
-  assert.deepEqual(claim.timeSources, [{ id: M1, text: "now 22:00", referenceInstant: new Date(original.createdAt).toISOString() }]);
+  assert.deepEqual(claim.timeSources, [{ id: M1, text: "now 22:00", referenceInstant: new Date(original.editedAt!).toISOString() }]);
 });
 
 it("list_events puts this run's prior events first and drops unpublished and removed events", async () => {
@@ -654,13 +654,13 @@ it("keeps the Discord link on the draft and off the published event, and keeps a
 });
 
 it("holds unresolved time-tool results for review but keeps optional missing ends publishable", async () => {
-  for (const [reason, expected] of [["source_timezone_required", "draft"], ["No event end is provided", "published"]] as const) {
+  for (const [fieldPath, reason, expected] of [["event.start", "source_timezone_required", "draft"], ["event.eventDate", "invalid_date", "draft"], ["event.timezone", "timezone_choice_required", "draft"], ["event.end", "No event end is provided", "published"]] as const) {
     const { t } = await seedDiscordIntake({ mode: "autopublish" });
     await record(t, "create", message(M1));
     const { runId, draftId } = await startRun(t);
     const value = candidate({ kind: "new" });
     const result = await t.mutation(internal.discordIntake.finishRun, { runId, draftId, candidate: { ...value,
-      questions: [{ fieldPath: reason === "source_timezone_required" ? "event.start" : "event.end", reason, alternatives: [] }] } });
+      questions: [{ fieldPath, reason, alternatives: [] }] } });
     assert.equal(result.outcome, expected);
     if (expected === "draft") assert.equal((await getDraft(t, draftId)).fields.tentative?.start?.time, "22:00");
   }

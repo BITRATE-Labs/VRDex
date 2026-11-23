@@ -204,15 +204,16 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
       const parts = data.output.flatMap((item: { content?: { type: string; text?: string }[] }) => item.content ?? []);
       const text = parts.filter((part: { type: string }) => part.type === "output_text").map((part: { text: string }) => part.text).join("");
       const candidate = EventIntakeCandidateSchema.parse(JSON.parse(text));
+      const existingTimeContext = candidate.decision.kind === "update" ? eventTimeContexts.get(candidate.decision.slug) : undefined;
       if (candidate.decision.kind === "update") {
-        const existing = eventTimeContexts.get(candidate.decision.slug);
+        const existing = existingTimeContext;
         const authoredZone = candidate.evidence.some(item => item.fieldPath === "event.timezone" && item.assessment === "explicit"
           && (item.origin === "poster" || item.origin === "text" && item.excerpt && !/^<t:\d+(?::[tTdDfFR])?>$/.test(item.excerpt)));
         if (existing?.timezone && !authoredZone) candidate.event.timezone = existing.timezone;
         const changesStart = candidate.evidence.some(item => item.fieldPath === "event.start" && item.assessment === "explicit");
         if (existing?.eventDate && !changesStart && !hasAuthoredEventDate(candidate, input.sourceText ?? "")) candidate.event.eventDate = existing.eventDate;
       }
-      const result = revalidate(timeTools.apply(normalizeDiscordTimestampTimes(candidate, timeSources.length ? timeSources.map(source => source.text).join("\n") : input.sourceText ?? "")), people, communities, events, Boolean(input.context));
+      const result = revalidate(timeTools.apply(normalizeDiscordTimestampTimes(candidate, timeSources.length ? timeSources.map(source => source.text).join("\n") : input.sourceText ?? ""), existingTimeContext), people, communities, events, Boolean(input.context));
       decision = result.decision;
       return EventIntakeCandidateSchema.parse(result);
     }

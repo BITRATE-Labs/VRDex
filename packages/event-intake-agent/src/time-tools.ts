@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Candidate } from "../../temporal-runtime/src/types";
-import type { EventIntakeCandidate } from "../../api-contracts/src/event-intake";
+import type { EventIntakeCandidate, EventIntakeFields } from "../../api-contracts/src/event-intake";
 import { discordTimestampFacts, hasAuthoredEventDate, projectInstant, relativeTimePhrase, replaceTimeEvidence, temporalFieldPath } from "./discord-timestamps";
 
 export type IntakeTimeSource = { id: string; text: string; referenceInstant: string };
@@ -10,10 +10,14 @@ const clockPhrases = /\b(?:\d{1,2}:\d{2}(?:\s*[ap]\.?m\.?)?|\d{1,2}\s*[ap]\.?m\.
 const resolve = z.strictObject({ fieldPath: field, performerLabel, text: z.string().max(500), sourceMessageId: z.string().nullable(), timezone: z.string().max(64).nullable() });
 const shift = z.strictObject({ fieldPath: field, performerLabel, candidateId: z.string(), days: z.number().int().min(-7).max(90), hours: z.number().int().min(-168).max(2160), minutes: z.number().int().min(-1440).max(1440) });
 const clock = z.strictObject({ fieldPath: field, performerLabel, candidateId: z.string(), hour: z.number().int().min(0).max(23), minute: z.number().int().min(0).max(59) });
+// Keep wire schemas conservative; safeParse below enforces the complete bounds.
+function wireSchema(schema: z.ZodType) {
+  return JSON.parse(JSON.stringify(z.toJSONSchema(schema), (key, value) => ["pattern", "maxLength", "minimum", "maximum"].includes(key) ? undefined : value));
+}
 export const intakeTimeTools = [
-  { type: "function", name: "resolve_event_time", description: "Resolve an exact source phrase using its original message reference. For a Discord timestamp use only the token; use shift_event_time for offsets. Binds a single validated result to fieldPath. Date-only results never become a start time.", strict: true, parameters: z.toJSONSchema(resolve) },
-  { type: "function", name: "shift_event_time", description: "Shift a returned time candidate. Days are calendar days; hours/minutes are elapsed time. Binds the result to fieldPath. Never invent candidate IDs.", strict: true, parameters: z.toJSONSchema(shift) },
-  { type: "function", name: "set_event_clock", description: "Set a returned candidate's local clock. Rejects nonexistent/ambiguous DST times. Binds the result to fieldPath.", strict: true, parameters: z.toJSONSchema(clock) },
+  { type: "function", name: "resolve_event_time", description: "Resolve an exact source phrase using its original message reference. For a Discord timestamp use only the token; use shift_event_time for offsets. Binds a single validated result to fieldPath. Date-only results never become a start time.", strict: true, parameters: wireSchema(resolve) },
+  { type: "function", name: "shift_event_time", description: "Shift a returned time candidate. Days are calendar days; hours/minutes are elapsed time. Binds the result to fieldPath. Never invent candidate IDs.", strict: true, parameters: wireSchema(shift) },
+  { type: "function", name: "set_event_clock", description: "Set a returned candidate's local clock. Rejects nonexistent/ambiguous DST times. Binds the result to fieldPath.", strict: true, parameters: wireSchema(clock) },
 ];
 
 async function loadTimeRuntime() {
@@ -125,15 +129,22 @@ export function createIntakeTimeTools(sourceText: string, sources: IntakeTimeSou
         return { candidates: [], reason: "time_resolution_required" };
       }
     },
-    apply(candidate: EventIntakeCandidate) {
+    apply(candidate: EventIntakeCandidate, existing: Pick<EventIntakeFields, "eventDate" | "timezone"> = {}) {
       if (runtimeFailed) throw new Error("temporal_runtime_unavailable");
       const authoredDate = hasAuthoredEventDate(candidate, sourceText) ? candidate.event.eventDate : null;
+      const knownDate = authoredDate ?? existing.eventDate;
+      const knownZone = existing.timezone || candidate.evidence.some(item => item.fieldPath === "event.timezone" && item.assessment === "explicit");
+      let establishedDate = false, establishedZone = false;
       const conflictingContext = candidate.evidence.some(item => ["event.eventDate", "event.timezone"].includes(item.fieldPath) && item.assessment === "conflicting");
       // A model that skips the shift tool must not publish the bare timestamp or its own arithmetic.
       for (const evidence of candidate.evidence) {
         const path = temporalFieldPath(evidence.fieldPath);
         if (!/^(event\.(?:eventDate|start|end)|lineup\.\d+\.(?:start|end))$/.test(path) || bindings.has(path)) continue;
-        if (relativeTimePhrase(evidence.excerpt ?? "")) failures.set(path, "relative_time_tool_required");
+        if (relativeTimePhrase(evidence.excerpt ?? "")) {
+          const absolutePart = /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}\b|\b\d{4}-\d{2}-\d{2}\b/i.test(evidence.excerpt ?? "");
+          if (absolutePart) holds.set(path, "source_reference_time_required");
+          else failures.set(path, "relative_time_tool_required");
+        }
         if (discordTimestampFacts(sourceText).some(fact => evidence.excerpt?.includes(fact.epoch)
           && sourceText.split("\n").some(line => line.includes(fact.token) && /\b(?:after|before|later|earlier|shift|move|ignore|wrong|instead)\b/i.test(line)))) failures.set(path, "relative_time_tool_required");
       }
@@ -162,13 +173,18 @@ export function createIntakeTimeTools(sourceText: string, sources: IntakeTimeSou
           failures.set(fieldPath, "time_evidence_limit"); continue;
         }
         candidate.event.timezone = zone;
+        establishedZone = true;
         if (field === "eventDate") candidate.event.eventDate = local.date;
         else {
           const key = field as "start" | "end";
           row[key] = local.time; row[`${key}Date`] = local.date;
           if (establishesDate) candidate.event.eventDate = local.date;
         }
-        if (establishesDate) failures.delete("event.eventDate");
+        if (establishesDate) {
+          failures.delete("event.eventDate");
+          holds.delete("event.eventDate");
+        }
+        establishedDate ||= establishesDate;
         candidate.questions = candidate.questions.filter(item => !paths.has(temporalFieldPath(item.fieldPath)));
       }
       for (const [fieldPath, reason] of failures) {
@@ -184,8 +200,8 @@ export function createIntakeTimeTools(sourceText: string, sources: IntakeTimeSou
         const match = /^lineup\.(\d+)\.(start|end)$/.exec(fieldPath);
         const row = match ? candidate.lineup[Number(match[1])] : candidate.event;
         const field = match?.[2] ?? fieldPath.slice(6);
-        if (field === "eventDate" || reason === "source_reference_time_required") candidate.event.eventDate = null;
-        if (reason === "source_timezone_required") candidate.event.timezone = null;
+        if (!knownDate && !establishedDate && (fieldPath === "event.eventDate" || fieldPath === "event.start" && reason === "source_reference_time_required")) candidate.event.eventDate = null;
+        if (!knownZone && !establishedZone && fieldPath === "event.start" && reason === "source_timezone_required") candidate.event.timezone = null;
         if (row && field !== "eventDate" && (reason === "source_reference_time_required" || !authoredDate)) row[`${field as "start" | "end"}Date`] = null;
         if (candidate.questions.length === 100) candidate.questions.pop();
         candidate.questions.push({ fieldPath, reason, alternatives: [] });
