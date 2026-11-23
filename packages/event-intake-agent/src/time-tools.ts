@@ -70,6 +70,9 @@ export function createIntakeTimeTools(sourceText: string, sources: IntakeTimeSou
           // A local relative phrase needs a zone actually written in that message.
           const clause = text.split(/[\n;,|]|(?<=[.!?])\s+/).find(part => part.includes(args.text)) ?? args.text;
           const zone = await tools.resolveTimeZone({ text: clause, calendarContext: provisional });
+          const matchedZone = zone.candidates[0];
+          if (zone.status === "resolved" && matchedZone?.kind === "iana"
+            && /^[a-z]{2,5}$/i.test(matchedZone.matchedText) && !/^(UTC|GMT)$/i.test(matchedZone.matchedText)) throw new Error("source_timezone_required");
           const absoluteIso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/.test(args.text);
           if (!token && !absoluteIso && (args.text.match(clockPhrases)?.length ?? 0) > 1) throw new Error("ambiguous_or_unresolved_time");
           const elapsed = /^(?:in\s+\d+\s+(?:minutes?|hours?)|\d+\s+(?:minutes?|hours?)\s+(?:from now|ago))$/i.test(args.text);
@@ -151,7 +154,7 @@ export function createIntakeTimeTools(sourceText: string, sources: IntakeTimeSou
         if (!/^(event\.(?:eventDate|start|end)|lineup\.\d+\.(?:start|end))$/.test(path) || bindings.has(path)) continue;
         if (relativeTimePhrase(evidence.excerpt ?? "")) {
           const absolutePart = /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}\b|\b\d{4}-\d{2}-\d{2}\b/i.test(evidence.excerpt ?? "");
-          if (absolutePart) holds.set(path, "source_reference_time_required");
+          if (absolutePart || evidence.origin === "poster" || ![sourceText, ...sources.map(source => source.text)].some(text => evidence.excerpt && text.includes(evidence.excerpt))) holds.set(path, "source_reference_time_required");
           else failures.set(path, "relative_time_tool_required");
         }
         if (discordTimestampFacts(sourceText).some(fact => evidence.excerpt?.includes(fact.epoch)

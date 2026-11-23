@@ -46,22 +46,45 @@ function directSourceLine(line: string, token: string, label?: string) {
 /** Normalize only clocks tied to their own direct source clause, preserving authored context. */
 export function normalizeDiscordTimestampTimes(candidate: EventIntakeCandidate, source: string) {
   const facts = discordTimestampFacts(source);
-  if (!facts.length || candidate.evidence.some(item => item.assessment === "conflicting" && /^(event\.(?:start|end|eventDate|timezone)|lineup)/.test(temporalFieldPath(item.fieldPath)))) return candidate;
+  if (!facts.length) return candidate;
   const clocks = [["event", candidate.event], ...candidate.lineup.map((row, index) => [`lineup.${index}`, row] as const)] as const;
+  const reviewUncorrectedClocks = () => {
+    for (const [prefix, row] of clocks) {
+      for (const field of ["start", "end"] as const) {
+        if (!row[field]) continue;
+        const fieldPath = `${prefix}.${field}`;
+        const evidence = candidate.evidence.filter(item => temporalFieldPath(item.fieldPath) === fieldPath);
+        const matches = facts.filter(fact => evidence.some(item => item.excerpt?.includes(fact.token)));
+        if (!matches.length) continue;
+        let mismatch = new Set(matches.map(fact => fact.epoch)).size !== 1;
+        try {
+          const expected = projectInstant(matches[0].utc, candidate.event.timezone ?? "UTC");
+          const date = row[`${field}Date`] ?? candidate.event.eventDate;
+          mismatch ||= row[field] !== expected.time || Boolean(date && date !== expected.date);
+        } catch { mismatch = true; }
+        if (mismatch && !candidate.questions.some(item => temporalFieldPath(item.fieldPath) === fieldPath && item.reason === "time_resolution_required")) {
+          if (candidate.questions.length === 100) candidate.questions.pop();
+          candidate.questions.push({ fieldPath, reason: "time_resolution_required", alternatives: [] });
+        }
+      }
+    }
+    return candidate;
+  };
+  if (candidate.evidence.some(item => item.assessment === "conflicting" && /^(event\.(?:start|end|eventDate|timezone)|lineup)/.test(temporalFieldPath(item.fieldPath)))) return reviewUncorrectedClocks();
   const resolved = [];
   for (const [prefix, row] of clocks) {
     for (const field of ["start", "end"] as const) {
       if (!row[field]) continue;
       const evidence = candidate.evidence.filter(item => temporalFieldPath(item.fieldPath) === `${prefix}.${field}`);
-      if (evidence.some(item => relativeTimePhrase(item.excerpt ?? ""))) return candidate;
+      if (evidence.some(item => relativeTimePhrase(item.excerpt ?? ""))) return reviewUncorrectedClocks();
       const matches = facts.filter(fact => evidence.some(item => item.excerpt?.includes(fact.token)));
-      if (new Set(matches.map(fact => fact.epoch)).size !== 1) return candidate;
+      if (new Set(matches.map(fact => fact.epoch)).size !== 1) return reviewUncorrectedClocks();
       const label = "performerLabel" in row ? row.performerLabel ?? undefined : undefined;
       const fact = matches.find(fact => source.split("\n").some(line => directSourceLine(line, fact.token, label)));
-      if (!fact) return candidate;
+      if (!fact) return reviewUncorrectedClocks();
       // Repeated references in other clauses may express corrections or relative shifts.
       if (source.split("\n").some(line => line.includes(fact.token) && !directSourceLine(line, fact.token)
-        && !candidate.lineup.some(row => row.performerLabel && directSourceLine(line, fact.token, row.performerLabel)))) return candidate;
+        && !candidate.lineup.some(row => row.performerLabel && directSourceLine(line, fact.token, row.performerLabel)))) return reviewUncorrectedClocks();
       resolved.push({ row, field, fieldPath: `${prefix}.${field}`, fact,
         assessment: evidence.some(item => item.assessment === "explicit") ? "explicit" as const : "inferred" as const });
     }
@@ -70,7 +93,7 @@ export function normalizeDiscordTimestampTimes(candidate: EventIntakeCandidate, 
   const timezone = candidate.event.timezone ?? "UTC";
   let values;
   try { values = resolved.map(item => ({ ...item, local: projectInstant(item.fact.utc, timezone) })); }
-  catch { return candidate; }
+  catch { return reviewUncorrectedClocks(); }
   const start = values.find(item => item.fieldPath === "event.start");
   const date = start?.local.date ?? values.filter(item => item.field === "start").map(item => item.local.date).sort()[0];
   const authoredDate = hasAuthoredEventDate(candidate, source);

@@ -386,3 +386,47 @@ it("validates full meridiem tokens without accepting their colon-clock substring
     assert.equal("candidateId" in result, hour === 18);
   }
 });
+
+it("preserves poster-relative clocks when no text tool can resolve their date", () => {
+  for (const source of ["", "See the poster for tonight's schedule"]) {
+    const value = blank(); Object.assign(value.event, { start: "22:00", eventDate: "2026-11-20", startDate: "2026-11-20" });
+    value.evidence = [{ fieldPath: "event.start", origin: "poster", excerpt: "TONIGHT 10 PM", assessment: "explicit" }];
+    const result = createIntakeTimeTools(source, []).apply(value);
+    assert.equal(result.event.start, "22:00");
+    assert.equal(result.event.startDate, null);
+    assert.ok(result.questions.some(item => item.reason === "source_reference_time_required"));
+  }
+});
+
+it("keeps abbreviation zones unconfirmed while preserving the source wall clock", async () => {
+  for (const abbreviation of ["EST", "PST", "CET"]) {
+    const text = `November 21, 2026 at 10 PM ${abbreviation}`, tools = createIntakeTimeTools(text, []);
+    const resolved = await tools.call("resolve_event_time", resolve(text));
+    assert.equal((resolved as { reason: string }).reason, "source_timezone_required");
+    const value = blank(); value.event.start = "22:00";
+    const result = tools.apply(value);
+    assert.equal(result.event.start, "22:00");
+    assert.ok(result.questions.some(item => item.reason === "source_timezone_required"));
+  }
+});
+
+it("holds a date-only timestamp update rather than silently discarding the announced change", async () => {
+  const text = "Date change: now <t:1796000000:D>";
+  let turn = 0;
+  const result = await extractEventIntake({ draftId: "fixture", sourceText: text, context: { trigger: "discord", communitySlug: "club" } }, {
+    authorize: async () => ({ actorUserId: "fixture", version: 1 }), search_people: async () => [], search_communities: async () => [], enabled: true, apiKey: "fixture",
+    list_events: async () => [{ slug: "event", title: "Event", eventDate: "2026-11-20", start: "23:00", lineupSummary: "" }],
+    get_event: async () => ({ eventDate: "2026-11-20", timezone: "UTC", start: { time: "23:00" } }),
+    fetchImplementation: async () => {
+      const tool = (name: string, args: unknown) => Response.json({ status: "completed", output: [{ type: "function_call", name, call_id: String(turn), arguments: JSON.stringify(args) }] });
+      if (++turn === 1) return tool("list_events", { limit: 1 });
+      if (turn === 2) return tool("get_event", { slug: "event" });
+      const value = blank(); value.event.eventDate = "2026-11-29"; value.decision = { kind: "update", slug: "event" };
+      value.evidence = [{ fieldPath: "event.eventDate", origin: "text", excerpt: "<t:1796000000:D>", assessment: "explicit" }];
+      return Response.json({ status: "completed", output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(value) }] }] });
+    },
+  });
+  assert.equal(result.event.eventDate, "2026-11-20");
+  assert.ok(result.questions.some(item => item.fieldPath === "event.eventDate" && item.reason === "authored_date_conflict"));
+  assert.ok(!explicitUpdateKeys(result.evidence, "discord_announcements").includes("eventDate"));
+});

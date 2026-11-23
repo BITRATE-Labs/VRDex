@@ -18,6 +18,12 @@ Calendar-day shifts require a source timezone and differ from elapsed-hour shift
 across DST. The tools keep the existing five-call/six-turn extraction budget and
 make no extra model request of their own.
 
+An explicit date-only update that cannot be safely applied keeps the current day
+and requests date review. Partial normalization checks every cited epoch for
+disagreement so mixed wall clocks cannot bypass deterministic time validation.
+Timezone abbreviations remain unconfirmed clues, while exact token-only instants
+retain the UTC default. Poster-relative clocks remain visible for date review.
+
 Fully specified text dates can resolve without a message anchor when their result
 is independent of the reference date. Poster-only or unavailable text tools do
 not erase independently extracted facts. A calendar-library load failure reports

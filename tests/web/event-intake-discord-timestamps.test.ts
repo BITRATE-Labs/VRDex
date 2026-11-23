@@ -47,7 +47,9 @@ it("leaves mixed wall-clock schedules and ambiguous or invented timestamp eviden
   ]) {
     const value = candidate(); change(value);
     const before = structuredClone(value);
-    assert.deepEqual(normalizeDiscordTimestampTimes(value, source), before);
+    const result = normalizeDiscordTimestampTimes(value, source);
+    assert.deepEqual({ ...result, questions: before.questions }, before);
+    assert.ok(result.questions.some(item => item.reason === "time_resolution_required"));
   }
 });
 
@@ -73,7 +75,9 @@ it("does not trust stale startDate without a start, or discard conflicting sourc
   assert.equal(normalizeDiscordTimestampTimes(value, source).event.eventDate, "2026-11-20");
   const conflict = candidate(); conflict.evidence[0].assessment = "conflicting";
   const before = structuredClone(conflict);
-  assert.deepEqual(normalizeDiscordTimestampTimes(conflict, source), before);
+  const result = normalizeDiscordTimestampTimes(conflict, source);
+  assert.deepEqual({ ...result, questions: before.questions }, before);
+  assert.ok(result.questions.some(item => item.reason === "time_resolution_required"));
 });
 
 it("does not assign one source token to other performers or ignore relative meaning", () => {
@@ -81,7 +85,9 @@ it("does not assign one source token to other performers or ignore relative mean
     const value = candidate(); value.lineup = value.lineup.slice(0, text.includes("after") ? 1 : 2);
     value.evidence = value.lineup.map((_, index) => ({ fieldPath: `lineup.${index}.start`, origin: "text", excerpt: `<t:${epochs[0]}:t>`, assessment: "explicit" }));
     const before = structuredClone(value);
-    assert.deepEqual(normalizeDiscordTimestampTimes(value, text), before);
+    const result = normalizeDiscordTimestampTimes(value, text);
+    assert.deepEqual({ ...result, questions: before.questions }, before);
+    assert.ok(result.questions.some(item => item.reason === "time_resolution_required"));
   }
 });
 
@@ -130,4 +136,12 @@ it("does not erase multiline relative corrections during direct normalization", 
   const result = normalizeDiscordTimestampTimes(value, text);
   assert.equal(result.event.start, "00:00");
   assert.equal(result.evidence[0].excerpt, text);
+});
+
+it("holds wrong token arithmetic when a plain wall clock prevents full normalization", () => {
+  const value = candidate(); value.event.start = "22:00";
+  value.evidence.push({ fieldPath: "event.start", origin: "text", excerpt: "Doors 22:00", assessment: "explicit" });
+  const result = normalizeDiscordTimestampTimes(value, `Doors 22:00\n${source}`);
+  assert.equal(result.event.start, "22:00");
+  assert.equal(result.questions.filter(item => item.fieldPath.startsWith("lineup.") && item.reason === "time_resolution_required").length, 4);
 });

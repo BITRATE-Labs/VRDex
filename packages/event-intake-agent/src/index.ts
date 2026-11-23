@@ -211,7 +211,15 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
           && (item.origin === "poster" || item.origin === "text" && item.excerpt && !/^<t:\d+(?::[tTdDfFR])?>$/.test(item.excerpt)));
         if (existing?.timezone && !authoredZone) candidate.event.timezone = existing.timezone;
         const changesStart = candidate.evidence.some(item => item.fieldPath === "event.start" && item.assessment === "explicit");
-        if (existing?.eventDate && !changesStart && !hasAuthoredEventDate(candidate, input.sourceText ?? "")) candidate.event.eventDate = existing.eventDate;
+        if (existing?.eventDate && !changesStart && !hasAuthoredEventDate(candidate, input.sourceText ?? "")) {
+          const announcedDateChange = candidate.event.eventDate !== existing.eventDate
+            && candidate.evidence.some(item => item.fieldPath === "event.eventDate" && item.assessment === "explicit");
+          candidate.event.eventDate = existing.eventDate;
+          if (announcedDateChange) {
+            if (candidate.questions.length === 100) candidate.questions.pop();
+            candidate.questions.push({ fieldPath: "event.eventDate", reason: "authored_date_conflict", alternatives: [] });
+          }
+        }
       }
       const result = revalidate(timeTools.apply(normalizeDiscordTimestampTimes(candidate, timeSources.length ? timeSources.map(source => source.text).join("\n") : input.sourceText ?? ""), existingTimeContext), people, communities, events, Boolean(input.context));
       decision = result.decision;
