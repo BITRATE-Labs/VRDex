@@ -113,3 +113,12 @@ it("retains explicit formatted-token and temporal context evidence through conne
   for (const key of ["start", "eventDate", "timezone", "lineup"]) assert.ok(keys.includes(key as never), key);
   assert.equal(sanitized.event.start, "23:30");
 });
+
+it("keeps direct conversion within the evidence limit without losing conflict warnings", () => {
+  const value = candidate();
+  value.evidence.push(...Array.from({ length: 36 }, (_, index) => ({ fieldPath: `other.${index}`, origin: "text" as const, excerpt: "Other source fact", assessment: index === 35 ? "conflicting" as const : "explicit" as const })));
+  const result = normalizeDiscordTimestampTimes(value, source);
+  assert.equal(result.evidence.length, 40);
+  assert.ok(result.evidence.some(item => item.assessment === "conflicting"));
+  assert.equal(result.event.eventDate, "2026-11-20");
+});

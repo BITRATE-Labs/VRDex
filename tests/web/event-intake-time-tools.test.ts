@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
-import { createIntakeTimeTools } from "../../packages/event-intake-agent/src/time-tools";
+import { createIntakeTimeTools, intakeTimeTools } from "../../packages/event-intake-agent/src/time-tools";
+import { EventIntakeCandidateSchema } from "../../packages/api-contracts/src/event-intake";
 import { extractEventIntake } from "../../packages/event-intake-agent/src/index";
 import type { EventIntakeCandidate } from "../../packages/api-contracts/src/event-intake";
 const blank = (): EventIntakeCandidate => ({ event: { title: null, communitySlug: null, eventDate: null, start: null, end: null, startDate: null, endDate: null, timezone: null, venueLabel: null, summary: null, sourceUrl: null }, lineup: [], evidence: [], questions: [], decision: { kind: "new" } });
@@ -30,7 +31,7 @@ it("requires the right message in a batch and never accepts invented phrases or 
   const result = await tools.call("resolve_event_time", resolve(text, "event.start", "second")) as { date: string };
   assert.equal(result.date, "2026-11-22");
   assert.ok("reason" in (await tools.call("resolve_event_time", resolve("Next month", "event.start", "second")) as object));
-  assert.equal(tools.apply(blank()).event.start, null);
+  assert.equal(tools.apply(blank()).event.start, "18:00");
 });
 
 it("does not silently use UTC for local-relative phrases without a source timezone", async () => {
@@ -121,4 +122,106 @@ it("holds a relative timestamp field for review when the model skips the time to
   const result = createIntakeTimeTools(text, []).apply(value);
   assert.equal(result.event.start, null);
   assert.equal(result.questions[0].reason, "relative_time_tool_required");
+});
+
+it("does not let a lineup binding erase conflicting event context or manufacture an authored date", async () => {
+  const token = "<t:1795217400:t>", tools = createIntakeTimeTools(token, []);
+  await tools.call("resolve_event_time", resolve(token, "lineup.0.start"));
+  const value = blank(); value.event.eventDate = "2026-11-22";
+  value.lineup = [{ performerLabel: "DJ", personSlug: null, roleLabel: null, start: "23:30", end: null, startDate: null, endDate: null }];
+  value.evidence = [{ fieldPath: "event.eventDate", origin: "text", excerpt: "Two contradictory dates", assessment: "conflicting" }];
+  value.questions = [{ fieldPath: "event.eventDate", reason: "Which date?", alternatives: [] }];
+  const result = tools.apply(value);
+  assert.equal(result.evidence[0].assessment, "conflicting");
+  assert.equal(result.questions[0].reason, "Which date?");
+  assert.equal(result.event.eventDate, "2026-11-22");
+  assert.equal(result.lineup[0].start, null);
+});
+
+it("resolves fully specified web dates without inventing an anchor, but holds relative dates", async () => {
+  for (const text of ["November 21, 2026 at 18:00 UTC", "2026-11-21T18:00:00Z"]) {
+    const tools = createIntakeTimeTools(text, []);
+    const result = await tools.call("resolve_event_time", resolve(text)) as { instant: string };
+    assert.equal(result.instant, "2026-11-21T18:00:00Z");
+  }
+  const text = "Tomorrow at 6pm UTC", tools = createIntakeTimeTools(text, []);
+  assert.ok("reason" in (await tools.call("resolve_event_time", resolve(text)) as object));
+});
+
+it("invalidates a guessed date when its tool resolution fails and supports zoneless elapsed offsets", async () => {
+  const text = "Tomorrow", tools = createIntakeTimeTools(text, [{ id: "post", text, referenceInstant: "2026-11-20T12:00:00Z" }]);
+  await tools.call("resolve_event_time", resolve(text, "event.eventDate"));
+  const guessed = blank(); guessed.event.eventDate = "2026-11-25";
+  guessed.evidence = [{ fieldPath: "event.eventDate", origin: "text", excerpt: text, assessment: "explicit" }];
+  assert.equal(tools.apply(guessed).event.eventDate, null);
+  const elapsed = "in 30 minutes", clock = createIntakeTimeTools(elapsed, [{ id: "post", text: elapsed, referenceInstant: "2026-11-20T23:50:00Z" }]);
+  const result = await clock.call("resolve_event_time", resolve(elapsed)) as { instant: string };
+  assert.equal(result.instant, "2026-11-21T00:20:00Z");
+});
+
+it("uses verified time context when the model emits an invalid timezone without discarding other facts", async () => {
+  const token = "<t:1795217400:t>";
+  for (const timezone of ["Mars/Base", "NotAZone", "PST"]) {
+    const tools = createIntakeTimeTools(token, []);
+    await tools.call("resolve_event_time", resolve(token));
+    const value = blank(); value.event.title = "Keep this title"; value.event.timezone = timezone;
+    const result = tools.apply(value);
+    assert.equal(result.event.title, "Keep this title");
+    assert.equal(result.event.timezone, "UTC");
+    assert.equal(result.event.start, "23:30");
+  }
+});
+
+it("bounds generated evidence while retaining conflicts and the applied time context", async () => {
+  const token = "<t:1795217400:t>", tools = createIntakeTimeTools(token, []);
+  await tools.call("resolve_event_time", resolve(token));
+  const value = blank(); value.evidence = Array.from({ length: 40 }, (_, index) => ({ fieldPath: `other.${index}`, origin: "text", excerpt: "Keep facts", assessment: index === 39 ? "conflicting" : "explicit" }));
+  const result = tools.apply(value);
+  assert.equal(result.evidence.length, 40);
+  assert.ok(result.evidence.some(item => item.assessment === "conflicting"));
+  for (const path of ["event.start", "event.timezone", "event.eventDate"]) assert.ok(result.evidence.some(item => item.fieldPath === path));
+  assert.ok(EventIntakeCandidateSchema.safeParse(result).success);
+});
+
+it("reports runtime loading failures distinctly and leaves poster-only values alone when text tools are unavailable", async () => {
+  const token = "<t:1795217400:t>", tools = createIntakeTimeTools(token, [], async () => { throw new Error("fixture import failure"); });
+  assert.equal((await tools.call("resolve_event_time", resolve(token)) as { reason: string }).reason, "temporal_runtime_unavailable");
+  assert.throws(() => tools.apply(blank()), /temporal_runtime_unavailable/);
+  const poster = createIntakeTimeTools("", []), value = blank(); value.event.start = "18:00";
+  assert.equal((await poster.call("resolve_event_time", resolve("November 21 at 18:00 UTC")) as { reason: string }).reason, "text_time_tool_unavailable");
+  assert.equal(poster.apply(value).event.start, "18:00");
+  for (const tool of intakeTimeTools) assert.doesNotMatch(JSON.stringify(tool.parameters), /"(?:minLength|oneOf|const|default)":/);
+});
+
+it("holds the clock rather than discard conflicts when the evidence budget cannot fit both", async () => {
+  const token = "<t:1795217400:t>", tools = createIntakeTimeTools(token, []);
+  await tools.call("resolve_event_time", resolve(token));
+  const value = blank(); value.evidence = Array.from({ length: 40 }, (_, index) => ({ fieldPath: `other.${index}`, origin: "text", excerpt: "Conflict", assessment: "conflicting" }));
+  const result = tools.apply(value);
+  assert.equal(result.event.start, null);
+  assert.equal(result.evidence.length, 40);
+  assert.ok(result.evidence.every(item => item.assessment === "conflicting"));
+  assert.ok(result.questions.some(item => item.reason === "time_evidence_limit"));
+});
+
+it("retains an existing event's server-read timezone when an update model drops that context", async () => {
+  const token = "<t:1795217400:t>", text = `Starts ${token}`;
+  let turn = 0;
+  const result = await extractEventIntake({ draftId: "fixture", sourceText: text, context: { trigger: "discord", communitySlug: "club" } }, {
+    authorize: async () => ({ actorUserId: "fixture", version: 1 }), search_people: async () => [], search_communities: async () => [], enabled: true, apiKey: "fixture",
+    list_events: async () => [{ slug: "event", title: "Event", eventDate: "2026-11-20", start: "19:00", lineupSummary: "" }],
+    get_event: async () => ({ eventDate: "2026-11-20", timezone: "America/New_York", start: { time: "19:00" } }),
+    fetchImplementation: async () => {
+      const tool = (name: string, args: unknown) => Response.json({ status: "completed", output: [{ type: "function_call", name, call_id: String(turn), arguments: JSON.stringify(args) }] });
+      if (++turn === 1) return tool("list_events", { limit: 1 });
+      if (turn === 2) return tool("get_event", { slug: "event" });
+      const value = blank(); Object.assign(value.event, { start: "00:50", startDate: "2026-11-21", eventDate: "2026-11-21", timezone: "UTC" });
+      value.decision = { kind: "update", slug: "event" };
+      value.evidence = [{ fieldPath: "event.start", origin: "text", excerpt: token, assessment: "explicit" }];
+      return Response.json({ status: "completed", output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(value) }] }] });
+    },
+  });
+  assert.equal(result.event.timezone, "America/New_York");
+  assert.equal(result.event.eventDate, "2026-11-20");
+  assert.equal(result.event.start, "18:30");
 });

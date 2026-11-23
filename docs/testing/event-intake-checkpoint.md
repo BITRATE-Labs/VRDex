@@ -18,6 +18,15 @@ Calendar-day shifts require a source timezone and differ from elapsed-hour shift
 across DST. The tools keep the existing five-call/six-turn extraction budget and
 make no extra model request of their own.
 
+Fully specified text dates can resolve without a message anchor when their result
+is independent of the reference date. Poster-only or unavailable text tools do
+not erase independently extracted facts. A calendar-library load failure reports
+`temporal_runtime_unavailable` through the existing extraction fallback and run
+metrics rather than appearing as ordinary ambiguity. Generated evidence stays
+within 40 rows, preserving applied time context and conflict warnings first.
+Token-only updates reuse the timezone read from the existing event unless the
+source explicitly authors a replacement zone.
+
 Regression coverage: `tests/web/event-intake-discord-timestamps.test.ts`,
 `tests/web/event-intake-time-tools.test.ts`, and the Discord source/claim tests.
 

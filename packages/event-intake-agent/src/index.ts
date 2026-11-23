@@ -121,7 +121,8 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
   let turns = 0, toolCalls = 0, inputTokens = 0, outputTokens = 0;
   const people = new Set<string>(), communities = new Set<string>(), events = new Set<string>();
   const listEvents = input.context && deps.list_events, getEvent = input.context && deps.get_event;
-  const timeSources = deps.timeSources ?? authority.timeSources ?? [];
+  const timeSources = (deps.timeSources ?? authority.timeSources ?? []).filter(source => source.text.trim() && input.sourceText?.includes(source.text));
+  const eventTimeContexts = new Map<string, EventIntakeFields>();
   const timeTools = createIntakeTimeTools(input.sourceText ?? "", timeSources);
   const runTools = [...tools, ...intakeTimeTools, ...(listEvents ? [listEventsTool] : []), ...(getEvent ? [getEventTool] : [])];
   const messages: unknown[] = [];
@@ -188,7 +189,9 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
           });
         } else if (call.name === "get_event" && getEvent) {
           if (!args || Object.keys(args).join(",") !== "slug" || typeof args.slug !== "string" || args.slug.length < 1 || args.slug.length > 64) throw new Error("invalid_tool");
-          output = events.has(args.slug) ? { event: await getEvent(args.slug) } : { event: null, reason: "unlisted_event" };
+          const event = events.has(args.slug) ? await getEvent(args.slug) : null;
+          if (event) eventTimeContexts.set(args.slug, event);
+          output = events.has(args.slug) ? { event } : { event: null, reason: "unlisted_event" };
         } else throw new Error("invalid_tool");
         toolCalls++;
         messages.push(...data.output, { type: "function_call_output", call_id: call.call_id, output: JSON.stringify(output) });
@@ -197,6 +200,12 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
       const parts = data.output.flatMap((item: { content?: { type: string; text?: string }[] }) => item.content ?? []);
       const text = parts.filter((part: { type: string }) => part.type === "output_text").map((part: { text: string }) => part.text).join("");
       const candidate = EventIntakeCandidateSchema.parse(JSON.parse(text));
+      if (candidate.decision.kind === "update") {
+        const existing = eventTimeContexts.get(candidate.decision.slug);
+        const authoredZone = candidate.evidence.some(item => item.fieldPath === "event.timezone" && item.assessment === "explicit"
+          && (item.origin === "poster" || item.origin === "text" && item.excerpt && !/^<t:\d+(?::[tTdDfFR])?>$/.test(item.excerpt)));
+        if (existing?.timezone && !authoredZone) candidate.event.timezone = existing.timezone;
+      }
       const result = revalidate(timeTools.apply(normalizeDiscordTimestampTimes(candidate, timeSources.length ? timeSources.map(source => source.text).join("\n") : input.sourceText ?? "")), people, communities, events, Boolean(input.context));
       decision = result.decision;
       return EventIntakeCandidateSchema.parse(result);
@@ -204,7 +213,7 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
     throw new Error("tool_budget");
   } catch (error) {
     const code = error instanceof Error ? error.message : "provider_failure";
-    reason = ["provider_failure", "incomplete_response", "refusal", "tool_budget", "invalid_tool", "invalid_poster"].includes(code) ? code : "invalid_response";
+    reason = ["provider_failure", "incomplete_response", "refusal", "tool_budget", "invalid_tool", "invalid_poster", "temporal_runtime_unavailable"].includes(code) ? code : "invalid_response";
     return fallback(reason);
   } finally {
     let timer: ReturnType<typeof setTimeout> | undefined;
