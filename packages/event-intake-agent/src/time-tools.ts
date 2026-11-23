@@ -59,7 +59,7 @@ export function createIntakeTimeTools(sourceText: string, sources: IntakeTimeSou
           const zone = await tools.resolveTimeZone({ text, calendarContext: provisional });
           const absoluteIso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/.test(args.text);
           const elapsed = /^(?:in\s+\d+\s+(?:minutes?|hours?)|\d+\s+(?:minutes?|hours?)\s+(?:from now|ago))$/i.test(args.text);
-          const timezone = zone.status === "resolved" ? zone.candidates[0]?.timeZone : (token || absoluteIso || elapsed) && !args.timezone ? "UTC" : undefined;
+          const timezone = zone.status === "resolved" ? zone.candidates[0]?.timeZone : (token || absoluteIso || elapsed) && (!args.timezone || args.timezone === "UTC") ? "UTC" : undefined;
           if (!timezone || args.timezone && args.timezone !== timezone) throw new Error("source_timezone_required");
           const context = parseCalendarContext(timezone, reference.referenceInstant);
           const result = await tools.resolveCalendarQuery({ query: args.text, calendarContext: context });

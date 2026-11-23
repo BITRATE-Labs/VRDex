@@ -172,6 +172,12 @@ it("uses verified time context when the model emits an invalid timezone without 
   }
 });
 
+it("accepts an explicit UTC tool argument for exact instants without treating it as an authored local zone", async () => {
+  const token = "<t:1795217400:t>", tools = createIntakeTimeTools(token, []);
+  const result = await tools.call("resolve_event_time", resolve(token, "event.start", null, "UTC")) as { instant: string };
+  assert.equal(result.instant, "2026-11-20T23:30:00Z");
+});
+
 it("bounds generated evidence while retaining conflicts and the applied time context", async () => {
   const token = "<t:1795217400:t>", tools = createIntakeTimeTools(token, []);
   await tools.call("resolve_event_time", resolve(token));
