@@ -5,6 +5,7 @@ import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { ConvexError } from "convex/values";
 import { buildSourceText, pickPosterAttachments } from "../../convex/_discordIntake";
 import { saveIntakeDraft } from "../../convex/_eventIntake";
+import { replaceEventLineup } from "../../convex/_eventLineup";
 import { dismissHeldDraft, heldUpdatePatch } from "../../convex/_eventIntakeHeld";
 import { failureReason } from "../../convex/discordIntakeRun";
 import { EVENT_POSTER_MAX_BYTES, resolveEventLocalTime } from "../../packages/api-contracts/src/event-intake";
@@ -650,6 +651,42 @@ it("keeps the Discord link on the draft and off the published event, and keeps a
     assert.equal((await t.run(ctx => ctx.db.get(result.eventId!)))!.sourceUrl, published);
     assert.equal((await getDraft(t, draftId)).fields.sourceUrl, sourceUrl ?? DISCORD_LINK);
   }
+});
+
+it("holds unresolved time-tool results for review but keeps optional missing ends publishable", async () => {
+  for (const [reason, expected] of [["source_timezone_required", "draft"], ["No event end is provided", "published"]] as const) {
+    const { t } = await seedDiscordIntake({ mode: "autopublish" });
+    await record(t, "create", message(M1));
+    const { runId, draftId } = await startRun(t);
+    const value = candidate({ kind: "new" });
+    const result = await t.mutation(internal.discordIntake.finishRun, { runId, draftId, candidate: { ...value,
+      questions: [{ fieldPath: reason === "source_timezone_required" ? "event.start" : "event.end", reason, alternatives: [] }] } });
+    assert.equal(result.outcome, expected);
+    if (expected === "draft") assert.equal((await getDraft(t, draftId)).fields.tentative?.start?.time, "22:00");
+  }
+});
+
+it("does not replace a published timed lineup when its revised timing is unresolved", async () => {
+  const { t, connectorId, communityProfileId } = await seedDiscordIntake({ mode: "autopublish" });
+  const eventId = await seedEvent(t, communityProfileId, { slug: "night-at-ari" });
+  await t.run(async ({ db }) => {
+    const event = (await db.get(eventId))!;
+    await replaceEventLineup(db, event, [{ clientKey: "original", position: 0, performerLabel: "DJ A", startAt: event.startAt! }], Date.now());
+  });
+  const before = await t.run(async ({ db }) => ({ event: (await db.get(eventId))!, slots: await db.query("eventSlots").withIndex("by_eventId", q => q.eq("eventId", eventId)).collect() }));
+  await linkEvent(t, connectorId, eventId, M1);
+  await record(t, "update", message(M1, { createdAt: Date.now() - 10_000, content: "DJ A now 22:00", editedAt: Date.now() }));
+  const { runId, draftId } = await startRun(t);
+  const value = candidate({ kind: "update", slug: "night-at-ari" });
+  const result = await t.mutation(internal.discordIntake.finishRun, { runId, draftId, expectedUpdatedAt: before.event.updatedAt, candidate: { ...value,
+    lineup: [{ performerLabel: "DJ A", personSlug: null, roleLabel: null, start: null, end: null, startDate: null, endDate: null }],
+    evidence: [{ fieldPath: "lineup.0.performerLabel", origin: "text", excerpt: "DJ A", assessment: "explicit" }],
+    questions: [{ fieldPath: "lineup.0.start", reason: "time_resolution_required", alternatives: [] }],
+  } });
+  assert.equal(result.outcome, "draft");
+  assert.equal(result.eventId, eventId);
+  const after = await t.run(async ({ db }) => ({ event: (await db.get(eventId))!, slots: await db.query("eventSlots").withIndex("by_eventId", q => q.eq("eventId", eventId)).collect() }));
+  assert.deepEqual(after, before);
 });
 
 it("never patches a Discord link onto the event, even from explicit evidence", async () => {

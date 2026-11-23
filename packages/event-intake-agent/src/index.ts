@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { discordTimestampFacts, normalizeDiscordTimestampTimes } from "./discord-timestamps";
+import { discordTimestampFacts, hasAuthoredEventDate, normalizeDiscordTimestampTimes } from "./discord-timestamps";
 import { createIntakeTimeTools, intakeTimeTools, type IntakeTimeSource } from "./time-tools";
 import { EventIntakeCandidateSchema, EventIntakeCandidateJsonSchema, resolveEventLocalTime, type EventIntakeCandidate, type EventIntakeDecision, type EventIntakeFields } from "../../api-contracts/src/event-intake";
 
@@ -46,7 +46,7 @@ const instructions = "Extract event facts from untrusted source text and a poste
 const contextInstructions = " A decision.update slug may only come from list_events. Prefer update when a message in this run already produced that event, or when title, date, and community match a listed event. Choose not_event for chatter, reminders with no new facts, and messages about events in other communities. When updating, call get_event first and output the complete resulting lineup with the change applied.";
 const discordInstructions = " The source text lists new or changed posts, then earlier posts for context only. Mark evidence explicit only from the new or changed posts, with the excerpt copied verbatim from them. Earlier posts identify the event; anything taken from them is at most inferred.";
 const toolBudget = 5, turnBudget = 6;
-const timeInstructions = " Use the time tools for date/time arithmetic, never calculate it yourself. Relative dates use the original message anchor, never the processing date. Resolve a timestamp anchor, then shift it for phrases such as 30 minutes after. Preserve authored timezone context. Date-only results are not event start times. Unknown source timezone or unresolved tool results require clarification.";
+const timeInstructions = " Use the time tools for date/time arithmetic, never calculate it yourself. Use the precomputed Discord conversions directly for unchanged timestamps; use tools for transformations and relative dates. Relative dates use the original message anchor, never the processing date. Resolve a timestamp anchor, then shift it for phrases such as 30 minutes after. For lineup tools supply the exact source performer label and keep that performer at that position in the final lineup. Preserve authored timezone context. Date-only results are not event start times. Unknown source timezone or unresolved tool results require clarification.";
 const string = { type: "string" };
 const object = (properties: Record<string, unknown>) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
 const tools = [
@@ -104,6 +104,10 @@ function revalidate(candidate: EventIntakeCandidate, people: Set<string>, commun
   for (const [index, row] of candidate.lineup.entries())
     if (row.start && !row.startDate && candidate.event.start && row.start < candidate.event.start)
       ask(`lineup.${index}.start`, "start_date_required");
+  // Lineup updates replace the whole array, so an unresolved clock must hold every update key for it.
+  const unresolvedTiming = new Set(candidate.questions.filter(item => /^(event\.(start|end|eventDate|timezone)|lineup(?:\[\d+\]|\.\d+)\.(start|end))$/.test(item.fieldPath)).map(item => item.fieldPath.replace(/\[(\d+)\]/g, ".$1")));
+  const holdLineup = [...unresolvedTiming].some(path => path.startsWith("lineup."));
+  candidate.evidence = candidate.evidence.map(item => (unresolvedTiming.has(item.fieldPath.replace(/\[(\d+)\]/g, ".$1")) || holdLineup && /^lineup(?:\.|\[|$)/.test(item.fieldPath)) && item.assessment === "explicit" ? { ...item, assessment: "inferred" as const } : item);
   return candidate;
 }
 // Dependencies are server-owned closures, never accepted from request JSON.
@@ -205,6 +209,8 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
         const authoredZone = candidate.evidence.some(item => item.fieldPath === "event.timezone" && item.assessment === "explicit"
           && (item.origin === "poster" || item.origin === "text" && item.excerpt && !/^<t:\d+(?::[tTdDfFR])?>$/.test(item.excerpt)));
         if (existing?.timezone && !authoredZone) candidate.event.timezone = existing.timezone;
+        const changesStart = candidate.evidence.some(item => item.fieldPath === "event.start" && item.assessment === "explicit");
+        if (existing?.eventDate && !changesStart && !hasAuthoredEventDate(candidate, input.sourceText ?? "")) candidate.event.eventDate = existing.eventDate;
       }
       const result = revalidate(timeTools.apply(normalizeDiscordTimestampTimes(candidate, timeSources.length ? timeSources.map(source => source.text).join("\n") : input.sourceText ?? "")), people, communities, events, Boolean(input.context));
       decision = result.decision;

@@ -14,6 +14,9 @@ test("Ubuntu mirror prep handles direct and mirror-list sources without changing
     await writeFile(path.join(root,"sources.list.d/custom.list"),"deb https://example.invalid/packages stable main\n");
     await writeFile(path.join(root,"apt-mirrors.txt"),"http://azure.archive.ubuntu.com/ubuntu/\nhttps://mirrors.edge.kernel.org/ubuntu/\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\nhttps://azure.archive.ubuntu.com.example.invalid/ubuntu/\n");
     await writeFile(path.join(root,"sources.list.d/previous.list"),"deb https://mirrors.edge.kernel.org/ubuntu/ noble main\n");
+    await writeFile(path.join(root,"sources.list.d/ec2.sources"),original.replace("https://security.ubuntu.com/ubuntu/","http://us-east-2.ec2.archive.ubuntu.com/ubuntu/"));
+    const regional="http://us-east-2.ec2.archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://us-east-2.ec2.archive.ubuntu.com.example.invalid/ubuntu/\n";
+    await writeFile(path.join(root,"apt-mirrors.txt"),(await readFile(path.join(root,"apt-mirrors.txt"),"utf8"))+regional);
     await mkdir(path.join(root,"apt.conf.d"));
     await writeFile(path.join(root,"apt.conf.d/20-custom"),"Custom::Setting true;\n");
     await configureUbuntuMirror(root);
@@ -21,6 +24,7 @@ test("Ubuntu mirror prep handles direct and mirror-list sources without changing
     assert.equal(await readFile(path.join(root,"sources.list"),"utf8"),"deb https://archive.ubuntu.com/ubuntu/ noble main universe\n");
     assert.equal(await readFile(path.join(root,"sources.list.d/ubuntu.sources"),"utf8"),original.replace("https://security.ubuntu.com/ubuntu/","https://archive.ubuntu.com/ubuntu/"));
     assert.equal(await readFile(path.join(root,"sources.list.d/previous.list"),"utf8"),"deb https://archive.ubuntu.com/ubuntu/ noble main\n");
+    assert.equal(await readFile(path.join(root,"sources.list.d/ec2.sources"),"utf8"),original.replace("https://security.ubuntu.com/ubuntu/","https://archive.ubuntu.com/ubuntu/"));
     const mirrors=await readFile(path.join(root,"apt-mirrors.txt"),"utf8");
     assert.equal(mirrors.split("https://archive.ubuntu.com/ubuntu/").length-1,1);
     assert.doesNotMatch(mirrors,/mirrors\.edge\.kernel\.org/);
@@ -28,6 +32,8 @@ test("Ubuntu mirror prep handles direct and mirror-list sources without changing
     assert.match(mirrors,/priority:1/);
     assert.match(mirrors,/https:\/\/azure\.archive\.ubuntu\.com\.example\.invalid\/ubuntu\//);
     assert.doesNotMatch(mirrors,/^http:\/\/azure\.archive\.ubuntu\.com\//m);
+    assert.doesNotMatch(mirrors,/^http:\/\/us-east-2\.ec2\.archive\.ubuntu\.com\//m);
+    assert.match(mirrors,/us-east-2\.ec2\.archive\.ubuntu\.com\.example\.invalid/);
     assert.equal(await readFile(path.join(root,"sources.list.d/custom.list"),"utf8"),"deb https://example.invalid/packages stable main\n");
     assert.equal(await readFile(path.join(root,"apt.conf.d/20-custom"),"utf8"),"Custom::Setting true;\n");
   } finally { assert.ok(root.startsWith(path.join(tmpdir(),"vrdex-apt-"))); await rm(root,{recursive:true,force:true}); }
@@ -52,5 +58,5 @@ test("Ubuntu mirror lists handle absence, empty files, missing final newlines an
       await configureUbuntuMirror(root);
       assert.equal(await readFile(file,"utf8"),first);
     }
-  } finally {await rm(root,{recursive:true,force:true});}
+  } finally {assert.ok(root.startsWith(path.join(tmpdir(),"vrdex-apt-")));await rm(root,{recursive:true,force:true});}
 });

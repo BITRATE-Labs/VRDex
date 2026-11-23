@@ -354,7 +354,9 @@ export const finishRun = internalMutation({
     // A draft slug goes no further as an update: as new, the named draft's link refreshes that draft, and nothing can read the slug as an event's.
     const candidate = draftSlug ? { ...sanitized, decision: { kind: "new" as const } } : sanitized;
     // Decision new can only be about a post other than the linked event, or follow an update slug that did not resolve; staff decide both.
-    const forceHold = !named && candidate.decision.kind === "new" && (draftSlug !== null || (runLink.hasUnsourcedTrigger && link !== null) || candidate.questions.some(question => question.fieldPath === "decision.slug"));
+    const timeReview = candidate.questions.some(question => /^(event\.|lineup(?:\.|\[))/.test(question.fieldPath)
+      && /^(?:time_|relative_|clock_time_required|event_time_context_conflict|authored_date_conflict|source_timezone_required|source_reference_time_required|date_timezone_required|start_date_required|end_date_required|ambiguous_local_time|nonexistent_local_time|invalid_local_time)/.test(question.reason));
+    const forceHold = timeReview || !named && candidate.decision.kind === "new" && (draftSlug !== null || (runLink.hasUnsourcedTrigger && link !== null) || candidate.questions.some(question => question.fieldPath === "decision.slug"));
     let result = await applyEventCandidate(ctx, {
       connector, candidate, actorUserId: connector.authorityUserId, draftId: args.draftId, link: link ?? undefined, externalId,
       expectedUpdatedAt: args.expectedUpdatedAt, idempotencyKey: args.runId, forceHold,

@@ -27,6 +27,15 @@ within 40 rows, preserving applied time context and conflict warnings first.
 Token-only updates reuse the timezone read from the existing event unless the
 source explicitly authors a replacement zone.
 
+End-only updates retain the event's existing day and carry an overnight end
+through `endDate`. Lineup bindings retain the source performer label so a changed
+final order cannot give a different performer that instant. Timezone discovery is
+scoped to the resolved source clause, rather than unrelated zones elsewhere in a
+message. Invalid tool arguments return a recoverable tool error. Correctly read
+wall clocks stay available for manual review when only their reference date or
+timezone is unavailable. Discord autopublish holds unresolved timing for staff
+review, including updates, while an optional missing end does not force a hold.
+
 Regression coverage: `tests/web/event-intake-discord-timestamps.test.ts`,
 `tests/web/event-intake-time-tools.test.ts`, and the Discord source/claim tests.
 

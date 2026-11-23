@@ -11,6 +11,12 @@ export function discordTimestampFacts(source: string) {
 }
 
 export const temporalFieldPath = (value: string) => value.replace(/\[(\d+)\]/g, ".$1");
+export const relativeTimePhrase = (text: string) => /\b(?:today|tonight|tomorrow|yesterday|next|last|after|before|later|earlier|in\s+\d+\s+(?:minutes?|hours?|days?))\b/i.test(text);
+export function hasAuthoredEventDate(candidate: EventIntakeCandidate, source: string) {
+  return candidate.evidence.some(item => item.fieldPath === "event.eventDate" && item.assessment === "explicit" && item.excerpt
+    && !relativeTimePhrase(item.excerpt) && !/^<t:\d+(?::[tTdDfFR])?>$/.test(item.excerpt.trim())
+    && (item.origin === "poster" || item.origin === "text" && source.includes(item.excerpt)));
+}
 /** Keep deterministic facts and conflicts within the existing evidence contract. */
 export function replaceTimeEvidence(candidate: EventIntakeCandidate, paths: Set<string>, rows: EventIntakeCandidate["evidence"]) {
   const rest = candidate.evidence.filter(item => !paths.has(temporalFieldPath(item.fieldPath)));
@@ -65,12 +71,13 @@ export function normalizeDiscordTimestampTimes(candidate: EventIntakeCandidate, 
   try { values = resolved.map(item => ({ ...item, local: projectInstant(item.fact.utc, timezone) })); }
   catch { return candidate; }
   const start = values.find(item => item.fieldPath === "event.start");
-  const date = start?.local.date ?? values.map(item => item.local.date).sort()[0];
-  const authoredDate = candidate.evidence.some(item => item.fieldPath === "event.eventDate" && item.assessment === "explicit");
-  const corrected = new Set(["event.timezone", ...(!authoredDate ? ["event.eventDate"] : []), ...resolved.map(item => item.fieldPath)]);
+  const date = start?.local.date ?? values.filter(item => item.field === "start").map(item => item.local.date).sort()[0];
+  const authoredDate = hasAuthoredEventDate(candidate, source);
+  const establishesDate = !authoredDate && date !== undefined && (candidate.decision.kind !== "update" || start !== undefined || !candidate.event.eventDate);
+  const corrected = new Set(["event.timezone", ...(establishesDate ? ["event.eventDate"] : []), ...resolved.map(item => item.fieldPath)]);
   const context = start ?? values[0];
   const evidence = [...resolved.map(item => ({ fieldPath: item.fieldPath, origin: "text" as const, excerpt: item.fact.token, assessment: item.assessment })),
-    ...["event.timezone", ...(!authoredDate ? ["event.eventDate"] : [])].map(fieldPath => ({ fieldPath, origin: "text" as const, excerpt: context.fact.token, assessment: context.assessment }))];
+    ...["event.timezone", ...(establishesDate ? ["event.eventDate"] : [])].map(fieldPath => ({ fieldPath, origin: "text" as const, excerpt: context.fact.token, assessment: context.assessment }))];
   if (!replaceTimeEvidence(candidate, corrected, evidence)) {
     for (const item of resolved) item.row[item.field] = null;
     if (candidate.questions.length < 100) candidate.questions.push({ fieldPath: "event.start", reason: "time_evidence_limit", alternatives: [] });
@@ -78,7 +85,7 @@ export function normalizeDiscordTimestampTimes(candidate: EventIntakeCandidate, 
   }
   for (const { row, field, local } of values) { row[field] = local.time; row[`${field}Date`] = local.date; }
   candidate.event.timezone = timezone;
-  if (!authoredDate) candidate.event.eventDate = date;
+  if (establishesDate) candidate.event.eventDate = date;
   candidate.questions = candidate.questions.filter(item => !corrected.has(temporalFieldPath(item.fieldPath)));
   return candidate;
 }
