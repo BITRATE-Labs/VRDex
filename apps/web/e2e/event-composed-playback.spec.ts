@@ -23,6 +23,7 @@ for (const mode of ['sequence', 'automatic', 'event-stream']) test(`composed pub
     await page.getByRole('button', { name: 'Play Lineup live', exact: true }).click();
     const video = page.locator('video:not([hidden])');
     await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime), { timeout: 20000 }).toBeGreaterThan(1);
+    await expect.poll(() => page.evaluate(() => navigator.mediaSession?.metadata?.title)).toBe('Lineup live - VRDex');
     await expect(page.locator('video')).toHaveCount(1);
     await expect(page.getByRole('button', { name: 'Audio only', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Video', exact: true })).toHaveCount(0);

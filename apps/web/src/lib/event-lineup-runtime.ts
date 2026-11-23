@@ -69,13 +69,14 @@ export class EventLineupSession {
   private selected?: LineupSlot;
   private disposed = false;
   private playRequest = 0;
+  private audioResume?: Promise<void>;
   private lastSnapshot?: LineupSnapshot;
   private timer: ReturnType<typeof setInterval>;
   constructor(private event: LineupEvent, private mount: HTMLElement, private notify: (state: LineupSnapshot) => void,
     private createSource = createObservedVrcdnSource, private native?: NativeLineupOptions) {
     this.event = { ...event, slots: inferLineupEnds(event.slots, event.endAt) };
     this.timer = setInterval(() => this.tick(), 100);
-    document.addEventListener("visibilitychange", this.resetEvidence);
+    document.addEventListener("visibilitychange", this.visibilityChanged);
   }
   private emit() {
     if (this.disposed) return;
@@ -89,6 +90,20 @@ export class EventLineupSession {
   }
   private resetEvidence = () => {
     for (const connection of [this.current, this.next]) if (connection) connection.evidence = clearPlaybackEvidence(performance.now());
+  };
+  private visibilityChanged = () => {
+    this.resetEvidence();
+    const context = this.context;
+    if (this.disposed || this.state.paused || document.visibilityState !== "visible" || !context || context.state === "running" || context.state === "closed" || this.audioResume) return;
+    const request = this.playRequest;
+    this.audioResume = context.resume().then(() => {
+      if (this.disposed || request !== this.playRequest || this.state.paused) return;
+      if (context.state !== "running") throw Error("Audio resume requires interaction");
+      this.setGain();
+    }).catch(() => {
+      if (this.disposed || request !== this.playRequest || this.state.paused) return;
+      this.state.paused = true; this.state.playbackBlocked = true; this.current?.source.pause(); this.emit();
+    }).finally(() => { this.audioResume = undefined; });
   };
   private releaseNext() {
     const released = !!this.next;
@@ -433,7 +448,7 @@ export class EventLineupSession {
     this.emit();
   }
   dispose() {
-    this.disposed = true; clearInterval(this.timer); document.removeEventListener("visibilitychange", this.resetEvidence);
+    this.disposed = true; clearInterval(this.timer); document.removeEventListener("visibilitychange", this.visibilityChanged);
     this.releaseNext(); this.releaseCurrent(); this.releaseContinuation(); this.context?.removeEventListener("statechange", this.resetEvidence);
     void this.context?.close().catch(() => {});
   }

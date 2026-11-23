@@ -6,8 +6,8 @@ type Identity = { displayName: string; artwork: string | undefined };
 // Chrome supports this action ahead of our TypeScript DOM definitions.
 const ENTER_PICTURE_IN_PICTURE = "enterpictureinpicture" as MediaSessionAction;
 export function nowPlayingIdentity(state: PlaybackSnapshot): Identity | null {
-  if (!state.request || !state.metadata) return null;
-  return { displayName: state.metadata.displayName, artwork: playbackArtwork(state) };
+  if (!state.request) return null;
+  return { displayName: state.metadata?.displayName ?? state.request.title.replace(/\s*-\s*VRDex$/, ""), artwork: playbackArtwork(state) };
 }
 function session() { return typeof navigator !== "undefined" && "mediaSession" in navigator ? navigator.mediaSession : null; }
 export function clearNowPlaying(): void {
@@ -36,7 +36,7 @@ export function applyNowPlaying({ identity, mode, actions }: { identity: Identit
   }
   try {
     // The browser invokes this when automatic PiP is permitted, without another tap.
-    current.setActionHandler(ENTER_PICTURE_IN_PICTURE, mode === "video" ? () => {
+    current.setActionHandler(ENTER_PICTURE_IN_PICTURE, mode === "video" && owner.supportsPictureInPicture ? () => {
       const state = owner.getSnapshot();
       const media = owner.media;
       if (!valid() || state.mode !== "video" || state.status !== "playing" ||
