@@ -122,3 +122,12 @@ it("keeps direct conversion within the evidence limit without losing conflict wa
   assert.ok(result.evidence.some(item => item.assessment === "conflicting"));
   assert.equal(result.event.eventDate, "2026-11-20");
 });
+
+it("does not erase multiline relative corrections during direct normalization", () => {
+  const value = candidate(); value.lineup = []; value.event.start = "00:00";
+  const text = "Starts <t:1795217400:t>\nActually starts 30 minutes later.";
+  value.evidence = [{ fieldPath: "event.start", origin: "text", excerpt: text, assessment: "explicit" }];
+  const result = normalizeDiscordTimestampTimes(value, text);
+  assert.equal(result.event.start, "00:00");
+  assert.equal(result.evidence[0].excerpt, text);
+});

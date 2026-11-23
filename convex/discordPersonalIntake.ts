@@ -55,6 +55,7 @@ export const captureSelectedMessage = internalMutation({
     const submissionId = await ctx.db.insert("discordPersonalIntakeSubmissions", {
       actorUserId, discordUserId: input.invokerDiscordUserId, channelId: input.channelId, messageId: input.message.messageId, interactionId: input.interactionId,
       fingerprint, ...(input.message.authorId ? { authorId: input.message.authorId } : {}), ...(input.guildId ? { guildId: input.guildId } : {}),
+      ...(input.message.editedAt !== undefined ? { sourceEditedAt: input.message.editedAt } : {}),
       attachments: input.message.attachments, preparationStatus: "pending", createdAt: now, updatedAt: now, expiresAt: now + EVENT_INTAKE_DRAFT_TTL_MS,
     });
     const { draftId } = await saveIntakeDraft(ctx.db, actorUserId, { patch: { sourceText: input.message.sourceText } }, now, { personalSubmissionId: submissionId });

@@ -382,3 +382,12 @@ it("super-admin imports remain contributions and later owner artwork updates pre
   const document = await t.run(ctx => ctx.db.query("searchDocuments").filter(q => q.eq(q.field("eventId"), published.eventId)).first());
   assert.ok(document?.searchText.toLowerCase().includes("roleneedle"), "owner artwork changes retain contributor role terms");
 });
+
+it("anchors edited personal-message text to the captured edit time", async () => {
+  const { t, authorityUserId } = await fixture();
+  const editedAt = Date.parse("2026-11-20T12:00:00Z");
+  const first = await t.mutation(internal.discordPersonalIntake.captureSelectedMessage, { ...capture, message: { ...capture.message, editedAt, sourceText: "Tomorrow 6pm UTC" } });
+  if (first.kind !== "draft") throw new Error("Expected private draft");
+  const extraction = await t.mutation(internal.eventIntakeSources.authorizeExtraction, { actorUserId: authorityUserId, draftId: first.draftId, reserveQuota: false });
+  assert.equal(extraction.timeSources[0].referenceInstant, new Date(editedAt).toISOString());
+});

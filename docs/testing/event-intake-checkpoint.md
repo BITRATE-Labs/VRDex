@@ -5,7 +5,7 @@ Intake exposes bounded `resolve_event_time`, `shift_event_time` and
 server-held candidates to event/lineup fields; the final response cannot replace
 their arithmetic with model-generated clocks. Relative phrases use the original
 message timestamp (the edit timestamp for edited connector posts), supplied separately per trigger post. Personal Discord imports
-derive that anchor from the captured message snowflake. Missing source timezone,
+use the captured source edit timestamp when present, otherwise the message snowflake. Missing source timezone,
 ambiguous clocks and date-only results remain unresolved until corrected.
 
 Direct Discord timestamps use deterministic epoch conversion. UTC is the default

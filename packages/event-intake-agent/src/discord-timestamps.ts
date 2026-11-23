@@ -53,6 +53,7 @@ export function normalizeDiscordTimestampTimes(candidate: EventIntakeCandidate, 
     for (const field of ["start", "end"] as const) {
       if (!row[field]) continue;
       const evidence = candidate.evidence.filter(item => temporalFieldPath(item.fieldPath) === `${prefix}.${field}`);
+      if (evidence.some(item => relativeTimePhrase(item.excerpt ?? ""))) return candidate;
       const matches = facts.filter(fact => evidence.some(item => item.excerpt?.includes(fact.token)));
       if (new Set(matches.map(fact => fact.epoch)).size !== 1) return candidate;
       const label = "performerLabel" in row ? row.performerLabel ?? undefined : undefined;

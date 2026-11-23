@@ -369,3 +369,20 @@ it("keeps an authored clock for review when an absolute date excerpt also says n
   assert.equal(result.event.start, "22:00");
   assert.ok(result.questions.some(item => item.reason === "source_reference_time_required"));
 });
+
+it("rejects a calendar-day shift into a DST gap", async () => {
+  const text = "March 7, 2026 at 2:30 AM America/New_York", tools = createIntakeTimeTools(text, []);
+  const base = await tools.call("resolve_event_time", resolve(text)) as { candidateId: string };
+  assert.ok(base.candidateId);
+  assert.ok("reason" in (await tools.call("shift_event_time", shift(base.candidateId, { days: 1 })) as object));
+  assert.equal(tools.apply(blank()).event.start, null);
+});
+
+it("validates full meridiem tokens without accepting their colon-clock substring", async () => {
+  for (const hour of [6, 18]) {
+    const text = "Tomorrow UTC. Starts 6:30 PM.", tools = createIntakeTimeTools(text, [{ id: "post", text, referenceInstant: "2026-11-20T12:00:00Z" }]);
+    const base = await tools.call("resolve_event_time", resolve("Tomorrow")) as { candidateId: string };
+    const result = await tools.call("set_event_clock", { fieldPath: "event.start", performerLabel: null, candidateId: base.candidateId, hour, minute: 30 }) as object;
+    assert.equal("candidateId" in result, hour === 18);
+  }
+});

@@ -104,7 +104,12 @@ export function createIntakeTimeTools(sourceText: string, sources: IntakeTimeSou
         if (name === "shift_event_time") {
           const args = shift.parse(normalized);
           if (args.days && !base.calendarZoneKnown) throw new Error("calendar_timezone_required");
-          value = await tools.shiftDateTime({ base: { zonedDateTime: base.value.zonedDateTime }, delta: { days: args.days, hours: args.hours, minutes: args.minutes }, calendarContext: context });
+          value = base.value;
+          if (args.days) {
+            const [hour, minute] = projectInstant(base.value.isoInstant, base.value.timeZone).time.split(":").map(Number);
+            value = await tools.shiftDateTime({ base: { zonedDateTime: value.zonedDateTime }, delta: { days: args.days }, time: { hour, minute }, calendarContext: context });
+          }
+          if (args.hours || args.minutes) value = await tools.shiftDateTime({ base: { zonedDateTime: value.zonedDateTime }, delta: { hours: args.hours, minutes: args.minutes }, calendarContext: context });
           if (base.value.precision === "date") {
             if (args.hours || args.minutes) throw new Error("date_only_requires_clock");
             value.precision = "date";
@@ -112,9 +117,13 @@ export function createIntakeTimeTools(sourceText: string, sources: IntakeTimeSou
         } else {
           const args = clock.parse(normalized);
           if (!base.calendarZoneKnown) throw new Error("clock_timezone_required");
-          const phrases = new Set([base.source.text, ...base.source.text.match(clockPhrases) ?? []]);
-          const clocks = await Promise.all([...phrases].map(text => tools.resolveClockTime({ text, calendarContext: context })));
-          if (!clocks.some(result => result.candidates.some(clock => clock.hour === args.hour && clock.minute === args.minute))) throw new Error("clock_not_in_source");
+          const matchesClock = (base.source.text.match(clockPhrases) ?? []).some(text => {
+            const match = /^(\d{1,2})(?::(\d{2}))?\s*([ap])?/i.exec(text);
+            if (!match) return false;
+            const hour = match[3] ? Number(match[1]) % 12 + (match[3].toLowerCase() === "p" ? 12 : 0) : Number(match[1]);
+            return hour === args.hour && Number(match[2] ?? 0) === args.minute;
+          });
+          if (!matchesClock) throw new Error("clock_not_in_source");
           value = await tools.setClockTime({ base: { zonedDateTime: base.value.zonedDateTime }, time: { hour: args.hour, minute: args.minute }, calendarContext: context });
         }
         return remember(args.fieldPath, value, base.source, base.excerpt, base.calendarZoneKnown, label);
