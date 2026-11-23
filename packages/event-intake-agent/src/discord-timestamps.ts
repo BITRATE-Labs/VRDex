@@ -1,43 +1,72 @@
 import type { EventIntakeCandidate } from "../../api-contracts/src/event-intake";
 
 export function discordTimestampFacts(source: string) {
-  return [...new Set([...source.matchAll(/<t:(\d{1,12})(?::[tTdDfFR])?>/g)].map(match => match[1]))]
-    .flatMap(epoch => {
+  return [...new Set([...source.matchAll(/<t:(\d{1,12})(?::[tTdDfFR])?>/g)].map(match => match[0]))]
+    .flatMap(token => {
+      const epoch = token.split(":")[1].replace(">", "");
       const instant = new Date(Number(epoch) * 1000);
       return Number.isFinite(instant.getTime()) && instant.getUTCFullYear() >= 1970 && instant.getUTCFullYear() <= 9999
-        ? [{ epoch, utc: instant.toISOString() }] : [];
+        ? [{ token, epoch, utc: instant.toISOString() }] : [];
     });
 }
 
-/** Use source-backed epochs, never model arithmetic, for timestamp-only schedules. */
+export const temporalFieldPath = (value: string) => value.replace(/\[(\d+)\]/g, ".$1");
+export function projectInstant(instant: string, timezone: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(instant));
+  const get = (key: string) => parts.find(part => part.type === key)!.value;
+  return { date: `${get("year")}-${get("month")}-${get("day")}`, time: `${get("hour")}:${get("minute")}` };
+}
+
+/** A narrow direct-reference guard. Transformations must go through the time tools. */
+function directSourceLine(line: string, token: string, label?: string) {
+  if (/^\s*(?:>|`)/.test(line) || /\b(?:after|before|later|earlier|shift|move|ignore|wrong|instead)\b/i.test(line)) return false;
+  let rest = line.replace(/<t:\d+(?::[tTdDfFR])?>/g, "");
+  if (label) {
+    if (!rest.toLowerCase().includes(label.toLowerCase())) return false;
+    const at = rest.toLowerCase().indexOf(label.toLowerCase());
+    rest = rest.slice(0, at) + rest.slice(at + label.length);
+  }
+  return line.includes(token) && !rest.replace(/\b(?:doors?|starts?|begins?|ends?|opens?|at|on|time)\b/gi, "").replace(/[\s#*_:()\-.,]/g, "");
+}
+
+/** Normalize only clocks tied to their own direct source clause, preserving authored context. */
 export function normalizeDiscordTimestampTimes(candidate: EventIntakeCandidate, source: string) {
   const facts = discordTimestampFacts(source);
-  if (!facts.length) return candidate;
-  const path = (value: string) => value.replace(/\[(\d+)\]/g, ".$1");
+  if (!facts.length || candidate.evidence.some(item => item.assessment === "conflicting" && /^(event\.(?:start|end|eventDate|timezone)|lineup)/.test(temporalFieldPath(item.fieldPath)))) return candidate;
   const clocks = [["event", candidate.event], ...candidate.lineup.map((row, index) => [`lineup.${index}`, row] as const)] as const;
   const resolved = [];
   for (const [prefix, row] of clocks) {
     for (const field of ["start", "end"] as const) {
       if (!row[field]) continue;
-      const evidence = candidate.evidence.filter(item => path(item.fieldPath) === `${prefix}.${field}`);
-      const matches = facts.filter(fact => evidence.some(item => new RegExp(`(?<!\\d)${fact.epoch}(?!\\d)`).test(item.excerpt ?? "")));
-      // Mixed wall-clock schedules still need their authored timezone and date review.
-      if (matches.length !== 1) return candidate;
-      resolved.push({ row, field, fieldPath: `${prefix}.${field}`, fact: matches[0],
+      const evidence = candidate.evidence.filter(item => temporalFieldPath(item.fieldPath) === `${prefix}.${field}`);
+      const matches = facts.filter(fact => evidence.some(item => item.excerpt?.includes(fact.token)));
+      if (new Set(matches.map(fact => fact.epoch)).size !== 1) return candidate;
+      const label = "performerLabel" in row ? row.performerLabel ?? undefined : undefined;
+      const fact = matches.find(fact => source.split("\n").some(line => directSourceLine(line, fact.token, label)));
+      if (!fact) return candidate;
+      // Repeated references in other clauses may express corrections or relative shifts.
+      if (source.split("\n").some(line => line.includes(fact.token) && !directSourceLine(line, fact.token)
+        && !candidate.lineup.some(row => row.performerLabel && directSourceLine(line, fact.token, row.performerLabel)))) return candidate;
+      resolved.push({ row, field, fieldPath: `${prefix}.${field}`, fact,
         assessment: evidence.some(item => item.assessment === "explicit") ? "explicit" as const : "inferred" as const });
     }
   }
   if (!resolved.length) return candidate;
-  for (const { row, field, fact } of resolved) {
-    row[field] = fact.utc.slice(11, 16);
-    row[`${field}Date`] = fact.utc.slice(0, 10);
-  }
-  candidate.event.timezone = "UTC";
-  candidate.event.eventDate = candidate.event.startDate ?? resolved.map(item => item.fact.utc.slice(0, 10)).sort()[0];
-  const corrected = new Set(["event.timezone", "event.eventDate", ...resolved.map(item => item.fieldPath)]);
-  candidate.questions = candidate.questions.filter(item => !corrected.has(path(item.fieldPath)));
-  candidate.evidence = candidate.evidence.filter(item => !corrected.has(path(item.fieldPath)));
-  candidate.evidence.push(...resolved.map(item => ({ fieldPath: item.fieldPath, origin: "text" as const,
-    excerpt: `<t:${item.fact.epoch}>`, assessment: item.assessment })));
+  const timezone = candidate.event.timezone ?? "UTC";
+  let values;
+  try { values = resolved.map(item => ({ ...item, local: projectInstant(item.fact.utc, timezone) })); }
+  catch { return candidate; }
+  const start = values.find(item => item.fieldPath === "event.start");
+  const date = start?.local.date ?? values.map(item => item.local.date).sort()[0];
+  const authoredDate = candidate.evidence.some(item => item.fieldPath === "event.eventDate" && item.assessment === "explicit");
+  for (const { row, field, local } of values) { row[field] = local.time; row[`${field}Date`] = local.date; }
+  candidate.event.timezone = timezone;
+  if (!authoredDate) candidate.event.eventDate = date;
+  const corrected = new Set(["event.timezone", ...(!authoredDate ? ["event.eventDate"] : []), ...resolved.map(item => item.fieldPath)]);
+  candidate.questions = candidate.questions.filter(item => !corrected.has(temporalFieldPath(item.fieldPath)));
+  candidate.evidence = candidate.evidence.filter(item => !corrected.has(temporalFieldPath(item.fieldPath)));
+  candidate.evidence.push(...resolved.map(item => ({ fieldPath: item.fieldPath, origin: "text" as const, excerpt: item.fact.token, assessment: item.assessment })));
+  const context = start ?? values[0];
+  candidate.evidence.push(...["event.timezone", ...(!authoredDate ? ["event.eventDate"] : [])].map(fieldPath => ({ fieldPath, origin: "text" as const, excerpt: context.fact.token, assessment: context.assessment })));
   return candidate;
 }

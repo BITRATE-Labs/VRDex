@@ -40,6 +40,9 @@ it("selection replay preserves accepted edits and keeps the source private", asy
   assert.equal(draft.connectorId, undefined);
   const extraction = await t.mutation(internal.eventIntakeSources.authorizeExtraction, { actorUserId: authorityUserId, draftId: first.draftId, reserveQuota: false });
   assert.equal(extraction.privateSource, true);
+  assert.equal(extraction.timeSources[0].id, M1);
+  assert.equal(extraction.timeSources[0].referenceInstant, new Date(Number((BigInt(M1) >> 22n) + 1420070400000n)).toISOString());
+  assert.equal(extraction.timeSources[0].text, capture.message.sourceText);
   assert.equal((await t.run(ctx => ctx.db.query("eventIntakeDrafts").collect())).length, 1);
 });
 

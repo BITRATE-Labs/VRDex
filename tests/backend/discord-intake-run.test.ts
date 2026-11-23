@@ -94,6 +94,8 @@ it("passes prior events from discordIntakeSources to the agent", async () => {
   if (claim.kind !== "run") return;
   assert.deepEqual(claim.context, { trigger: "discord", communitySlug: "night-club", connectorId, mode: "hold", priorEvents: [{ sourceMessageId: M1, eventSlug: "night-at-ari" }] });
   assert.equal(claim.sourceUrl, `https://discord.com/channels/${GUILD}/${CHANNEL}/${M1}`);
+  const original = await t.run(async ctx => (await ctx.db.query("discordIntakeMessages").collect()).find(row => row.messageId === M1)!);
+  assert.deepEqual(claim.timeSources, [{ id: M1, text: "now 22:00", referenceInstant: new Date(original.createdAt).toISOString() }]);
 });
 
 it("list_events puts this run's prior events first and drops unpublished and removed events", async () => {

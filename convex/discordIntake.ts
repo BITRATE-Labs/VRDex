@@ -174,6 +174,7 @@ export const claimRun = internalMutation({
     v.object({
       kind: v.literal("run"), authorityUserId: v.id("users"), mode: connectorMode, sourceText: v.string(), modelText: v.string(), sourceUrl: v.string(),
       posters: v.array(discordAttachmentValidator),
+      timeSources: v.array(v.object({ id: v.string(), text: v.string(), referenceInstant: v.string() })),
       context: v.object({
         trigger: v.literal("discord"), communitySlug: v.string(), connectorId: v.id("eventConnectors"), mode: connectorMode,
         priorEvents: v.array(v.object({ sourceMessageId: v.string(), eventSlug: v.string() })),
@@ -255,6 +256,7 @@ export const claimRun = internalMutation({
     return {
       kind: "run" as const, authorityUserId: connector.authorityUserId, mode: connector.mode,
       sourceText: buildDraftSourceText(messages), modelText: buildSourceText(messages, run.triggerMessageIds), sourceUrl: messageUrl(newest), posters: pickPosterAttachments(triggers, unusedContext),
+      timeSources: triggers.filter(row => row.deletedAt === undefined).map(row => ({ id: row.messageId, text: row.content, referenceInstant: new Date(row.createdAt).toISOString() })),
       context: { trigger: "discord" as const, communitySlug: community.slug, connectorId: connector._id, mode: connector.mode, priorEvents },
       ...(run.draftId ? { draftId: run.draftId } : {}),
     };

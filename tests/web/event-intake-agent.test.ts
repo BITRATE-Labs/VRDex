@@ -249,8 +249,9 @@ it("offers list_events and get_event and the decision rules only with run contex
   } };
   await extractEventIntake({ draftId: "draft", sourceText: "Night" }, deps);
   await extractEventIntake({ draftId: "draft", sourceText: "Night", context: discord }, deps);
-  assert.deepEqual(seen[0]!.tools, ["search_people", "search_communities", "resolve_local_time"]);
-  assert.deepEqual(seen[1]!.tools, ["search_people", "search_communities", "resolve_local_time", "list_events", "get_event"]);
+  const shared = ["search_people", "search_communities", "resolve_local_time", "resolve_event_time", "shift_event_time", "set_event_clock"];
+  assert.deepEqual(seen[0]!.tools, shared);
+  assert.deepEqual(seen[1]!.tools, [...shared, "list_events", "get_event"]);
   assert.doesNotMatch(seen[0]!.instructions, /list_events/);
   assert.match(seen[1]!.instructions, /may only come from list_events/);
 });
@@ -365,12 +366,13 @@ it("returns the candidate when a sink end never settles", async () => {
   const result = await extractEventIntake({ draftId: "draft", sourceText: "Night" }, { ...base, sink: stalled, fetchImplementation: async () => response({ ...blank(), event: { ...blank().event, title: "Night" } }) });
   assert.equal(result.event.title, "Night");
 });
-it("adds the new-posts evidence rule to Discord runs only and leaves web and MCP prompts byte-identical", async () => {
+it("adds the new-posts evidence rule only to Discord and shares arithmetic guidance across surfaces", async () => {
   const prompts: string[] = [];
   const fetchImplementation = (async (_url: unknown, init: RequestInit) => { prompts.push(JSON.parse(String(init.body)).instructions); return response(blank()); }) as typeof fetch;
   for (const context of [undefined, { trigger: "mcp" as const, communitySlug: "club" }, discord]) await extractEventIntake({ draftId: "draft", sourceText: "Friday", context }, { ...base, fetchImplementation });
-  const digest = (text: string) => createHash("sha256").update(text).digest("hex");
-  assert.deepEqual(prompts.slice(0, 2).map(digest), ["fc97bbd5936af7fcba57777bd69819d9be7ca931fd31a2f2149c1e40fc8bc963", "3aeadd96c77528cc955ba2d56e5e75f64022fbf0334bcc54f2ac8389ffa21f06"]);
+  for (const prompt of prompts) assert.match(prompt, /time tools for date\/time arithmetic/);
+  assert.doesNotMatch(prompts[0], /explicit only from the new or changed posts/);
+  assert.doesNotMatch(prompts[1], /explicit only from the new or changed posts/);
   assert.ok(prompts[2].startsWith(prompts[1]));
   assert.match(prompts[2].slice(prompts[1].length), /explicit only from the new or changed posts/);
 });

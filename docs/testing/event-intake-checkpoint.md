@@ -1,10 +1,25 @@
 # Contributed event intake checkpoint
 
-Discord timestamp intake converts source epochs deterministically before candidate
-validation. Timestamp-only schedules use UTC without requesting a local timezone;
-dates and overnight offsets come from those instants rather than model arithmetic.
-Mixed wall-clock schedules and ambiguous timestamp evidence retain manual review.
-Regression coverage: `tests/web/event-intake-discord-timestamps.test.ts`.
+Intake exposes bounded `resolve_event_time`, `shift_event_time` and
+`set_event_clock` tools using the existing temporal runtime. Resolutions bind
+server-held candidates to event/lineup fields; the final response cannot replace
+their arithmetic with model-generated clocks. Relative phrases use the original
+message timestamp, supplied separately per trigger post. Personal Discord imports
+derive that anchor from the captured message snowflake. Missing source timezone,
+ambiguous clocks and date-only results remain unresolved until corrected.
+
+Direct Discord timestamps use deterministic epoch conversion. UTC is the default
+only when no zone was authored. Authored timezone/date context, formatted source
+tokens and conflicting evidence survive normalization and connector update
+selection. Direct normalization is restricted to simple source clauses associated
+with the named performer or event. Relative transformations must resolve an anchor
+and apply a shift; resolving the anchor alone does not complete that field.
+Calendar-day shifts require a source timezone and differ from elapsed-hour shifts
+across DST. The tools keep the existing five-call/six-turn extraction budget and
+make no extra model request of their own.
+
+Regression coverage: `tests/web/event-intake-discord-timestamps.test.ts`,
+`tests/web/event-intake-time-tools.test.ts`, and the Discord source/claim tests.
 
 The 2026-10-13 scheduling follow-up is recorded in the
 [event editor scheduling checkpoint](./event-editor-scheduling-checkpoint.md): explicit

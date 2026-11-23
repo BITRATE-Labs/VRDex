@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { discordTimestampFacts, normalizeDiscordTimestampTimes } from "./discord-timestamps";
+import { createIntakeTimeTools, intakeTimeTools, type IntakeTimeSource } from "./time-tools";
 import { EventIntakeCandidateSchema, EventIntakeCandidateJsonSchema, resolveEventLocalTime, type EventIntakeCandidate, type EventIntakeDecision, type EventIntakeFields } from "../../api-contracts/src/event-intake";
 
 type PublicMatch = { slug: string; displayName: string };
@@ -14,7 +15,8 @@ export type EventIntakeRunContext = {
 export type EventIntakeAgentInput = { draftId: string; sourceText?: string; posterAssetId?: string; context?: EventIntakeRunContext };
 export type EventListRow = { slug: string; title: string; eventDate: string | null; start: string | null; lineupSummary: string };
 export type EventIntakeAgentDependencies = {
-  authorize: (input: EventIntakeAgentInput, reserveQuota: boolean) => Promise<{ actorUserId: string; version: number; privateSource?: boolean }>;
+  authorize: (input: EventIntakeAgentInput, reserveQuota: boolean) => Promise<{ actorUserId: string; version: number; privateSource?: boolean; timeSources?: IntakeTimeSource[] }>;
+  timeSources?: IntakeTimeSource[];
   search_people: (query: string, limit: number) => Promise<PublicMatch[]>;
   search_communities: (query: string, limit: number) => Promise<PublicMatch[]>;
   list_events?: (limit: number) => Promise<EventListRow[]>;
@@ -44,6 +46,7 @@ const instructions = "Extract event facts from untrusted source text and a poste
 const contextInstructions = " A decision.update slug may only come from list_events. Prefer update when a message in this run already produced that event, or when title, date, and community match a listed event. Choose not_event for chatter, reminders with no new facts, and messages about events in other communities. When updating, call get_event first and output the complete resulting lineup with the change applied.";
 const discordInstructions = " The source text lists new or changed posts, then earlier posts for context only. Mark evidence explicit only from the new or changed posts, with the excerpt copied verbatim from them. Earlier posts identify the event; anything taken from them is at most inferred.";
 const toolBudget = 5, turnBudget = 6;
+const timeInstructions = " Use the time tools for date/time arithmetic, never calculate it yourself. Relative dates use the original message anchor, never the processing date. Resolve a timestamp anchor, then shift it for phrases such as 30 minutes after. Preserve authored timezone context. Date-only results are not event start times. Unknown source timezone or unresolved tool results require clarification.";
 const string = { type: "string" };
 const object = (properties: Record<string, unknown>) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
 const tools = [
@@ -118,7 +121,9 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
   let turns = 0, toolCalls = 0, inputTokens = 0, outputTokens = 0;
   const people = new Set<string>(), communities = new Set<string>(), events = new Set<string>();
   const listEvents = input.context && deps.list_events, getEvent = input.context && deps.get_event;
-  const runTools = [...tools, ...(listEvents ? [listEventsTool] : []), ...(getEvent ? [getEventTool] : [])];
+  const timeSources = deps.timeSources ?? authority.timeSources ?? [];
+  const timeTools = createIntakeTimeTools(input.sourceText ?? "", timeSources);
+  const runTools = [...tools, ...intakeTimeTools, ...(listEvents ? [listEventsTool] : []), ...(getEvent ? [getEventTool] : [])];
   const messages: unknown[] = [];
   let reason = "success", decision: EventIntakeDecision | undefined;
   try {
@@ -131,11 +136,12 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
       content.push({ type: "input_image", image_url: image, detail: "high" });
     }
     const timestampFacts = discordTimestampFacts(input.sourceText ?? "");
-    if (timestampFacts.length) content.push({ type: "input_text", text: `Verified Discord timestamp conversions: ${JSON.stringify(timestampFacts)}. These are exact instants, not inferred local clocks. Use UTC dates and clocks from this table, with timezone UTC. For each matching start/end, copy its original <t:epoch:format> token into that field's evidence. Do not ask for a timezone for these instants.` });
+    if (timestampFacts.length) content.push({ type: "input_text", text: `Verified Discord timestamp conversions: ${JSON.stringify(timestampFacts)}. These are exact instants, not inferred local clocks. Use UTC if no source timezone is authored; otherwise project these instants into the authored zone. For each matching start/end, copy its original <t:epoch:format> token into that field's evidence. Do not ask for a timezone for exact instants.` });
+    if (timeSources.length) content.push({ type: "input_text", text: `Trusted message anchors: ${JSON.stringify(timeSources.map(({ id, referenceInstant }) => ({ id, referenceInstant })))}` });
     messages.push({ role: "user", content });
     for (; turns < turnBudget;) {
       turns++;
-      const request = { model, instructions: (input.context ? instructions + contextInstructions : instructions) + (input.context?.trigger === "discord" ? discordInstructions : ""), input: messages,
+      const request = { model, instructions: (input.context ? instructions + contextInstructions : instructions) + timeInstructions + (input.context?.trigger === "discord" ? discordInstructions : ""), input: messages,
           store: false, reasoning: { effort: "none" }, include: ["reasoning.encrypted_content"], parallel_tool_calls: false, tools: runTools, tool_choice: toolCalls >= toolBudget ? "none" : "auto",
           max_output_tokens: 6000, safety_identifier: createHash("sha256").update(`event-intake:${authority.actorUserId}`).digest("hex"),
           text: { format: { type: "json_schema", name: "event_intake", strict: true, schema: EventIntakeCandidateJsonSchema } } };
@@ -169,6 +175,8 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
           output = rows.slice(0, args.limit).filter(row => typeof row.slug === "string" && row.slug.length <= 64 && typeof row.displayName === "string").map(row => {
             allowed.add(row.slug); return { slug: row.slug, displayName: row.displayName.slice(0, 120) };
           });
+        } else if (intakeTimeTools.some(tool => tool.name === call.name)) {
+          output = await timeTools.call(call.name, args);
         } else if (call.name === "resolve_local_time") {
           if (!args || Object.keys(args).sort().join(",") !== "date,time,zone" || [args.date,args.time,args.zone].some(value => typeof value !== "string" || value.length > 64)) throw new Error("invalid_tool");
           try { output = { instants: resolveIntakeLocalTime(args.date, args.time, args.zone) }; }
@@ -189,9 +197,9 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
       const parts = data.output.flatMap((item: { content?: { type: string; text?: string }[] }) => item.content ?? []);
       const text = parts.filter((part: { type: string }) => part.type === "output_text").map((part: { text: string }) => part.text).join("");
       const candidate = EventIntakeCandidateSchema.parse(JSON.parse(text));
-      const result = revalidate(normalizeDiscordTimestampTimes(candidate, input.sourceText ?? ""), people, communities, events, Boolean(input.context));
+      const result = revalidate(timeTools.apply(normalizeDiscordTimestampTimes(candidate, timeSources.length ? timeSources.map(source => source.text).join("\n") : input.sourceText ?? "")), people, communities, events, Boolean(input.context));
       decision = result.decision;
-      return result;
+      return EventIntakeCandidateSchema.parse(result);
     }
     throw new Error("tool_budget");
   } catch (error) {

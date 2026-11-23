@@ -74,6 +74,7 @@ export const runPending = internalAction({
       const sinks: EventIntakeSink[] = [createPostHogSink(event => ctx.runMutation(internal.productAnalytics.enqueue, event).then(() => undefined))];
       if (publicKey && secretKey) sinks.push(createLangfuseSink({ publicKey, secretKey, baseUrl: process.env.LANGFUSE_BASE_URL || undefined }));
       const candidate = await extractEventIntake({ draftId, sourceText: claim.modelText, posterAssetId: posterIds[0], context: claim.context }, {
+        timeSources: claim.timeSources,
         authorize: (input, reserveQuota) => ctx.runMutation(internal.eventIntakeSources.authorizeExtraction, {
           actorUserId: claim.authorityUserId, draftId, reserveQuota, connectorId: claim.context.connectorId,
           ...(input.posterAssetId ? { posterAssetId: input.posterAssetId as Id<"eventPosterSources"> } : {}),
