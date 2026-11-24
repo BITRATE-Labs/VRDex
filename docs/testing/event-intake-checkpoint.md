@@ -35,8 +35,10 @@ Date-only parser placeholders cannot shift the source civil date when projected
 into an existing event's zone; a differing calendar day requires review.
 Bare or this-qualified weekdays without an absolute date require a reference-time
 review unless a tool already resolved them.
-Numeric slash/hyphen dates share the absolute-date marker used by the resolver,
-so a weekday beside an explicit numeric date does not erase the stated day.
+Slash dates and numeric dates with a year share the absolute-date marker used
+by the resolver, so a weekday beside those dates does not erase the stated day.
+Bare hyphen pairs remain eligible parser input but do not bypass a weekday hold:
+clock, price and age ranges alone cannot establish an absolute event date.
 Message capture rejects invalid Date timestamps; legacy invalid personal edit
 timestamps fall back to snowflake time.
 Legacy invalid connector edit timestamps fall back to creation time consistently
