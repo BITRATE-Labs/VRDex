@@ -217,7 +217,7 @@ export class EventPlaybackOwner {
               foregroundPlayback.acquire(this, () => this.pause());
               this.started = true;
             }
-            this.emit(patch);
+            this.emit(patch.status === "playing" ? { ...patch, unavailableReason: undefined } : patch);
           },
           this.state.mode,
         );

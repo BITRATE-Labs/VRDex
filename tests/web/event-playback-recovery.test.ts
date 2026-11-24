@@ -267,3 +267,15 @@ test("hidden pages suppress direct stall deadlines and foreground gets a fresh f
     owner.close(); assert.equal(fixture.documentListeners, 0);
   } finally { owner.close(); fixture.restore(); }
 });
+
+test("actual resumed profile playback clears an old ended reason", async () => {
+  const fixture = dom();
+  const profile: PlaybackRequest = { kind: "vrcdn", profileId: "p", profileSlug: "dj", title: "DJ", href: "/dj", sourceId: "AA", src: "url", transport: "video" };
+  const owner = new EventPlaybackOwner((value, notify) => createEventPlaybackAdapter(value, fixture.mount, notify));
+  try {
+    await owner.play(profile); fixture.nodes[0].dispatchEvent(new Event("ended"));
+    assert.equal(owner.getSnapshot().unavailableReason, "ended");
+    await fixture.nodes[0].play();
+    assert.equal(owner.getSnapshot().status, "playing"); assert.equal(owner.getSnapshot().unavailableReason, undefined);
+  } finally { owner.close(); fixture.restore(); }
+});
