@@ -15,9 +15,13 @@ class Video extends EventTarget {
 }
 function dom() {
   const before = { document: globalThis.document, window: globalThis.window }; const nodes: Video[] = [];
-  Object.defineProperty(globalThis, "document", { configurable: true, value: { createElement() { const node = new Video(); nodes.push(node); return node; } } });
+  const events = new EventTarget(); let listeners = 0;
+  const document = { visibilityState: "visible", createElement() { const node = new Video(); nodes.push(node); return node; },
+    addEventListener(...args: Parameters<EventTarget["addEventListener"]>) { listeners++; events.addEventListener(...args); },
+    removeEventListener(...args: Parameters<EventTarget["removeEventListener"]>) { listeners--; events.removeEventListener(...args); } };
+  Object.defineProperty(globalThis, "document", { configurable: true, value: document });
   Object.defineProperty(globalThis, "window", { configurable: true, value: { innerWidth: 1200, location: { hostname: "localhost" } } });
-  return { nodes, mount: { append() {} } as unknown as HTMLElement, restore() { Object.defineProperty(globalThis, "document", { configurable: true, value: before.document }); Object.defineProperty(globalThis, "window", { configurable: true, value: before.window }); } };
+  return { nodes, get documentListeners() { return listeners; }, visibility(value: string) { document.visibilityState = value; events.dispatchEvent(new Event("visibilitychange")); }, mount: { append() {} } as unknown as HTMLElement, restore() { Object.defineProperty(globalThis, "document", { configurable: true, value: before.document }); Object.defineProperty(globalThis, "window", { configurable: true, value: before.window }); } };
 }
 test("native browser pause, EOF, error and recovery update state; disposal removes listeners", async () => {
   const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
@@ -248,5 +252,18 @@ test("retry escalates an established dead stream after one attempt without decod
     await owner.play(request); assert.equal(fixture.nodes.length, 1);
     t.mock.timers.tick(15000); assert.equal(owner.getSnapshot().status, "unavailable");
     await owner.play(request); assert.equal(fixture.nodes.length, 2); assert.equal(original.removed, true);
+  } finally { owner.close(); fixture.restore(); }
+});
+
+test("hidden pages suppress direct stall deadlines and foreground gets a fresh full window", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const fixture = dom(); const owner = new EventPlaybackOwner((value, notify) => createEventPlaybackAdapter(value, fixture.mount, notify));
+  try {
+    await owner.play(request); fixture.nodes[0].dispatchEvent(new Event("waiting"));
+    t.mock.timers.tick(10000); fixture.visibility("hidden"); t.mock.timers.tick(20000);
+    assert.equal(owner.getSnapshot().status, "playing");
+    fixture.visibility("visible"); t.mock.timers.tick(14999); assert.equal(owner.getSnapshot().status, "playing");
+    t.mock.timers.tick(1); assert.equal(owner.getSnapshot().status, "unavailable");
+    owner.close(); assert.equal(fixture.documentListeners, 0);
   } finally { owner.close(); fixture.restore(); }
 });

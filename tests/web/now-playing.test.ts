@@ -121,3 +121,12 @@ test("legacy playback keeps media-session controls without relay metadata and re
     assert.equal(handlers.get("enterpictureinpicture"), null);
   } finally { release(); owner.close(); }
 });
+
+test("legacy system identity clears for ended/unavailable playback and leaves Twitch metadata to its embed", () => {
+  const request = { kind: "vrcdn", profileId: "p", profileSlug: "dj", title: "DJ", href: "/dj", sourceId: "AA", src: "url", transport: "mpegts" } as const;
+  const state = { request, status: "playing", mode: "video", volume: 1, muted: false } as const;
+  assert.ok(nowPlayingIdentity(state)); assert.ok(nowPlayingIdentity({ ...state, status: "paused" }));
+  for (const status of ["idle", "loading", "blocked", "unavailable"] as const) assert.equal(nowPlayingIdentity({ ...state, status }), null);
+  assert.equal(nowPlayingIdentity({ ...state, unavailableReason: "ended", metadata: { displayName: "DJ", artworkAssetId: null, artworkRevision: null } }), null);
+  assert.equal(nowPlayingIdentity({ ...state, request: { kind: "twitch", channel: "dj", profileId: "p", profileSlug: "dj", title: "DJ", href: "/dj", sourceId: "twitch" } }), null);
+});

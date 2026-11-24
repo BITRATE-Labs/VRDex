@@ -53,7 +53,10 @@ a still-buffering stream receives a fresh deadline when visible again.
 ### Automatic video pop-out
 
 The retained player's Media Session registers `enterpictureinpicture` in video
-mode when the adapter permits PiP. Legacy playback uses its request title when relay metadata is unavailable, so system playback controls still register. On supported browsers, switching away can open the active video without
+mode when the adapter permits PiP. Legacy playback uses its request title while
+playing or paused when relay metadata is unavailable. Ended and unsupported
+playback clear system controls; Twitch retains its embed's own metadata.
+On supported browsers, switching away can open the active video without
 another button press. Only the current, playing video may respond. Audio mode,
 Close and stale playback generations cannot open a video window.
 
