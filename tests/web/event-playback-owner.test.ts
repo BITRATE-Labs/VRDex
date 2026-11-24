@@ -440,6 +440,9 @@ test("terminal playback reasons restore the music session after a successful sta
     notify({ status: "unavailable", unavailableReason: "ended" }); assert.equal(audioSession.type, "auto");
     notify({ status: "playing" }); assert.equal(audioSession.type, "playback");
     notify({ status: "unavailable", unavailableReason: "unsupported" }); assert.equal(audioSession.type, "auto");
+    await owner.play(request()); assert.equal(audioSession.type, "playback");
+    owner.update(request("a", "https://stream/replacement"));
+    assert.equal(owner.getSnapshot().status, "paused"); assert.equal(owner.media, undefined); assert.equal(audioSession.type, "auto");
   } finally { owner.close(); if (descriptor) Object.defineProperty(globalThis, "navigator", descriptor); else Reflect.deleteProperty(globalThis, "navigator"); }
 });
 

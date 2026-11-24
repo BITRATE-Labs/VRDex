@@ -340,6 +340,7 @@ export class EventPlaybackOwner {
     )
       return;
     if (playbackSourceKey(request) !== playbackSourceKey(this.state.request)) {
+      foregroundPlayback.release(this);
       this.release();
       this.emit({ request, status: "paused", lineup: undefined, metadata: undefined });
       return;
