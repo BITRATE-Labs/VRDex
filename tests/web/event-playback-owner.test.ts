@@ -411,7 +411,7 @@ test("lineup recovery keeps ownership and a genuinely paused mode result stays p
   const lineup = { started: true, following: true, paused: false, muted: false, volume: 1, connected: true, unavailable: false, current: "dj" };
   const owner = new EventPlaybackOwner((_request, report) => {
     notify = report;
-    return { async play() { return true; }, pause() { pauses++; }, setVolume() {}, setMuted() {}, update() {}, dispose() {},
+    return { async play() { report({ status: "unavailable", lineup: { ...lineup, unavailable: true } }); return true; }, pause() { pauses++; }, setVolume() {}, setMuted() {}, update() {}, dispose() {},
       async setMode() { report({ status: "paused", lineup: { ...lineup, paused: true, current: "next" } }); return true; } };
   });
   const other = {};
@@ -421,6 +421,7 @@ test("lineup recovery keeps ownership and a genuinely paused mode result stays p
     foregroundPlayback.acquire(other, () => {}); assert.equal(pauses, 1); assert.equal(owner.getSnapshot().status, "paused");
     foregroundPlayback.release(other);
     await owner.play(request());
+    notify({ status: "playing", lineup });
     await owner.setMode(owner.getSnapshot().mode === "video" ? "audio" : "video");
     assert.equal(owner.getSnapshot().lineup?.current, "next"); assert.equal(owner.getSnapshot().lineup?.paused, true);
     assert.equal(owner.getSnapshot().status, "paused");
@@ -443,6 +444,8 @@ test("terminal playback reasons restore the music session after a successful sta
     await owner.play(request()); assert.equal(audioSession.type, "playback");
     owner.update(request("a", "https://stream/replacement"));
     assert.equal(owner.getSnapshot().status, "paused"); assert.equal(owner.media, undefined); assert.equal(audioSession.type, "auto");
+    await owner.play(request("a", "https://stream/replacement")); assert.equal(audioSession.type, "playback");
+    owner.revalidate(null, owner.generation); assert.equal(audioSession.type, "auto");
   } finally { owner.close(); if (descriptor) Object.defineProperty(globalThis, "navigator", descriptor); else Reflect.deleteProperty(globalThis, "navigator"); }
 });
 
