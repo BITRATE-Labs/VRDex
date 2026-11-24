@@ -255,14 +255,32 @@ test("growing startup media extends the deadline, unchanged buffers do not", asy
   try {
     void owner.play(request); await Promise.resolve(); await Promise.resolve();
     const video = fixture.nodes[0];
-    t.mock.timers.tick(10000); video.bufferEnd = 1; video.dispatchEvent(new Event("progress"));
-    t.mock.timers.tick(10000); assert.equal(owner.getSnapshot().status, "loading");
+    t.mock.timers.tick(10000); video.bufferEnd = 1;
+    t.mock.timers.tick(5000); assert.equal(owner.getSnapshot().status, "loading", "deadline samples growing MSE buffers without progress events");
+    t.mock.timers.tick(5000);
     video.bufferEnd = 2; video.dispatchEvent(new Event("loadeddata"));
     t.mock.timers.tick(10000); video.dispatchEvent(new Event("progress"));
     t.mock.timers.tick(4999); assert.equal(owner.getSnapshot().status, "loading");
     t.mock.timers.tick(1); assert.equal(owner.getSnapshot().status, "unavailable");
     assert.equal(video.removed, false);
   } finally { owner.close(); fixture.restore(); }
+});
+
+test("recoverable buffering retains music ownership until another surface pauses it", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator"), audioSession = { type: "auto" };
+  Object.defineProperty(globalThis, "navigator", { configurable: true, value: { audioSession } });
+  const fixture = dom(), other = {};
+  const owner = new EventPlaybackOwner((value, notify) => createEventPlaybackAdapter(value, fixture.mount, notify));
+  try {
+    await owner.play(request); const video = fixture.nodes[0];
+    video.dispatchEvent(new Event("waiting")); t.mock.timers.tick(15000);
+    assert.equal(owner.getSnapshot().status, "unavailable"); assert.equal(audioSession.type, "playback");
+    foregroundPlayback.acquire(other, () => {});
+    assert.equal(owner.getSnapshot().status, "paused"); assert.equal(video.paused, true);
+    video.currentTime = 3; video.dispatchEvent(new Event("timeupdate"));
+    assert.equal(owner.getSnapshot().status, "paused", "the old stalled stream cannot steal the new surface on progress");
+  } finally { foregroundPlayback.release(other); owner.close(); fixture.restore(); if (descriptor) Object.defineProperty(globalThis, "navigator", descriptor); else Reflect.deleteProperty(globalThis, "navigator"); }
 });
 
 test("explicit retry rebuilds a starved unpaused direct stream immediately", async t => {

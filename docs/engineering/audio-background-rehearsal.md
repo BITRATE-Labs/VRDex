@@ -46,9 +46,12 @@ Unsupported or rejected Audio Session access does not block ordinary playback.
 
 Direct streams allow fifteen seconds for initial startup or an established stall
 without progress before exposing unavailable playback. Growing startup buffers
-restart that allowance; repeated progress events without growth do not. The existing media stays mounted for
+restart that allowance; the deadline also samples buffer growth without element
+progress events. Repeated events without growth do not extend it. The existing media stays mounted for
 recovery. Retry resumes genuinely paused media in place, while an unpaused,
 starved stream reconnects on the first tap rather than falsely reporting playback.
+Recoverable stalls retain foreground ownership and the music audio-session claim;
+starting another surface pauses the stalled player before it can recover.
 Hard transport errors still allow a fresh connection. Pause, Close and background visibility clear the deadline;
 a still-buffering stream receives a fresh deadline when visible again.
 
