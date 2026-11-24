@@ -75,6 +75,7 @@ export type PlaybackSnapshot = {
 export type PlaybackAdapter = {
   readonly supportsAudioOnly?: boolean;
   readonly supportsPictureInPicture?: boolean;
+  readonly recovering?: boolean;
   play(): Promise<boolean>;
   pause(): void;
   setVolume(value: number): void;
@@ -159,7 +160,7 @@ export class EventPlaybackOwner {
     };
   };
   private emit(patch: Partial<PlaybackSnapshot>) {
-    if (patch.status === "blocked" || patch.status === "unavailable") foregroundPlayback.release(this);
+    if (patch.status === "blocked" || (patch.status === "unavailable" && !this.adapter?.recovering)) foregroundPlayback.release(this);
     this.state = { ...this.state, ...patch };
     this.listeners.forEach((listener) => listener());
   }

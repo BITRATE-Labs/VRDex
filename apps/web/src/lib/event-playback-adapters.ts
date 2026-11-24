@@ -79,6 +79,9 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
     stallTimer = setTimeout(() => {
       stallTimer = undefined;
       if (!wantsPlayback || disposed || document.visibilityState === "hidden") return;
+      // MSE appendBuffer need not emit element progress events. Sample the range
+      // at the deadline too before declaring a cold transport unresponsive.
+      if (!played) { startupProgress(); if (stallTimer !== undefined) return; }
       if (played && !stalled) stalled = true; else failed = true;
       notify({ status: "unavailable" });
     }, 15_000);
@@ -184,6 +187,7 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
   };
   return {
     get media() { return disposed ? undefined : video; },
+    get recovering() { return !disposed && wantsPlayback && !failed; },
     enableControls(callback) { beforeUnmute = callback; video.controls = true; },
     play,
     get retry() { return stalled && !failed && video.paused ? play : undefined; },
