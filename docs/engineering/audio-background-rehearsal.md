@@ -36,10 +36,12 @@ restoration cannot undo a later Pause or Close. This does not provide a separate
 audio rendition or establish physical iPhone background acceptance.
 Repeated app switches invalidate pending restoration; a hidden-page rejection
 does not pause the viewer's still-active playback intent.
+An audio-context resume that never settles expires after ten seconds, exposing
+gesture-required playback instead of permanently blocking future restoration.
 
 The foreground playback owner requests the browser's `playback` audio-session
 type when that API is available. Ownership transfers without resetting the type;
-Pause, Close, blocked playback or failed initial startup restores the previous type unless another
+Pause, Close, blocked playback, terminal end/unsupported reasons or failed initial startup restores the previous type unless another
 caller changed it. Internal pauses during a rendition switch retain the claim
 until the switch succeeds or fails.
 Unsupported or rejected Audio Session access does not block ordinary playback.

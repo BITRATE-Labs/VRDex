@@ -567,3 +567,29 @@ test("foreground restoration supersedes a pending source play without falsely bl
     assert.equal(media.paused, false); assert.equal(session.state.paused, false); assert.equal(session.state.playbackBlocked, false);
   } finally { session?.dispose(); mock.restoreAll(); Object.defineProperty(globalThis, "document", { configurable: true, value: before.document }); Object.defineProperty(globalThis, "AudioContext", { configurable: true, value: before.context }); }
 });
+
+test("a never-settling foreground resume times out and a later Play can recover", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const before = { document: globalThis.document, context: globalThis.AudioContext };
+  let visibility = () => {}, calls = 0;
+  class Context {
+    static current: Context;
+    state = "running"; destination = {};
+    constructor() { Context.current = this; }
+    createGain() { return { gain: { value: 1 }, connect() {} }; }
+    addEventListener() {} removeEventListener() {} async close() {}
+    resume() { if (++calls === 2) return new Promise<void>(() => {}); this.state = "running"; return Promise.resolve(); }
+  }
+  let session: EventLineupSession | undefined;
+  try {
+    Object.defineProperty(globalThis, "document", { configurable: true, value: { visibilityState: "visible", addEventListener(_name: string, callback: () => void) { visibility = callback; }, removeEventListener() {} } });
+    Object.defineProperty(globalThis, "AudioContext", { configurable: true, value: Context });
+    mock.method(Date, "now", () => at(20)); mock.method(globalThis, "setInterval", () => 1); mock.method(globalThis, "clearInterval", () => {});
+    session = new EventLineupSession({ title: "Event", startAt: at(20), slots: [{ key: "a", startAt: at(20), endAt: at(21), stream: stream("a") }] }, { append() {} } as unknown as HTMLElement, () => {}, () => new Promise(() => {}));
+    await session.play(); Context.current.state = "suspended"; visibility(); await settle();
+    t.mock.timers.tick(10000); await settle();
+    assert.equal(session.state.paused, true); assert.equal(session.state.playbackBlocked, true);
+    await session.play(); Context.current.state = "suspended"; visibility(); await settle();
+    assert.equal(calls, 4); assert.equal(Context.current.state, "running"); assert.equal(session.state.paused, false);
+  } finally { session?.dispose(); mock.restoreAll(); Object.defineProperty(globalThis, "document", { configurable: true, value: before.document }); Object.defineProperty(globalThis, "AudioContext", { configurable: true, value: before.context }); }
+});
