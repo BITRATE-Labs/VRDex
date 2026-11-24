@@ -385,3 +385,23 @@ test("adapter setup snapshots do not release the music session before its first 
     notify({ status: "paused" }); assert.equal(audioSession.type, "auto");
   } finally { owner.close(); if (descriptor) Object.defineProperty(globalThis, "navigator", descriptor); else Reflect.deleteProperty(globalThis, "navigator"); }
 });
+
+test("failed Play and transient mode-switch Pause restore only the appropriate audio claim", async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator"), audioSession = { type: "auto" };
+  Object.defineProperty(globalThis, "navigator", { configurable: true, value: { audioSession } });
+  let accepted = false, fail = false, duringSwitch = "";
+  const owner = new EventPlaybackOwner((_request, report) => ({
+    async play() { if (fail) throw new Error("failed"); return accepted; },
+    async setMode() { report({ status: "paused" }); duringSwitch = audioSession.type; return accepted; },
+    setVolume() {}, setMuted() {}, pause() {}, update() {}, dispose() {},
+  }));
+  try {
+    await owner.play(request()); assert.equal(owner.getSnapshot().status, "blocked"); assert.equal(audioSession.type, "auto");
+    fail = true; await owner.play(request()); assert.equal(owner.getSnapshot().status, "unavailable"); assert.equal(audioSession.type, "auto");
+    fail = false; accepted = true; await owner.play(request()); assert.equal(audioSession.type, "playback");
+    await owner.setMode(owner.getSnapshot().mode === "video" ? "audio" : "video");
+    assert.equal(duringSwitch, "playback"); assert.equal(owner.getSnapshot().status, "playing"); assert.equal(audioSession.type, "playback");
+    accepted = false; await owner.setMode(owner.getSnapshot().mode === "video" ? "audio" : "video");
+    assert.equal(duringSwitch, "playback"); assert.equal(owner.getSnapshot().status, "blocked"); assert.equal(audioSession.type, "auto");
+  } finally { owner.close(); if (descriptor) Object.defineProperty(globalThis, "navigator", descriptor); else Reflect.deleteProperty(globalThis, "navigator"); }
+});

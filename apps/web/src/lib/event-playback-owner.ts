@@ -137,6 +137,7 @@ export class EventPlaybackOwner {
   private listeners = new Set<() => void>();
   private adapter?: PlaybackAdapter;
   private attempt = 0;
+  private modeAttempt?: number;
   private started = false;
   private unavailable = false;
   generation = 0;
@@ -158,6 +159,7 @@ export class EventPlaybackOwner {
     };
   };
   private emit(patch: Partial<PlaybackSnapshot>) {
+    if (patch.status === "blocked" || patch.status === "unavailable") foregroundPlayback.release(this);
     this.state = { ...this.state, ...patch };
     this.listeners.forEach((listener) => listener());
   }
@@ -210,6 +212,7 @@ export class EventPlaybackOwner {
           request,
           (patch) => {
             if (generation !== this.generation) return;
+            if (patch.status === "paused" && this.modeAttempt === this.attempt) return;
             if (patch.status === "paused" && !configuring) foregroundPlayback.release(this);
             if (patch.status === "unavailable") this.unavailable = true;
             if (patch.status === "playing") {
@@ -274,12 +277,17 @@ export class EventPlaybackOwner {
     }
     const playing =
       this.state.status === "playing" || this.state.status === "loading";
+    this.modeAttempt = attempt;
     try {
       const accepted = await this.adapter.setMode(mode);
-      if (attempt === this.attempt && playing)
+      if (attempt === this.attempt && playing) {
+        if (accepted) foregroundPlayback.acquire(this, () => this.pause());
         this.emit({ status: accepted ? "playing" : "blocked" });
+      }
     } catch {
       if (attempt === this.attempt) this.emit({ status: "blocked" });
+    } finally {
+      if (this.modeAttempt === attempt) this.modeAttempt = undefined;
     }
   }
   setVolume(value: number) {
