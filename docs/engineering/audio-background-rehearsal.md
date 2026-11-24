@@ -59,6 +59,8 @@ Recoverable stalls retain foreground ownership and the music audio-session claim
 starting another surface pauses the stalled player before it can recover.
 If an established stall makes no progress for a second fifteen-second window,
 it becomes a terminal failure even when the browser emits no further events.
+Terminal reasons pause the adapter and invalidate pending Play before releasing
+foreground ownership, including native lineup recovery loops.
 Previously established system controls remain during a reason-less stall while
 the same player generation still has mounted media; terminal failures clear them.
 Hard transport errors still allow a fresh connection. Pause, Close and background visibility clear the deadline;
