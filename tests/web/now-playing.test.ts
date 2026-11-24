@@ -112,13 +112,18 @@ test("legacy playback keeps media-session controls without relay metadata and re
   const handlers = new Map<string, (() => void) | null>();
   Object.defineProperty(globalThis, "navigator", { configurable: true, value: { mediaSession: { setActionHandler(action: string, handler: (() => void) | null) { handlers.set(action, handler); } } } });
   Object.defineProperty(globalThis, "MediaMetadata", { configurable: true, value: class {} });
-  const owner = new EventPlaybackOwner(() => ({ supportsPictureInPicture: false, play: async () => true, pause() {}, setVolume() {}, setMuted() {}, update() {}, dispose() {} }));
+  let notify!: Parameters<ConstructorParameters<typeof EventPlaybackOwner>[0]>[1];
+  const owner = new EventPlaybackOwner((_request, report) => { notify = report; return { media: {} as HTMLMediaElement, supportsPictureInPicture: false, play: async () => true, pause() {}, setVolume() {}, setMuted() {}, update() {}, dispose() {} }; });
   const release = retainNowPlaying(owner);
   try {
     await owner.play({ kind: "vrcdn", profileId: "p", profileSlug: "dj", title: "DJ - VRDex", href: "/dj", sourceId: "AA", src: "url", transport: "mpegts" });
     assert.equal(nowPlayingIdentity(owner.getSnapshot())?.displayName, "DJ");
     assert.equal(typeof handlers.get("pause"), "function");
     assert.equal(handlers.get("enterpictureinpicture"), null);
+    notify({ status: "unavailable" });
+    assert.equal(typeof handlers.get("pause"), "function", "recoverable mounted playback keeps system controls");
+    notify({ status: "unavailable", unavailableReason: "failed" });
+    assert.equal(handlers.get("pause"), null, "terminal failures clear retained controls");
   } finally { release(); owner.close(); }
 });
 

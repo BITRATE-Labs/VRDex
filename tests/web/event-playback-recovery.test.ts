@@ -318,3 +318,15 @@ test("actual resumed profile playback clears an old ended reason", async () => {
     assert.equal(owner.getSnapshot().status, "playing"); assert.equal(owner.getSnapshot().unavailableReason, undefined);
   } finally { owner.close(); fixture.restore(); }
 });
+
+test("failed transport setup cannot re-arm its startup watchdog on foreground return", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const fixture = dom();
+  const owner = new EventPlaybackOwner((value, notify) => createEventPlaybackAdapter(value, fixture.mount, notify, async () => { throw new Error("unsupported transport"); }));
+  try {
+    await owner.play({ ...request, transport: "mpegts" });
+    assert.equal(owner.getSnapshot().status, "unavailable"); assert.equal(owner.getSnapshot().unavailableReason, undefined);
+    fixture.visibility("hidden"); fixture.visibility("visible"); t.mock.timers.tick(20000);
+    assert.equal(owner.getSnapshot().unavailableReason, undefined, "setup failure stays settled instead of a late watchdog failure");
+  } finally { owner.close(); fixture.restore(); }
+});

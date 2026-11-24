@@ -177,7 +177,7 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
     player = attachVrcdnTransport(mpegts, video, request.src, { ...("profileId" in request ? {onLoadingComplete:connectionEnded} : {}), onError: () => { if (!disposed) { failed = true; notify({ status: "unavailable", unavailableReason: "failed" }); } } });
   });
   // The owner may close before Play awaits the transport import.
-  void ready.catch(() => { clearStall(); });
+  void ready.catch(() => { wantsPlayback = false; clearStall(); });
   const play = async () => {
     const current = ++attempt; wantsPlayback = true; watchStall(); await ready;
     if (disposed || current !== attempt) return false;
