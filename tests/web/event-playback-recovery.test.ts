@@ -294,6 +294,7 @@ test("explicit retry rebuilds a starved unpaused direct stream immediately", asy
     fixture.nodes[1].dispatchEvent(new Event("waiting"));
     t.mock.timers.tick(15000); assert.equal(owner.getSnapshot().unavailableReason, undefined);
     t.mock.timers.tick(15000); assert.equal(owner.getSnapshot().unavailableReason, "failed", "a single waiting event can reach terminal failure without another media event");
+    assert.equal(fixture.nodes[1].paused, true, "terminal failure stops the producer before giving up music ownership");
   } finally { owner.close(); fixture.restore(); }
 });
 
