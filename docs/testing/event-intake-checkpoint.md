@@ -31,6 +31,11 @@ Timing updates require the current event context read before unattended writes.
 Invalid replacement arguments invalidate an earlier binding. Relative guards
 require temporal constructions so names such as After Dark and Last Call do not
 erase valid clock context.
+Date-only parser placeholders cannot shift the source civil date when projected
+into an existing event's zone; a differing calendar day requires review.
+Bare or this-qualified weekdays without an absolute date require a reference-time
+review unless a tool already resolved them. Message capture rejects invalid Date
+timestamps; legacy invalid personal edit timestamps fall back to snowflake time.
 
 Fully specified text dates can resolve without a message anchor when their result
 is independent of the reference date. Poster-only or unavailable text tools do

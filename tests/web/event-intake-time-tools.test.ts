@@ -531,3 +531,32 @@ it("holds timing updates when the model skips the existing event context read", 
   assert.ok(result.questions.some(item => item.reason === "time_context_required"));
   assert.ok(!explicitUpdateKeys(result.evidence, "discord_announcements").includes("timezone"));
 });
+
+it("does not project a date-only synthetic noon into a different event calendar day", async () => {
+  const text = "Tomorrow Pacific/Kiritimati", tools = createIntakeTimeTools(text, [{ id: "post", text, referenceInstant: "2026-11-20T12:00:00Z" }]);
+  const date = await tools.call("resolve_event_time", resolve(text, "event.eventDate")) as { precision: string; date: string };
+  assert.equal(date.precision, "date");
+  assert.equal(date.date, "2026-11-22");
+  const value = blank(); Object.assign(value.event, { eventDate: date.date, timezone: "America/Adak" });
+  value.evidence = [{ fieldPath: "event.eventDate", origin: "text", excerpt: text, assessment: "explicit" }];
+  const result = tools.apply(value, { eventDate: "2026-11-20", timezone: "America/Adak" });
+  assert.equal(result.event.eventDate, null);
+  assert.ok(result.questions.some(item => item.fieldPath === "event.eventDate" && item.reason === "time_date_zone_conflict"));
+});
+
+it("holds unanchored weekday evidence without suppressing absolute dates or exact epochs", () => {
+  for (const text of ["Friday 10 PM, Eastern time", "Fri 10 PM, Eastern time", "this Friday 10 PM, Eastern time", "this Fri 10 PM, Eastern time", "this week 10 PM, Eastern time"]) {
+    const value = blank(); Object.assign(value.event, { eventDate: "2026-11-25", start: "22:00", startDate: "2026-11-25", timezone: "America/New_York" });
+    value.evidence = [{ fieldPath: "event.start", origin: "text", excerpt: text, assessment: "explicit" }];
+    const result = createIntakeTimeTools(text, []).apply(value);
+    assert.equal(result.event.start, "22:00");
+    assert.equal(result.event.startDate, null);
+    assert.ok(result.questions.some(item => item.reason === "source_reference_time_required"));
+  }
+  for (const text of ["Friday November 20, doors 10 PM", "Friday <t:1795217400:t>"]) {
+    const value = blank(); Object.assign(value.event, { eventDate: "2026-11-20", start: "22:00", startDate: "2026-11-20", timezone: "UTC" });
+    if (text.includes("<t:")) value.event.start = "23:30";
+    value.evidence = [{ fieldPath: "event.start", origin: "text", excerpt: text, assessment: "explicit" }];
+    assert.deepEqual(createIntakeTimeTools(text, []).apply(value).questions, []);
+  }
+});

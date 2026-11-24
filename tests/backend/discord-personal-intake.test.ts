@@ -391,3 +391,17 @@ it("anchors edited personal-message text to the captured edit time", async () =>
   const extraction = await t.mutation(internal.eventIntakeSources.authorizeExtraction, { actorUserId: authorityUserId, draftId: first.draftId, reserveQuota: false });
   assert.equal(extraction.timeSources[0].referenceInstant, new Date(editedAt).toISOString());
 });
+
+it("rejects invalid edit dates before capture and tolerates corrupt legacy edit dates on read", async () => {
+  const { t, authorityUserId } = await fixture();
+  for (const editedAt of [1e20, -1e20, Infinity, NaN]) {
+    await assert.rejects(t.mutation(internal.discordPersonalIntake.captureSelectedMessage, { ...capture, message: { ...capture.message, editedAt } }), /DISCORD_INTAKE_INVALID/);
+  }
+  assert.equal((await t.run(ctx => ctx.db.query("discordPersonalIntakeSubmissions").collect())).length, 0);
+  const first = await t.mutation(internal.discordPersonalIntake.captureSelectedMessage, capture);
+  if (first.kind !== "draft") throw new Error("Expected private draft");
+  await t.run(async ({ db }) => { const [submission] = await db.query("discordPersonalIntakeSubmissions").collect(); await db.patch(submission._id, { sourceEditedAt: 1e20 }); });
+  const extraction = await t.mutation(internal.eventIntakeSources.authorizeExtraction, { actorUserId: authorityUserId, draftId: first.draftId, reserveQuota: false });
+  const original = new Date(Number((BigInt(capture.message.messageId) >> 22n) + 1420070400000n)).toISOString();
+  assert.equal(extraction.timeSources[0].referenceInstant, original);
+});

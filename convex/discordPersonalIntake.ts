@@ -29,6 +29,7 @@ export const captureSelectedMessage = internalMutation({
   handler: async (ctx, input) => {
     const ids = [input.interactionId, input.invokerDiscordUserId, input.channelId, input.guildId, input.message.messageId, input.message.authorId].filter((id): id is string => id !== undefined);
     if (ids.some(id => !DISCORD_SNOWFLAKE.test(id)) || input.message.sourceText.length > 12_000 || input.message.attachments.length > 10) throw new ConvexError({ code: "DISCORD_INTAKE_INVALID" });
+    if (input.message.editedAt !== undefined && !Number.isFinite(new Date(input.message.editedAt).getTime())) throw new ConvexError({ code: "DISCORD_INTAKE_INVALID" });
     for (const item of input.message.attachments) {
       let url: URL;
       try { url = new URL(item.url); } catch { throw new ConvexError({ code: "DISCORD_INTAKE_INVALID" }); }

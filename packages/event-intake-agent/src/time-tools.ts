@@ -181,8 +181,11 @@ export function createIntakeTimeTools(sourceText: string, sources: IntakeTimeSou
       for (const evidence of candidate.evidence) {
         const path = temporalFieldPath(evidence.fieldPath);
         if (!/^(event\.(?:eventDate|start|end)|lineup\.\d+\.(?:start|end))$/.test(path) || bindings.has(path)) continue;
+        const absolutePart = /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}\b|\b\d{4}-\d{2}-\d{2}\b/i.test(evidence.excerpt ?? "");
+        const weekdayOnly = /\b(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b|\bthis\s+(?:day|night|week|month|year)\b/i.test(evidence.excerpt ?? "");
+        const exactToken = discordTimestampFacts(evidence.excerpt ?? "").some(fact => sourceText.includes(fact.token));
+        if ((path === "event.eventDate" || path === "event.start") && weekdayOnly && !absolutePart && !exactToken) holds.set(path, "source_reference_time_required");
         if (relativeTimePhrase(evidence.excerpt ?? "")) {
-          const absolutePart = /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}\b|\b\d{4}-\d{2}-\d{2}\b/i.test(evidence.excerpt ?? "");
           if (absolutePart || evidence.origin === "poster" || (evidence.excerpt?.match(clockPhrases)?.length ?? 0) > 0 || ![sourceText, ...sources.map(source => source.text)].some(text => evidence.excerpt && text.includes(evidence.excerpt))) holds.set(path, "source_reference_time_required");
           else failures.set(path, "relative_time_tool_required");
         }
@@ -208,6 +211,10 @@ export function createIntakeTimeTools(sourceText: string, sources: IntakeTimeSou
         let local;
         try { local = projectInstant(value.isoInstant, zone); }
         catch { zone = value.timeZone; local = projectInstant(value.isoInstant, zone); }
+        // Date-only noon is a parser placeholder, not an instant that can change the authored day.
+        if (value.precision === "date" && local.date !== projectInstant(value.isoInstant, value.timeZone).date) {
+          failures.set(fieldPath, "time_date_zone_conflict"); continue;
+        }
         if ((fieldPath === "event.start" || fieldPath === "event.eventDate") && authoredDate && authoredDate !== local.date) {
           failures.set(fieldPath, "authored_date_conflict"); continue;
         }

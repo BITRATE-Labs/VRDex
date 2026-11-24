@@ -122,6 +122,7 @@ export const recordMessage = internalMutation({
       } else {
         const { authorId: author, authorDisplayName, content, createdAt, attachments } = payload;
         if (author === undefined || authorDisplayName === undefined || content === undefined || createdAt === undefined || attachments === undefined) throw new ConvexError({ code: "DISCORD_INTAKE_INVALID" });
+        if (!Number.isFinite(new Date(createdAt).getTime()) || payload.editedAt !== undefined && !Number.isFinite(new Date(payload.editedAt).getTime())) throw new ConvexError({ code: "DISCORD_INTAKE_INVALID" });
         if (!existing && createdAt < connector.createdAt) continue;
         if (existing?.deletedAt !== undefined) continue;
         const stored = { content: content.slice(0, MAX_CONTENT), attachments: attachments.filter(item => isDiscordCdnUrl(item.url)) };
