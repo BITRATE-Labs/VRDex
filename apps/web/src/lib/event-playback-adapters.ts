@@ -187,7 +187,6 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
   };
   return {
     get media() { return disposed ? undefined : video; },
-    get recovering() { return !disposed && wantsPlayback && !failed; },
     enableControls(callback) { beforeUnmute = callback; video.controls = true; },
     play,
     get retry() { return stalled && !failed && video.paused ? play : undefined; },

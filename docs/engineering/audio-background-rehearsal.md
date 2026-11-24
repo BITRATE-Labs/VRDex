@@ -39,7 +39,7 @@ does not pause the viewer's still-active playback intent.
 
 The foreground playback owner requests the browser's `playback` audio-session
 type when that API is available. Ownership transfers without resetting the type;
-Pause, Close or unsuccessful playback restores the previous type unless another
+Pause, Close, blocked playback or failed initial startup restores the previous type unless another
 caller changed it. Internal pauses during a rendition switch retain the claim
 until the switch succeeds or fails.
 Unsupported or rejected Audio Session access does not block ordinary playback.

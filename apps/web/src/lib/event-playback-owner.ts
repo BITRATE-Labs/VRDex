@@ -75,7 +75,6 @@ export type PlaybackSnapshot = {
 export type PlaybackAdapter = {
   readonly supportsAudioOnly?: boolean;
   readonly supportsPictureInPicture?: boolean;
-  readonly recovering?: boolean;
   play(): Promise<boolean>;
   pause(): void;
   setVolume(value: number): void;
@@ -160,7 +159,7 @@ export class EventPlaybackOwner {
     };
   };
   private emit(patch: Partial<PlaybackSnapshot>) {
-    if (patch.status === "blocked" || (patch.status === "unavailable" && !this.adapter?.recovering)) foregroundPlayback.release(this);
+    if (patch.status === "blocked" || (patch.status === "unavailable" && !this.started)) foregroundPlayback.release(this);
     this.state = { ...this.state, ...patch };
     this.listeners.forEach((listener) => listener());
   }
@@ -213,7 +212,12 @@ export class EventPlaybackOwner {
           request,
           (patch) => {
             if (generation !== this.generation) return;
-            if (patch.status === "paused" && this.modeAttempt === this.attempt) return;
+            if (patch.status === "paused" && this.modeAttempt === this.attempt) {
+              const details = { ...patch };
+              delete details.status;
+              this.emit(details);
+              return;
+            }
             if (patch.status === "paused" && !configuring) foregroundPlayback.release(this);
             if (patch.status === "unavailable") this.unavailable = true;
             if (patch.status === "playing") {
@@ -231,6 +235,7 @@ export class EventPlaybackOwner {
         configuring = false;
       } catch {
         configuring = false;
+        foregroundPlayback.release(this);
         this.unavailable = true;
         this.emit({ status: "unavailable" });
         return;
@@ -251,6 +256,7 @@ export class EventPlaybackOwner {
       }
     } catch {
       if (attempt === this.attempt && this.state.status === "loading") {
+        foregroundPlayback.release(this);
         this.unavailable = true;
         this.emit({ status: "unavailable" });
       }
@@ -282,8 +288,10 @@ export class EventPlaybackOwner {
     try {
       const accepted = await this.adapter.setMode(mode);
       if (attempt === this.attempt && playing) {
-        if (accepted) foregroundPlayback.acquire(this, () => this.pause());
-        this.emit({ status: accepted ? "playing" : "blocked" });
+        const paused = this.state.lineup?.paused ?? this.adapter.media?.paused;
+        if (accepted && paused !== true) foregroundPlayback.acquire(this, () => this.pause());
+        else foregroundPlayback.release(this);
+        this.emit({ status: accepted ? (paused ? "paused" : "playing") : "blocked" });
       }
     } catch {
       if (attempt === this.attempt) this.emit({ status: "blocked" });
