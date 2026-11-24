@@ -369,3 +369,19 @@ test("refused cold lineup resume keeps live slot unavailability distinct from an
     assert.ok(owner.getSnapshot().request);
   } finally { owner.close(); }
 });
+
+test("adapter setup snapshots do not release the music session before its first Play", async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator"), audioSession = { type: "auto" };
+  Object.defineProperty(globalThis, "navigator", { configurable: true, value: { audioSession } });
+  let typeAtPlay = "", notify!: (patch: { status: "paused" | "playing" }) => void;
+  const owner = new EventPlaybackOwner((_request, report) => {
+    notify = report;
+    return { setVolume() { report({ status: "paused" }); }, setMuted() { report({ status: "paused" }); },
+      async play() { typeAtPlay = audioSession.type; report({ status: "playing" }); return true; }, pause() {}, update() {}, dispose() {} };
+  });
+  try {
+    await owner.play({ kind: "vrcdn", profileId: "p", profileSlug: "dj", title: "DJ", href: "/dj", sourceId: "AA", src: "url", transport: "mpegts" });
+    assert.equal(typeAtPlay, "playback"); assert.equal(audioSession.type, "playback");
+    notify({ status: "paused" }); assert.equal(audioSession.type, "auto");
+  } finally { owner.close(); if (descriptor) Object.defineProperty(globalThis, "navigator", descriptor); else Reflect.deleteProperty(globalThis, "navigator"); }
+});

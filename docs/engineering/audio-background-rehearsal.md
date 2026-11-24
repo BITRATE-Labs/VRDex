@@ -44,9 +44,8 @@ Unsupported or rejected Audio Session access does not block ordinary playback.
 
 Direct streams allow fifteen seconds for initial startup or an established stall
 before exposing unavailable playback. The existing media stays mounted for
-recovery, and retry after an established stall resumes it without reconnecting.
-If that attempt makes no decoded progress before its next deadline, a later
-retry can rebuild the dead connection.
+recovery. Retry resumes genuinely paused media in place, while an unpaused,
+starved stream reconnects on the first tap rather than falsely reporting playback.
 Hard transport errors still allow a fresh connection. Pause, Close and background visibility clear the deadline;
 a still-buffering stream receives a fresh deadline when visible again.
 

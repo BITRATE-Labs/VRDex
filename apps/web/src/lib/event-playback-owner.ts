@@ -204,12 +204,13 @@ export class EventPlaybackOwner {
         metadata: undefined,
         unavailableReason: undefined,
       });
+      let configuring = true;
       try {
         this.adapter = this.create(
           request,
           (patch) => {
             if (generation !== this.generation) return;
-            if (patch.status === "paused") foregroundPlayback.release(this);
+            if (patch.status === "paused" && !configuring) foregroundPlayback.release(this);
             if (patch.status === "unavailable") this.unavailable = true;
             if (patch.status === "playing") {
               this.unavailable = false;
@@ -223,7 +224,9 @@ export class EventPlaybackOwner {
         );
         this.adapter.setVolume(this.state.volume);
         this.adapter.setMuted(this.state.muted);
+        configuring = false;
       } catch {
+        configuring = false;
         this.unavailable = true;
         this.emit({ status: "unavailable" });
         return;
