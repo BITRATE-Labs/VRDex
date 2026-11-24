@@ -6,6 +6,7 @@ import { discordTimestampFacts, hasAuthoredEventDate, projectInstant, relativeTi
 export type IntakeTimeSource = { id: string; text: string; referenceInstant: string };
 const field = z.string().regex(/^(event\.(start|end|eventDate)|lineup\.\d+\.(start|end))$/);
 const performerLabel = z.string().max(120).nullable().describe("Exact source performer label for lineup fields; null for event fields.");
+const absoluteDateMarker = /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}\b|\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b/i;
 const clockPhrases = /\b(?:\d{1,2}:\d{2}(?:\s*[ap]\.?m\.?)?|\d{1,2}\s*[ap]\.?m\.?)(?!\w)/gi;
 const resolve = z.strictObject({ fieldPath: field, performerLabel, text: z.string().max(500), sourceMessageId: z.string().nullable(), timezone: z.string().max(64).nullable() });
 const shift = z.strictObject({ fieldPath: field, performerLabel, candidateId: z.string(), days: z.number().int().min(-7).max(90), hours: z.number().int().min(-168).max(2160), minutes: z.number().int().min(-1440).max(1440) });
@@ -82,7 +83,7 @@ export function createIntakeTimeTools(sourceText: string, sources: IntakeTimeSou
           const elapsed = /^(?:in\s+\d+\s+(?:minutes?|hours?)|\d+\s+(?:minutes?|hours?)\s+(?:from now|ago))$/i.test(args.text);
           const timezone = zone.status === "resolved" ? zone.candidates[0]?.timeZone : (token || absoluteIso || elapsed) && (!args.timezone || args.timezone === "UTC") ? "UTC" : undefined;
           if (!timezone || args.timezone && args.timezone !== timezone) throw new Error("source_timezone_required");
-          const dateSignal = /\b(?:today|tonight|tomorrow|yesterday|(?:next|last|this)\s+(?:day|night|week|month|year)|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b|\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}\b|\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b|\b\d{1,2}(?:st|nd|rd|th)\b|^\d{10}(?:\d{3})?$/i.test(args.text);
+          const dateSignal = absoluteDateMarker.test(args.text) || /\b(?:today|tonight|tomorrow|yesterday|(?:next|last|this)\s+(?:day|night|week|month|year)|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b|\b\d{1,2}(?:st|nd|rd|th)\b|^\d{10}(?:\d{3})?$/i.test(args.text);
           if (!token && !absoluteIso && !elapsed && !dateSignal) throw new Error("source_reference_time_required");
           const context = parseCalendarContext(timezone, reference.referenceInstant);
           const result = await tools.resolveCalendarQuery({ query: args.text, calendarContext: context });
@@ -183,7 +184,7 @@ export function createIntakeTimeTools(sourceText: string, sources: IntakeTimeSou
       for (const evidence of candidate.evidence) {
         const path = temporalFieldPath(evidence.fieldPath);
         if (!/^(event\.(?:eventDate|start|end)|lineup\.\d+\.(?:start|end))$/.test(path) || bindings.has(path)) continue;
-        const absolutePart = /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}\b|\b\d{4}-\d{2}-\d{2}\b/i.test(evidence.excerpt ?? "");
+        const absolutePart = absoluteDateMarker.test(evidence.excerpt ?? "");
         const weekdayOnly = /\b(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b|\bthis\s+(?:day|night|week|month|year)\b/i.test(evidence.excerpt ?? "");
         const exactToken = discordTimestampFacts(evidence.excerpt ?? "").some(fact => sourceText.includes(fact.token));
         if ((path === "event.eventDate" || path === "event.start") && weekdayOnly && !absolutePart && !exactToken) holds.set(path, "source_reference_time_required");

@@ -34,8 +34,11 @@ erase valid clock context.
 Date-only parser placeholders cannot shift the source civil date when projected
 into an existing event's zone; a differing calendar day requires review.
 Bare or this-qualified weekdays without an absolute date require a reference-time
-review unless a tool already resolved them. Message capture rejects invalid Date
-timestamps; legacy invalid personal edit timestamps fall back to snowflake time.
+review unless a tool already resolved them.
+Numeric slash/hyphen dates share the absolute-date marker used by the resolver,
+so a weekday beside an explicit numeric date does not erase the stated day.
+Message capture rejects invalid Date timestamps; legacy invalid personal edit
+timestamps fall back to snowflake time.
 Legacy invalid connector edit timestamps fall back to creation time consistently
 in model context and tool anchors. Clock-only resolver phrases do not establish
 an event day; resolve a date-bearing phrase before applying a replacement clock.

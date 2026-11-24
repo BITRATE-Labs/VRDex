@@ -561,6 +561,22 @@ it("holds unanchored weekday evidence without suppressing absolute dates or exac
   }
 });
 
+it("preserves explicit numeric dates beside weekday labels", () => {
+  for (const date of ["11/21", "11/21/2025", "11-21-2025"]) {
+    const text = `FRI ${date} • DOORS 10PM • $20`, value = blank();
+    Object.assign(value.event, { eventDate: "2025-11-21", start: "22:00", startDate: "2025-11-21", timezone: "America/New_York" });
+    value.evidence = [
+      { fieldPath: "event.eventDate", origin: "text", excerpt: "November 21", assessment: "explicit" },
+      { fieldPath: "event.start", origin: "text", excerpt: text, assessment: "explicit" },
+    ];
+    const result = createIntakeTimeTools(text, []).apply(value);
+    assert.equal(result.event.eventDate, "2025-11-21");
+    assert.equal(result.event.startDate, "2025-11-21");
+    assert.equal(result.event.start, "22:00");
+    assert.deepEqual(result.questions, []);
+  }
+});
+
 it("does not let a clock-only resolution replace the announced day with the posting day", async () => {
   const text = "BASSDROP: Sun Nov 29, doors 22:00 Eastern time";
   for (const excerpt of ["Sun Nov 29", "November 29"]) {
