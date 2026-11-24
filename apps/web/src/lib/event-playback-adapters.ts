@@ -179,7 +179,7 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
   }) : loadMpegts().then(({ default: mpegts }) => {
     if (disposed) return;
     if (!mpegts.isSupported()) throw new Error("Unsupported media transport");
-    player = attachVrcdnTransport(mpegts, video, request.src, { ...("profileId" in request ? {onLoadingComplete:connectionEnded} : {}), onError: () => { if (!disposed) { failed = true; notify({ status: "unavailable", unavailableReason: "failed" }); } } });
+    player = attachVrcdnTransport(mpegts, video, request.src, { onError: () => { if (!disposed) { failed = true; notify({ status: "unavailable", unavailableReason: "failed" }); } } });
   });
   // The owner may close before Play awaits the transport import.
   void ready.catch(() => { wantsPlayback = false; clearStall(); });
