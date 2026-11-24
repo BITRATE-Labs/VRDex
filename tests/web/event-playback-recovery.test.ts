@@ -6,6 +6,8 @@ import { foregroundPlayback } from "../../apps/web/src/lib/foreground-playback";
 import { createEventPlaybackAdapter } from "../../apps/web/src/lib/event-playback-adapters";
 const request: PlaybackRequest = { kind: "vrcdn", eventId: "a", eventSlug: "a", title: "A", href: "/a", sourceId: "a", src: "a", transport: "video", startAt: Date.now() - 1000 };
 class Video extends EventTarget {
+  bufferEnd = 0;
+  get buffered() { return { length: this.bufferEnd > 0 ? 1 : 0, end: () => this.bufferEnd }; }
   style = {}; src = ""; paused = true; muted = false; volume = 1; removed = false; listeners = 0; currentTime = 0;
   async play() { this.paused = false; this.dispatchEvent(new Event("playing")); }
   pause() { this.paused = true; this.dispatchEvent(new Event("pause")); }
@@ -239,6 +241,27 @@ test("a never-starting direct stream has a fifteen-second startup allowance", as
     t.mock.timers.tick(1); assert.equal(owner.getSnapshot().status, "unavailable");
     assert.equal(fixture.nodes[0].removed, false);
     void start;
+  } finally { owner.close(); fixture.restore(); }
+});
+
+test("growing startup media extends the deadline, unchanged buffers do not", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const fixture = dom();
+  const owner = new EventPlaybackOwner((value, notify) => {
+    const adapter = createEventPlaybackAdapter(value, fixture.mount, notify);
+    fixture.nodes[0].play = () => new Promise<void>(() => {});
+    return adapter;
+  });
+  try {
+    void owner.play(request); await Promise.resolve(); await Promise.resolve();
+    const video = fixture.nodes[0];
+    t.mock.timers.tick(10000); video.bufferEnd = 1; video.dispatchEvent(new Event("progress"));
+    t.mock.timers.tick(10000); assert.equal(owner.getSnapshot().status, "loading");
+    video.bufferEnd = 2; video.dispatchEvent(new Event("loadeddata"));
+    t.mock.timers.tick(10000); video.dispatchEvent(new Event("progress"));
+    t.mock.timers.tick(4999); assert.equal(owner.getSnapshot().status, "loading");
+    t.mock.timers.tick(1); assert.equal(owner.getSnapshot().status, "unavailable");
+    assert.equal(video.removed, false);
   } finally { owner.close(); fixture.restore(); }
 });
 

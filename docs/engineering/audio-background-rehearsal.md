@@ -39,11 +39,14 @@ does not pause the viewer's still-active playback intent.
 
 The foreground playback owner requests the browser's `playback` audio-session
 type when that API is available. Ownership transfers without resetting the type;
-Pause or Close restores the previous type unless another caller changed it.
+Pause, Close or unsuccessful playback restores the previous type unless another
+caller changed it. Internal pauses during a rendition switch retain the claim
+until the switch succeeds or fails.
 Unsupported or rejected Audio Session access does not block ordinary playback.
 
 Direct streams allow fifteen seconds for initial startup or an established stall
-before exposing unavailable playback. The existing media stays mounted for
+without progress before exposing unavailable playback. Growing startup buffers
+restart that allowance; repeated progress events without growth do not. The existing media stays mounted for
 recovery. Retry resumes genuinely paused media in place, while an unpaused,
 starved stream reconnects on the first tap rather than falsely reporting playback.
 Hard transport errors still allow a fresh connection. Pause, Close and background visibility clear the deadline;

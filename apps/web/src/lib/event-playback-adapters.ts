@@ -71,6 +71,7 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
   let failed = false;
   let wantsPlayback = false, played = false, buffering = true, stalled = false, previousTime = 0;
   let stallTimer: ReturnType<typeof setTimeout> | undefined;
+  let startupBufferedEnd = 0;
   const clearStall = () => { if (stallTimer !== undefined) clearTimeout(stallTimer); stallTimer = undefined; };
   const watchStall = () => {
     buffering = true;
@@ -85,6 +86,13 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
   const visibilityChange = () => {
     clearStall();
     if (document.visibilityState !== "hidden" && buffering) watchStall();
+  };
+  const startupProgress = () => {
+    if (played || failed || disposed || !buffering || !video.buffered?.length) return;
+    const end = video.buffered.end(video.buffered.length - 1);
+    if (end <= startupBufferedEnd) return;
+    startupBufferedEnd = end;
+    clearStall(); watchStall();
   };
   document.addEventListener?.("visibilitychange", visibilityChange);
   let hls: { destroy(): void } | undefined;
@@ -129,6 +137,8 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
     ["ended", connectionEnded],
     ["waiting", watchStall],
     ["stalled", watchStall],
+    ["progress", startupProgress],
+    ["loadeddata", startupProgress],
     ["timeupdate", () => {
       if (video.currentTime > previousTime && wantsPlayback && !video.paused) {
         clearStall(); buffering = false; played = true;
