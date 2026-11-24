@@ -59,6 +59,8 @@ Growing buffers cannot extend initial startup beyond sixty seconds in the curren
 foreground window. Returning from the background starts a fresh startup window.
 Recoverable stalls retain foreground ownership and the music audio-session claim;
 starting another surface pauses the stalled player before it can recover.
+Reason-less recovery keeps ownership before the first frame too; terminal
+reasons, Play exceptions, source replacement and revocation release it explicitly.
 If an established stall makes no progress for a second fifteen-second window,
 it becomes a terminal failure even when the browser emits no further events.
 Terminal reasons pause the adapter and invalidate pending Play before releasing
