@@ -6,7 +6,7 @@ import { foregroundPlayback } from "../../apps/web/src/lib/foreground-playback";
 import { createEventPlaybackAdapter } from "../../apps/web/src/lib/event-playback-adapters";
 const request: PlaybackRequest = { kind: "vrcdn", eventId: "a", eventSlug: "a", title: "A", href: "/a", sourceId: "a", src: "a", transport: "video", startAt: Date.now() - 1000 };
 class Video extends EventTarget {
-  style = {}; src = ""; paused = true; muted = false; volume = 1; removed = false; listeners = 0;
+  style = {}; src = ""; paused = true; muted = false; volume = 1; removed = false; listeners = 0; currentTime = 0;
   async play() { this.paused = false; this.dispatchEvent(new Event("playing")); }
   pause() { this.paused = true; this.dispatchEvent(new Event("pause")); }
   removeAttribute() {} load() {} remove() { this.removed = true; }
@@ -191,4 +191,42 @@ test("automatic saved audio creates neither a hidden-video session nor relay adm
     assert.equal(await adapter.play(), false);
     assert.equal(admissions, 0);
   } finally { adapter?.dispose(); Object.defineProperty(globalThis, "document", { configurable: true, value: previous }); }
+});
+
+test("a direct startup/stall becomes retryable without discarding recovering media", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const fixture = dom(); const owner = new EventPlaybackOwner((value, notify) => createEventPlaybackAdapter(value, fixture.mount, notify));
+  try {
+    await owner.play(request); const video = fixture.nodes[0];
+    video.dispatchEvent(new Event("stalled"));
+    t.mock.timers.tick(2000); video.currentTime = 2; video.dispatchEvent(new Event("timeupdate"));
+    t.mock.timers.tick(4000); assert.equal(owner.getSnapshot().status, "playing", "buffered playback survives a network stall");
+    video.dispatchEvent(new Event("waiting"));
+    t.mock.timers.tick(3999); assert.equal(owner.getSnapshot().status, "playing");
+    t.mock.timers.tick(1); assert.equal(owner.getSnapshot().status, "unavailable");
+    assert.equal(video.removed, false);
+    video.dispatchEvent(new Event("playing")); assert.equal(owner.getSnapshot().status, "playing");
+    video.dispatchEvent(new Event("waiting")); owner.pause(); t.mock.timers.tick(20000);
+    assert.equal(owner.getSnapshot().status, "paused");
+    owner.close(); assert.equal(video.listeners, 0);
+  } finally { owner.close(); fixture.restore(); }
+});
+
+test("a never-starting direct stream has a fifteen-second startup allowance", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const fixture = dom();
+  const pending = new Promise<void>(() => {});
+  const owner = new EventPlaybackOwner((value, notify) => {
+    const adapter = createEventPlaybackAdapter(value, fixture.mount, notify);
+    fixture.nodes[0].play = () => pending;
+    return adapter;
+  });
+  try {
+    const start = owner.play(request);
+    await Promise.resolve(); await Promise.resolve();
+    t.mock.timers.tick(14999); assert.equal(owner.getSnapshot().status, "loading");
+    t.mock.timers.tick(1); assert.equal(owner.getSnapshot().status, "unavailable");
+    assert.equal(fixture.nodes[0].removed, false);
+    void start;
+  } finally { owner.close(); fixture.restore(); }
 });

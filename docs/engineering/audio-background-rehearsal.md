@@ -35,6 +35,11 @@ gesture, playback returns to paused with a blocked-playback signal. Pending
 restoration cannot undo a later Pause or Close. This does not provide a separate
 audio rendition or establish physical iPhone background acceptance.
 
+Direct streams allow fifteen seconds for initial startup and four seconds for an
+established stall before exposing unavailable playback. The existing media stays
+mounted for recovery. Pause, Close and background visibility clear the deadline;
+a still-buffering stream receives a fresh deadline when visible again.
+
 ### Automatic video pop-out
 
 The retained player's Media Session registers `enterpictureinpicture` in video

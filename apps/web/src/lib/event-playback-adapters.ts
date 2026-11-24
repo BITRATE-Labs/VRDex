@@ -69,6 +69,23 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
     disposed = false,
     attempt = 0;
   let failed = false;
+  let wantsPlayback = false, played = false, buffering = true, previousTime = 0;
+  let stallTimer: ReturnType<typeof setTimeout> | undefined;
+  const clearStall = () => { if (stallTimer !== undefined) clearTimeout(stallTimer); stallTimer = undefined; };
+  const watchStall = () => {
+    buffering = true;
+    if (!wantsPlayback || failed || disposed || stallTimer !== undefined) return;
+    stallTimer = setTimeout(() => {
+      stallTimer = undefined;
+      if (!wantsPlayback || disposed || document.visibilityState === "hidden") return;
+      failed = true; notify({ status: "unavailable" });
+    }, played ? 4000 : 15_000);
+  };
+  const visibilityChange = () => {
+    clearStall();
+    if (document.visibilityState !== "hidden" && buffering) watchStall();
+  };
+  document.addEventListener?.("visibilitychange", visibilityChange);
   let hls: { destroy(): void } | undefined;
   let guardVolume = false, audible = false, beforeUnmute: (() => boolean) | undefined;
   const volumeChange = () => {
@@ -83,6 +100,7 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
   };
   video.addEventListener("volumechange", volumeChange);
   const connectionEnded = () => {
+    wantsPlayback = false; clearStall();
     if (disposed || failed) return;
     if ("profileId" in request) {
       failed = true;
@@ -94,6 +112,7 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
       "playing",
       () => {
         if (!disposed && !video.paused) {
+          clearStall(); played = true; buffering = false; wantsPlayback = true;
           failed = false;
           notify({ status: "playing" });
         }
@@ -102,14 +121,22 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
     [
       "pause",
       () => {
+        wantsPlayback = false; clearStall();
         if (!disposed && !failed) notify({ status: "paused" });
       },
     ],
     ["ended", connectionEnded],
+    ["waiting", watchStall],
+    ["stalled", watchStall],
+    ["timeupdate", () => {
+      if (video.currentTime > previousTime) { clearStall(); buffering = false; played = true; }
+      previousTime = video.currentTime;
+    }],
     [
       "error",
       () => {
         if (!disposed) {
+          clearStall();
           failed = true;
           notify({ status: "unavailable" });
         }
@@ -133,15 +160,16 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
     player = attachVrcdnTransport(mpegts, video, request.src, { ...("profileId" in request ? {onLoadingComplete:connectionEnded} : {}), onError: () => { if (!disposed) { failed = true; notify({ status: "unavailable" }); } } });
   });
   // The owner may close before Play awaits the transport import.
-  void ready.catch(() => {});
+  void ready.catch(() => { clearStall(); });
   return {
     get media() { return disposed ? undefined : video; },
     enableControls(callback) { beforeUnmute = callback; video.controls = true; },
-    async play() { const current = ++attempt; await ready; if (disposed || current !== attempt) return false;
-      try { await video.play(); return !disposed && current === attempt; } catch { return false; } },
-    pause() { attempt++; video.pause(); }, setVolume(value) { if (value === 0) audible = false; video.volume = value; }, setMuted(value) { if (value) audible = false; video.muted = value; },
+    async play() { const current = ++attempt; wantsPlayback = true; watchStall(); await ready; if (disposed || current !== attempt) return false;
+      wantsPlayback = true; watchStall();
+      try { await video.play(); return !disposed && current === attempt; } catch { if (current === attempt) { wantsPlayback = false; clearStall(); } return false; } },
+    pause() { attempt++; wantsPlayback = false; clearStall(); video.pause(); }, setVolume(value) { if (value === 0) audible = false; video.volume = value; }, setMuted(value) { if (value) audible = false; video.muted = value; },
     update(value) { video.title = value.title; },
-    dispose() { if (disposed) return; disposed = true; attempt++; for (const [event, listener] of listeners) video.removeEventListener(event, listener); video.pause(); video.removeEventListener("volumechange", volumeChange); hls?.destroy(); if (player) releaseVrcdnTransport(player); video.removeAttribute("src"); video.load(); video.remove(); },
+    dispose() { if (disposed) return; disposed = true; clearStall(); document.removeEventListener?.("visibilitychange", visibilityChange); attempt++; for (const [event, listener] of listeners) video.removeEventListener(event, listener); video.pause(); video.removeEventListener("volumechange", volumeChange); hls?.destroy(); if (player) releaseVrcdnTransport(player); video.removeAttribute("src"); video.load(); video.remove(); },
   };
 }
 

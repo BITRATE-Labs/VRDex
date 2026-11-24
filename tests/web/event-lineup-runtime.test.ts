@@ -466,7 +466,8 @@ test("returning a started viewer to an authored gap retains unavailable-session 
 test("returning to the page resumes suspended audio without reconnecting or undoing Pause", async () => {
   const originalDocument = globalThis.document, originalContext = globalThis.AudioContext;
   const handlers = new Map<string, () => void>();
-  let resumes = 0, connections = 0, finish: (() => void) | undefined;
+  let resumes = 0, connections = 0, mediaPlays = 0, finish: (() => void) | undefined;
+  const media = { hidden: false, paused: false };
   const document = { visibilityState: "visible", addEventListener(name: string, callback: () => void) { handlers.set(name, callback); }, removeEventListener(name: string) { handlers.delete(name); } };
   class Context {
     static current: Context;
@@ -485,18 +486,48 @@ test("returning to the page resumes suspended audio without reconnecting or undo
     mock.method(globalThis, "setInterval", () => 1); mock.method(globalThis, "clearInterval", () => {});
     session = new EventLineupSession({ title: "Event", startAt: at(20), slots: [{ key: "a", startAt: at(20), endAt: at(21), stream: stream("a") }] }, { append() {} } as unknown as HTMLElement, () => {}, async () => {
       connections++;
-      return { video: { hidden: false }, gain: { gain: { value: 1 } }, async play() { return true; }, pause() {}, release() {}, ready() { return true; }, sample(observedAt: number) { return { observedAt, dbfs: 0, progressing: true, analysisActive: true, paused: false, disconnected: false }; } } as unknown as ObservedVrcdnSource;
+      return { video: media, gain: { gain: { value: 1 } }, async play() { mediaPlays++; media.paused = false; return true; }, pause() {}, release() {}, ready() { return true; }, sample(observedAt: number) { return { observedAt, dbfs: 0, progressing: true, analysisActive: true, paused: false, disconnected: false }; } } as unknown as ObservedVrcdnSource;
     });
     await session.play(); await settle();
     Context.current.state = "suspended";
+    media.paused = true;
     handlers.get("visibilitychange")!(); handlers.get("visibilitychange")!();
     assert.equal(resumes, 2, "one initial resume and one restoration, without duplicate in-flight work");
     finish!(); await settle();
-    assert.equal(connections, 1); assert.equal(session.state.paused, false);
+    assert.equal(connections, 1); assert.equal(session.state.paused, false); assert.equal(mediaPlays, 2);
     Context.current.state = "suspended"; handlers.get("visibilitychange")!();
     session.pause(); finish!(); await settle();
     assert.equal(session.state.paused, true);
     session.dispose(); session = undefined;
     assert.equal(handlers.has("visibilitychange"), false);
   } finally { session?.dispose(); mock.restoreAll(); Object.defineProperty(globalThis, "document", { configurable: true, value: originalDocument }); Object.defineProperty(globalThis, "AudioContext", { configurable: true, value: originalContext }); }
+});
+
+test("blocked audio restoration discards a connection that is still initializing", async () => {
+  const before = { document: globalThis.document, context: globalThis.AudioContext };
+  let visibility = () => {}, finish!: (source: ObservedVrcdnSource) => void;
+  let plays = 0, released = 0, resumes = 0;
+  class Context {
+    static current: Context;
+    state = "running"; destination = {};
+    constructor() { Context.current = this; }
+    createGain() { return { gain: { value: 1 }, connect() {} }; }
+    addEventListener() {} removeEventListener() {} async close() {}
+    async resume() { if (++resumes > 1) this.state = "suspended"; }
+  }
+  let session: EventLineupSession | undefined;
+  try {
+    Object.defineProperty(globalThis, "document", { configurable: true, value: { visibilityState: "visible", addEventListener(_name: string, callback: () => void) { visibility = callback; }, removeEventListener() {} } });
+    Object.defineProperty(globalThis, "AudioContext", { configurable: true, value: Context });
+    mock.method(Date, "now", () => at(20));
+    mock.method(globalThis, "setInterval", () => 1); mock.method(globalThis, "clearInterval", () => {});
+    session = new EventLineupSession({ title: "Event", startAt: at(20), slots: [{ key: "a", startAt: at(20), endAt: at(21), stream: stream("a") }] }, { append() {} } as unknown as HTMLElement, () => {}, () => new Promise(resolve => { finish = resolve; }));
+    await session.play();
+    // The real browser changes context state independently while the module loads.
+    Context.current.state = "suspended";
+    visibility(); await settle();
+    assert.equal(session.state.paused, true); assert.equal(session.state.playbackBlocked, true);
+    finish({ video: { hidden: false }, gain: { gain: { value: 0 } }, async play() { plays++; return true; }, release() { released++; } } as unknown as ObservedVrcdnSource);
+    await settle(); assert.equal(plays, 0); assert.equal(released, 1);
+  } finally { session?.dispose(); mock.restoreAll(); Object.defineProperty(globalThis, "document", { configurable: true, value: before.document }); Object.defineProperty(globalThis, "AudioContext", { configurable: true, value: before.context }); }
 });

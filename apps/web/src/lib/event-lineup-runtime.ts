@@ -96,13 +96,19 @@ export class EventLineupSession {
     const context = this.context;
     if (this.disposed || this.state.paused || document.visibilityState !== "visible" || !context || context.state === "running" || context.state === "closed" || this.audioResume) return;
     const request = this.playRequest;
-    this.audioResume = context.resume().then(() => {
+    this.audioResume = context.resume().then(async () => {
       if (this.disposed || request !== this.playRequest || this.state.paused) return;
       if (context.state !== "running") throw Error("Audio resume requires interaction");
+      const active = this.current;
+      if (active?.source.media.paused) {
+        const accepted = await active.source.play();
+        if (this.disposed || request !== this.playRequest || this.state.paused || active !== this.current) return;
+        if (!accepted) throw Error("Media resume requires interaction");
+      }
       this.setGain();
     }).catch(() => {
       if (this.disposed || request !== this.playRequest || this.state.paused) return;
-      this.state.paused = true; this.state.playbackBlocked = true; this.current?.source.pause(); this.emit();
+      this.pause(); this.state.playbackBlocked = true; this.emit();
     }).finally(() => { this.audioResume = undefined; });
   };
   private releaseNext() {
