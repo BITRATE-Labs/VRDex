@@ -100,7 +100,9 @@ export class EventLineupSession {
     if (this.disposed || this.state.paused || document.visibilityState !== "visible" || !context || context.state === "closed" || (context.state === "running" && !this.current?.source.media.paused) || this.audioResume) return;
     const request = this.playRequest;
     const valid = () => !this.disposed && request === this.playRequest && !this.state.paused && document.visibilityState === "visible" && visibility === this.visibilityGeneration;
-    this.audioResume = context.resume().then(async () => {
+    let resumeTimer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_, reject) => { resumeTimer = setTimeout(() => reject(Error("Audio resume timed out")), 10_000); });
+    this.audioResume = Promise.race([context.resume(), deadline]).then(async () => {
       if (!valid()) return;
       if (context.state !== "running") throw Error("Audio resume requires interaction");
       const active = this.current;
@@ -115,6 +117,7 @@ export class EventLineupSession {
       if (!valid()) return;
       this.pause(); this.state.playbackBlocked = true; this.emit();
     }).finally(() => {
+      if (resumeTimer !== undefined) clearTimeout(resumeTimer);
       this.audioResume = undefined;
       if (!this.disposed && !this.state.paused && visibility !== this.visibilityGeneration && document.visibilityState === "visible") this.visibilityChanged();
     });

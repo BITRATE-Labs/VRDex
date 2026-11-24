@@ -426,3 +426,19 @@ test("lineup recovery keeps ownership and a genuinely paused mode result stays p
     assert.equal(owner.getSnapshot().status, "paused");
   } finally { owner.close(); }
 });
+
+test("terminal playback reasons restore the music session after a successful start", async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator"), audioSession = { type: "auto" };
+  Object.defineProperty(globalThis, "navigator", { configurable: true, value: { audioSession } });
+  let notify!: Parameters<ConstructorParameters<typeof EventPlaybackOwner>[0]>[1];
+  const owner = new EventPlaybackOwner((_request, report) => {
+    notify = report;
+    return { async play() { return true; }, pause() {}, setVolume() {}, setMuted() {}, update() {}, dispose() {} };
+  });
+  try {
+    await owner.play(request()); assert.equal(audioSession.type, "playback");
+    notify({ status: "unavailable", unavailableReason: "ended" }); assert.equal(audioSession.type, "auto");
+    notify({ status: "playing" }); assert.equal(audioSession.type, "playback");
+    notify({ status: "unavailable", unavailableReason: "unsupported" }); assert.equal(audioSession.type, "auto");
+  } finally { owner.close(); if (descriptor) Object.defineProperty(globalThis, "navigator", descriptor); else Reflect.deleteProperty(globalThis, "navigator"); }
+});

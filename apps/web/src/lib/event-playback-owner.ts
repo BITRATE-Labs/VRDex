@@ -159,7 +159,7 @@ export class EventPlaybackOwner {
     };
   };
   private emit(patch: Partial<PlaybackSnapshot>) {
-    if (patch.status === "blocked" || (patch.status === "unavailable" && !this.started)) foregroundPlayback.release(this);
+    if (patch.status === "blocked" || (patch.status === "unavailable" && (!this.started || patch.unavailableReason !== undefined))) foregroundPlayback.release(this);
     this.state = { ...this.state, ...patch };
     this.listeners.forEach((listener) => listener());
   }
