@@ -405,3 +405,24 @@ test("failed Play and transient mode-switch Pause restore only the appropriate a
     assert.equal(duringSwitch, "playback"); assert.equal(owner.getSnapshot().status, "blocked"); assert.equal(audioSession.type, "auto");
   } finally { owner.close(); if (descriptor) Object.defineProperty(globalThis, "navigator", descriptor); else Reflect.deleteProperty(globalThis, "navigator"); }
 });
+
+test("lineup recovery keeps ownership and a genuinely paused mode result stays paused", async () => {
+  let notify!: Parameters<ConstructorParameters<typeof EventPlaybackOwner>[0]>[1], pauses = 0;
+  const lineup = { started: true, following: true, paused: false, muted: false, volume: 1, connected: true, unavailable: false, current: "dj" };
+  const owner = new EventPlaybackOwner((_request, report) => {
+    notify = report;
+    return { async play() { return true; }, pause() { pauses++; }, setVolume() {}, setMuted() {}, update() {}, dispose() {},
+      async setMode() { report({ status: "paused", lineup: { ...lineup, paused: true, current: "next" } }); return true; } };
+  });
+  const other = {};
+  try {
+    const { foregroundPlayback } = await import("../../apps/web/src/lib/foreground-playback");
+    await owner.play(request()); notify({ status: "unavailable", lineup: { ...lineup, unavailable: true } });
+    foregroundPlayback.acquire(other, () => {}); assert.equal(pauses, 1); assert.equal(owner.getSnapshot().status, "paused");
+    foregroundPlayback.release(other);
+    await owner.play(request());
+    await owner.setMode(owner.getSnapshot().mode === "video" ? "audio" : "video");
+    assert.equal(owner.getSnapshot().lineup?.current, "next"); assert.equal(owner.getSnapshot().lineup?.paused, true);
+    assert.equal(owner.getSnapshot().status, "paused");
+  } finally { owner.close(); }
+});
