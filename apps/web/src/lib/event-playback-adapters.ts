@@ -83,7 +83,7 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
       // at the deadline too before declaring a cold transport unresponsive.
       if (!played) { startupProgress(); if (stallTimer !== undefined) return; }
       if (played && !stalled) stalled = true; else failed = true;
-      notify({ status: "unavailable" });
+      notify({ status: "unavailable", unavailableReason: failed ? "failed" : undefined });
     }, 15_000);
   };
   const visibilityChange = () => {
@@ -155,7 +155,7 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
         if (!disposed) {
           clearStall();
           failed = true;
-          notify({ status: "unavailable" });
+          notify({ status: "unavailable", unavailableReason: "failed" });
         }
       },
     ],
@@ -169,12 +169,12 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
     if (!Hls.isSupported()) throw new Error("Unsupported media transport");
     const instance = new Hls({ enableWorker: true, maxBufferLength: 15, maxMaxBufferLength: 30 });
     hls = instance;
-    instance.on(Hls.Events.ERROR, (_event, data) => { if (!disposed && data.fatal) { failed = true; notify({ status: "unavailable" }); } });
+    instance.on(Hls.Events.ERROR, (_event, data) => { if (!disposed && data.fatal) { failed = true; notify({ status: "unavailable", unavailableReason: "failed" }); } });
     instance.loadSource(request.src); instance.attachMedia(video);
   }) : loadMpegts().then(({ default: mpegts }) => {
     if (disposed) return;
     if (!mpegts.isSupported()) throw new Error("Unsupported media transport");
-    player = attachVrcdnTransport(mpegts, video, request.src, { ...("profileId" in request ? {onLoadingComplete:connectionEnded} : {}), onError: () => { if (!disposed) { failed = true; notify({ status: "unavailable" }); } } });
+    player = attachVrcdnTransport(mpegts, video, request.src, { ...("profileId" in request ? {onLoadingComplete:connectionEnded} : {}), onError: () => { if (!disposed) { failed = true; notify({ status: "unavailable", unavailableReason: "failed" }); } } });
   });
   // The owner may close before Play awaits the transport import.
   void ready.catch(() => { clearStall(); });

@@ -7,7 +7,7 @@ type Identity = { displayName: string; artwork: string | undefined };
 const ENTER_PICTURE_IN_PICTURE = "enterpictureinpicture" as MediaSessionAction;
 export function nowPlayingIdentity(state: PlaybackSnapshot): Identity | null {
   if (!state.request) return null;
-  if (state.unavailableReason === "ended" || state.unavailableReason === "unsupported") return null;
+  if (state.unavailableReason !== undefined) return null;
   if (!state.metadata && (state.request.kind === "twitch" || !["playing", "paused"].includes(state.status))) return null;
   return { displayName: state.metadata?.displayName ?? state.request.title.replace(/\s*-\s*VRDex$/, ""), artwork: playbackArtwork(state) };
 }
