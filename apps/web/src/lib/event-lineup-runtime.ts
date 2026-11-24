@@ -94,7 +94,7 @@ export class EventLineupSession {
   private visibilityChanged = () => {
     this.resetEvidence();
     const context = this.context;
-    if (this.disposed || this.state.paused || document.visibilityState !== "visible" || !context || context.state === "running" || context.state === "closed" || this.audioResume) return;
+    if (this.disposed || this.state.paused || document.visibilityState !== "visible" || !context || context.state === "closed" || (context.state === "running" && !this.current?.source.media.paused) || this.audioResume) return;
     const request = this.playRequest;
     this.audioResume = context.resume().then(async () => {
       if (this.disposed || request !== this.playRequest || this.state.paused) return;

@@ -69,7 +69,7 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
     disposed = false,
     attempt = 0;
   let failed = false;
-  let wantsPlayback = false, played = false, buffering = true, previousTime = 0;
+  let wantsPlayback = false, played = false, buffering = true, stalled = false, previousTime = 0;
   let stallTimer: ReturnType<typeof setTimeout> | undefined;
   const clearStall = () => { if (stallTimer !== undefined) clearTimeout(stallTimer); stallTimer = undefined; };
   const watchStall = () => {
@@ -78,8 +78,9 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
     stallTimer = setTimeout(() => {
       stallTimer = undefined;
       if (!wantsPlayback || disposed || document.visibilityState === "hidden") return;
-      failed = true; notify({ status: "unavailable" });
-    }, played ? 4000 : 15_000);
+      if (played) stalled = true; else failed = true;
+      notify({ status: "unavailable" });
+    }, 15_000);
   };
   const visibilityChange = () => {
     clearStall();
@@ -113,7 +114,7 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
       () => {
         if (!disposed && !video.paused) {
           clearStall(); played = true; buffering = false; wantsPlayback = true;
-          failed = false;
+          failed = false; stalled = false;
           notify({ status: "playing" });
         }
       },
@@ -129,7 +130,10 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
     ["waiting", watchStall],
     ["stalled", watchStall],
     ["timeupdate", () => {
-      if (video.currentTime > previousTime) { clearStall(); buffering = false; played = true; }
+      if (video.currentTime > previousTime && wantsPlayback && !video.paused) {
+        clearStall(); buffering = false; played = true;
+        if (stalled && !failed) { stalled = false; notify({ status: "playing" }); }
+      }
       previousTime = video.currentTime;
     }],
     [
@@ -161,12 +165,18 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
   });
   // The owner may close before Play awaits the transport import.
   void ready.catch(() => { clearStall(); });
+  const play = async () => {
+    const current = ++attempt; wantsPlayback = true; watchStall(); await ready;
+    if (disposed || current !== attempt) return false;
+    wantsPlayback = true; watchStall();
+    try { await video.play(); return !disposed && current === attempt; }
+    catch { if (current === attempt) { wantsPlayback = false; clearStall(); } return false; }
+  };
   return {
     get media() { return disposed ? undefined : video; },
     enableControls(callback) { beforeUnmute = callback; video.controls = true; },
-    async play() { const current = ++attempt; wantsPlayback = true; watchStall(); await ready; if (disposed || current !== attempt) return false;
-      wantsPlayback = true; watchStall();
-      try { await video.play(); return !disposed && current === attempt; } catch { if (current === attempt) { wantsPlayback = false; clearStall(); } return false; } },
+    play,
+    get retry() { return stalled && !failed ? play : undefined; },
     pause() { attempt++; wantsPlayback = false; clearStall(); video.pause(); }, setVolume(value) { if (value === 0) audible = false; video.volume = value; }, setMuted(value) { if (value) audible = false; video.muted = value; },
     update(value) { video.title = value.title; },
     dispose() { if (disposed) return; disposed = true; clearStall(); document.removeEventListener?.("visibilitychange", visibilityChange); attempt++; for (const [event, listener] of listeners) video.removeEventListener(event, listener); video.pause(); video.removeEventListener("volumechange", volumeChange); hls?.destroy(); if (player) releaseVrcdnTransport(player); video.removeAttribute("src"); video.load(); video.remove(); },
