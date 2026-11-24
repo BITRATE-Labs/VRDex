@@ -16,7 +16,8 @@ export async function configureUbuntuMirror(root) {
     const remaining=current.split(/\r?\n/).filter(line=>{
       try {
         const url=new URL(line.trim().split(/\s+/)[0]);
-        return !replacedMirrors.has(url.href.replace(/\/$/,""));
+        const regionalUbuntu=["http:","https:"].includes(url.protocol)&&/^[a-z0-9-]+\.ec2\.archive\.ubuntu\.com$/.test(url.hostname)&&["/ubuntu","/ubuntu/"].includes(url.pathname);
+        return !replacedMirrors.has(url.href.replace(/\/$/,""))&&!regionalUbuntu;
       } catch { return true; }
     }).join("\n");
     await writeFile(mirrorFile,`${mirror}\tpriority:1\n${remaining}`);
@@ -28,7 +29,7 @@ export async function configureUbuntuMirror(root) {
   for(const file of files) {
     const source=await readOptional(file);
     if(source===null) continue;
-    const updated=source.replace(/https?:\/\/(?:(?:azure\.archive|archive|security)\.ubuntu\.com|mirrors\.edge\.kernel\.org)\/ubuntu\/?(?=\s|$)/g,mirror);
+    const updated=source.replace(/https?:\/\/(?:(?:azure\.archive|archive|security)\.ubuntu\.com|[a-z0-9-]+\.ec2\.archive\.ubuntu\.com|mirrors\.edge\.kernel\.org)\/ubuntu\/?(?=\s|$)/g,mirror);
     if(updated!==source) await writeFile(file,updated);
   }
 }
