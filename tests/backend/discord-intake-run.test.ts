@@ -99,6 +99,21 @@ it("passes prior events from discordIntakeSources to the agent", async () => {
   assert.deepEqual(claim.timeSources, [{ id: M1, text: "now 22:00", referenceInstant: new Date(original.editedAt!).toISOString() }]);
 });
 
+it("claims legacy connector messages with invalid edit dates using their creation anchor", async () => {
+  for (const editedAt of [NaN, 1e20]) {
+    const { t } = await seedDiscordIntake();
+    const createdAt = Date.now() - 10_000;
+    await record(t, "create", message(M1, { createdAt }));
+    await t.run(async ({ db }) => { const [row] = await db.query("discordIntakeMessages").collect(); await db.patch(row._id, { editedAt }); });
+    const runId = (await pendingRun(t))._id;
+    const claim = await t.mutation(internal.discordIntake.claimRun, { runId });
+    assert.equal(claim.kind, "run");
+    if (claim.kind !== "run") throw new Error("Expected runnable legacy post");
+    assert.equal(claim.timeSources[0].referenceInstant, new Date(createdAt).toISOString());
+    assert.ok(claim.modelText.includes(new Date(createdAt).toISOString()));
+  }
+});
+
 it("list_events puts this run's prior events first and drops unpublished and removed events", async () => {
   const { t, connectorId, communityProfileId } = await seedDiscordIntake();
   await seedEvent(t, communityProfileId, { slug: "soon-night", title: "Soon Night", daysOut: 2 });

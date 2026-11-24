@@ -560,3 +560,18 @@ it("holds unanchored weekday evidence without suppressing absolute dates or exac
     assert.deepEqual(createIntakeTimeTools(text, []).apply(value).questions, []);
   }
 });
+
+it("does not let a clock-only resolution replace the announced day with the posting day", async () => {
+  const text = "BASSDROP: Sun Nov 29, doors 22:00 Eastern time";
+  for (const excerpt of ["Sun Nov 29", "November 29"]) {
+    const tools = createIntakeTimeTools(text, [{ id: "post", text, referenceInstant: "2026-11-10T12:00:00Z" }]);
+    const result = await tools.call("resolve_event_time", resolve("22:00")) as { reason: string };
+    assert.equal(result.reason, "source_reference_time_required");
+    const value = blank(); Object.assign(value.event, { eventDate: "2026-11-29", start: "22:00", startDate: "2026-11-29", timezone: "America/New_York" });
+    value.evidence = [{ fieldPath: "event.eventDate", origin: "text", excerpt, assessment: "explicit" }];
+    const held = tools.apply(value);
+    assert.equal(held.event.start, "22:00");
+    assert.notEqual(held.event.eventDate, "2026-11-10");
+    assert.ok(held.questions.some(item => item.reason === "source_reference_time_required"));
+  }
+});

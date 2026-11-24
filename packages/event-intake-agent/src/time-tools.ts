@@ -82,6 +82,8 @@ export function createIntakeTimeTools(sourceText: string, sources: IntakeTimeSou
           const elapsed = /^(?:in\s+\d+\s+(?:minutes?|hours?)|\d+\s+(?:minutes?|hours?)\s+(?:from now|ago))$/i.test(args.text);
           const timezone = zone.status === "resolved" ? zone.candidates[0]?.timeZone : (token || absoluteIso || elapsed) && (!args.timezone || args.timezone === "UTC") ? "UTC" : undefined;
           if (!timezone || args.timezone && args.timezone !== timezone) throw new Error("source_timezone_required");
+          const dateSignal = /\b(?:today|tonight|tomorrow|yesterday|(?:next|last|this)\s+(?:day|night|week|month|year)|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b|\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}\b|\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b|\b\d{1,2}(?:st|nd|rd|th)\b|^\d{10}(?:\d{3})?$/i.test(args.text);
+          if (!token && !absoluteIso && !elapsed && !dateSignal) throw new Error("source_reference_time_required");
           const context = parseCalendarContext(timezone, reference.referenceInstant);
           const result = await tools.resolveCalendarQuery({ query: args.text, calendarContext: context });
           if (result.candidates.length !== 1) throw new Error("ambiguous_or_unresolved_time");

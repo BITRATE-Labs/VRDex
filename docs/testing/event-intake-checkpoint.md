@@ -36,6 +36,9 @@ into an existing event's zone; a differing calendar day requires review.
 Bare or this-qualified weekdays without an absolute date require a reference-time
 review unless a tool already resolved them. Message capture rejects invalid Date
 timestamps; legacy invalid personal edit timestamps fall back to snowflake time.
+Legacy invalid connector edit timestamps fall back to creation time consistently
+in model context and tool anchors. Clock-only resolver phrases do not establish
+an event day; resolve a date-bearing phrase before applying a replacement clock.
 
 Fully specified text dates can resolve without a message anchor when their result
 is independent of the reference date. Poster-only or unavailable text tools do

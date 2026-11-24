@@ -7,7 +7,7 @@ import { getAccountFeatureAccess } from "./_accountFeatures";
 import { requireActiveBrowserSessionSubject } from "./_browserSessionAuthority";
 import {
   buildDraftSourceText, buildSourceText, clampQuietWindowSeconds, connectDiscordAnnouncements, discordAttachmentValidator, discordBotInviteUrl, discordCommandReplies, discordIntakeEnabled,
-  DISCORD_SNOWFLAKE, discordMessagePayloadValidator, findRunLink, isConnectableChannelType, isDiscordCdnUrl, liveChannelConnectors, messageRow, messageUrl, pickPosterAttachments, quietWindowMs,
+  DISCORD_SNOWFLAKE, discordMessagePayloadValidator, findRunLink, isConnectableChannelType, isDiscordCdnUrl, liveChannelConnectors, messageReferenceInstant, messageRow, messageUrl, pickPosterAttachments, quietWindowMs,
   readableTextChannels, resolveDiscordUserId, sanitizeRunEvidence, type DiscordChannel,
 } from "./_discordIntake";
 import { discordRequest } from "./_discordRest";
@@ -257,7 +257,7 @@ export const claimRun = internalMutation({
     return {
       kind: "run" as const, authorityUserId: connector.authorityUserId, mode: connector.mode,
       sourceText: buildDraftSourceText(messages), modelText: buildSourceText(messages, run.triggerMessageIds), sourceUrl: messageUrl(newest), posters: pickPosterAttachments(triggers, unusedContext),
-      timeSources: triggers.filter(row => row.deletedAt === undefined).map(row => ({ id: row.messageId, text: row.content, referenceInstant: new Date(row.editedAt ?? row.createdAt).toISOString() })),
+      timeSources: triggers.filter(row => row.deletedAt === undefined).map(row => ({ id: row.messageId, text: row.content, referenceInstant: messageReferenceInstant(row) })),
       context: { trigger: "discord" as const, communitySlug: community.slug, connectorId: connector._id, mode: connector.mode, priorEvents },
       ...(run.draftId ? { draftId: run.draftId } : {}),
     };

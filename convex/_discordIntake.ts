@@ -146,7 +146,11 @@ export function buildDraftSourceText(messages: Doc<"discordIntakeMessages">[]): 
   return parts.join("\n\n").slice(0, SOURCE_TEXT_MAX);
 }
 
-const postLine = (message: Doc<"discordIntakeMessages">) => `${message.authorDisplayName} (${message.editedAt === undefined ? "" : "edited "}${new Date(message.editedAt ?? message.createdAt).toISOString()}): ${message.content}`;
+export function messageReferenceInstant(message: Pick<Doc<"discordIntakeMessages">, "createdAt" | "editedAt">) {
+  const edited = new Date(message.editedAt ?? NaN);
+  return Number.isFinite(edited.getTime()) ? edited.toISOString() : new Date(message.createdAt).toISOString();
+}
+const postLine = (message: Doc<"discordIntakeMessages">) => `${message.authorDisplayName} (${message.editedAt === undefined ? "" : "edited "}${messageReferenceInstant(message)}): ${message.content}`;
 
 /**
  * The model's source text: two labelled sections of live messages, oldest first: the run's new or changed posts with their IDs, then earlier posts for
