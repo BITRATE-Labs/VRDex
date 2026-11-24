@@ -55,6 +55,8 @@ restart that allowance; the deadline also samples buffer growth without element
 progress events. Repeated events without growth do not extend it. The existing media stays mounted for
 recovery. Retry resumes genuinely paused media in place, while an unpaused,
 starved stream reconnects on the first tap rather than falsely reporting playback.
+Growing buffers cannot extend initial startup beyond sixty seconds in the current
+foreground window. Returning from the background starts a fresh startup window.
 Recoverable stalls retain foreground ownership and the music audio-session claim;
 starting another surface pauses the stalled player before it can recover.
 If an established stall makes no progress for a second fifteen-second window,

@@ -72,6 +72,7 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
   let wantsPlayback = false, played = false, buffering = true, stalled = false, previousTime = 0;
   let stallTimer: ReturnType<typeof setTimeout> | undefined;
   let startupBufferedEnd = 0;
+  let startupExpiry = Infinity;
   const clearStall = () => { if (stallTimer !== undefined) clearTimeout(stallTimer); stallTimer = undefined; };
   const watchStall = () => {
     buffering = true;
@@ -81,15 +82,18 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
       if (!wantsPlayback || disposed || document.visibilityState === "hidden") return;
       // MSE appendBuffer need not emit element progress events. Sample the range
       // at the deadline too before declaring a cold transport unresponsive.
-      if (!played) { startupProgress(); if (stallTimer !== undefined) return; }
+      if (!played && performance.now() < startupExpiry) { startupProgress(); if (stallTimer !== undefined) return; }
       if (played && !stalled) stalled = true; else failed = true;
       notify({ status: "unavailable", unavailableReason: failed ? "failed" : undefined });
       if (!failed) watchStall();
-    }, 15_000);
+    }, played ? 15_000 : Math.min(15_000, Math.max(0, startupExpiry - performance.now())));
   };
   const visibilityChange = () => {
     clearStall();
-    if (document.visibilityState !== "hidden" && buffering) watchStall();
+    if (document.visibilityState !== "hidden" && buffering) {
+      if (!played) startupExpiry = performance.now() + 60_000;
+      watchStall();
+    }
   };
   const startupProgress = () => {
     if (played || failed || disposed || !buffering || !video.buffered?.length) return;
@@ -180,7 +184,9 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
   // The owner may close before Play awaits the transport import.
   void ready.catch(() => { wantsPlayback = false; clearStall(); });
   const play = async () => {
-    const current = ++attempt; wantsPlayback = true; watchStall(); await ready;
+    const current = ++attempt; wantsPlayback = true;
+    if (!played) startupExpiry = performance.now() + 60_000;
+    watchStall(); await ready;
     if (disposed || current !== attempt) return false;
     wantsPlayback = true; watchStall();
     try { await video.play(); return !disposed && current === attempt; }

@@ -334,3 +334,22 @@ test("failed transport setup cannot re-arm its startup watchdog on foreground re
     assert.equal(owner.getSnapshot().unavailableReason, undefined, "setup failure stays settled instead of a late watchdog failure");
   } finally { owner.close(); fixture.restore(); }
 });
+
+test("continuously growing undecodable startup media still expires within one minute", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let clock = 0; t.mock.method(performance, "now", () => clock);
+  const fixture = dom();
+  const owner = new EventPlaybackOwner((value, notify) => {
+    const adapter = createEventPlaybackAdapter(value, fixture.mount, notify);
+    fixture.nodes[0].play = () => new Promise<void>(() => {});
+    return adapter;
+  });
+  try {
+    void owner.play(request); await Promise.resolve(); await Promise.resolve();
+    const video = fixture.nodes[0];
+    for (let i = 1; i <= 6; i++) {
+      clock = i * 10000; video.bufferEnd = i; video.dispatchEvent(new Event("progress")); t.mock.timers.tick(10000);
+    }
+    assert.equal(owner.getSnapshot().unavailableReason, "failed"); assert.equal(video.paused, true);
+  } finally { owner.close(); fixture.restore(); }
+});
