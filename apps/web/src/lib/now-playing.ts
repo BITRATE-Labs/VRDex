@@ -52,10 +52,13 @@ export function applyNowPlaying({ identity, mode, actions }: { identity: Identit
 /** The root provider retains this subscription alongside its existing playback owner. */
 export function retainNowPlaying(owner: EventPlaybackOwner): () => void {
   let previous = "";
+  let retained: { identity: Identity; generation: number } | undefined;
   const update = () => {
     const state = owner.getSnapshot();
-    const identity = nowPlayingIdentity(state);
     const generation = owner.generation;
+    let identity = nowPlayingIdentity(state);
+    if (!identity && state.status === "unavailable" && state.unavailableReason === undefined && owner.media && retained?.generation === generation) identity = retained.identity;
+    retained = identity ? { identity, generation } : undefined;
     const key = JSON.stringify([identity, state.mode, state.status, generation]);
     if (key === previous) return;
     previous = key;

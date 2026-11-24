@@ -54,6 +54,8 @@ recovery. Retry resumes genuinely paused media in place, while an unpaused,
 starved stream reconnects on the first tap rather than falsely reporting playback.
 Recoverable stalls retain foreground ownership and the music audio-session claim;
 starting another surface pauses the stalled player before it can recover.
+Previously established system controls remain during a reason-less stall while
+the same player generation still has mounted media; terminal failures clear them.
 Hard transport errors still allow a fresh connection. Pause, Close and background visibility clear the deadline;
 a still-buffering stream receives a fresh deadline when visible again.
 
