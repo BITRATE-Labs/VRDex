@@ -145,22 +145,45 @@ export function createIntakeTimeTools(sourceText: string, sources: IntakeTimeSou
       if (runtimeFailed) throw new Error("temporal_runtime_unavailable");
       const authoredDate = hasAuthoredEventDate(candidate, sourceText) ? candidate.event.eventDate : null;
       const knownDate = authoredDate ?? existing.eventDate;
-      const knownZone = existing.timezone || candidate.evidence.some(item => item.fieldPath === "event.timezone" && item.assessment === "explicit");
+      const knownZone = existing.timezone || candidate.evidence.some(item => item.fieldPath === "event.timezone" && item.assessment === "explicit"
+        && item.excerpt && !/^<t:\d+(?::[tTdDfFR])?>$/.test(item.excerpt.trim())
+        && (item.origin === "poster" || item.origin === "text" && sourceText.includes(item.excerpt)));
       let establishedDate = false, establishedZone = false;
       const conflictingContext = candidate.evidence.some(item => ["event.eventDate", "event.timezone"].includes(item.fieldPath) && item.assessment === "conflicting");
+      const unboundLocalClocks = [];
+      if (!knownZone && [...bindings.values()].some(id => !candidates.get(id)!.calendarZoneKnown)) {
+        const facts = discordTimestampFacts(sourceText);
+        for (const [prefix, row] of [["event", candidate.event], ...candidate.lineup.map((row, index) => [`lineup.${index}`, row] as const)] as const) {
+          for (const field of ["start", "end"] as const) {
+            const path = `${prefix}.${field}`;
+            if (!row[field] || bindings.has(path)) continue;
+            const evidence = candidate.evidence.filter(item => temporalFieldPath(item.fieldPath) === path);
+            const matches = facts.filter(fact => evidence.some(item => item.excerpt?.includes(fact.token)));
+            const exact = new Set(matches.map(fact => fact.epoch)).size === 1 && matches.some(fact => {
+              const local = projectInstant(fact.utc, "UTC");
+              return row[field] === local.time && row[`${field}Date`] === local.date;
+            });
+            if (!exact) { unboundLocalClocks.push(path); holds.set(path, "source_timezone_required"); }
+          }
+        }
+      }
+      if (unboundLocalClocks.length) candidate.event.timezone = null;
       // A model that skips the shift tool must not publish the bare timestamp or its own arithmetic.
       for (const evidence of candidate.evidence) {
         const path = temporalFieldPath(evidence.fieldPath);
         if (!/^(event\.(?:eventDate|start|end)|lineup\.\d+\.(?:start|end))$/.test(path) || bindings.has(path)) continue;
         if (relativeTimePhrase(evidence.excerpt ?? "")) {
           const absolutePart = /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}\b|\b\d{4}-\d{2}-\d{2}\b/i.test(evidence.excerpt ?? "");
-          if (absolutePart || evidence.origin === "poster" || ![sourceText, ...sources.map(source => source.text)].some(text => evidence.excerpt && text.includes(evidence.excerpt))) holds.set(path, "source_reference_time_required");
+          if (absolutePart || evidence.origin === "poster" || (evidence.excerpt?.match(clockPhrases)?.length ?? 0) > 0 || ![sourceText, ...sources.map(source => source.text)].some(text => evidence.excerpt && text.includes(evidence.excerpt))) holds.set(path, "source_reference_time_required");
           else failures.set(path, "relative_time_tool_required");
         }
         if (discordTimestampFacts(sourceText).some(fact => evidence.excerpt?.includes(fact.epoch)
           && sourceText.split("\n").some(line => line.includes(fact.token) && /\b(?:after|before|later|earlier|shift|move|ignore|wrong|instead)\b/i.test(line)))) failures.set(path, "relative_time_tool_required");
       }
-      for (const [fieldPath, id] of bindings) {
+      const bindingOrder = (path: string) => path === "event.eventDate" ? 0 : path === "event.start" ? 1 : path.endsWith(".start") ? 2 : 3;
+      const orderedBindings = [...bindings].sort(([left, leftId], [right, rightId]) => bindingOrder(left) - bindingOrder(right)
+        || candidates.get(leftId)!.value.isoInstant.localeCompare(candidates.get(rightId)!.value.isoInstant));
+      for (const [fieldPath, id] of orderedBindings) {
         const binding = candidates.get(id)!;
         const [, index, lineupField] = /^lineup\.(\d+)\.(start|end)$/.exec(fieldPath) ?? [];
         const row = index === undefined ? candidate.event : candidate.lineup[Number(index)];
@@ -180,12 +203,11 @@ export function createIntakeTimeTools(sourceText: string, sources: IntakeTimeSou
           failures.set(fieldPath, "authored_date_conflict"); continue;
         }
         const establishesDate = field === "eventDate" || fieldPath === "event.start" || !candidate.event.eventDate && field === "start";
-        const paths = new Set([fieldPath, "event.timezone", ...(establishesDate ? ["event.eventDate"] : [])]);
+        const paths = new Set([fieldPath, ...(!unboundLocalClocks.length ? ["event.timezone"] : []), ...(establishesDate ? ["event.eventDate"] : [])]);
         if (!replaceTimeEvidence(candidate, paths, [...paths].map(fieldPath => ({ fieldPath, origin: "text" as const, excerpt: binding.excerpt, assessment: "explicit" as const })))) {
           failures.set(fieldPath, "time_evidence_limit"); continue;
         }
-        candidate.event.timezone = zone;
-        establishedZone = true;
+        if (!unboundLocalClocks.length) { candidate.event.timezone = zone; establishedZone = true; }
         if (field === "eventDate") candidate.event.eventDate = local.date;
         else {
           const key = field as "start" | "end";

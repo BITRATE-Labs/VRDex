@@ -241,7 +241,7 @@ it("requires tools for cited relative dates and lets a proven result correct the
   const value = blank(); value.event.eventDate = "2026-11-25"; value.event.start = "18:00";
   value.evidence = ["event.eventDate", "event.start"].map(fieldPath => ({ fieldPath, origin: "text", excerpt: text, assessment: "explicit" }));
   const held = tools.apply(structuredClone(value));
-  assert.equal(held.event.start, null);
+  assert.equal(held.event.start, "18:00");
   assert.equal(held.event.eventDate, null);
   await tools.call("resolve_event_time", resolve(text));
   const resolved = tools.apply(structuredClone(value));
@@ -429,4 +429,47 @@ it("holds a date-only timestamp update rather than silently discarding the annou
   assert.equal(result.event.eventDate, "2026-11-20");
   assert.ok(result.questions.some(item => item.fieldPath === "event.eventDate" && item.reason === "authored_date_conflict"));
   assert.ok(!explicitUpdateKeys(result.evidence, "discord_announcements").includes("eventDate"));
+});
+
+it("does not lend a UTC-default binding to an unrelated unbound wall clock", async () => {
+  const token = "<t:1795217400:t>", text = `Doors 22:00\nDJ A 30 minutes after ${token}`;
+  const tools = createIntakeTimeTools(text, []);
+  const base = await tools.call("resolve_event_time", resolve(token, "lineup.0.start", null, null, "DJ A")) as { candidateId: string };
+  await tools.call("shift_event_time", { ...shift(base.candidateId, { minutes: 30 }), fieldPath: "lineup.0.start", performerLabel: "DJ A" });
+  const value = blank(); Object.assign(value.event, { eventDate: "2026-11-20", start: "22:00" });
+  value.lineup = [{ performerLabel: "DJ A", personSlug: null, roleLabel: null, start: null, end: null, startDate: null, endDate: null }];
+  value.evidence = [{ fieldPath: "event.start", origin: "text", excerpt: "Doors 22:00", assessment: "explicit" }];
+  const result = tools.apply(value);
+  assert.equal(result.event.timezone, null);
+  assert.equal(result.event.start, "22:00");
+  assert.equal(result.lineup[0].start, "00:00");
+  assert.ok(result.questions.some(item => item.fieldPath === "event.start" && item.reason === "source_timezone_required"));
+  const tokenZone = structuredClone(value); tokenZone.event.timezone = "UTC";
+  tokenZone.evidence.push({ fieldPath: "event.timezone", origin: "text", excerpt: token, assessment: "explicit" });
+  assert.equal(tools.apply(tokenZone).event.timezone, null);
+});
+
+it("preserves a literal text clock while its relative date or source zone needs review", () => {
+  const text = "Doors 10 PM tonight", value = blank();
+  value.event.start = "22:00"; value.event.startDate = "2026-11-20";
+  value.evidence = [{ fieldPath: "event.start", origin: "text", excerpt: text, assessment: "explicit" }];
+  const result = createIntakeTimeTools(text, []).apply(value);
+  assert.equal(result.event.start, "22:00");
+  assert.equal(result.event.startDate, null);
+  assert.ok(result.questions.some(item => item.reason === "source_reference_time_required"));
+});
+
+it("derives a token-only event's day from the event start or earliest bound performer, not call order", async () => {
+  for (const firstPath of ["lineup.0.start", "event.start"]) {
+    const opening = "<t:1795217400:t>", closing = "<t:1795225500:t>", text = `DJ A ${opening}\nDJ B ${closing}`;
+    const tools = createIntakeTimeTools(text, []);
+    await tools.call("resolve_event_time", resolve(closing, "lineup.1.start", null, null, "DJ B"));
+    await tools.call("resolve_event_time", resolve(opening, firstPath, null, null, firstPath === "event.start" ? null : "DJ A"));
+    const value = blank();
+    value.lineup = ["DJ A", "DJ B"].map(performerLabel => ({ performerLabel, personSlug: null, roleLabel: null, start: null, end: null, startDate: null, endDate: null }));
+    const result = tools.apply(value);
+    assert.equal(result.event.eventDate, "2026-11-20");
+    assert.equal(result.event.timezone, "UTC");
+    assert.deepEqual(result.questions, []);
+  }
 });
