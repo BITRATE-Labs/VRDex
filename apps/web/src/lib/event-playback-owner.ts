@@ -209,6 +209,7 @@ export class EventPlaybackOwner {
           request,
           (patch) => {
             if (generation !== this.generation) return;
+            if (patch.status === "paused") foregroundPlayback.release(this);
             if (patch.status === "unavailable") this.unavailable = true;
             if (patch.status === "playing") {
               this.unavailable = false;
@@ -216,7 +217,7 @@ export class EventPlaybackOwner {
               foregroundPlayback.acquire(this, () => this.pause());
               this.started = true;
             }
-            this.emit(patch);
+            this.emit(patch.status === "playing" ? { ...patch, unavailableReason: undefined } : patch);
           },
           this.state.mode,
         );

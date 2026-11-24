@@ -6,7 +6,7 @@ import { foregroundPlayback } from "../../apps/web/src/lib/foreground-playback";
 import { createEventPlaybackAdapter } from "../../apps/web/src/lib/event-playback-adapters";
 const request: PlaybackRequest = { kind: "vrcdn", eventId: "a", eventSlug: "a", title: "A", href: "/a", sourceId: "a", src: "a", transport: "video", startAt: Date.now() - 1000 };
 class Video extends EventTarget {
-  style = {}; src = ""; paused = true; muted = false; volume = 1; removed = false; listeners = 0;
+  style = {}; src = ""; paused = true; muted = false; volume = 1; removed = false; listeners = 0; currentTime = 0;
   async play() { this.paused = false; this.dispatchEvent(new Event("playing")); }
   pause() { this.paused = true; this.dispatchEvent(new Event("pause")); }
   removeAttribute() {} load() {} remove() { this.removed = true; }
@@ -15,20 +15,27 @@ class Video extends EventTarget {
 }
 function dom() {
   const before = { document: globalThis.document, window: globalThis.window }; const nodes: Video[] = [];
-  Object.defineProperty(globalThis, "document", { configurable: true, value: { createElement() { const node = new Video(); nodes.push(node); return node; } } });
+  const events = new EventTarget(); let listeners = 0;
+  const document = { visibilityState: "visible", createElement() { const node = new Video(); nodes.push(node); return node; },
+    addEventListener(...args: Parameters<EventTarget["addEventListener"]>) { listeners++; events.addEventListener(...args); },
+    removeEventListener(...args: Parameters<EventTarget["removeEventListener"]>) { listeners--; events.removeEventListener(...args); } };
+  Object.defineProperty(globalThis, "document", { configurable: true, value: document });
   Object.defineProperty(globalThis, "window", { configurable: true, value: { innerWidth: 1200, location: { hostname: "localhost" } } });
-  return { nodes, mount: { append() {} } as unknown as HTMLElement, restore() { Object.defineProperty(globalThis, "document", { configurable: true, value: before.document }); Object.defineProperty(globalThis, "window", { configurable: true, value: before.window }); } };
+  return { nodes, get documentListeners() { return listeners; }, visibility(value: string) { document.visibilityState = value; events.dispatchEvent(new Event("visibilitychange")); }, mount: { append() {} } as unknown as HTMLElement, restore() { Object.defineProperty(globalThis, "document", { configurable: true, value: before.document }); Object.defineProperty(globalThis, "window", { configurable: true, value: before.window }); } };
 }
 test("native browser pause, EOF, error and recovery update state; disposal removes listeners", async () => {
+  const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const audioSession = { type: "auto" };
+  Object.defineProperty(globalThis, "navigator", { configurable: true, value: { audioSession } });
   const fixture = dom(); const owner = new EventPlaybackOwner((value, notify) => createEventPlaybackAdapter(value, fixture.mount, notify));
   try {
-    await owner.play(request); assert.equal(owner.supportsAudioOnly, false); const video = fixture.nodes[0]; video.pause(); assert.equal(owner.getSnapshot().status, "paused");
+    await owner.play(request); assert.equal(audioSession.type, "playback"); assert.equal(owner.supportsAudioOnly, false); const video = fixture.nodes[0]; video.pause(); assert.equal(owner.getSnapshot().status, "paused"); assert.equal(audioSession.type, "auto");
     let stoppedOther = false; foregroundPlayback.acquire({}, () => { stoppedOther = true; });
     await video.play(); assert.equal(owner.getSnapshot().status, "playing"); assert.equal(stoppedOther, true);
     video.dispatchEvent(new Event("ended")); assert.equal(owner.getSnapshot().status, "paused");
     video.dispatchEvent(new Event("error")); assert.equal(owner.getSnapshot().status, "unavailable");
     owner.close(); assert.equal(video.listeners, 0); video.dispatchEvent(new Event("playing")); assert.equal(owner.getSnapshot().status, "idle");
-  } finally { owner.close(); fixture.restore(); }
+  } finally { owner.close(); fixture.restore(); if (navigatorDescriptor) Object.defineProperty(globalThis, "navigator", navigatorDescriptor); else Reflect.deleteProperty(globalThis, "navigator"); }
 });
 test("Twitch SDK failure retry creates a recoverable adapter and restores viewer output", async () => {
   const fixture = dom(); let attempts = 0;
@@ -191,4 +198,84 @@ test("automatic saved audio creates neither a hidden-video session nor relay adm
     assert.equal(await adapter.play(), false);
     assert.equal(admissions, 0);
   } finally { adapter?.dispose(); Object.defineProperty(globalThis, "document", { configurable: true, value: previous }); }
+});
+
+test("a direct startup/stall becomes retryable without discarding recovering media", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const fixture = dom(); const owner = new EventPlaybackOwner((value, notify) => createEventPlaybackAdapter(value, fixture.mount, notify));
+  try {
+    await owner.play(request); const video = fixture.nodes[0];
+    video.dispatchEvent(new Event("stalled"));
+    t.mock.timers.tick(2000); video.currentTime = 2; video.dispatchEvent(new Event("timeupdate"));
+    t.mock.timers.tick(20000); assert.equal(owner.getSnapshot().status, "playing", "buffered playback survives a network stall");
+    video.dispatchEvent(new Event("waiting"));
+    t.mock.timers.tick(14999); assert.equal(owner.getSnapshot().status, "playing");
+    t.mock.timers.tick(1); assert.equal(owner.getSnapshot().status, "unavailable");
+    assert.equal(video.removed, false);
+    await owner.play(request); assert.equal(owner.getSnapshot().status, "playing");
+    assert.equal(fixture.nodes.length, 1, "retry reuses the buffered connection after an established stall");
+    video.dispatchEvent(new Event("waiting")); t.mock.timers.tick(15000); video.pause();
+    assert.equal(owner.getSnapshot().status, "paused", "native Pause remains available during a recoverable stall");
+    await owner.play(request); assert.equal(fixture.nodes.length, 1);
+    video.dispatchEvent(new Event("waiting")); owner.pause(); t.mock.timers.tick(20000);
+    assert.equal(owner.getSnapshot().status, "paused");
+    owner.close(); assert.equal(video.listeners, 0);
+  } finally { owner.close(); fixture.restore(); }
+});
+
+test("a never-starting direct stream has a fifteen-second startup allowance", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const fixture = dom();
+  const pending = new Promise<void>(() => {});
+  const owner = new EventPlaybackOwner((value, notify) => {
+    const adapter = createEventPlaybackAdapter(value, fixture.mount, notify);
+    fixture.nodes[0].play = () => pending;
+    return adapter;
+  });
+  try {
+    const start = owner.play(request);
+    await Promise.resolve(); await Promise.resolve();
+    t.mock.timers.tick(14999); assert.equal(owner.getSnapshot().status, "loading");
+    t.mock.timers.tick(1); assert.equal(owner.getSnapshot().status, "unavailable");
+    assert.equal(fixture.nodes[0].removed, false);
+    void start;
+  } finally { owner.close(); fixture.restore(); }
+});
+
+test("retry escalates an established dead stream after one attempt without decoded progress", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const fixture = dom(); const owner = new EventPlaybackOwner((value, notify) => createEventPlaybackAdapter(value, fixture.mount, notify));
+  try {
+    await owner.play(request); const original = fixture.nodes[0];
+    original.dispatchEvent(new Event("waiting")); t.mock.timers.tick(15000);
+    original.play = async () => { original.paused = false; };
+    await owner.play(request); assert.equal(fixture.nodes.length, 1);
+    t.mock.timers.tick(15000); assert.equal(owner.getSnapshot().status, "unavailable");
+    await owner.play(request); assert.equal(fixture.nodes.length, 2); assert.equal(original.removed, true);
+  } finally { owner.close(); fixture.restore(); }
+});
+
+test("hidden pages suppress direct stall deadlines and foreground gets a fresh full window", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const fixture = dom(); const owner = new EventPlaybackOwner((value, notify) => createEventPlaybackAdapter(value, fixture.mount, notify));
+  try {
+    await owner.play(request); fixture.nodes[0].dispatchEvent(new Event("waiting"));
+    t.mock.timers.tick(10000); fixture.visibility("hidden"); t.mock.timers.tick(20000);
+    assert.equal(owner.getSnapshot().status, "playing");
+    fixture.visibility("visible"); t.mock.timers.tick(14999); assert.equal(owner.getSnapshot().status, "playing");
+    t.mock.timers.tick(1); assert.equal(owner.getSnapshot().status, "unavailable");
+    owner.close(); assert.equal(fixture.documentListeners, 0);
+  } finally { owner.close(); fixture.restore(); }
+});
+
+test("actual resumed profile playback clears an old ended reason", async () => {
+  const fixture = dom();
+  const profile: PlaybackRequest = { kind: "vrcdn", profileId: "p", profileSlug: "dj", title: "DJ", href: "/dj", sourceId: "AA", src: "url", transport: "video" };
+  const owner = new EventPlaybackOwner((value, notify) => createEventPlaybackAdapter(value, fixture.mount, notify));
+  try {
+    await owner.play(profile); fixture.nodes[0].dispatchEvent(new Event("ended"));
+    assert.equal(owner.getSnapshot().unavailableReason, "ended");
+    await fixture.nodes[0].play();
+    assert.equal(owner.getSnapshot().status, "playing"); assert.equal(owner.getSnapshot().unavailableReason, undefined);
+  } finally { owner.close(); fixture.restore(); }
 });

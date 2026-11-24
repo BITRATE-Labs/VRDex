@@ -29,10 +29,34 @@ and [approved design](../superpowers/specs/2026-10-28-mobile-vrcdn-playback-desi
 
 ## Finite integration contract
 
+Legacy event playback restores a suspended audio context when the document becomes
+visible again, without replacing its stream. If the browser requires another
+gesture, playback returns to paused with a blocked-playback signal. Pending
+restoration cannot undo a later Pause or Close. This does not provide a separate
+audio rendition or establish physical iPhone background acceptance.
+Repeated app switches invalidate pending restoration; a hidden-page rejection
+does not pause the viewer's still-active playback intent.
+
+The foreground playback owner requests the browser's `playback` audio-session
+type when that API is available. Ownership transfers without resetting the type;
+Pause or Close restores the previous type unless another caller changed it.
+Unsupported or rejected Audio Session access does not block ordinary playback.
+
+Direct streams allow fifteen seconds for initial startup or an established stall
+before exposing unavailable playback. The existing media stays mounted for
+recovery, and retry after an established stall resumes it without reconnecting.
+If that attempt makes no decoded progress before its next deadline, a later
+retry can rebuild the dead connection.
+Hard transport errors still allow a fresh connection. Pause, Close and background visibility clear the deadline;
+a still-buffering stream receives a fresh deadline when visible again.
+
 ### Automatic video pop-out
 
 The retained player's Media Session registers `enterpictureinpicture` in video
-mode. On supported browsers, switching away can open the active video without
+mode when the adapter permits PiP. Legacy playback uses its request title while
+playing or paused when relay metadata is unavailable. Ended and unsupported
+playback clear system controls; Twitch retains its embed's own metadata.
+On supported browsers, switching away can open the active video without
 another button press. Only the current, playing video may respond. Audio mode,
 Close and stale playback generations cannot open a video window.
 
