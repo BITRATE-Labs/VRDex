@@ -176,7 +176,7 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
     get media() { return disposed ? undefined : video; },
     enableControls(callback) { beforeUnmute = callback; video.controls = true; },
     play,
-    get retry() { return stalled && !failed ? play : undefined; },
+    get retry() { return stalled && !failed && video.paused ? play : undefined; },
     pause() { attempt++; wantsPlayback = false; clearStall(); video.pause(); }, setVolume(value) { if (value === 0) audible = false; video.volume = value; }, setMuted(value) { if (value) audible = false; video.muted = value; },
     update(value) { video.title = value.title; },
     dispose() { if (disposed) return; disposed = true; clearStall(); document.removeEventListener?.("visibilitychange", visibilityChange); attempt++; for (const [event, listener] of listeners) video.removeEventListener(event, listener); video.pause(); video.removeEventListener("volumechange", volumeChange); hls?.destroy(); if (player) releaseVrcdnTransport(player); video.removeAttribute("src"); video.load(); video.remove(); },

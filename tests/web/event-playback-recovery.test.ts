@@ -212,8 +212,8 @@ test("a direct startup/stall becomes retryable without discarding recovering med
     t.mock.timers.tick(14999); assert.equal(owner.getSnapshot().status, "playing");
     t.mock.timers.tick(1); assert.equal(owner.getSnapshot().status, "unavailable");
     assert.equal(video.removed, false);
-    await owner.play(request); assert.equal(owner.getSnapshot().status, "playing");
-    assert.equal(fixture.nodes.length, 1, "retry reuses the buffered connection after an established stall");
+    video.currentTime = 3; video.dispatchEvent(new Event("timeupdate")); assert.equal(owner.getSnapshot().status, "playing");
+    assert.equal(fixture.nodes.length, 1, "decoded progress recovers the buffered connection without a retry");
     video.dispatchEvent(new Event("waiting")); t.mock.timers.tick(15000); video.pause();
     assert.equal(owner.getSnapshot().status, "paused", "native Pause remains available during a recoverable stall");
     await owner.play(request); assert.equal(fixture.nodes.length, 1);
@@ -242,15 +242,13 @@ test("a never-starting direct stream has a fifteen-second startup allowance", as
   } finally { owner.close(); fixture.restore(); }
 });
 
-test("retry escalates an established dead stream after one attempt without decoded progress", async t => {
+test("explicit retry rebuilds a starved unpaused direct stream immediately", async t => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const fixture = dom(); const owner = new EventPlaybackOwner((value, notify) => createEventPlaybackAdapter(value, fixture.mount, notify));
   try {
     await owner.play(request); const original = fixture.nodes[0];
     original.dispatchEvent(new Event("waiting")); t.mock.timers.tick(15000);
     original.play = async () => { original.paused = false; };
-    await owner.play(request); assert.equal(fixture.nodes.length, 1);
-    t.mock.timers.tick(15000); assert.equal(owner.getSnapshot().status, "unavailable");
     await owner.play(request); assert.equal(fixture.nodes.length, 2); assert.equal(original.removed, true);
   } finally { owner.close(); fixture.restore(); }
 });
