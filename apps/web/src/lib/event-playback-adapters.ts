@@ -78,7 +78,7 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
     stallTimer = setTimeout(() => {
       stallTimer = undefined;
       if (!wantsPlayback || disposed || document.visibilityState === "hidden") return;
-      if (played) stalled = true; else failed = true;
+      if (played && !stalled) stalled = true; else failed = true;
       notify({ status: "unavailable" });
     }, 15_000);
   };

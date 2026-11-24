@@ -34,6 +34,8 @@ visible again, without replacing its stream. If the browser requires another
 gesture, playback returns to paused with a blocked-playback signal. Pending
 restoration cannot undo a later Pause or Close. This does not provide a separate
 audio rendition or establish physical iPhone background acceptance.
+Repeated app switches invalidate pending restoration; a hidden-page rejection
+does not pause the viewer's still-active playback intent.
 
 The foreground playback owner requests the browser's `playback` audio-session
 type when that API is available. Ownership transfers without resetting the type;
@@ -43,6 +45,8 @@ Unsupported or rejected Audio Session access does not block ordinary playback.
 Direct streams allow fifteen seconds for initial startup or an established stall
 before exposing unavailable playback. The existing media stays mounted for
 recovery, and retry after an established stall resumes it without reconnecting.
+If that attempt makes no decoded progress before its next deadline, a later
+retry can rebuild the dead connection.
 Hard transport errors still allow a fresh connection. Pause, Close and background visibility clear the deadline;
 a still-buffering stream receives a fresh deadline when visible again.
 

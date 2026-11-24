@@ -20,15 +20,18 @@ function dom() {
   return { nodes, mount: { append() {} } as unknown as HTMLElement, restore() { Object.defineProperty(globalThis, "document", { configurable: true, value: before.document }); Object.defineProperty(globalThis, "window", { configurable: true, value: before.window }); } };
 }
 test("native browser pause, EOF, error and recovery update state; disposal removes listeners", async () => {
+  const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const audioSession = { type: "auto" };
+  Object.defineProperty(globalThis, "navigator", { configurable: true, value: { audioSession } });
   const fixture = dom(); const owner = new EventPlaybackOwner((value, notify) => createEventPlaybackAdapter(value, fixture.mount, notify));
   try {
-    await owner.play(request); assert.equal(owner.supportsAudioOnly, false); const video = fixture.nodes[0]; video.pause(); assert.equal(owner.getSnapshot().status, "paused");
+    await owner.play(request); assert.equal(audioSession.type, "playback"); assert.equal(owner.supportsAudioOnly, false); const video = fixture.nodes[0]; video.pause(); assert.equal(owner.getSnapshot().status, "paused"); assert.equal(audioSession.type, "auto");
     let stoppedOther = false; foregroundPlayback.acquire({}, () => { stoppedOther = true; });
     await video.play(); assert.equal(owner.getSnapshot().status, "playing"); assert.equal(stoppedOther, true);
     video.dispatchEvent(new Event("ended")); assert.equal(owner.getSnapshot().status, "paused");
     video.dispatchEvent(new Event("error")); assert.equal(owner.getSnapshot().status, "unavailable");
     owner.close(); assert.equal(video.listeners, 0); video.dispatchEvent(new Event("playing")); assert.equal(owner.getSnapshot().status, "idle");
-  } finally { owner.close(); fixture.restore(); }
+  } finally { owner.close(); fixture.restore(); if (navigatorDescriptor) Object.defineProperty(globalThis, "navigator", navigatorDescriptor); else Reflect.deleteProperty(globalThis, "navigator"); }
 });
 test("Twitch SDK failure retry creates a recoverable adapter and restores viewer output", async () => {
   const fixture = dom(); let attempts = 0;
@@ -232,5 +235,18 @@ test("a never-starting direct stream has a fifteen-second startup allowance", as
     t.mock.timers.tick(1); assert.equal(owner.getSnapshot().status, "unavailable");
     assert.equal(fixture.nodes[0].removed, false);
     void start;
+  } finally { owner.close(); fixture.restore(); }
+});
+
+test("retry escalates an established dead stream after one attempt without decoded progress", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const fixture = dom(); const owner = new EventPlaybackOwner((value, notify) => createEventPlaybackAdapter(value, fixture.mount, notify));
+  try {
+    await owner.play(request); const original = fixture.nodes[0];
+    original.dispatchEvent(new Event("waiting")); t.mock.timers.tick(15000);
+    original.play = async () => { original.paused = false; };
+    await owner.play(request); assert.equal(fixture.nodes.length, 1);
+    t.mock.timers.tick(15000); assert.equal(owner.getSnapshot().status, "unavailable");
+    await owner.play(request); assert.equal(fixture.nodes.length, 2); assert.equal(original.removed, true);
   } finally { owner.close(); fixture.restore(); }
 });

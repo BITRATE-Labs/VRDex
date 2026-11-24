@@ -497,6 +497,12 @@ test("returning to the page resumes suspended audio without reconnecting or undo
     assert.equal(connections, 1); assert.equal(session.state.paused, false); assert.equal(mediaPlays, 2);
     media.paused = true; handlers.get("visibilitychange")!(); await settle();
     assert.equal(connections, 1); assert.equal(mediaPlays, 3, "a browser-paused element resumes even when its audio context stayed running");
+    media.paused = true; Context.current.state = "suspended"; handlers.get("visibilitychange")!();
+    document.visibilityState = "hidden"; handlers.get("visibilitychange")!(); finish!(); await settle();
+    assert.equal(session.state.paused, false); assert.equal(session.state.playbackBlocked, false);
+    assert.equal(mediaPlays, 3, "a stale resume cannot play media after the page is hidden again");
+    document.visibilityState = "visible"; handlers.get("visibilitychange")!(); await settle();
+    assert.equal(mediaPlays, 4); assert.equal(connections, 1);
     Context.current.state = "suspended"; handlers.get("visibilitychange")!();
     session.pause(); finish!(); await settle();
     assert.equal(session.state.paused, true);

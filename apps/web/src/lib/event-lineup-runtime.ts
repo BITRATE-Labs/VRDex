@@ -70,6 +70,7 @@ export class EventLineupSession {
   private disposed = false;
   private playRequest = 0;
   private audioResume?: Promise<void>;
+  private visibilityGeneration = 0;
   private lastSnapshot?: LineupSnapshot;
   private timer: ReturnType<typeof setInterval>;
   constructor(private event: LineupEvent, private mount: HTMLElement, private notify: (state: LineupSnapshot) => void,
@@ -92,24 +93,29 @@ export class EventLineupSession {
     for (const connection of [this.current, this.next]) if (connection) connection.evidence = clearPlaybackEvidence(performance.now());
   };
   private visibilityChanged = () => {
+    const visibility = ++this.visibilityGeneration;
     this.resetEvidence();
     const context = this.context;
     if (this.disposed || this.state.paused || document.visibilityState !== "visible" || !context || context.state === "closed" || (context.state === "running" && !this.current?.source.media.paused) || this.audioResume) return;
     const request = this.playRequest;
+    const valid = () => !this.disposed && request === this.playRequest && !this.state.paused && document.visibilityState === "visible" && visibility === this.visibilityGeneration;
     this.audioResume = context.resume().then(async () => {
-      if (this.disposed || request !== this.playRequest || this.state.paused) return;
+      if (!valid()) return;
       if (context.state !== "running") throw Error("Audio resume requires interaction");
       const active = this.current;
       if (active?.source.media.paused) {
         const accepted = await active.source.play();
-        if (this.disposed || request !== this.playRequest || this.state.paused || active !== this.current) return;
+        if (!valid() || active !== this.current) return;
         if (!accepted) throw Error("Media resume requires interaction");
       }
       this.setGain();
     }).catch(() => {
-      if (this.disposed || request !== this.playRequest || this.state.paused) return;
+      if (!valid()) return;
       this.pause(); this.state.playbackBlocked = true; this.emit();
-    }).finally(() => { this.audioResume = undefined; });
+    }).finally(() => {
+      this.audioResume = undefined;
+      if (!this.disposed && !this.state.paused && visibility !== this.visibilityGeneration && document.visibilityState === "visible") this.visibilityChanged();
+    });
   };
   private releaseNext() {
     const released = !!this.next;
