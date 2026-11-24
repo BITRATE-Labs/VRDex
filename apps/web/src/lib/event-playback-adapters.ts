@@ -84,6 +84,7 @@ export function createEventPlaybackAdapter(request: PlaybackRequest, mount: HTML
       if (!played) { startupProgress(); if (stallTimer !== undefined) return; }
       if (played && !stalled) stalled = true; else failed = true;
       notify({ status: "unavailable", unavailableReason: failed ? "failed" : undefined });
+      if (!failed) watchStall();
     }, 15_000);
   };
   const visibilityChange = () => {

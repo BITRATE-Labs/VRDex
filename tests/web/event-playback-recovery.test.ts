@@ -291,6 +291,9 @@ test("explicit retry rebuilds a starved unpaused direct stream immediately", asy
     original.dispatchEvent(new Event("waiting")); t.mock.timers.tick(15000);
     original.play = async () => { original.paused = false; };
     await owner.play(request); assert.equal(fixture.nodes.length, 2); assert.equal(original.removed, true);
+    fixture.nodes[1].dispatchEvent(new Event("waiting"));
+    t.mock.timers.tick(15000); assert.equal(owner.getSnapshot().unavailableReason, undefined);
+    t.mock.timers.tick(15000); assert.equal(owner.getSnapshot().unavailableReason, "failed", "a single waiting event can reach terminal failure without another media event");
   } finally { owner.close(); fixture.restore(); }
 });
 
