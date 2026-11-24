@@ -108,7 +108,7 @@ export class EventLineupSession {
       const active = this.current;
       if (active?.source.media.paused) {
         const attempt = ++this.currentPlayAttempt;
-        const accepted = await active.source.play();
+        const accepted = await active.source.play().catch(() => false);
         if (!valid() || active !== this.current || attempt !== this.currentPlayAttempt) return;
         if (!accepted) throw Error("Media resume requires interaction");
       }
