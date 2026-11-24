@@ -6,7 +6,8 @@ import { discordTimestampFacts, hasAuthoredEventDate, projectInstant, relativeTi
 export type IntakeTimeSource = { id: string; text: string; referenceInstant: string };
 const field = z.string().regex(/^(event\.(start|end|eventDate)|lineup\.\d+\.(start|end))$/);
 const performerLabel = z.string().max(120).nullable().describe("Exact source performer label for lineup fields; null for event fields.");
-const absoluteDateMarker = /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}\b|\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b|\b\d{1,2}-\d{1,2}-\d{2,4}\b/i;
+const monthName = "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
+const absoluteDateMarker = new RegExp(`\\b${monthName}\\s+\\d{1,2}\\b|\\b\\d{1,2}(?:st|nd|rd|th)?\\s+${monthName}\\b|\\b\\d{4}-\\d{2}-\\d{2}\\b|\\b\\d{1,2}/\\d{1,2}(?:/\\d{2,4})?\\b|\\b\\d{1,2}[-.]\\d{1,2}[-.]\\d{2,4}\\b`, "i");
 const clockPhrases = /\b(?:\d{1,2}:\d{2}(?:\s*[ap]\.?m\.?)?|\d{1,2}\s*[ap]\.?m\.?)(?!\w)/gi;
 const resolve = z.strictObject({ fieldPath: field, performerLabel, text: z.string().max(500), sourceMessageId: z.string().nullable(), timezone: z.string().max(64).nullable() });
 const shift = z.strictObject({ fieldPath: field, performerLabel, candidateId: z.string(), days: z.number().int().min(-7).max(90), hours: z.number().int().min(-168).max(2160), minutes: z.number().int().min(-1440).max(1440) });

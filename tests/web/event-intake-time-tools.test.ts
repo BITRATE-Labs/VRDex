@@ -589,6 +589,25 @@ it("does not mistake clock, price or age ranges for an absolute weekday date", (
   }
 });
 
+it("preserves day-first and Sept source dates beside weekday labels", () => {
+  for (const [text, date] of [
+    ["SAT 21 NOV • DOORS 10PM", "2026-11-21"],
+    ["SAT SEPT 12 • DOORS 10PM", "2026-09-12"],
+    ["Saturday, 21 November 2026 • DOORS 10PM", "2026-11-21"],
+    ["Saturday, 21st November 2026 • DOORS 10PM", "2026-11-21"],
+    ["SAT 21.11.2026 • DOORS 10PM", "2026-11-21"],
+  ]) {
+    const value = blank();
+    Object.assign(value.event, { eventDate: date, start: "22:00", startDate: date, timezone: "America/New_York" });
+    value.evidence = [{ fieldPath: "event.start", origin: "text", excerpt: text, assessment: "explicit" }];
+    const result = createIntakeTimeTools(text, []).apply(value);
+    assert.equal(result.event.eventDate, date);
+    assert.equal(result.event.startDate, date);
+    assert.equal(result.event.start, "22:00");
+    assert.deepEqual(result.questions, []);
+  }
+});
+
 it("does not let a clock-only resolution replace the announced day with the posting day", async () => {
   const text = "BASSDROP: Sun Nov 29, doors 22:00 Eastern time";
   for (const excerpt of ["Sun Nov 29", "November 29"]) {
