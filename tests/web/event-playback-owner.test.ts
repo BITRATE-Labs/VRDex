@@ -442,3 +442,20 @@ test("terminal playback reasons restore the music session after a successful sta
     notify({ status: "unavailable", unavailableReason: "unsupported" }); assert.equal(audioSession.type, "auto");
   } finally { owner.close(); if (descriptor) Object.defineProperty(globalThis, "navigator", descriptor); else Reflect.deleteProperty(globalThis, "navigator"); }
 });
+
+test("a hung mode switch stops suppressing native Pause after its deadline", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let notify!: Parameters<ConstructorParameters<typeof EventPlaybackOwner>[0]>[1], pauses = 0;
+  const owner = new EventPlaybackOwner((_request, report) => {
+    notify = report;
+    return { async play() { return true; }, setMode() { return new Promise<boolean>(() => {}); }, pause() { pauses++; report({ status: "paused" }); }, setVolume() {}, setMuted() {}, update() {}, dispose() {} };
+  });
+  try {
+    await owner.play(request());
+    const change = owner.setMode(owner.getSnapshot().mode === "video" ? "audio" : "video");
+    notify({ status: "paused" }); assert.equal(owner.getSnapshot().status, "playing");
+    t.mock.timers.tick(10000); await change;
+    assert.equal(pauses, 1); assert.equal(owner.getSnapshot().status, "blocked");
+    notify({ status: "paused" }); assert.equal(owner.getSnapshot().status, "paused");
+  } finally { owner.close(); }
+});

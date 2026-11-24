@@ -285,8 +285,10 @@ export class EventPlaybackOwner {
     const playing =
       this.state.status === "playing" || this.state.status === "loading";
     this.modeAttempt = attempt;
+    let modeTimer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const accepted = await this.adapter.setMode(mode);
+      const deadline = new Promise<never>((_, reject) => { modeTimer = setTimeout(() => reject(Error("Playback mode switch timed out")), 10_000); });
+      const accepted = await Promise.race([this.adapter.setMode(mode), deadline]);
       if (attempt === this.attempt && playing) {
         const paused = this.state.lineup?.paused ?? this.adapter.media?.paused;
         if (accepted && paused !== true) foregroundPlayback.acquire(this, () => this.pause());
@@ -294,8 +296,9 @@ export class EventPlaybackOwner {
         this.emit({ status: accepted ? (paused ? "paused" : "playing") : "blocked" });
       }
     } catch {
-      if (attempt === this.attempt) this.emit({ status: "blocked" });
+      if (attempt === this.attempt) { this.pause(); this.emit({ status: "blocked" }); }
     } finally {
+      if (modeTimer !== undefined) clearTimeout(modeTimer);
       if (this.modeAttempt === attempt) this.modeAttempt = undefined;
     }
   }

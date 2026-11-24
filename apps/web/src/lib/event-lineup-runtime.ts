@@ -102,7 +102,7 @@ export class EventLineupSession {
     const valid = () => !this.disposed && request === this.playRequest && !this.state.paused && document.visibilityState === "visible" && visibility === this.visibilityGeneration;
     let resumeTimer: ReturnType<typeof setTimeout> | undefined;
     const deadline = new Promise<never>((_, reject) => { resumeTimer = setTimeout(() => reject(Error("Audio resume timed out")), 10_000); });
-    this.audioResume = Promise.race([context.resume(), deadline]).then(async () => {
+    const restore = context.resume().then(async () => {
       if (!valid()) return;
       if (context.state !== "running") throw Error("Audio resume requires interaction");
       const active = this.current;
@@ -113,12 +113,14 @@ export class EventLineupSession {
         if (!accepted) throw Error("Media resume requires interaction");
       }
       this.setGain();
-    }).catch(() => {
+    });
+    this.audioResume = Promise.race([restore, deadline]).catch(() => {
       if (!valid()) return;
       this.pause(); this.state.playbackBlocked = true; this.emit();
     }).finally(() => {
       if (resumeTimer !== undefined) clearTimeout(resumeTimer);
       this.audioResume = undefined;
+      this.resetEvidence();
       if (!this.disposed && !this.state.paused && visibility !== this.visibilityGeneration && document.visibilityState === "visible") this.visibilityChanged();
     });
   };
@@ -407,6 +409,7 @@ export class EventLineupSession {
     if (this.disposed || !this.state.started || this.state.paused) return;
     const at = performance.now();
     const visible = document.visibilityState === "visible";
+    if (this.audioResume) this.resetEvidence();
     if (!this.selected && this.state.following) this.select(this.scheduleSlot());
     const scheduleNow = Date.now();
     if (visible && this.state.following && this.current) {
