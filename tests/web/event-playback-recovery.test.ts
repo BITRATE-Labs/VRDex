@@ -35,7 +35,7 @@ test("native browser pause, EOF, error and recovery update state; disposal remov
     let stoppedOther = false; foregroundPlayback.acquire({}, () => { stoppedOther = true; });
     await video.play(); assert.equal(owner.getSnapshot().status, "playing"); assert.equal(stoppedOther, true);
     video.dispatchEvent(new Event("ended")); assert.equal(owner.getSnapshot().status, "paused");
-    video.dispatchEvent(new Event("error")); assert.equal(owner.getSnapshot().status, "unavailable");
+    video.dispatchEvent(new Event("error")); assert.equal(owner.getSnapshot().status, "unavailable"); assert.equal(audioSession.type, "auto");
     owner.close(); assert.equal(video.listeners, 0); video.dispatchEvent(new Event("playing")); assert.equal(owner.getSnapshot().status, "idle");
   } finally { owner.close(); fixture.restore(); if (navigatorDescriptor) Object.defineProperty(globalThis, "navigator", navigatorDescriptor); else Reflect.deleteProperty(globalThis, "navigator"); }
 });
