@@ -5,6 +5,7 @@ import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { ConvexError } from "convex/values";
 import { buildSourceText, pickPosterAttachments } from "../../convex/_discordIntake";
 import { saveIntakeDraft } from "../../convex/_eventIntake";
+import { replaceEventLineup } from "../../convex/_eventLineup";
 import { dismissHeldDraft, heldUpdatePatch } from "../../convex/_eventIntakeHeld";
 import { failureReason } from "../../convex/discordIntakeRun";
 import { EVENT_POSTER_MAX_BYTES, resolveEventLocalTime } from "../../packages/api-contracts/src/event-intake";
@@ -63,8 +64,8 @@ it("labels new posts with their IDs apart from earlier context, and drops contex
     { messageId: M1, authorDisplayName: "Ari", content: "Friday 9pm", createdAt: Date.UTC(2026, 10, 1, 20, 0) },
     { messageId: M3, authorDisplayName: "Ari", content: "oops", createdAt: 0, deletedAt: 1 },
   ] as Doc<"discordIntakeMessages">[];
-  assert.equal(buildSourceText(rows, [M2, M3]), `New or changed posts:\n[message ${M2}] Ari (2026-11-01T20:01:00.000Z): flyer\n\nEarlier posts, for context only:\nAri (2026-11-01T20:00:00.000Z): Friday 9pm`);
-  assert.equal(buildSourceText(rows, [M1, M2]), `New or changed posts:\n[message ${M1}] Ari (2026-11-01T20:00:00.000Z): Friday 9pm\n[message ${M2}] Ari (2026-11-01T20:01:00.000Z): flyer`);
+  assert.equal(buildSourceText(rows, [M2, M3]), `New or changed posts:\n[message ${M2}] Ari (created 2026-11-01T20:01:00.000Z): flyer\n\nEarlier posts, for context only:\nAri (created 2026-11-01T20:00:00.000Z): Friday 9pm`);
+  assert.equal(buildSourceText(rows, [M1, M2]), `New or changed posts:\n[message ${M1}] Ari (created 2026-11-01T20:00:00.000Z): Friday 9pm\n[message ${M2}] Ari (created 2026-11-01T20:01:00.000Z): flyer`);
   const longContext = buildSourceText([rows[0], { ...rows[1], content: "x".repeat(12_000) }], [M2]);
   assert.ok(longContext.includes("flyer") && !longContext.includes("xxx") && !longContext.includes("Earlier posts"));
   const longTrigger = buildSourceText([{ ...rows[0], content: "x".repeat(12_000) }, rows[1]], [M2]);
@@ -94,6 +95,25 @@ it("passes prior events from discordIntakeSources to the agent", async () => {
   if (claim.kind !== "run") return;
   assert.deepEqual(claim.context, { trigger: "discord", communitySlug: "night-club", connectorId, mode: "hold", priorEvents: [{ sourceMessageId: M1, eventSlug: "night-at-ari" }] });
   assert.equal(claim.sourceUrl, `https://discord.com/channels/${GUILD}/${CHANNEL}/${M1}`);
+  const original = await t.run(async ctx => (await ctx.db.query("discordIntakeMessages").collect()).find(row => row.messageId === M1)!);
+  assert.deepEqual(claim.timeSources, [{ id: M1, text: "now 22:00", referenceInstant: new Date(original.createdAt).toISOString() }]);
+  assert.ok(claim.modelText.includes(`created ${new Date(original.createdAt).toISOString()}`));
+  assert.ok(claim.modelText.includes(`edited ${new Date(original.editedAt!).toISOString()} (change metadata only)`));
+});
+
+it("claims legacy connector messages with invalid edit dates using their creation anchor", async () => {
+  for (const editedAt of [NaN, 1e20]) {
+    const { t } = await seedDiscordIntake();
+    const createdAt = Date.now() - 10_000;
+    await record(t, "create", message(M1, { createdAt }));
+    await t.run(async ({ db }) => { const [row] = await db.query("discordIntakeMessages").collect(); await db.patch(row._id, { editedAt }); });
+    const runId = (await pendingRun(t))._id;
+    const claim = await t.mutation(internal.discordIntake.claimRun, { runId });
+    assert.equal(claim.kind, "run");
+    if (claim.kind !== "run") throw new Error("Expected runnable legacy post");
+    assert.equal(claim.timeSources[0].referenceInstant, new Date(createdAt).toISOString());
+    assert.ok(claim.modelText.includes(new Date(createdAt).toISOString()));
+  }
 });
 
 it("list_events puts this run's prior events first and drops unpublished and removed events", async () => {
@@ -648,6 +668,60 @@ it("keeps the Discord link on the draft and off the published event, and keeps a
     assert.equal((await t.run(ctx => ctx.db.get(result.eventId!)))!.sourceUrl, published);
     assert.equal((await getDraft(t, draftId)).fields.sourceUrl, sourceUrl ?? DISCORD_LINK);
   }
+});
+
+it("holds unresolved time-tool results for review but keeps optional missing ends publishable", async () => {
+  for (const [fieldPath, reason, expected] of [["event.start", "source_timezone_required", "draft"], ["event.eventDate", "invalid_date", "draft"], ["event.timezone", "timezone_choice_required", "draft"], ["event.end", "No event end is provided", "published"]] as const) {
+    const { t } = await seedDiscordIntake({ mode: "autopublish" });
+    await record(t, "create", message(M1));
+    const { runId, draftId } = await startRun(t);
+    const value = candidate({ kind: "new" });
+    const result = await t.mutation(internal.discordIntake.finishRun, { runId, draftId, candidate: { ...value,
+      questions: [{ fieldPath, reason, alternatives: [] }] } });
+    assert.equal(result.outcome, expected);
+    if (expected === "draft") assert.equal((await getDraft(t, draftId)).fields.tentative?.start?.time, "22:00");
+  }
+});
+
+it("does not replace a published timed lineup when its revised timing is unresolved", async () => {
+  const { t, connectorId, communityProfileId } = await seedDiscordIntake({ mode: "autopublish" });
+  const eventId = await seedEvent(t, communityProfileId, { slug: "night-at-ari" });
+  await t.run(async ({ db }) => {
+    const event = (await db.get(eventId))!;
+    await replaceEventLineup(db, event, [{ clientKey: "original", position: 0, performerLabel: "DJ A", startAt: event.startAt! }], Date.now());
+  });
+  const before = await t.run(async ({ db }) => ({ event: (await db.get(eventId))!, slots: await db.query("eventSlots").withIndex("by_eventId", q => q.eq("eventId", eventId)).collect() }));
+  await linkEvent(t, connectorId, eventId, M1);
+  await record(t, "update", message(M1, { createdAt: Date.now() - 10_000, content: "DJ A now 22:00", editedAt: Date.now() }));
+  const { runId, draftId } = await startRun(t);
+  const value = candidate({ kind: "update", slug: "night-at-ari" });
+  const result = await t.mutation(internal.discordIntake.finishRun, { runId, draftId, expectedUpdatedAt: before.event.updatedAt, candidate: { ...value,
+    lineup: [{ performerLabel: "DJ A", personSlug: null, roleLabel: null, start: null, end: null, startDate: null, endDate: null }],
+    evidence: [{ fieldPath: "lineup.0.performerLabel", origin: "text", excerpt: "DJ A", assessment: "explicit" }],
+    questions: [{ fieldPath: "lineup.0.start", reason: "time_resolution_required", alternatives: [] }],
+  } });
+  assert.equal(result.outcome, "draft");
+  assert.equal(result.eventId, eventId);
+  const after = await t.run(async ({ db }) => ({ event: (await db.get(eventId))!, slots: await db.query("eventSlots").withIndex("by_eventId", q => q.eq("eventId", eventId)).collect() }));
+  assert.deepEqual(after, before);
+});
+
+it("holds a timing update without read context instead of rewriting its published day and zone", async () => {
+  const { t, connectorId, communityProfileId } = await seedDiscordIntake({ mode: "autopublish" });
+  const eventId = await seedEvent(t, communityProfileId, { slug: "night-at-ari" });
+  await t.run(async ({ db }) => { await db.patch(eventId, { timezone: "America/New_York" }); });
+  const before = await t.run(async ({ db }) => db.get(eventId));
+  await linkEvent(t, connectorId, eventId, M1);
+  const token = "<t:1795235400:t>";
+  await record(t, "update", message(M1, { createdAt: Date.now() - 10_000, content: `Starts ${token}`, editedAt: Date.now() }));
+  const { runId, draftId } = await startRun(t);
+  const value = candidate({ kind: "update", slug: "night-at-ari" });
+  Object.assign(value.event, { timezone: "UTC", eventDate: "2026-11-21", start: "04:30", startDate: "2026-11-21" });
+  value.evidence = ["event.start", "event.eventDate", "event.timezone"].map(fieldPath => ({ fieldPath, origin: "text", excerpt: token, assessment: "explicit" }));
+  value.questions = [{ fieldPath: "event.timezone", reason: "time_context_required", alternatives: [] }];
+  const result = await t.mutation(internal.discordIntake.finishRun, { runId, draftId, candidate: value });
+  assert.equal(result.outcome, "draft");
+  assert.deepEqual(await t.run(async ({ db }) => db.get(eventId)), before);
 });
 
 it("never patches a Discord link onto the event, even from explicit evidence", async () => {

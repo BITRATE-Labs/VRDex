@@ -736,4 +736,4 @@ The controller owns whole-branch review and selected browser/visual CI.
 
 ### Ubuntu package prerequisites
 
-Baseline browser and media jobs use `.github/scripts/configure-ubuntu-mirror.mjs` before APT dependency installation. It applies the same reachable Ubuntu mirror to direct source files and mirror lists, retaining distribution suites, components and signing configuration. This avoids Canonical/Azure DNS failures without dropping browser fonts, FFmpeg or any test lane. `tests/scripts/ubuntu-mirror.test.mjs` covers both source formats and idempotence.
+Baseline browser and media jobs use `.github/scripts/configure-ubuntu-mirror.mjs` before APT dependency installation. It applies the same reachable Ubuntu mirror to direct source files and mirror lists, retaining distribution suites, components and signing configuration. Regional EC2 Ubuntu mirrors are rewritten or removed too, so APT cannot retain them as equally ranked alternatives. This avoids Canonical/Azure DNS failures without dropping browser fonts, FFmpeg or any test lane. `tests/scripts/ubuntu-mirror.test.mjs` covers both source formats, regional mirrors, third-party preservation and idempotence.

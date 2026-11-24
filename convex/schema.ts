@@ -1203,6 +1203,7 @@ export default defineSchema({
     actorUserId: v.id("users"), draftId: v.id("eventIntakeDrafts"), createdAt: v.number(),
   }).index("by_actor_createdAt", ["actorUserId", "createdAt"]).index("by_createdAt", ["createdAt"]),
   discordPersonalIntakeSubmissions: defineTable({
+    sourceEditedAt: v.optional(v.number()),
     actorUserId: v.id("users"), discordUserId: v.string(), channelId: v.string(), messageId: v.string(), interactionId: v.string(),
     fingerprint: v.string(), authorId: v.optional(v.string()), guildId: v.optional(v.string()), draftId: v.optional(v.id("eventIntakeDrafts")), eventId: v.optional(v.id("events")),
     ownerKey: v.optional(v.string()), ownerFingerprint: v.optional(v.string()), ownerVersion: v.optional(v.number()), ownerOutcome: v.optional(v.union(v.literal("published"), v.literal("updated"))),

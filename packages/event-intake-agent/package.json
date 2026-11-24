@@ -8,6 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@langfuse/client": "^5.9.1"
+    "@langfuse/client": "^5.9.1",
+    "zod": "^4.3.6"
   }
 }
