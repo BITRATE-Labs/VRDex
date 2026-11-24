@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Candidate } from "../../temporal-runtime/src/types";
 import type { EventIntakeCandidate, EventIntakeFields } from "../../api-contracts/src/event-intake";
-import { discordTimestampFacts, hasAuthoredEventDate, projectInstant, relativeTimePhrase, replaceTimeEvidence, temporalFieldPath } from "./discord-timestamps";
+import { discordTimestampFacts, hasAuthoredEventDate, projectInstant, relativeTimePhrase, replaceTimeEvidence, temporalFieldPath, timestampTransformPhrase } from "./discord-timestamps";
 
 export type IntakeTimeSource = { id: string; text: string; referenceInstant: string };
 const field = z.string().regex(/^(event\.(start|end|eventDate)|lineup\.\d+\.(start|end))$/);
@@ -45,7 +45,11 @@ export function createIntakeTimeTools(sourceText: string, sources: IntakeTimeSou
       const normalized = input && typeof input === "object" && !Array.isArray(input) ? { ...input } as Record<string, unknown> : input;
       if (normalized && typeof normalized === "object" && "fieldPath" in normalized && typeof normalized.fieldPath === "string") normalized.fieldPath = temporalFieldPath(normalized.fieldPath);
       const parsed = (name === "resolve_event_time" ? resolve : name === "shift_event_time" ? shift : clock).safeParse(normalized);
-      if (!parsed.success) return { candidates: [], reason: "invalid_time_arguments" };
+      if (!parsed.success) {
+        const path = field.safeParse(normalized && typeof normalized === "object" && "fieldPath" in normalized ? normalized.fieldPath : undefined);
+        if (path.success) { bindings.delete(path.data); holds.delete(path.data); failures.set(path.data, "time_resolution_required"); }
+        return { candidates: [], reason: "invalid_time_arguments" };
+      }
       const args = parsed.data;
       if (name === "resolve_event_time" && !sourceText.trim() && !sources.some(source => source.text.trim())) return { candidates: [], reason: "text_time_tool_unavailable" };
       let runtime: Awaited<ReturnType<typeof loadTimeRuntime>>;
@@ -92,7 +96,7 @@ export function createIntakeTimeTools(sourceText: string, sources: IntakeTimeSou
             if (!validation.passed || validation.ambiguity.length) throw new Error("ambiguous_or_invalid_time");
           }
           const remembered = remember(args.fieldPath, value, reference, args.text, zone.status === "resolved", args.performerLabel);
-          if (token && /\b(?:after|before|later|earlier|shift|move)\b/i.test(clauses)) {
+          if (token && timestampTransformPhrase(clauses)) {
             bindings.delete(args.fieldPath); failures.set(args.fieldPath, "relative_shift_required");
             return { ...remembered, requiresShift: true };
           }
@@ -151,18 +155,23 @@ export function createIntakeTimeTools(sourceText: string, sources: IntakeTimeSou
       let establishedDate = false, establishedZone = false;
       const conflictingContext = candidate.evidence.some(item => ["event.eventDate", "event.timezone"].includes(item.fieldPath) && item.assessment === "conflicting");
       const unboundLocalClocks = [];
-      if (!knownZone && [...bindings.values()].some(id => !candidates.get(id)!.calendarZoneKnown)) {
+      if (!knownZone && bindings.size) {
         const facts = discordTimestampFacts(sourceText);
+        const bindingZones = new Set([...bindings.values()].map(id => candidates.get(id)!.value.timeZone));
+        const exactZone = candidate.event.timezone ?? (bindingZones.size === 1 ? [...bindingZones][0] : undefined);
         for (const [prefix, row] of [["event", candidate.event], ...candidate.lineup.map((row, index) => [`lineup.${index}`, row] as const)] as const) {
           for (const field of ["start", "end"] as const) {
             const path = `${prefix}.${field}`;
             if (!row[field] || bindings.has(path)) continue;
             const evidence = candidate.evidence.filter(item => temporalFieldPath(item.fieldPath) === path);
             const matches = facts.filter(fact => evidence.some(item => item.excerpt?.includes(fact.token)));
-            const exact = new Set(matches.map(fact => fact.epoch)).size === 1 && matches.some(fact => {
-              const local = projectInstant(fact.utc, "UTC");
-              return row[field] === local.time && row[`${field}Date`] === local.date;
-            });
+            let exact = false;
+            if (new Set(matches.map(fact => fact.epoch)).size === 1 && exactZone && (exactZone === "UTC" || exactZone.includes("/"))) {
+              try {
+                const local = projectInstant(matches[0].utc, exactZone);
+                exact = row[field] === local.time && row[`${field}Date`] === local.date;
+              } catch { /* An invalid model zone cannot establish an unbound clock. */ }
+            }
             if (!exact) { unboundLocalClocks.push(path); holds.set(path, "source_timezone_required"); }
           }
         }
@@ -178,7 +187,7 @@ export function createIntakeTimeTools(sourceText: string, sources: IntakeTimeSou
           else failures.set(path, "relative_time_tool_required");
         }
         if (discordTimestampFacts(sourceText).some(fact => evidence.excerpt?.includes(fact.epoch)
-          && sourceText.split("\n").some(line => line.includes(fact.token) && /\b(?:after|before|later|earlier|shift|move|ignore|wrong|instead)\b/i.test(line)))) failures.set(path, "relative_time_tool_required");
+          && sourceText.split("\n").some(line => line.includes(fact.token) && timestampTransformPhrase(line)))) failures.set(path, "relative_time_tool_required");
       }
       const bindingOrder = (path: string) => path === "event.eventDate" ? 0 : path === "event.start" ? 1 : path.endsWith(".start") ? 2 : 3;
       const orderedBindings = [...bindings].sort(([left, leftId], [right, rightId]) => bindingOrder(left) - bindingOrder(right)

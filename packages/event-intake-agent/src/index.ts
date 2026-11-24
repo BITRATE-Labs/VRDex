@@ -221,7 +221,13 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
           }
         }
       }
-      const result = revalidate(timeTools.apply(normalizeDiscordTimestampTimes(candidate, timeSources.length ? timeSources.map(source => source.text).join("\n") : input.sourceText ?? ""), existingTimeContext), people, communities, events, Boolean(input.context));
+      const timed = timeTools.apply(normalizeDiscordTimestampTimes(candidate, timeSources.length ? timeSources.map(source => source.text).join("\n") : input.sourceText ?? ""), existingTimeContext);
+      const changesTiming = timed.evidence.some(item => item.assessment === "explicit" && /^(event\.(start|end|eventDate|timezone)|lineup(?:\.\d+|\[\d+\])\.(start|end))$/.test(item.fieldPath));
+      if (input.context && timed.decision.kind === "update" && events.has(timed.decision.slug) && !existingTimeContext && changesTiming) {
+        if (timed.questions.length === 100) timed.questions.pop();
+        timed.questions.push({ fieldPath: "event.timezone", reason: "time_context_required", alternatives: [] });
+      }
+      const result = revalidate(timed, people, communities, events, Boolean(input.context));
       decision = result.decision;
       return EventIntakeCandidateSchema.parse(result);
     }

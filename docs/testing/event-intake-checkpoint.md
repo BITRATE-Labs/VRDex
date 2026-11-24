@@ -23,10 +23,14 @@ and requests date review. Partial normalization checks every cited epoch for
 disagreement so mixed wall clocks cannot bypass deterministic time validation.
 Timezone abbreviations remain unconfirmed clues, while exact token-only instants
 retain the UTC default. Poster-relative clocks remain visible for date review.
-UTC-default tool results do not supply a zone to unrelated wall clocks in mixed
+Bound tool results do not supply a zone to unrelated wall clocks in mixed
 sources. Literal relative clocks remain visible while their date or zone needs
 review. Bound starts establish the event day in chronological order, with the
 event start taking priority over lineup order or tool-call order.
+Timing updates require the current event context read before unattended writes.
+Invalid replacement arguments invalidate an earlier binding. Relative guards
+require temporal constructions so names such as After Dark and Last Call do not
+erase valid clock context.
 
 Fully specified text dates can resolve without a message anchor when their result
 is independent of the reference date. Poster-only or unavailable text tools do

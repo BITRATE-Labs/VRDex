@@ -459,6 +459,17 @@ it("preserves a literal text clock while its relative date or source zone needs 
   assert.ok(result.questions.some(item => item.reason === "source_reference_time_required"));
 });
 
+it("does not lend a DJ clause's authored zone to an unrelated event wall clock", async () => {
+  const token = "<t:1795217400:t>", text = `Doors 22:00\nDJ A ${token} UTC`, tools = createIntakeTimeTools(text, []);
+  await tools.call("resolve_event_time", resolve(token, "lineup.0.start", null, null, "DJ A"));
+  const value = blank(); value.event.start = "22:00";
+  value.lineup = [{ performerLabel: "DJ A", personSlug: null, roleLabel: null, start: null, end: null, startDate: null, endDate: null }];
+  const result = tools.apply(value);
+  assert.equal(result.event.timezone, null);
+  assert.equal(result.event.start, "22:00");
+  assert.ok(result.questions.some(item => item.fieldPath === "event.start" && item.reason === "source_timezone_required"));
+});
+
 it("derives a token-only event's day from the event start or earliest bound performer, not call order", async () => {
   for (const firstPath of ["lineup.0.start", "event.start"]) {
     const opening = "<t:1795217400:t>", closing = "<t:1795225500:t>", text = `DJ A ${opening}\nDJ B ${closing}`;
@@ -472,4 +483,51 @@ it("derives a token-only event's day from the event start or earliest bound perf
     assert.equal(result.event.timezone, "UTC");
     assert.deepEqual(result.questions, []);
   }
+});
+
+it("invalid replacement arguments discard an earlier bound anchor", async () => {
+  const token = "<t:1795217400:t>", text = `Doors ${token}, DJ A starts 30 min in`;
+  for (const operation of ["shift_event_time", "set_event_clock"]) {
+    const tools = createIntakeTimeTools(text, []);
+    const base = await tools.call("resolve_event_time", resolve(token, "lineup.0.start", null, null, "DJ A")) as { candidateId: string };
+    const args = operation === "shift_event_time"
+      ? { ...shift(base.candidateId, { minutes: 2000 }), fieldPath: "lineup.0.start", performerLabel: "DJ A" }
+      : { fieldPath: "lineup.0.start", performerLabel: "DJ A", candidateId: base.candidateId, hour: 99, minute: 0 };
+    assert.equal((await tools.call(operation, args) as { reason: string }).reason, "invalid_time_arguments");
+    const value = blank(); value.lineup = [{ performerLabel: "DJ A", personSlug: null, roleLabel: null, start: "23:30", end: null, startDate: "2026-11-20", endDate: null }];
+    const result = tools.apply(value);
+    assert.equal(result.lineup[0].start, null);
+    assert.ok(result.questions.some(item => item.fieldPath === "lineup.0.start" && item.reason === "time_resolution_required"));
+  }
+});
+
+it("does not interpret ordinary event names as relative time phrases", () => {
+  for (const name of ["AFTER DARK", "After Party", "Last Call", "Next Level"]) {
+    const text = `${name}: Saturday November 21, doors 10 PM`, value = blank();
+    Object.assign(value.event, { eventDate: "2026-11-21", start: "22:00", startDate: "2026-11-21" });
+    value.evidence = [{ fieldPath: "event.start", origin: "text", excerpt: text, assessment: "explicit" }];
+    const result = createIntakeTimeTools(text, []).apply(value);
+    assert.equal(result.event.startDate, "2026-11-21");
+    assert.equal(result.event.start, "22:00");
+    assert.deepEqual(result.questions, []);
+  }
+});
+
+it("holds timing updates when the model skips the existing event context read", async () => {
+  const token = "<t:1795235400:t>", text = `Starts ${token}`;
+  let turn = 0;
+  const result = await extractEventIntake({ draftId: "fixture", sourceText: text, context: { trigger: "discord", communitySlug: "club" } }, {
+    authorize: async () => ({ actorUserId: "fixture", version: 1 }), search_people: async () => [], search_communities: async () => [], enabled: true, apiKey: "fixture",
+    list_events: async () => [{ slug: "event", title: "Event", eventDate: "2026-11-20", start: "23:30", lineupSummary: "" }],
+    get_event: async () => { throw new Error("This model deliberately skips the read"); },
+    fetchImplementation: async () => {
+      if (++turn === 1) return Response.json({ status: "completed", output: [{ type: "function_call", name: "list_events", call_id: "list", arguments: JSON.stringify({ limit: 1 }) }] });
+      const value = blank(); value.decision = { kind: "update", slug: "event" };
+      Object.assign(value.event, { start: "04:30", startDate: "2026-11-21", eventDate: "2026-11-21" });
+      value.evidence = [{ fieldPath: "event.start", origin: "text", excerpt: token, assessment: "explicit" }];
+      return Response.json({ status: "completed", output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(value) }] }] });
+    },
+  });
+  assert.ok(result.questions.some(item => item.reason === "time_context_required"));
+  assert.ok(!explicitUpdateKeys(result.evidence, "discord_announcements").includes("timezone"));
 });

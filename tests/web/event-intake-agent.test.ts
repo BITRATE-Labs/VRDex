@@ -264,6 +264,7 @@ it("accepts an update slug only when list_events returned it in this run", async
   const listed = await extractEventIntake({ draftId: "draft", sourceText: "Friday moves to 22:00", context: discord }, { ...base, list_events: async (n: number) => { limit = n; return rows; }, fetchImplementation: async () => ++turn === 1 ? toolCall("list_events", { limit: 40 }) : response(update) });
   assert.equal(limit, 40);
   assert.deepEqual(listed.decision, { kind: "update", slug: "friday-night" });
+  assert.ok(!listed.questions.some(question => question.reason === "time_context_required"));
   const held = { ...rows[0], slug: "draft:k57abc" };
   let step = 0, read: unknown;
   const script = [toolCall("list_events", { limit: 5 }, "a"), toolCall("get_event", { slug: held.slug }, "b"), response({ ...blank(), decision: { kind: "update", slug: held.slug } })];

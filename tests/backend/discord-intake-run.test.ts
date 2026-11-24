@@ -689,6 +689,24 @@ it("does not replace a published timed lineup when its revised timing is unresol
   assert.deepEqual(after, before);
 });
 
+it("holds a timing update without read context instead of rewriting its published day and zone", async () => {
+  const { t, connectorId, communityProfileId } = await seedDiscordIntake({ mode: "autopublish" });
+  const eventId = await seedEvent(t, communityProfileId, { slug: "night-at-ari" });
+  await t.run(async ({ db }) => { await db.patch(eventId, { timezone: "America/New_York" }); });
+  const before = await t.run(async ({ db }) => db.get(eventId));
+  await linkEvent(t, connectorId, eventId, M1);
+  const token = "<t:1795235400:t>";
+  await record(t, "update", message(M1, { createdAt: Date.now() - 10_000, content: `Starts ${token}`, editedAt: Date.now() }));
+  const { runId, draftId } = await startRun(t);
+  const value = candidate({ kind: "update", slug: "night-at-ari" });
+  Object.assign(value.event, { timezone: "UTC", eventDate: "2026-11-21", start: "04:30", startDate: "2026-11-21" });
+  value.evidence = ["event.start", "event.eventDate", "event.timezone"].map(fieldPath => ({ fieldPath, origin: "text", excerpt: token, assessment: "explicit" }));
+  value.questions = [{ fieldPath: "event.timezone", reason: "time_context_required", alternatives: [] }];
+  const result = await t.mutation(internal.discordIntake.finishRun, { runId, draftId, candidate: value });
+  assert.equal(result.outcome, "draft");
+  assert.deepEqual(await t.run(async ({ db }) => db.get(eventId)), before);
+});
+
 it("never patches a Discord link onto the event, even from explicit evidence", async () => {
   const { t, connectorId, communityProfileId } = await seedDiscordIntake({ mode: "autopublish" });
   const eventId = await seedEvent(t, communityProfileId, { slug: "night-at-ari" });

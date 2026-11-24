@@ -11,7 +11,11 @@ export function discordTimestampFacts(source: string) {
 }
 
 export const temporalFieldPath = (value: string) => value.replace(/\[(\d+)\]/g, ".$1");
-export const relativeTimePhrase = (text: string) => /\b(?:today|tonight|tomorrow|yesterday|next|last|after|before|later|earlier|in\s+\d+\s+(?:minutes?|hours?|days?))\b/i.test(text);
+const calendarWord = "(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|day|night|week|month|year)";
+const temporalRelation = new RegExp(String.raw`\b(?:after|before|later|earlier)\s+(?:<t:\d|\d{1,2}(?::\d{2})?|noon\b|midnight\b|${calendarWord}\b)|\b(?:\d+|[a-z]+)\s+(?:minutes?|mins?|hours?|hrs?|days?|weeks?)\s+(?:after|before|later|earlier)\b`, "i");
+export const relativeTimePhrase = (text: string) => /\b(?:today|tonight|tomorrow|yesterday|in\s+\d+\s+(?:minutes?|hours?|days?))\b/i.test(text)
+  || new RegExp(String.raw`\b(?:next|last)\s+${calendarWord}\b`, "i").test(text) || temporalRelation.test(text);
+export const timestampTransformPhrase = (text: string) => temporalRelation.test(text) || /\b(?:shift|move|ignore|wrong|instead)\b/i.test(text);
 export function hasAuthoredEventDate(candidate: EventIntakeCandidate, source: string) {
   return candidate.evidence.some(item => item.fieldPath === "event.eventDate" && item.assessment === "explicit" && item.excerpt
     && !relativeTimePhrase(item.excerpt) && !/^<t:\d+(?::[tTdDfFR])?>$/.test(item.excerpt.trim())
@@ -33,7 +37,7 @@ export function projectInstant(instant: string, timezone: string) {
 
 /** A narrow direct-reference guard. Transformations must go through the time tools. */
 function directSourceLine(line: string, token: string, label?: string) {
-  if (/^\s*(?:>|`)/.test(line) || /\b(?:after|before|later|earlier|shift|move|ignore|wrong|instead)\b/i.test(line)) return false;
+  if (/^\s*(?:>|`)/.test(line) || timestampTransformPhrase(line)) return false;
   let rest = line.replace(/<t:\d+(?::[tTdDfFR])?>/g, "");
   if (label) {
     if (!rest.toLowerCase().includes(label.toLowerCase())) return false;
