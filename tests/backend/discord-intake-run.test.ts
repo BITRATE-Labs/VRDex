@@ -64,8 +64,8 @@ it("labels new posts with their IDs apart from earlier context, and drops contex
     { messageId: M1, authorDisplayName: "Ari", content: "Friday 9pm", createdAt: Date.UTC(2026, 10, 1, 20, 0) },
     { messageId: M3, authorDisplayName: "Ari", content: "oops", createdAt: 0, deletedAt: 1 },
   ] as Doc<"discordIntakeMessages">[];
-  assert.equal(buildSourceText(rows, [M2, M3]), `New or changed posts:\n[message ${M2}] Ari (2026-11-01T20:01:00.000Z): flyer\n\nEarlier posts, for context only:\nAri (2026-11-01T20:00:00.000Z): Friday 9pm`);
-  assert.equal(buildSourceText(rows, [M1, M2]), `New or changed posts:\n[message ${M1}] Ari (2026-11-01T20:00:00.000Z): Friday 9pm\n[message ${M2}] Ari (2026-11-01T20:01:00.000Z): flyer`);
+  assert.equal(buildSourceText(rows, [M2, M3]), `New or changed posts:\n[message ${M2}] Ari (created 2026-11-01T20:01:00.000Z): flyer\n\nEarlier posts, for context only:\nAri (created 2026-11-01T20:00:00.000Z): Friday 9pm`);
+  assert.equal(buildSourceText(rows, [M1, M2]), `New or changed posts:\n[message ${M1}] Ari (created 2026-11-01T20:00:00.000Z): Friday 9pm\n[message ${M2}] Ari (created 2026-11-01T20:01:00.000Z): flyer`);
   const longContext = buildSourceText([rows[0], { ...rows[1], content: "x".repeat(12_000) }], [M2]);
   assert.ok(longContext.includes("flyer") && !longContext.includes("xxx") && !longContext.includes("Earlier posts"));
   const longTrigger = buildSourceText([{ ...rows[0], content: "x".repeat(12_000) }, rows[1]], [M2]);
@@ -96,7 +96,9 @@ it("passes prior events from discordIntakeSources to the agent", async () => {
   assert.deepEqual(claim.context, { trigger: "discord", communitySlug: "night-club", connectorId, mode: "hold", priorEvents: [{ sourceMessageId: M1, eventSlug: "night-at-ari" }] });
   assert.equal(claim.sourceUrl, `https://discord.com/channels/${GUILD}/${CHANNEL}/${M1}`);
   const original = await t.run(async ctx => (await ctx.db.query("discordIntakeMessages").collect()).find(row => row.messageId === M1)!);
-  assert.deepEqual(claim.timeSources, [{ id: M1, text: "now 22:00", referenceInstant: new Date(original.editedAt!).toISOString() }]);
+  assert.deepEqual(claim.timeSources, [{ id: M1, text: "now 22:00", referenceInstant: new Date(original.createdAt).toISOString() }]);
+  assert.ok(claim.modelText.includes(`created ${new Date(original.createdAt).toISOString()}`));
+  assert.ok(claim.modelText.includes(`edited ${new Date(original.editedAt!).toISOString()} (change metadata only)`));
 });
 
 it("claims legacy connector messages with invalid edit dates using their creation anchor", async () => {

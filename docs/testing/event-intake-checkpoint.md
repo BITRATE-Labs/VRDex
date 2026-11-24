@@ -4,8 +4,9 @@ Intake exposes bounded `resolve_event_time`, `shift_event_time` and
 `set_event_clock` tools using the existing temporal runtime. Resolutions bind
 server-held candidates to event/lineup fields; the final response cannot replace
 their arithmetic with model-generated clocks. Relative phrases use the original
-message timestamp (the edit timestamp for edited connector posts), supplied separately per trigger post. Personal Discord imports
-use the captured source edit timestamp when present, otherwise the message snowflake. Missing source timezone,
+message creation timestamp, supplied separately per trigger post. Edits remain
+change metadata and cannot re-anchor relative phrases. Personal Discord imports
+derive that creation timestamp from the message snowflake. Missing source timezone,
 ambiguous clocks and date-only results remain unresolved until corrected.
 
 Direct Discord timestamps use deterministic epoch conversion. UTC is the default
@@ -41,8 +42,8 @@ Bare hyphen pairs remain eligible parser input but do not bypass a weekday hold:
 clock, price and age ranges alone cannot establish an absolute event date.
 Message capture rejects invalid Date timestamps; legacy invalid personal edit
 timestamps fall back to snowflake time.
-Legacy invalid connector edit timestamps fall back to creation time consistently
-in model context and tool anchors. Clock-only resolver phrases do not establish
+Legacy invalid connector edit timestamps are omitted from change metadata;
+model context and tool anchors retain creation time. Clock-only resolver phrases do not establish
 an event day; resolve a date-bearing phrase before applying a replacement clock.
 
 Fully specified text dates can resolve without a message anchor when their result

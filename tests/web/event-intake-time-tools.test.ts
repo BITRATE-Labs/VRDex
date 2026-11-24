@@ -3,13 +3,25 @@ import { it } from "node:test";
 import { createIntakeTimeTools, intakeTimeTools } from "../../packages/event-intake-agent/src/time-tools";
 import { EventIntakeCandidateSchema } from "../../packages/api-contracts/src/event-intake";
 import { candidatePatch } from "../../apps/web/src/lib/event-intake-source";
-import { sanitizeRunEvidence } from "../../convex/_discordIntake";
+import { messageReferenceInstant, sanitizeRunEvidence } from "../../convex/_discordIntake";
 import { explicitUpdateKeys } from "../../convex/_eventCandidateApply";
 import { extractEventIntake } from "../../packages/event-intake-agent/src/index";
 import type { EventIntakeCandidate } from "../../packages/api-contracts/src/event-intake";
 const blank = (): EventIntakeCandidate => ({ event: { title: null, communitySlug: null, eventDate: null, start: null, end: null, startDate: null, endDate: null, timezone: null, venueLabel: null, summary: null, sourceUrl: null }, lineup: [], evidence: [], questions: [], decision: { kind: "new" } });
 const resolve = (text: string, fieldPath = "event.start", sourceMessageId: string | null = null, timezone: string | null = null, performerLabel: string | null = null) => ({ fieldPath, performerLabel, text, sourceMessageId, timezone });
 const shift = (candidateId: string, delta: { days?: number; hours?: number; minutes?: number }) => ({ fieldPath: "event.start", performerLabel: null, candidateId, days: 0, hours: 0, minutes: 0, ...delta });
+
+it("keeps tomorrow on the original day after cosmetic edits", async () => {
+  const text = "Tomorrow at 10pm Eastern time", createdAt = Date.parse("2026-11-20T12:00:00Z");
+  for (const editedAt of [undefined, Date.parse("2026-11-24T12:00:00Z")]) {
+    const tools = createIntakeTimeTools(text, [{ id: "post", text, referenceInstant: messageReferenceInstant({ createdAt, editedAt }) }]);
+    await tools.call("resolve_event_time", resolve(text));
+    const value = tools.apply(blank());
+    assert.equal(value.event.eventDate, "2026-11-21");
+    assert.equal(value.event.startDate, "2026-11-21");
+    assert.equal(value.event.start, "22:00");
+  }
+});
 
 it("anchors tomorrow to the original message independently of retry time", async () => {
   const text = "Tomorrow at 6pm UTC";

@@ -135,10 +135,9 @@ export const authorizeExtraction = internalMutation({ args: { ...actor, draftId:
     await ctx.db.insert("eventIntakeModelAttempts", { actorUserId: args.actorUserId, draftId: draft._id, createdAt: Date.now() });
   }
   const submission = draft.personalSubmissionId ? await ctx.db.get(draft.personalSubmissionId) : null;
-  const editedAt = submission?.sourceEditedAt !== undefined && Number.isFinite(new Date(submission.sourceEditedAt).getTime()) ? submission.sourceEditedAt : undefined;
   // Discord snowflakes encode the original message time, including for old DM imports.
   const timeSources = submission && /^\d{17,20}$/.test(submission.messageId) ? [{ id: submission.messageId, text: draft.fields.sourceText ?? "",
-    referenceInstant: new Date(editedAt ?? Number((BigInt(submission.messageId) >> 22n) + 1420070400000n)).toISOString() }] : [];
+    referenceInstant: new Date(Number((BigInt(submission.messageId) >> 22n) + 1420070400000n)).toISOString() }] : [];
   return { actorUserId: args.actorUserId, version: draft.version, privateSource: Boolean(draft.personalSubmissionId), timeSources };
 } });
 export const setEvidenceHold = mutation({ args: { ...sourceArg, reportId: v.union(v.id("eventReports"), v.null()) }, returns: v.null(), handler: async (ctx, args) => {
