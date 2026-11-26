@@ -801,6 +801,10 @@ export default defineSchema({
   // to deploy first and gives the sequence.
   users: defineTable({
     clerkUserId: v.string(),
+    eventOwnerMode: v.optional(v.object({
+      communityProfileId: v.id("profiles"),
+      expiresAt: v.number(),
+    })),
     name: v.optional(v.string()),
     image: v.optional(v.string()),
     email: v.optional(v.string()),

@@ -44,10 +44,11 @@ const sparseHeldRows: HeldImports = [
   { ...heldOrigin, connectorKind: "google_calendar", targetName: "Club calendar", kind: "flag", eventId: eventId("flag-2"), reason: "external_deleted", title: "Lantern Night", href: "/afterglow/events/lantern/edit", updatedAt: 1 },
 ];
 
-function inventoryFixture(contributorOnly: boolean, failShortcuts: boolean, held?: string) {
+function inventoryFixture(contributorOnly: boolean, failShortcuts: boolean, held?: string, superAdmin = false) {
   const listeners = new Set<() => void>();
   const cache = new Map<string, unknown>();
   let shortcutsUnavailable = failShortcuts;
+  let ownerMode: { slug: string; name: string; expiresAt: number } | null = null;
   let slowReleased = false;
   let failed = false;
   let reads = 0;
@@ -102,8 +103,13 @@ function inventoryFixture(contributorOnly: boolean, failShortcuts: boolean, held
       if (getFunctionName(query) === "search:searchUniversal" && args.query?.toLowerCase().includes("aurora")) return [{ entityType: "profile", profileType: "person", slug: "playwright-dj-aurora", title: "Aurora", routePath: "/playwright-dj-aurora" }];
       return empty;
     },
-    async mutation(mutation: FunctionReference<"mutation">, args: { draftId?: string; eventId?: string }) {
+    async mutation(mutation: FunctionReference<"mutation">, args: { draftId?: string; eventId?: string; communitySlug?: string | null }) {
       const name = getFunctionName(mutation);
+      if (name === "events:setEventOwnerMode") {
+        ownerMode = args.communitySlug ? { slug: args.communitySlug, name: "District One", expiresAt: Date.now() + 3600000 } : null;
+        notify();
+        return null;
+      }
       if (held === `fail-${name.split(":")[1]}`) throw new Error("Fixture held command failed");
       if (held === "slow") await new Promise(resolve => window.addEventListener("held-release", resolve, { once: true }));
       sessionStorage.setItem("held-command", JSON.stringify([name, args]));
@@ -117,9 +123,10 @@ function inventoryFixture(contributorOnly: boolean, failShortcuts: boolean, held
       return {
         localQueryResult() {
           if (name === "accounts:viewer") return viewer;
+          if (name === "events:getEventOwnerMode") return superAdmin ? { community: ownerMode } : null;
           if (name === "events:listManagedCommunities") {
             if (shortcutsUnavailable) throw new Error("Fixture community source failed");
-            return communities;
+            return ownerMode ? [...communities, { profileId: "fixture-district-one", slug: ownerMode.slug, displayName: ownerMode.name, roleLabel: "Owner mode" }] : communities;
           }
           if (name === "eventCorrections:getEventReportAccess") return !contributorOnly;
           if (name === "eventInventory:listHeldImports") {
@@ -156,7 +163,7 @@ function useFixtureAuth(session?: string) {
 export function EventInventoryPreview({ contributorOnly, held, session }: { contributorOnly: boolean; held?: string; session?: string }) {
   const [fixture, setFixture] = useState<ReturnType<typeof inventoryFixture> | null>(null);
   useEffect(() => {
-    const value = inventoryFixture(contributorOnly, session === "shortcuts-failure", held);
+    const value = inventoryFixture(contributorOnly, session === "shortcuts-failure", held, session === "owner-mode");
     setFixture(value);
     return value.dispose;
   }, [contributorOnly, held, session]);

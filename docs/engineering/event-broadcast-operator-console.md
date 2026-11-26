@@ -5,6 +5,15 @@ selects the program's `activeSessionId`; a newer terminal session never replaces
 that session. An unresolved replacement subscription does not fall back to old
 permissions or source rows. Read-only operations staff retain diagnostics access.
 
+## Event owner mode
+
+An account with an active super-admin grant can enter owner mode from My events
+by entering one public community slug. The switch covers event setup, editing,
+hosting and media controls for that community for up to one hour. Exit owner
+mode from the same page. The server checks the grant, community and expiry at
+the time of access and when queued media commands are authorized. The operator
+keeps their own audit identity and the community retains its recorded owner.
+
 ## Control and observation
 
 The locked workspace adds person lookup and a pasted-link Quick switch, optional local previews, copyable destination URLs and a connection wizard. A single primary destination is plain text. The wizard supports VRCDN, Twitch and Custom ingest, derives VRCDN PC/Quest URLs, and permits skipping its bounded test. Saved but untested connections remain labeled Not tested. [Credential setup and self-hosting configuration](broadcast-output-credentials.md) must be ready before enabling the new setup route.

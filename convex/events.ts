@@ -90,6 +90,7 @@ import { getPublicProfileMediaKit } from "./_profileAssets";
 import { visibleProfileField } from "./_profileFieldVisibility";
 import { firstSafePublicImageUrl } from "./_publicFields";
 import { userOwnsProfile } from "./_profileOwnership";
+import { getAccountFeatureAccess, hasEventOwnerMode } from "./_accountFeatures";
 import { getProfileBySlug, validateProfileSlug } from "./_profileSlugs";
 import { reindexEventSearchDocument } from "./_searchDocuments";
 import { ensureShortLinkForTarget } from "./_shortLinks";
@@ -436,7 +437,8 @@ export async function canUpdateEvent(
     return true;
   }
 
-  return subjectHasCommunityCapability(db, event.communityProfileId, subject, "manage_events");
+  return (await hasEventOwnerMode(db, userId, event.communityProfileId)) ||
+    subjectHasCommunityCapability(db, event.communityProfileId, subject, "manage_events");
 }
 
 
@@ -458,7 +460,8 @@ async function canViewEventOperations(
     return true;
   }
 
-  return subjectHasAnyCommunityCapability(db, event.communityProfileId, subject, [
+  return (await hasEventOwnerMode(db, userId, event.communityProfileId)) ||
+    subjectHasAnyCommunityCapability(db, event.communityProfileId, subject, [
     "view_event_operations",
     "manage_events",
     "manage_event_media",
@@ -473,7 +476,8 @@ export async function canManageCommunityEvents(
 ): Promise<boolean> {
   return (
     await userOwnsProfile(db, communityProfileId, userId)
-  ) || subjectHasCommunityCapability(db, communityProfileId, subject, "manage_events");
+  ) || (await hasEventOwnerMode(db, userId, communityProfileId)) ||
+    subjectHasCommunityCapability(db, communityProfileId, subject, "manage_events");
 }
 
 export async function requireBrowserManagedCommunity(
@@ -2447,6 +2451,7 @@ async function hostableEvent(ctx: QueryCtx, args: { slug: string; communitySlug:
   const viewer = await activeBrowserSessionSubjectOrNull(ctx);
   if (!viewer) return null;
   const allowed = await userOwnsProfile(ctx.db, event.communityProfileId, viewer.userId)
+    || await hasEventOwnerMode(ctx.db, viewer.userId, event.communityProfileId)
     || await subjectHasAnyCommunityCapability(ctx.db, event.communityProfileId, viewer.subject, ["host_events", "manage_events"]);
   return allowed ? { event, community } : null;
 }
@@ -2950,6 +2955,41 @@ export const createCommunityEvent = mutation({
   },
 });
 
+export const getEventOwnerMode = query({
+  args: {},
+  handler: async (ctx) => {
+    const viewer = await activeBrowserSessionSubjectOrNull(ctx);
+    if (!viewer || !(await getAccountFeatureAccess(ctx.db, viewer.userId)).superAdmin) return null;
+    const mode = viewer.user.eventOwnerMode;
+    if (!mode || mode.expiresAt <= Date.now()) return { community: null };
+    const profile = await ctx.db.get(mode.communityProfileId);
+    return { community: profile ? { slug: profile.slug, name: profile.displayName, expiresAt: mode.expiresAt } : null };
+  },
+});
+
+export const setEventOwnerMode = mutation({
+  args: { communitySlug: v.union(v.string(), v.null()) },
+  handler: async (ctx, { communitySlug }) => {
+    const { userId } = await requireActiveBrowserSessionSubject(ctx);
+    if (!(await getAccountFeatureAccess(ctx.db, userId)).superAdmin) {
+      throw new Error("Super-admin access is required.");
+    }
+    if (communitySlug === null) {
+      await ctx.db.patch(userId, { eventOwnerMode: undefined });
+      return;
+    }
+    const profile = await ctx.db.query("profiles")
+      .withIndex("by_slug", (q) => q.eq("slug", communitySlug.trim()))
+      .unique();
+    if (profile?.profileType !== "community" || !canReadProfile("public", profile)) {
+      throw new Error("Community not found.");
+    }
+    await ctx.db.patch(userId, {
+      eventOwnerMode: { communityProfileId: profile._id, expiresAt: Date.now() + 60 * 60_000 },
+    });
+  },
+});
+
 export async function managedCommunitiesForBrowser(
   ctx: QueryCtx,
   options: { includeNonPublic?: boolean } = {},
@@ -2989,6 +3029,11 @@ export async function managedCommunitiesForBrowser(
   }
   const roleByProfileId = new Map<Id<"profiles">, string>();
   for (const owner of owners) roleByProfileId.set(owner.profileId, "Owner");
+  const mode = user.eventOwnerMode;
+  if (mode && !roleByProfileId.has(mode.communityProfileId) &&
+      await hasEventOwnerMode(ctx.db, user._id, mode.communityProfileId)) {
+    roleByProfileId.set(mode.communityProfileId, "Owner mode");
+  }
   for (const authority of authorities) {
     if(authority.subject.subject !== subject.subject || authority.subject.issuer !== subject.issuer) continue;
     const role = authority.roleId ? await ctx.db.get(authority.roleId) : null;
