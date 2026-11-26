@@ -8,6 +8,8 @@ import { api } from "@convex-generated-api";
 import { buttonVariants } from "@/components/ui/button";
 import { SectionTitle } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
+import { EventIdentityPicker } from "@/app/events/event-identity-picker";
+import type { EventIdentityOption } from "@/lib/event-editor-identity";
 import { EventInventoryControls, EventInventoryList, type EventInventoryCriteria, type EventInventoryView } from "./event-inventory-list";
 import { HeldImportsSection } from "./held-imports-section";
 
@@ -79,7 +81,7 @@ function InventoryTraversal({ timeZone, normalizedQuery, view, onRetry }: { time
 function EventOwnerMode() {
   const mode = useQuery(api.events.getEventOwnerMode, {});
   const setMode = useMutation(api.events.setEventOwnerMode);
-  const [slug, setSlug] = useState("");
+  const [community, setCommunity] = useState<EventIdentityOption | null>(null);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
   if (!mode) return null;
@@ -88,6 +90,7 @@ function EventOwnerMode() {
     setFailed(false);
     try {
       await setMode({ communitySlug });
+      setCommunity(null);
     } catch {
       setFailed(true);
     } finally {
@@ -98,24 +101,26 @@ function EventOwnerMode() {
     <div className="flex flex-wrap items-center gap-2">
       {mode.community ? (
         <>
-          <span>Owner mode · {mode.community.name}</span>
+          <span>Admin access · {mode.community.name}</span>
           <button className={buttonVariants({ variant: "secondary" })} disabled={saving} type="button"
-            onClick={() => void change(null)}>Exit owner mode</button>
+            onClick={() => void change(null)}>End admin access</button>
         </>
       ) : (
-        <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => {
+        <form className="flex min-w-0 flex-wrap items-end gap-2" onSubmit={(event) => {
           event.preventDefault();
-          void change(slug.trim());
+          if (community) void change(community.slug);
         }}>
-          <label htmlFor="event-owner-community">Community slug</label>
-          <input id="event-owner-community" className="rounded-control border border-border bg-background px-3 py-2"
-            value={slug} onChange={(event) => setSlug(event.target.value)} maxLength={64} required />
-          <button className={buttonVariants({ variant: "secondary" })} disabled={saving || !slug.trim()} type="submit">
-            Enter owner mode
+          <div className="w-full min-w-0 sm:w-64">
+            <EventIdentityPicker kind="community" selectedSlug={community?.slug}
+              selectedOption={community} disabled={saving}
+              onSelect={setCommunity} onClear={() => setCommunity(null)} />
+          </div>
+          <button className={buttonVariants({ variant: "secondary" })} disabled={saving || !community} type="submit">
+            Manage as admin
           </button>
         </form>
       )}
-      {failed ? <span role="alert">Could not change owner mode</span> : null}
+      {failed ? <span role="alert">Could not change admin access</span> : null}
     </div>
   );
 }

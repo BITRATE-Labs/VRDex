@@ -100,6 +100,7 @@ function inventoryFixture(contributorOnly: boolean, failShortcuts: boolean, held
     clearAuth() {},
     logger: { warn() {} },
     async query(query: FunctionReference<"query">, args: { query?: string }) {
+      if (getFunctionName(query) === "search:searchUniversal" && args.query?.toLowerCase().includes("district")) return [{ entityType: "profile", profileType: "community", slug: "district-one", title: "District One", routePath: "/district-one" }];
       if (getFunctionName(query) === "search:searchUniversal" && args.query?.toLowerCase().includes("aurora")) return [{ entityType: "profile", profileType: "person", slug: "playwright-dj-aurora", title: "Aurora", routePath: "/playwright-dj-aurora" }];
       return empty;
     },

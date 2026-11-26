@@ -5,12 +5,12 @@ selects the program's `activeSessionId`; a newer terminal session never replaces
 that session. An unresolved replacement subscription does not fall back to old
 permissions or source rows. Read-only operations staff retain diagnostics access.
 
-## Event owner mode
+## Community event administration
 
-An account with an active super-admin grant can enter owner mode from My events
-by entering one public community slug. The switch covers event setup, editing,
-hosting and media controls for that community for up to one hour. Exit owner
-mode from the same page. The server checks the grant, community and expiry at
+An account with an active super-admin grant can open My events, search for a public
+community by name and select **Manage as admin**. This enables event setup, editing,
+hosting and media controls for that community for up to one hour. Select
+**End admin access** on the same page to exit. The server checks the grant, community and expiry at
 the time of access and when queued media commands are authorized. The operator
 keeps their own audit identity and the community retains its recorded owner.
 

@@ -2,7 +2,8 @@ import { expect, test } from "@playwright/test";
 
 test("concierge owner assignment reviews the exact recipient before assigning @fixture", async ({ page }, info) => {
   await page.goto("/playwright/concierge-ownership");
-  await page.getByLabel("Profile slug").fill("afterglow");
+  await page.getByRole("combobox", { name: "Profile", exact: true }).fill("Afterglow");
+  await page.getByRole("option", { name: /Afterglow/ }).click();
   await page.getByLabel("Recipient’s verified email").fill("organizer@example.com");
   await page.getByRole("button", { name: "Review assignment" }).click();
   await expect(page.getByText("Test Organizer · organizer@example.com")).toBeVisible();
