@@ -191,6 +191,9 @@ and publication operations remain separate.
 
 ## Assigned collections and explicit rebase
 
+The collection picker paginates active assignments by reviewer and expiry.
+Expired assignments are outside the indexed range.
+
 `profileMediaSubmissions.setBatchReviewer` is a verified-browser super-admin
 mutation. It creates, updates, or revokes an exact batch/user assignment and
 refuses assignment of the donor to their own batch. It does not grant the

@@ -4,12 +4,12 @@ import { convexTest } from "convex-test";
 import { makeFunctionReference, type FunctionArgs, type PaginationOptions, type PaginationResult } from "convex/server";
 import schemaModule from "../../convex/schema";
 import { api } from "../../convex/_generated/api";
-import type { Doc } from "../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../convex/_generated/dataModel";
 import type { InventoryRow } from "../../convex/_eventInventory";
 import { listPage } from "../../convex/eventInventory";
 
 const schema = (schemaModule as unknown as { default?: typeof schemaModule }).default ?? schemaModule;
-const list = makeFunctionReference<"query", { view: "all" | "upcoming" | "drafts" | "past"; query: string; timeZone: string; asOf: number; paginationOpts: PaginationOptions }, PaginationResult<InventoryRow>>("eventInventory:listPage");
+const list = makeFunctionReference<"query", { view: "all" | "upcoming" | "drafts" | "past"; query: string; timeZone: string; asOf: number; draftSection?: "personal" | Id<"profiles">; paginationOpts: PaginationOptions }, PaginationResult<InventoryRow>>("eventInventory:listPage");
 const save = makeFunctionReference<"mutation">("eventIntake:saveEventIntakeDraft");
 const criteria = { view: "all" as const, query: "", timeZone: "UTC", asOf: Date.parse("2026-10-22T12:00:00Z") };
 
@@ -112,6 +112,32 @@ it("isolates private drafts, preserves expiry and omits source evidence and rece
   assert.deepEqual(await t.run(({ db }) => db.get(saved.draftId)), before);
   assert.equal((await traverse(actor("owner"))).rows.filter(row => row.kind === "intake_draft").length, 0);
   assert.equal((await traverse(other)).rows.length, 1);
+});
+it("paginates only eligible drafts in each draft section", async () => {
+  const { actor, event, ids, t } = await fixture();
+  const owner = actor("owner");
+  const time = Date.now();
+  const personal = await owner.mutation(save, { patch: { title: "Personal work" } });
+  const community = await event({ title: "Community work", publicationState: "draft_private" });
+  const published = await event();
+  await t.run(async ({ db }) => {
+    for (let offset = 0; offset < 22; offset++) {
+      const draft = await db.insert("eventIntakeDrafts", {
+        actorUserId: ids.owner, fields: { title: "Published work" }, version: 1, provenance: [],
+        createdAt: time, updatedAt: time + offset, expiresAt: time + 100_000 + offset,
+      });
+      const receipt = await db.insert("eventContributionReceipts", {
+        actorUserId: ids.owner, draftId: draft, draftVersion: 1, eventId: published,
+        eventPath: "/club/events/night", communityProfileId: ids.community, fingerprint: "done", createdAt: time,
+      });
+      await db.patch(draft, { publishedReceiptId: receipt });
+    }
+  });
+  assert.ok(await owner.mutation(save, { patch: { title: "Another draft" } }));
+  const args = { ...criteria, view: "drafts" as const, asOf: time, paginationOpts: { cursor: null, numItems: 2 } };
+  assert.ok((await owner.query(list, { ...args, draftSection: "personal" })).page.some(row => row.id === personal.draftId));
+  assert.deepEqual((await owner.query(list, { ...args, draftSection: ids.community })).page.map(row => row.id), [community]);
+  assert.deepEqual((await actor("other").query(list, { ...args, draftSection: ids.community })).page, []);
 });
 it("matches later pages and current community names through empty candidate pages", async () => {
   const { actor, event, t, ids } = await fixture();

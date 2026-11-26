@@ -1112,12 +1112,26 @@ it("round-trips assignment split children and scopes the ending cursor", async (
       });
     }
   });
+  await f.t.run(async ({ db }) => {
+    for (let n = 0; n < 6; n++) {
+      const batchId = await db.insert("contributionBatches", {
+        actorUserId: f.s.contributorUserId,
+        idempotencyKey: "expired-" + n, label: "Expired " + n,
+        archived: false, rowCount: 0, createdAt: NOW,
+      });
+      await db.insert("contributionBatchReviewers", {
+        batchId, reviewerUserId: f.s.moderatorUserId, active: true, expiresAt: Date.now() - 1000,
+      });
+    }
+  });
   const opts = { cursor: null, numItems: 40, maximumRowsRead: 4 };
   const parent = await f.actor.query(
     api.profileMediaSubmissions.assignedReviewBatches,
     { paginationOpts: opts },
   );
   assert.ok(parent.splitCursor);
+  assert.equal(parent.page.length, 4);
+  assert.ok(parent.page.every(row => !row.label.startsWith("Expired")));
   const first = await f.actor.query(
     api.profileMediaSubmissions.assignedReviewBatches,
     { paginationOpts: { ...opts, endCursor: parent.splitCursor } },

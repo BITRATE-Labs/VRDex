@@ -44,6 +44,8 @@ test.describe('My events @fixture', () => {
     await page.getByRole('button', { name: 'Drafts', exact: true }).focus();
     await page.keyboard.press('Enter');
     await expect(page.getByRole('listitem')).toHaveCount(2);
+    await expect(page.getByRole('heading', { name: 'Afterglow', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Personal drafts', exact: true })).toBeVisible();
     await expect(page.getByText('Retracted', { exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Upcoming', exact: true }).click();
     await expect(page.getByRole('listitem')).toHaveCount(1);
@@ -85,17 +87,21 @@ test.describe('My events @fixture', () => {
     expect(new URL(page.url()).searchParams.get('returnTo')).toBe('/afterglow/events/harbor/edit');
   });
 
-  test('bounds empty-page advancement and keeps explicit continuation until complete', async ({ page }) => {
+  test('follows empty pages automatically until there is a match', async ({ page }) => {
     await page.getByLabel('Find an event', { exact: true }).fill('later');
-    await expect(page.getByRole('button', { name: 'Load more', exact: true })).toBeEnabled();
-    await expect(page.getByText('No events', { exact: true })).toHaveCount(0);
-    await expect(page.getByRole('listitem')).toHaveCount(0);
-    await expect.poll(() => page.evaluate(() => Number(sessionStorage.getItem('inventory-later-reads')))).toBe(4);
-    await page.getByRole('button', { name: 'Load more', exact: true }).click();
     await expect(page.getByText('Later match')).toBeVisible();
+    await expect.poll(() => page.evaluate(() => Number(sessionStorage.getItem('inventory-later-reads')))).toBe(5);
     await expect(page.getByRole('button', { name: 'Load more', exact: true })).toHaveCount(0);
     await page.getByLabel('Find an event', { exact: true }).fill('absent');
     await expect(page.getByText('No events', { exact: true })).toBeVisible();
+  });
+
+  test('loads the next page after a short page without a button press', async ({ page }) => {
+    await page.getByLabel('Find an event', { exact: true }).fill('short');
+    await expect(page.getByText('First draft 4', { exact: true })).toBeVisible();
+    await page.getByText('First draft 4', { exact: true }).scrollIntoViewIfNeeded();
+    await expect(page.getByText('Next draft', { exact: true })).toBeVisible();
+    await expect(page.getByRole('listitem')).toHaveCount(5);
   });
 
   test('discards a query changed while loading and fails a source visibly with retry', async ({ page }) => {
@@ -143,11 +149,8 @@ test('contributor-only inventory loads all filters with an empty search @fixture
   for (const [filter, count] of [['Drafts', 1], ['Upcoming', 0], ['Past', 1], ['All', 3]] as const) {
     await page.getByRole('button', { name: filter, exact: true }).click();
     await expect(page.getByLabel('Find an event', { exact: true })).toHaveValue('');
-    await expect(page.getByRole('button', { name: 'Load more', exact: true })).toBeEnabled();
-    await expect(page.getByText('No events', { exact: true })).toHaveCount(0);
-    await page.getByRole('button', { name: 'Load more', exact: true }).click();
-    await expect(page.getByText('Loading events…', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('listitem')).toHaveCount(count);
+    await expect(page.getByText('Loading events…', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Load more', exact: true })).toHaveCount(0);
   }
 });

@@ -36,7 +36,9 @@ for (const [story, count] of [["paged-people", 20], ["underfilled-people", 17]] 
   const priorRestore = (await admissions()).length;
   await page.getByRole("tab", { name: "Pending", exact: true }).click();
   await expect.poll(async () => (await admissions()).length).toBe(priorRestore + 1);
-  expect((await admissions()).at(-1)).toEqual([...Array.from({ length: count }, (_, index) => `Action-MiXeD-${index}`), `Action-MiXeD-${count + 5}`, `Action-MiXeD-${count + 6}`]);
+  expect((await admissions()).at(-1)).toEqual(Array.from({ length: count }, (_, index) => "Action-MiXeD-" + index));
+  await page.getByRole("button", { name: "More actions", exact: true }).scrollIntoViewIfNeeded();
+  await expect.poll(async () => (await admissions()).at(-1)).toEqual(["Action-MiXeD-" + (count + 5), "Action-MiXeD-" + (count + 6)]);
 });
 test("staff can edit a lower-case saved role against upper-case provider IDs @storybook-visual", async ({ page }) => {
   await page.goto("/iframe.html?id=clubs-scheduled--mixed-case-role-edit&viewMode=story");
@@ -80,7 +82,6 @@ test("pending actions remain reachable after older history pages @storybook-visu
   await page.goto("/iframe.html?id=clubs-scheduled--older-pending&viewMode=story");
   await page.getByRole("tab", { name: "Pending", exact: true }).click();
   await expect(page.getByText("No actions in this view.")).toHaveCount(0);
-  await page.getByRole("button", { name: "More actions" }).click();
   await expect(page.getByText("Doors open", { exact: true })).toBeVisible();
   await expect(page.getByText("Afterhours recap", { exact: true })).toHaveCount(0);
   if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {

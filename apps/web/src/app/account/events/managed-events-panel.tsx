@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useConvexAuth, useMutation, usePaginatedQuery, useQuery } from "convex/react";
-import { Component, useEffect, useRef, useState, type ReactNode } from "react";
+import { Component, useEffect, useState, type ReactNode } from "react";
 import { api } from "@convex-generated-api";
 
 import { buttonVariants } from "@/components/ui/button";
@@ -11,10 +11,12 @@ import { Notice } from "@/components/ui/notice";
 import { EventIdentityPicker } from "@/app/events/event-identity-picker";
 import type { EventIdentityOption } from "@/lib/event-editor-identity";
 import { EventInventoryControls, EventInventoryList, type EventInventoryCriteria, type EventInventoryView } from "./event-inventory-list";
+import { useLoadMoreOnScroll } from "@/lib/use-load-more-on-scroll";
+import type { FunctionArgs } from "convex/server";
 import { HeldImportsSection } from "./held-imports-section";
 
 const candidatePageSize = 20;
-const maxAutomaticAdvances = 3;
+type DraftSection = FunctionArgs<typeof api.eventInventory.listPage>["draftSection"];
 
 type InventoryBoundaryProps = {
   children: ReactNode;
@@ -50,32 +52,37 @@ class HeldImportsBoundary extends Component<{ children: ReactNode; resetKey: str
   render() { return this.state.failed ? null : this.props.children; }
 }
 
-function InventoryPager({ criteria, onRetry }: { criteria: EventInventoryCriteria; onRetry: () => void }) {
-  const { results, status, loadMore } = usePaginatedQuery(api.eventInventory.listPage, criteria, { initialNumItems: candidatePageSize });
-  // Only traversal progress lives here. Query results remain owned by Convex so
-  // session/authority changes cannot leave a stale copied inventory behind.
-  const progress = useRef<{ automaticAdvances: number; previousCount: number; handled: typeof loadMore | null }>({ automaticAdvances: 0, previousCount: 0, handled: null });
-  useEffect(() => {
-    if (status !== "CanLoadMore" || progress.current.handled === loadMore) return;
-    const emptyPage = results.length === progress.current.previousCount;
-    progress.current.handled = loadMore;
-    progress.current.previousCount = results.length;
-    if (emptyPage && progress.current.automaticAdvances < maxAutomaticAdvances) {
-      progress.current.automaticAdvances += 1;
-      loadMore(candidatePageSize);
-    }
-  }, [status, results.length, loadMore]);
+function InventoryPager({ criteria, onRetry, draftSection, title }: {
+  criteria: EventInventoryCriteria;
+  onRetry: () => void;
+  draftSection?: DraftSection;
+  title?: string;
+}) {
+  const args = draftSection === undefined ? criteria : { ...criteria, draftSection };
+  const { results, status, loadMore } = usePaginatedQuery(api.eventInventory.listPage, args, { initialNumItems: candidatePageSize });
+  const sentinel = useLoadMoreOnScroll(status, loadMore, candidatePageSize);
+  if (title && draftSection !== "personal" && status === "Exhausted" && results.length === 0) return null;
 
-  return <EventInventoryList onRetry={onRetry} content={{
-    kind: status === "LoadingFirstPage" || status === "LoadingMore" ? "loading" : "ready",
-    rows: results,
-    hasMore: status === "CanLoadMore" || status === "LoadingMore",
-  }} onLoadMore={() => loadMore(candidatePageSize)} />;
+  return <div className="grid min-w-0 gap-2">
+    {title ? <h3 className="text-lg font-semibold">{title}</h3> : null}
+    <EventInventoryList onRetry={onRetry} label={title} showCommunity={draftSection === undefined || draftSection === "personal"} content={{
+      kind: status === "LoadingFirstPage" || status === "LoadingMore" ? "loading" : "ready",
+      rows: results,
+      hasMore: status === "CanLoadMore" || status === "LoadingMore",
+    }} onLoadMore={() => loadMore(candidatePageSize)} />
+    <div ref={sentinel} aria-hidden="true" />
+  </div>;
 }
 
 function InventoryTraversal({ timeZone, normalizedQuery, view, onRetry }: { timeZone: string; normalizedQuery: string; view: EventInventoryView; onRetry: () => void }) {
   const [asOf] = useState(Date.now);
-  return <InventoryPager onRetry={onRetry} criteria={{ view, query: normalizedQuery, timeZone, asOf }} />;
+  const criteria = { view, query: normalizedQuery, timeZone, asOf };
+  const communities = useQuery(api.events.listManagedCommunities, view === "drafts" ? { includeNonPublic: true } : "skip");
+  if (view !== "drafts") return <InventoryPager onRetry={onRetry} criteria={criteria} />;
+  return <div className="grid min-w-0 gap-6">
+    {communities?.map(community => <InventoryPager key={community.profileId} draftSection={community.profileId} title={community.displayName} criteria={criteria} onRetry={onRetry} />)}
+    <InventoryPager draftSection="personal" title="Personal drafts" criteria={criteria} onRetry={onRetry} />
+  </div>;
 }
 
 function EventOwnerMode() {

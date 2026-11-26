@@ -1,7 +1,7 @@
 import { paginationOptsValidator, type PaginationResult } from "convex/server";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { resolvePersonalSubmission } from "./_eventIntake";
+import { openPersonalIntakeDrafts, resolvePersonalSubmission } from "./_eventIntake";
 import type { Id } from "./_generated/dataModel";
 import { requireActiveBrowserSessionSubject } from "./_browserSessionAuthority";
 import { managedCommunitiesForBrowser, canUpdateEvent, eventOutputConfigurationLocked, getLatestEventMediaProgram, recordEventAuditEvent } from "./events";
@@ -12,27 +12,32 @@ import { canDiscardManagedDraft, canonicalInventoryRow, intakeInventoryRow, inve
 import { HELD_IMPORT_LIMIT, heldImportRows, type HeldImportRow } from "./_eventIntakeHeld";
 
 export const listPage = query({
-  args: { view: v.union(v.literal("all"), v.literal("upcoming"), v.literal("drafts"), v.literal("past")), query: v.string(), timeZone: v.string(), asOf: v.number(), paginationOpts: paginationOptsValidator },
+  args: { view: v.union(v.literal("all"), v.literal("upcoming"), v.literal("drafts"), v.literal("past")), query: v.string(), timeZone: v.string(), asOf: v.number(), draftSection: v.optional(v.union(v.literal("personal"), v.id("profiles"))), paginationOpts: paginationOptsValidator },
   handler: async (ctx, args): Promise<PaginationResult<InventoryRow>> => {
     const { user, subject } = await requireActiveBrowserSessionSubject(ctx);
     const criteria = inventoryCriteria(args);
     const communities = (await managedCommunitiesForBrowser(ctx, { includeNonPublic: true }))
       .sort((a, b) => a.profile._id < b.profile._id ? -1 : a.profile._id > b.profile._id ? 1 : 0);
-    const sources: InventorySource[] = [
+    const allSources: InventorySource[] = [
       { kind: "intake", key: "intake" },
       ...communities.map(({ profile }): InventorySource => ({ kind: "community", key: `community:${profile._id}`, profile })),
       { kind: "contributions", key: "contributions" },
     ];
+    const sources = args.draftSection === undefined
+      ? allSources
+      : allSources.filter(source => args.draftSection === "personal"
+        ? source.kind === "intake"
+        : source.kind === "community" && source.profile._id === args.draftSection);
+    if (sources.length === 0) return { page: [], isDone: true, continueCursor: "" };
     // This exact membership fingerprint is rebuilt from live authority, never from the cursor.
     const scope = JSON.stringify([user._id, subject, sources.map(source => source.key), criteria, dateOnlyEventsEnabled()]);
     const { source, native, wrap } = inventoryPagination(args.paginationOpts, scope, sources);
     if (source.kind === "intake") {
-      const candidates = await ctx.db.query("eventIntakeDrafts")
-        .withIndex("by_actor_updatedAt", q => q.eq("actorUserId", user._id)).order("desc").paginate(native);
+      const candidates = await openPersonalIntakeDrafts(ctx.db, user._id, criteria.asOf).order("desc").paginate(native);
       const page: InventoryRow[] = [];
       const now = Date.now();
       for (const draft of candidates.page) {
-        if (draft.expiresAt <= now || draft.publishedReceiptId !== undefined || draft.connectorId !== undefined || draft.resolvedAt !== undefined) continue;
+        if (draft.expiresAt <= now) continue;
         const fields = EventIntakePatchSchema.parse(draft.fields);
         const profile = fields.communitySlug ? await ctx.db.query("profiles").withIndex("by_slug", q => q.eq("slug", fields.communitySlug ?? "")).unique() : null;
         const community = profile?.profileType === "community" && (canReadProfile("public", profile) || communities.some(entry => entry.profile._id === profile._id)) ? profile : null;
@@ -41,14 +46,18 @@ export const listPage = query({
       }
       return wrap({ ...candidates, page });
     }
-    const candidates = source.kind === "community"
-      ? await ctx.db.query("events")
-        .withIndex(dateOnlyEventsEnabled() ? "by_communityProfileId_sortAt" : "by_communityProfileId_startAt", q => q.eq("communityProfileId", source.profile._id)).order("desc").paginate(native)
-      : await ctx.db.query("events").withIndex("by_contributorUserId", q => q.eq("contributorUserId", user._id)).order("desc").paginate(native);
+    const scopedEvents = source.kind === "community"
+      ? criteria.view === "drafts"
+        ? ctx.db.query("events").withIndex(
+          dateOnlyEventsEnabled() ? "by_communityProfileId_publicationState_eventStatus_sortAt" : "by_communityProfileId_publicationState_eventStatus_startAt",
+          q => q.eq("communityProfileId", source.profile._id).eq("publicationState", "draft_private").eq("eventStatus", "scheduled"),
+        )
+        : ctx.db.query("events").withIndex(dateOnlyEventsEnabled() ? "by_communityProfileId_sortAt" : "by_communityProfileId_startAt", q => q.eq("communityProfileId", source.profile._id))
+      : ctx.db.query("events").withIndex("by_contributorUserId", q => q.eq("contributorUserId", user._id));
+    const candidates = await scopedEvents.filter(q => q.eq(q.field("draftDiscardedAt"), undefined)).order("desc").paginate(native);
     const page: InventoryRow[] = [];
     const managementByCommunity = new Map<Id<"profiles">, Promise<boolean>>();
     for (const event of candidates.page) {
-      if (event.draftDiscardedAt !== undefined) continue;
       const communityId = event.communityProfileId;
       let managed = false;
       if (communityId && communities.some(entry => entry.profile._id === communityId)) {

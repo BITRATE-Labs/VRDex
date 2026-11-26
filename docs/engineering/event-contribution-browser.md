@@ -407,17 +407,19 @@ retention. Expired drafts and drafts with publication receipts are omitted.
 Private source posters are not inventory thumbnails. Managed work is deduplicated
 from own contributions by identity and live authority, never title.
 
-One native paginated query owns the traversal. Sources are visited in order:
-creator intake, managed communities ordered by ID, then own contributions. This
-is not a global chronological sort. Each bounded source page filters title and
-current community name before presentation. All, Upcoming, Drafts and Past use
-the viewer's timezone, retaining date-only values and unknown/ambiguous clocks.
-The browser requests 20 candidates, automatically crosses up to three empty
-pages, and keeps Load more available for remaining work. A failed source clears
-the inventory and uses the established error/Retry state; it cannot appear as
-No events. Criteria, identity and refresh reset traversal, while keyboard focus
-stays in the controls. Retry, focus, visibility and local-day/zone changes refresh
-the traversal; the classification clock stays fixed while paging.
+All, Upcoming and Past visit creator intake, managed communities ordered by ID,
+then own contributions. Drafts opens a separate paginated section for each
+managed community and a Personal drafts section. Each community section reads
+unpublished scheduled events directly. Personal intake pages use the same open
+draft index as the creation quota. Search still checks the event title and
+current community name.
+
+Each list fetches the next page when its bottom approaches the viewport,
+including after a short or empty page. Load more stays available on keyboard
+focus. A failed query clears the inventory and shows Retry. Criteria, identity
+and refresh reset pagination while keyboard focus stays in the controls.
+Retry, focus, visibility and local-day or zone changes refresh the traversal.
+The classification clock stays fixed while paging.
 
 Authoring return links use the existing dirty guard. Explicit save, revision
 checks, edits during pending requests, Review publication and canonical return

@@ -3064,7 +3064,7 @@ export async function managedCommunitiesForBrowser(
 }
 
 export const listManagedCommunities = query({
-  args: {},
+  args: { includeNonPublic: v.optional(v.boolean()) },
   returns: v.array(
     v.object({
       profileId: v.id("profiles"),
@@ -3074,9 +3074,9 @@ export const listManagedCommunities = query({
       imageUrl: v.optional(v.string()),
     }),
   ),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     return await Promise.all(
-      (await managedCommunitiesForBrowser(ctx)).map(
+      (await managedCommunitiesForBrowser(ctx, { includeNonPublic: args.includeNonPublic })).map(
         async ({ profile, roleLabel }) => {
           const mediaKit = await getPublicProfileMediaKit(ctx.db, profile, {
             surface: "discovery",

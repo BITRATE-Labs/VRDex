@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useConvex, useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import type { FunctionReturnType, FunctionArgs } from "convex/server";
 import { api } from "@convex-generated-api";
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
 import { findPersonIdentity, ClubPerson, PeoplePending, useOperationPeople, useClubPeople } from "./club-person";
+import { useLoadMoreOnScroll } from "@/lib/use-load-more-on-scroll";
 import { ClubNotifications } from "./club-notifications";
 import { useClubWorkspace } from "./club-workspace";
 import { metricTime } from "./club-chart";
@@ -42,7 +43,6 @@ const statusLabels = {
   cancelled: "Cancelled",
   missed: "Missed",
 };
-const MAX_AUTO_EMPTY_PAGES = 5;
 
 function PayloadFields({
   payload,
@@ -533,9 +533,10 @@ function OperationEditor({
 
 export function ClubScheduled() {
   const workspace = useClubWorkspace();
+  const [view, setView] = useState<"all" | "pending" | "history">("all");
   const operations = usePaginatedQuery(
     api.clubOperations.list,
-    { communityProfileId: workspace.community._id },
+    { communityProfileId: workspace.community._id, view },
     { initialNumItems: 25 },
   );
   const cancel = useMutation(api.clubOperations.cancel);
@@ -543,37 +544,9 @@ export function ClubScheduled() {
   const [confirmCancel, setConfirmCancel] = useState<Operation | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [view, setView] = useState<"all" | "pending" | "history">("all");
-  const visible = operations.results.filter(
-    (operation) =>
-      view === "all" ||
-      (view === "pending"
-        ? ["pending", "claimed", "submitted"].includes(operation.state)
-        : !["pending", "claimed", "submitted"].includes(operation.state)),
-  );
+  const visible = operations.results;
   const people = useOperationPeople(visible.map(operation => operation.id));
-  const autoPaging = useRef({
-    communityId: workspace.community._id,
-    view,
-    lastResults: undefined as typeof operations.results | undefined,
-    pages: 0,
-  });
-  const { results, status, loadMore } = operations;
-  useEffect(() => {
-    const paging = autoPaging.current;
-    if (paging.communityId !== workspace.community._id || paging.view !== view) {
-      paging.communityId = workspace.community._id;
-      paging.view = view;
-      paging.lastResults = undefined;
-      paging.pages = 0;
-    }
-    if (visible.length === 0 && status === "CanLoadMore" &&
-        paging.pages < MAX_AUTO_EMPTY_PAGES && paging.lastResults !== results) {
-      paging.lastResults = results;
-      paging.pages++;
-      loadMore(25);
-    }
-  }, [loadMore, results, status, view, visible.length, workspace.community._id]);
+  const sentinel = useLoadMoreOnScroll(operations.status, operations.loadMore, 25);
   return (
     <div className="grid gap-6">
       <h1 className="text-3xl font-semibold">Scheduled actions</h1>
@@ -747,6 +720,7 @@ export function ClubScheduled() {
         ) : operations.status === "Exhausted" && visible.length === 0 ? (
           <Notice variant="dashed">No actions in this view.</Notice>
         ) : null}
+        <div ref={sentinel} aria-hidden="true" />
         {operations.status === "CanLoadMore" ? (
           <Button className="mt-5" onClick={() => operations.loadMore(25)}>
             More actions

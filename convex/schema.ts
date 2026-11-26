@@ -1231,7 +1231,7 @@ export default defineSchema({
     createdAt: v.number(), updatedAt: v.number(), expiresAt: v.number(),
   }).index("by_actor_updatedAt", ["actorUserId", "updatedAt"])
     .index("by_actor_expiresAt", ["actorUserId", "expiresAt"])
-    .index("by_actor_connector_expiresAt", ["actorUserId", "connectorId", "expiresAt"])
+    .index("by_actor_open_expiresAt", ["actorUserId", "connectorId", "publishedReceiptId", "resolvedAt", "expiresAt"])
     .index("by_connectorId_resolvedAt_expiresAt", ["connectorId", "resolvedAt", "expiresAt"])
     .index("by_expiresAt", ["expiresAt"]),
   eventContributionReceipts: defineTable({

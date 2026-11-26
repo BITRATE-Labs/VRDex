@@ -7,6 +7,7 @@ import { createNotificationRecipientCache, notificationRecipient } from "./_club
 export const list = query({
   args: {
     communityProfileId: v.id("profiles"),
+    unreadOnly: v.optional(v.boolean()),
     paginationOpts: paginationOptsValidator,
   },
   returns: v.object({
@@ -43,6 +44,8 @@ export const list = query({
     const result = [];
     const recipientFor = createNotificationRecipientCache(ctx.db);
     for (const row of rows.page) {
+      const read = row.readBy.includes(actor.subject.tokenIdentifier);
+      if (args.unreadOnly && read) continue;
       const job = await ctx.db.get(row.operationId);
       if (!job || job.revision !== row.revision || job.state !== row.outcome)
         continue;
@@ -55,7 +58,7 @@ export const list = query({
         kind: job.payload.kind,
         outcome: row.outcome,
         createdAt: row.createdAt,
-        read: row.readBy.includes(actor.subject.tokenIdentifier),
+        read,
       });
     }
     return {

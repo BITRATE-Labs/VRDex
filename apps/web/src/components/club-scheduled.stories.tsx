@@ -113,16 +113,21 @@ class ScheduledFixtureClient extends ConvexReactClient {
     let result: unknown;
     if (name === "clubPeople:readView") result = this.peopleFixture.read(String((args as {viewId: string}).viewId));
     else if (name === "clubOperations:list") {
-      const cursor = (args as { paginationOpts?: { cursor?: string } })?.paginationOpts?.cursor;
+      const { paginationOpts, view = "all" } = args as { paginationOpts?: { cursor?: string }; view?: string };
+      const cursor = paginationOpts?.cursor;
+      const inView = (job: typeof this.jobs[number]) => {
+        const pending = ["pending", "claimed", "submitted"].includes(job.state);
+        return view === "all" || (view === "pending" ? pending : !pending);
+      };
       const pageIndex = cursor ? Number(cursor.slice("actions-".length)) : 0;
       const waiting = this.delayedActions && pageIndex < this.delayedActions.pages;
       const pending = this.delayedActions?.view === "pending";
       result = {
-        page: this.pagedPeople ? cursor ? this.jobs.slice(this.pagedPeople + 5) : this.jobs.slice(0, this.pagedPeople + 5) : this.delayedActions
+        page: (this.pagedPeople ? cursor ? this.jobs.slice(this.pagedPeople + 5) : this.jobs.slice(0, this.pagedPeople + 5) : this.delayedActions
           ? waiting ? pageIndex === 0 ? this.jobs.slice(pending ? 2 : 0, pending ? 4 : 2) : []
             : this.jobs.slice(pending ? 0 : 2, pending ? 2 : 4)
-          : this.jobs,
-        isDone: this.pagedPeople ? Boolean(cursor) : !waiting,
+          : this.jobs).filter(inView),
+        isDone: this.pagedPeople ? Boolean(cursor) || view === "history" : !waiting,
         continueCursor: this.pagedPeople ? "next-people" : waiting ? `actions-${pageIndex + 1}` : "",
       };
     }
@@ -165,7 +170,7 @@ class ScheduledFixtureClient extends ConvexReactClient {
                 ? "older-notifications-2"
                 : "older-notifications-1",
             }
-          : { page: this.notifications, isDone: true, continueCursor: "" };
+          : { page: this.notifications.filter(row => !(args as { unreadOnly?: boolean }).unreadOnly || !row.read), isDone: true, continueCursor: "" };
     } else throw new Error(`Unmocked ${name}`);
     this.cache.set(key, result);
     return result;

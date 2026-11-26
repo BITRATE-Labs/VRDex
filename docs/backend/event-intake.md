@@ -35,6 +35,10 @@ flowchart LR
 
 ## Draft contract
 
+The 20-draft cap counts unexpired personal intake drafts without a publication
+receipt or resolution timestamp. Publishing a draft frees its slot in the same
+transaction that records the receipt. Connector drafts have their own limits.
+
 ### Selected Discord messages
 
 The personal message adapter uses the ordinary private intake draft and the same

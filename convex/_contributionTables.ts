@@ -140,5 +140,5 @@ export const contributionTables = {
     expiresAt: v.number(),
   })
     .index("by_batch_reviewer", ["batchId", "reviewerUserId"])
-    .index("by_reviewer_active", ["reviewerUserId", "active"]),
+    .index("by_reviewer_active_expiresAt", ["reviewerUserId", "active", "expiresAt"]),
 };

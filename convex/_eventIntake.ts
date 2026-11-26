@@ -66,6 +66,12 @@ export async function getActorIntakeDraft(db: DatabaseReader, actorUserId: Id<"u
   const artworkSourceId = artwork?.draftId === draft._id && ["ready", "published"].includes(artwork.state) ? artwork.sourceId : undefined;
   return { ...draft, artworkSourceId, fields: sanitizeEventIntakePatch(draft.fields) };
 }
+export function openPersonalIntakeDrafts(db: DatabaseReader, actorUserId: Id<"users">, now: number) {
+  return db.query("eventIntakeDrafts").withIndex("by_actor_open_expiresAt", q => q
+    .eq("actorUserId", actorUserId).eq("connectorId", undefined).eq("publishedReceiptId", undefined)
+    .eq("resolvedAt", undefined).gt("expiresAt", now));
+}
+
 export async function saveIntakeDraft(db: DatabaseWriter, actorUserId: Id<"users">, args: { draftId?: Id<"eventIntakeDrafts">; expectedVersion?: number; patch: unknown }, now = Date.now(), options: { connectorDriven?: boolean; connectorId?: Id<"eventConnectors">; personalSubmissionId?: Id<"discordPersonalIntakeSubmissions">; preparationToken?: string } = {}) {
   if (!await db.get(actorUserId)) throw new Error("A signed-in user is required.");
   const patch = sanitizeEventIntakePatch(args.patch);
@@ -92,7 +98,7 @@ export async function saveIntakeDraft(db: DatabaseWriter, actorUserId: Id<"users
   if (!draft && !hasMeaningfulInput(fields) && !personalSource?.attachments.length) throw new Error("A draft needs at least one meaningful field.");
   if (JSON.stringify(fields).length > 48_000) throw new Error("Draft exceeds storage limit.");
   if (!draft && !options.connectorDriven && !options.connectorId) {
-    const active = await db.query("eventIntakeDrafts").withIndex("by_actor_connector_expiresAt", q => q.eq("actorUserId", actorUserId).eq("connectorId", undefined).gt("expiresAt", now)).take(EVENT_INTAKE_DRAFT_LIMIT);
+    const active = await openPersonalIntakeDrafts(db, actorUserId, now).take(EVENT_INTAKE_DRAFT_LIMIT);
     if (active.length >= EVENT_INTAKE_DRAFT_LIMIT) throw new ConvexError({ code: "DRAFT_QUOTA" });
   }
   const version = (draft?.version ?? 0) + 1;

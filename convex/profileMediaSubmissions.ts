@@ -2518,13 +2518,12 @@ async function assignedBatchPage(
     const scope = `assignments:${actor.user._id}`;
     const result = await ctx.db
       .query("contributionBatchReviewers")
-      .withIndex("by_reviewer_active", (q) =>
-        q.eq("reviewerUserId", actor.user._id).eq("active", true),
+      .withIndex("by_reviewer_active_expiresAt", (q) =>
+        q.eq("reviewerUserId", actor.user._id).eq("active", true).gt("expiresAt", Date.now()),
       )
       .paginate(readScopedPagination(args.paginationOpts,scope));
     const page = [];
     for (const assignment of result.page) {
-      if (assignment.expiresAt <= Date.now()) continue;
       const batch = await ctx.db.get(assignment.batchId);
       if (batch) page.push({ batchId: batch._id, label: batch.label });
     }

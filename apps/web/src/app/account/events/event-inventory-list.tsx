@@ -30,6 +30,8 @@ export type EventInventoryControlsProps = {
 };
 
 export type EventInventoryListProps = {
+  label?: string;
+  showCommunity?: boolean;
   content: EventInventoryContent;
   onLoadMore: () => void;
   onRetry: () => void;
@@ -128,7 +130,7 @@ function DraftActions({ draft, title }: { draft: DiscardableDraft; title: string
   </>;
 }
 
-function InventoryRow({ row }: { row: EventInventoryRow }) {
+function InventoryRow({ row, showCommunity }: { row: EventInventoryRow; showCommunity: boolean }) {
   const titleId = useId();
   const title = row.title ?? "Untitled event";
   const draft: DiscardableDraft | null = row.kind === "intake_draft"
@@ -141,7 +143,7 @@ function InventoryRow({ row }: { row: EventInventoryRow }) {
       <EntityImage alt="" className="aspect-[4/3] w-full rounded-control" label={title} sizes="96px" src={row.thumbnailUrl} />
       <div className="min-w-0">
         <h3 className="break-words text-base font-semibold sm:text-lg" id={titleId}>{title}</h3>
-        {row.community ? <p className="mt-1 break-words text-sm text-muted">{row.community.displayName}</p> : null}
+        {showCommunity && row.community ? <p className="mt-1 break-words text-sm text-muted">{row.community.displayName}</p> : null}
         {row.schedule.eventDate ? <p className="mt-1 text-sm text-muted"><InventoryScheduleText schedule={row.schedule} /></p> : null}
       </div>
       <div className="col-start-2 flex flex-wrap items-center gap-3 sm:col-start-auto sm:justify-end sm:gap-6">
@@ -165,16 +167,16 @@ export function EventInventoryControls({ view, query, onViewChange, onQueryChang
   </div>;
 }
 
-export function EventInventoryList({ content, onLoadMore, onRetry }: EventInventoryListProps) {
+export function EventInventoryList({ content, onLoadMore, onRetry, label = "My events", showCommunity = true }: EventInventoryListProps) {
   return (
     <div className="grid min-w-0 gap-4">
       {content.kind === "failed" ? <Notice role="alert" variant="error">Unable to load this page.<Button className="ml-3" onClick={onRetry} size="sm">Retry</Button></Notice> : <>
-        {content.rows.length > 0 ? <Card padding="none"><ul aria-busy={content.kind === "loading"} aria-label="My events" className="divide-y divide-border">{content.rows.map(row => <InventoryRow key={row.id} row={row} />)}</ul></Card> : null}
+        {content.rows.length > 0 ? <Card padding="none"><ul aria-busy={content.kind === "loading"} aria-label={label} className="divide-y divide-border">{content.rows.map(row => <InventoryRow key={row.id} row={row} showCommunity={showCommunity} />)}</ul></Card> : null}
         <div aria-live="polite">
           {content.kind === "loading" ? <p aria-busy="true" className="text-sm text-muted">Loading events…</p> : null}
           {content.kind === "ready" && !content.hasMore && content.rows.length === 0 ? <Notice>No events</Notice> : null}
         </div>
-        {content.hasMore ? <Button className="justify-self-start" disabled={content.kind === "loading"} onClick={onLoadMore}>Load more</Button> : null}
+        {content.hasMore ? <Button className="sr-only justify-self-start focus:not-sr-only" disabled={content.kind === "loading"} onClick={onLoadMore}>Load more</Button> : null}
       </>}
     </div>
   );

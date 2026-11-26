@@ -181,6 +181,15 @@ it("bounds drafts, rejects authority and unsafe URLs, and preserves tentative va
   for (let i = 1; i < 20; i++) await actor.mutation(save, { patch: { title: `Draft ${i}` } });
   await assert.rejects(actor.mutation(save, { patch: { title: "Over quota" } }), /DRAFT_QUOTA/);
 });
+it("frees exactly one draft slot after publishing at the cap", async () => {
+  const { actor } = await fixture();
+  const draft = await actor.mutation(save, { patch: complete });
+  for (let i = 1; i < 20; i++) await actor.mutation(save, { patch: { title: "Draft "+i } });
+  await assert.rejects(actor.mutation(save, { patch: { title: "Over quota" } }), /DRAFT_QUOTA/);
+  await actor.action(publish, { draftId: draft.draftId, expectedVersion: 1, idempotencyKey: "release-slot" });
+  await actor.mutation(save, { patch: { title: "Replacement" } });
+  await assert.rejects(actor.mutation(save, { patch: { title: "Over quota again" } }), /DRAFT_QUOTA/);
+});
 it("keeps accepted fields but clears stale discovery when source text changes", async () => {
   const { actor } = await fixture();
   const evidence = [{ fieldPath: "event.title", origin: "text", excerpt: "Night", assessment: "explicit" }];

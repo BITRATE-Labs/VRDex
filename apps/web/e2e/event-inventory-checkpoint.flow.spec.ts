@@ -42,7 +42,6 @@ for (const theme of ["light", "dark"] as const) test(`organizer real command che
     await page.emulateMedia({ colorScheme: theme });
     await open();
     await expect(page.getByRole("heading", { name: "My events", exact: true })).toBeVisible({ timeout: 15000 });
-    await page.getByRole("button", { name: "Load more", exact: true }).click();
     await expect(page.getByText("Checkpoint staff", { exact: true })).toBeVisible();
     await expect(page.getByText("Checkpoint intake", { exact: true })).toBeVisible();
     await expect(page.getByText("Other private draft", { exact: true })).toHaveCount(0);

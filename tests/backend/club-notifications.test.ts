@@ -299,6 +299,11 @@ it("rechecks role access and routes a revoked initiator to the current owner", a
     await owner.mutation(markReadRef, { notificationId: first.id });
     await owner.mutation(markReadRef, { notificationId: first.id });
     assert.equal(await readState(owner), true);
+    const unread = await owner.query(listRef, {
+      communityProfileId, unreadOnly: true,
+      paginationOpts: { numItems: 100, cursor: page.continueCursor },
+    });
+    assert.equal(unread.page.some((row: { id: typeof first.id }) => row.id === first.id), false);
 
     // Restoring the initiator's permission routes the same notice back to staff.
     await t.run(async (ctx) => {

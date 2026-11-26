@@ -29,7 +29,7 @@ const rows: EventInventoryRow[] = [
   { kind: "own_contribution", id: eventId("own-1"), eventId: eventId("own-1"), title: "Past session", community: { slug: "night-market", displayName: "Night Market" }, schedule: { kind: "timed", startAt: Date.UTC(2020, 0, 1, 22), endAt: Date.UTC(2020, 0, 2, 2), eventDate: "2020-01-01", timezone: "UTC" }, thumbnailUrl: "/test-media/event-poster.png", state: "published", continuation: { kind: "public_event", href: "/night-market/events/past", canCorrect: true, canSuggest: true } },
   { kind: "own_contribution", id: eventId("own-2"), eventId: eventId("own-2"), title: "Retracted night", community, schedule: incomplete, thumbnailUrl: null, state: "retracted", continuation: { kind: "unavailable" } },
 ];
-const matchingRow = (title: string): EventInventoryRow => ({ ...staffDraft, title });
+const matchingRow = (title: string) => ({ ...staffDraft, title });
 const heldId = (value: string) => value as Id<"eventIntakeDrafts">;
 const heldOrigin = { community, connectorKind: "discord_announcements", targetName: "#events" } as const;
 const harbor = { slug: "harbor", title: "Harbor Night", href: "/afterglow/events/harbor/edit" };
@@ -79,6 +79,15 @@ function inventoryFixture(contributorOnly: boolean, failShortcuts: boolean, held
       if (page > 0) { failed = true; throw new Error("Fixture contribution source failed"); }
       return { page: [], isDone: false, continueCursor: "1" };
     }
+    if (args.query === "short") {
+      const shortRows = Array.from({ length: 4 }, (_, index) => ({
+        ...matchingRow("First draft " + (index + 1)),
+        id: eventId("short-" + index),
+      }));
+      return page === 0
+        ? { page: shortRows, isDone: false, continueCursor: "1" }
+        : { page: [matchingRow("Next draft")], isDone: true, continueCursor: "done" };
+    }
     if (args.query === "later") {
       sessionStorage.setItem("inventory-later-reads", String(Number(sessionStorage.getItem("inventory-later-reads")) + 1));
       return { page: page < 4 ? [] : [matchingRow("Later match")], isDone: page >= 4, continueCursor: String(page + 1) };
@@ -88,6 +97,8 @@ function inventoryFixture(contributorOnly: boolean, failShortcuts: boolean, held
       if (discarded.has(row.id)) return false;
       if (contributorOnly && row.kind === "managed_event") return false;
       if (args.view === "drafts" && row.state !== "draft") return false;
+      if (args.draftSection === "personal" && row.kind !== "intake_draft") return false;
+      if (args.draftSection && args.draftSection !== "personal" && row.kind !== "managed_event") return false;
       if (args.view === "upcoming" && row.title !== "Date only night") return false;
       if (args.view === "past" && row.title !== "Past session") return false;
       return `${row.title ?? ""} ${row.community?.displayName ?? ""}`.toLowerCase().includes(args.query);

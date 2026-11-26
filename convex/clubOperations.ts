@@ -687,6 +687,7 @@ export async function cancelLoadedClubOperation(
 export const list = query({
   args: {
     communityProfileId: v.id("profiles"),
+    view: v.optional(v.union(v.literal("all"), v.literal("pending"), v.literal("history"))),
     paginationOpts: paginationOptsValidator,
   },
   returns: v.object({
@@ -729,10 +730,15 @@ export const list = query({
         q.eq("communityProfileId", args.communityProfileId),
       )
       .order("desc");
-    const page = await (actor.kind === "owner"
+    const allowed = actor.kind === "owner"
       ? operationQuery.filter(q => q.and(...CALENDAR_OPERATION_KINDS.map(kind => q.neq(q.field("payload.kind"), kind))))
-      : operationQuery.filter(q => q.or(...visibleKinds.map(kind => q.eq(q.field("payload.kind"), kind)))))
-      .paginate(args.paginationOpts);
+      : operationQuery.filter(q => q.or(...visibleKinds.map(kind => q.eq(q.field("payload.kind"), kind))));
+    const view = args.view ?? "all";
+    const scoped = view === "all" ? allowed : allowed.filter(q => {
+      const pending = q.or(q.eq(q.field("state"), "pending"), q.eq(q.field("state"), "claimed"), q.eq(q.field("state"), "submitted"));
+      return view === "pending" ? pending : q.not(pending);
+    });
+    const page = await scoped.paginate(args.paginationOpts);
     return {
       isDone: page.isDone,
       continueCursor: page.continueCursor,

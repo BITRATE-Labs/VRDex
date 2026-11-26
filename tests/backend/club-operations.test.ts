@@ -255,6 +255,26 @@ it("paginates authorized operations past newer hidden actions", async () => {
   assert.deepEqual(page.page.map((row: { id: string }) => row.id), [s.operationId]);
   assert.equal(page.isDone, true);
 });
+it("applies the action view before choosing a page", async () => {
+  const s = await queued();
+  const actor = s.owner;
+  await s.t.run(async ({ db }) => {
+    const { _id, _creationTime, ...row } = (await db.get(s.operationId))!;
+    void _id; void _creationTime;
+    for (let index = 1; index <= 25; index++) {
+      await db.insert("clubOperations", {
+        ...row, requestId: "completed-" + index, state: "succeeded",
+        createdAt: row.createdAt + index,
+      });
+    }
+  });
+  const args = { communityProfileId: s.communityProfileId, paginationOpts: { numItems: 2, cursor: null } };
+  const pending = await actor.query(ref("list"), { ...args, view: "pending" });
+  assert.deepEqual(pending.page.map((row: { id: string }) => row.id), [s.operationId]);
+  const history = await actor.query(ref("list"), { ...args, view: "history" });
+  assert.deepEqual(history.page.map((row: { state: string }) => row.state), ["succeeded", "succeeded"]);
+  assert.equal(history.isDone, false);
+});
 async function workerKeyHash(key: string) {
   const digest = await crypto.subtle.digest(
     "SHA-256",
