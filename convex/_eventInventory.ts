@@ -29,7 +29,7 @@ type InventorySummary = {
   thumbnailUrl: string | null;
 };
 export type InventoryRow = InventorySummary & (
-  | (EventIdentity & { kind: "managed_event"; continuation: Extract<InventoryContinuation, { kind: "staff_editor" | "unavailable" }> })
+  | (EventIdentity & { kind: "managed_event"; discardVersion?: number; continuation: Extract<InventoryContinuation, { kind: "staff_editor" | "unavailable" }> })
   | (EventIdentity & { kind: "own_contribution"; continuation: Extract<InventoryContinuation, { kind: "public_event" | "unavailable" }> })
   | { kind: "intake_draft"; id: Id<"eventIntakeDrafts">; draftId: Id<"eventIntakeDrafts">;
       state: "draft"; expiresAt: number; version: number;
@@ -170,11 +170,17 @@ export async function canonicalInventoryRow(args: {
     schedule: canonicalSchedule(event),
     state: !managed && event.sourceType === "contributor" && event.publicationState !== "published" ? "retracted" : event.eventStatus === "cancelled" ? "cancelled" : event.publicationState === "published" ? "published" : "draft",
     thumbnailUrl: managed || publicRoute ? await inventoryThumbnail(db, event, publicRoute) : null };
-  if (managed) return { ...summary, kind: "managed_event", continuation: event.slug && community
+  if (managed) return { ...summary, kind: "managed_event", ...(canDiscardManagedDraft(event) ? { discardVersion: event.updatedAt } : {}), continuation: event.slug && community
     ? { kind: "staff_editor", href: `${eventPathForSlugs(community.slug, event.slug)}/edit` }
     : { kind: "unavailable" } };
   const canCorrect = event.contributorEditsClosedAt === undefined && event.eventStatus === "scheduled";
   return { ...summary, kind: "own_contribution", continuation: publicRoute && event.slug && community
     ? { kind: "public_event", href: eventPathForSlugs(community.slug, event.slug), canCorrect, canSuggest: !canCorrect }
     : { kind: "unavailable" } };
+}
+
+export function canDiscardManagedDraft(event: Doc<"events">) {
+  return event.publicationState === "draft_private" && event.eventStatus === "scheduled" &&
+    event.publishedAt === undefined && event.seriesId === undefined && event.sourceType !== "contributor" &&
+    event.moderationRemovedAt === undefined && event.draftDiscardedAt === undefined;
 }

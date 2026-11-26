@@ -1,5 +1,23 @@
 import { expect, test } from '@playwright/test';
 
+test('draft row actions confirm discard without affecting other events @flow @fixture', async ({ page }, info) => {
+  await page.goto('/playwright/event-inventory');
+  const drafts = page.getByRole('listitem').filter({ hasText: 'Harbor sessions' });
+  await expect(drafts).toHaveCount(2);
+  await drafts.first().getByLabel('More actions for Harbor sessions').click();
+  await expect(drafts.first().getByRole('button', { name: 'Discard draft' })).toBeVisible();
+  await page.screenshot({ path: info.outputPath('draft-actions.png') });
+  await drafts.first().getByRole('button', { name: 'Discard draft' }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Discard draft?' });
+  await confirmation.getByRole('button', { name: 'Keep draft' }).click();
+  await expect(drafts).toHaveCount(2);
+  await drafts.first().getByLabel('More actions for Harbor sessions').click();
+  await drafts.first().getByRole('button', { name: 'Discard draft' }).click();
+  await confirmation.getByRole('button', { name: 'Discard draft' }).click();
+  await expect(drafts).toHaveCount(1);
+  await expect(page.getByRole('listitem').filter({ hasText: 'Date only night' })).toBeVisible();
+});
+
 test('the event owner switch opens and closes scoped community access @flow @fixture', async ({ page }, info) => {
   await page.goto('/playwright/event-inventory');
   await expect(page.getByRole('heading', { name: 'My events', exact: true })).toBeVisible();

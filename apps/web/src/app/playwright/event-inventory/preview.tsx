@@ -52,6 +52,7 @@ function inventoryFixture(contributorOnly: boolean, failShortcuts: boolean, held
   let slowReleased = false;
   let failed = false;
   let reads = 0;
+  const discarded = new Set<string>();
   let heldImports = !held ? [] : held === "sparse" ? sparseHeldRows : heldRows;
   let heldUnavailable = held === "fail-query";
   sessionStorage.setItem("inventory-later-reads", "0");
@@ -84,6 +85,7 @@ function inventoryFixture(contributorOnly: boolean, failShortcuts: boolean, held
     }
     if (args.query === "slow" || args.query === "failure") return { page: [matchingRow(args.query === "slow" ? "Slow stale match" : "Recovered match")], isDone: true, continueCursor: "done" };
     const pageRows = rows.filter(row => {
+      if (discarded.has(row.id)) return false;
       if (contributorOnly && row.kind === "managed_event") return false;
       if (args.view === "drafts" && row.state !== "draft") return false;
       if (args.view === "upcoming" && row.title !== "Date only night") return false;
@@ -104,8 +106,14 @@ function inventoryFixture(contributorOnly: boolean, failShortcuts: boolean, held
       if (getFunctionName(query) === "search:searchUniversal" && args.query?.toLowerCase().includes("aurora")) return [{ entityType: "profile", profileType: "person", slug: "playwright-dj-aurora", title: "Aurora", routePath: "/playwright-dj-aurora" }];
       return empty;
     },
-    async mutation(mutation: FunctionReference<"mutation">, args: { draftId?: string; eventId?: string; communitySlug?: string | null }) {
+    async mutation(mutation: FunctionReference<"mutation">, args: { draftId?: string; eventId?: string; communitySlug?: string | null; draft?: { id: string; version: number } }) {
       const name = getFunctionName(mutation);
+      if (name === "eventInventory:discardDraft" && args.draft) {
+        discarded.add(args.draft.id);
+        cache.clear();
+        notify();
+        return null;
+      }
       if (name === "events:setEventOwnerMode") {
         ownerMode = args.communitySlug ? { slug: args.communitySlug, name: "District One", expiresAt: Date.now() + 3600000 } : null;
         notify();

@@ -12,7 +12,7 @@ export async function canManageEventMedia(
   subject: AuthSubject,
   userId?: Id<"users"> | null,
 ): Promise<boolean> {
-  if (event.communityProfileId === undefined) {
+  if (event.communityProfileId === undefined || event.draftDiscardedAt !== undefined) {
     return false;
   }
 
