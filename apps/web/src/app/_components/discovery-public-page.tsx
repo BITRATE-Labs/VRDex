@@ -102,7 +102,7 @@ function ResultImage({ result }: { result: PublicSearchResult }) {
   if (result.entityType !== "profile") {
     return (
       <EntityImage
-        className="size-14 rounded-card bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] text-lg text-white"
+        className="size-14 rounded-card bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] text-lg text-foreground"
         label={result.title}
         sizes="56px"
         src={primaryImageUrl}
@@ -131,7 +131,7 @@ function ResultImage({ result }: { result: PublicSearchResult }) {
         ) : (
           <ProfileAvatarImage
             appearance={result.avatarAppearance}
-            className="size-14 rounded-card bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] text-lg text-white"
+            className="size-14 rounded-card bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] text-lg text-foreground"
             label={result.title}
             sizes="56px"
             src={primaryImageUrl}
@@ -149,7 +149,7 @@ function ResultImage({ result }: { result: PublicSearchResult }) {
       <span className="relative">
         <ProfileAvatarImage
           appearance={result.avatarAppearance}
-          className="size-14 rounded-card bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] text-lg text-white"
+          className="size-14 rounded-card bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] text-lg text-foreground"
           label={result.title}
           sizes="56px"
           src={result.profileImageUrl}
