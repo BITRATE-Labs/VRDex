@@ -258,8 +258,8 @@ export function ProfileVrcdnStreams({
                 </div>
 
                 <div>
-                  <CopyValueRow className="grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-0 py-1 [&_code]:truncate [&_code]:break-normal" label="Quest" value={questUrl} />
-                  <CopyValueRow className="grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-0 py-1 [&_code]:truncate [&_code]:break-normal" label="PC" value={pcUrl} />
+                  <CopyValueRow className="grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-0 py-1" label="Quest" value={questUrl} />
+                  <CopyValueRow className="grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-0 py-1" label="PC" value={pcUrl} />
                 </div>
                 {showPlayer ? (
                   <div className="mt-3 overflow-hidden rounded-control border border-border">
