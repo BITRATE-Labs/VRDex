@@ -419,6 +419,14 @@ export function DiscoveryLandingPage({
   now: number;
   status: DiscoveryStatus;
 }) {
+  const directory = [
+    { title: "People", results: data.people, empty: "No people are discoverable yet." },
+    { title: "Communities", results: data.communities, empty: "No communities are discoverable yet." },
+    { title: "Worlds", results: data.worlds, empty: "No worlds are discoverable yet." },
+  ];
+  const populatedDirectory = directory.filter(({ results }) => results.length > 0);
+  const directorySections = populatedDirectory.length > 0 ? populatedDirectory : directory;
+
   return (
     <PageShell>
       <PageContainer className="gap-8" max="7xl">
@@ -436,6 +444,14 @@ export function DiscoveryLandingPage({
 
         {data.eventSchedule && data.eventSchedule.length > 0 ? (
           <DiscoveryEventSchedule events={data.eventSchedule} now={now} />
+        ) : status === "live" && data.upcomingEvents.length === 0 ? (
+          <section className="flex flex-wrap items-center justify-between gap-x-5 gap-y-1">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <SectionTitle className="text-lg tracking-tight">Upcoming events</SectionTitle>
+              <p className="text-sm leading-6 text-muted">No events</p>
+            </div>
+            <Link href="/events/new" className="inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4">Add event</Link>
+          </section>
         ) : (
           <DiscoverySection
             empty="No events"
@@ -445,7 +461,9 @@ export function DiscoveryLandingPage({
           />
         )}
 
-        <HomeActiveWorldsSection status={activeWorldStatus} worlds={activeWorlds} />
+        {activeWorlds.length > 0 || activeWorldStatus !== "live" ? (
+          <HomeActiveWorldsSection status={activeWorldStatus} worlds={activeWorlds} />
+        ) : null}
 
         {data.featured.length > 0 ? (
           <DiscoveryFeatureGate flag={FEATURED_DISCOVERY_UI_FLAG}>
@@ -458,10 +476,10 @@ export function DiscoveryLandingPage({
           </DiscoveryFeatureGate>
         ) : null}
 
-        <section className="grid gap-5 xl:grid-cols-3">
-          <DiscoverySection columns="single" empty="No people are discoverable yet." results={data.people} surface="home" title="People" />
-          <DiscoverySection columns="single" empty="No communities are discoverable yet." results={data.communities} surface="home" title="Communities" />
-          <DiscoverySection columns="single" empty="No worlds are discoverable yet." results={data.worlds} surface="home" title="Worlds" />
+        <section className={cn("grid gap-5", directorySections.length === 3 ? "xl:grid-cols-3" : directorySections.length === 2 ? "xl:grid-cols-2" : undefined)}>
+          {directorySections.map(({ title, results, empty }) => (
+            <DiscoverySection key={title} columns="single" empty={empty} results={results} surface="home" title={title} />
+          ))}
         </section>
       </PageContainer>
     </PageShell>
