@@ -150,6 +150,7 @@ test.describe("continuous schedule @flow @fixture", () => {
     const quietAnchor = Date.UTC(2026, 9, 26) - (4 + width / 100) * 3600000;
     await page.goto(`/?at=${quietAnchor}&tz=America%2FNew_York&favorites=1&tag=keep`);
     await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready");
+    await expect(page.getByTestId("public-timeline-lanes")).toHaveCSS("height", "94px");
     await page.getByRole("button", { name: "Next event", exact: true }).click();
     const params = new URL(page.url()).searchParams;
     expect(params.get("at")).toBe(String(TIMELINE_NOW - 9000000));
@@ -170,13 +171,18 @@ test.describe("continuous schedule @flow @fixture", () => {
       await page.screenshot({ path: info.outputPath(`default-${size.width}.png`), fullPage: true });
     }
   });
-  test("fourPublicRowsRemainAtQuietStartup", async ({ page }, info) => {
+  test("settled quiet date shows a single public row", async ({ page }, info) => {
     await page.getByLabel("Schedule date", { exact: true }).fill("2026-11-05");
+    await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready");
     const lanes = page.getByTestId("public-timeline-lanes");
-    await expect(lanes).toHaveCount(1);
-    expect((await lanes.boundingBox())?.height).toBeGreaterThanOrEqual(376);
+    await expect(lanes).toHaveCSS("height", "94px");
     await info.attach("quiet-lanes.json", { body: JSON.stringify(await lanes.boundingBox()), contentType: "application/json" });
-    await page.screenshot({ path: info.outputPath("quiet-four-rows.png"), fullPage: true });
+    await page.screenshot({ path: info.outputPath("quiet-one-row.png"), fullPage: true });
+    const chart = page.getByRole("region", { name: "Timeline chart", exact: true });
+    const scrollLeft = await chart.evaluate((element) => element.scrollLeft);
+    await chart.press("ArrowRight");
+    await expect.poll(() => chart.evaluate((element) => element.scrollLeft)).toBe(scrollLeft + 100);
+    await expect(lanes).toHaveCSS("height", "94px");
   });
   test("favorites synchronize across tabs and saves survive reload without public snapshots", async ({
     page,

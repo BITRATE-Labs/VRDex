@@ -13,7 +13,7 @@ import type {
 } from "../../../../../../convex/_eventTimelineTypes";
 import {
   createTimelineController,
-  windowsForRange,
+  timelineViewportKey,
 } from "@/lib/timeline/window-cache";
 
 export function useTimelineData({
@@ -46,19 +46,19 @@ export function useTimelineData({
       }),
     [client],
   );
-  const state = useSyncExternalStore(
+  const { viewportKey: snapshotKey, ...state } = useSyncExternalStore(
     controller.subscribe,
     controller.getSnapshot,
     controller.getSnapshot,
   );
   // Pixels within the same windows do not invalidate in-flight pagination.
-  const ranges = JSON.stringify(windowsForRange(range));
+  const viewportKey = timelineViewportKey(range, favoritesOnly, favoriteProfileIds);
   const updateViewport = useEffectEvent(() =>
     controller.setViewport(range, favoritesOnly, favoriteProfileIds),
   );
   useEffect(() => {
     void updateViewport();
-  }, [controller, ranges, favoritesOnly, favoriteProfileIds]);
+  }, [controller, viewportKey, favoriteProfileIds]);
   useEffect(() => {
     void controller.setPlan(plan);
   }, [controller, plan]);
@@ -76,6 +76,7 @@ export function useTimelineData({
   }, [controller]);
   return {
     ...state,
+    isCurrentViewport: snapshotKey === viewportKey,
     retry: controller.retry,
     loadMore: controller.loadMore,
     resolveRoster: controller.resolveRoster,
