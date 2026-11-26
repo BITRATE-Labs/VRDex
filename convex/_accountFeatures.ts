@@ -9,6 +9,18 @@ import { requireClaimSession } from "./_claimSession";
 
 export * from "./_accountFeatureModel";
 
+export async function hasEventOwnerMode(
+  db: DatabaseReader,
+  userId: Id<"users"> | null | undefined,
+  communityProfileId: Id<"profiles">,
+  now = Date.now(),
+): Promise<boolean> {
+  if (!userId) return false;
+  const mode = (await db.get(userId))?.eventOwnerMode;
+  if (mode?.communityProfileId !== communityProfileId || mode.expiresAt <= now) return false;
+  return (await getAccountFeatureAccess(db, userId, now)).superAdmin;
+}
+
 export async function getAccountFeatureAccess(
   db: DatabaseReader,
   userId: Id<"users">,

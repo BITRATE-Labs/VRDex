@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useConvexAuth, usePaginatedQuery, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { Component, useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "@convex-generated-api";
 
@@ -76,10 +76,55 @@ function InventoryTraversal({ timeZone, normalizedQuery, view, onRetry }: { time
   return <InventoryPager onRetry={onRetry} criteria={{ view, query: normalizedQuery, timeZone, asOf }} />;
 }
 
+function EventOwnerMode() {
+  const mode = useQuery(api.events.getEventOwnerMode, {});
+  const setMode = useMutation(api.events.setEventOwnerMode);
+  const [slug, setSlug] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState(false);
+  if (!mode) return null;
+  const change = async (communitySlug: string | null) => {
+    setSaving(true);
+    setFailed(false);
+    try {
+      await setMode({ communitySlug });
+    } catch {
+      setFailed(true);
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {mode.community ? (
+        <>
+          <span>Owner mode · {mode.community.name}</span>
+          <button className={buttonVariants({ variant: "secondary" })} disabled={saving} type="button"
+            onClick={() => void change(null)}>Exit owner mode</button>
+        </>
+      ) : (
+        <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => {
+          event.preventDefault();
+          void change(slug.trim());
+        }}>
+          <label htmlFor="event-owner-community">Community slug</label>
+          <input id="event-owner-community" className="rounded-control border border-border bg-background px-3 py-2"
+            value={slug} onChange={(event) => setSlug(event.target.value)} maxLength={64} required />
+          <button className={buttonVariants({ variant: "secondary" })} disabled={saving || !slug.trim()} type="submit">
+            Enter owner mode
+          </button>
+        </form>
+      )}
+      {failed ? <span role="alert">Could not change owner mode</span> : null}
+    </div>
+  );
+}
+
 function InventoryShortcuts() {
   const communities = useQuery(api.events.listManagedCommunities, {});
   const reportsAllowed = useQuery(api.eventCorrections.getEventReportAccess, {});
   return <div className="flex flex-wrap gap-2">
+    <EventOwnerMode />
     {reportsAllowed ? <Link className={buttonVariants({ variant: "secondary" })} href="/account/events/reports">Event reports</Link> : null}
     {communities?.map(community => <Link aria-label={`Add event for ${community.displayName}`} className={buttonVariants({ variant: "secondary" })} href={`/${community.slug}/events/create`} key={community.profileId}>{`Manage ${community.displayName} event`}</Link>)}
   </div>;
