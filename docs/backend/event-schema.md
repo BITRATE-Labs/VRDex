@@ -28,6 +28,14 @@ Current event fields include:
 
 Generated durable short links such as `/l/<code>` are tracked in [Generated Short Links](./generated-short-links.md). An event uses that same generated code in its canonical community-scoped URL. Event codes are not editable.
 
+## Discarding drafts
+
+My events offers **Discard draft** for personal intake drafts and standalone
+community drafts that have never been published. Confirmation checks the latest
+draft version and the caller's authority. Personal Discord drafts also clear
+their import state. Community drafts retain their audit history and cannot be
+reopened, published or used for a broadcast after discard.
+
 ## Event Times
 
 Timed events store `startAt`, optional `doorsOpenAt`, and optional `endAt` as timestamps. `scheduleKind` is `timed` or `date_only`; legacy rows without it are read as timed. `eventDate` is the authored `YYYY-MM-DD` calendar date. The optional `timezone` field supplies the authoring zone for timed events. Existing owner authoring remains a timed-event interface; contribution authoring adds the date-only write path separately.

@@ -425,7 +425,7 @@ export async function canUpdateEvent(
   subject: AuthSubject,
   userId?: Id<"users"> | null,
 ): Promise<boolean> {
-  if (event.communityProfileId === undefined) {
+  if (event.communityProfileId === undefined || event.draftDiscardedAt !== undefined) {
     return false;
   }
 
@@ -3732,6 +3732,7 @@ export async function applyEventPublicationState(
   actorSurface: Doc<"eventAuditEvents">["actorSurface"],
   now: number,
 ): Promise<void> {
+  if (event.draftDiscardedAt !== undefined) throw new ConvexError({ code: "REMOVED_EVENT" });
   const published = publicationState === "published";
   await ctx.db.patch(event._id, {
     publicationState,

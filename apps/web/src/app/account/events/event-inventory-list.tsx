@@ -2,7 +2,9 @@
 
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import Link from "next/link";
-import { useId } from "react";
+import { useId, useRef, useState } from "react";
+import { useMutation } from "convex/react";
+import { EllipsisVertical } from "lucide-react";
 import { api } from "@convex-generated-api";
 
 import { ViewerLocalEventDateTime } from "@/app/_components/viewer-local-event-times";
@@ -68,9 +70,72 @@ function InventoryAction({ row, titleId }: { row: EventInventoryRow; titleId: st
   }
 }
 
+type DiscardableDraft = FunctionArgs<typeof api.eventInventory.discardDraft>["draft"];
+
+function DraftActions({ draft, title }: { draft: DiscardableDraft; title: string }) {
+  const discard = useMutation(api.eventInventory.discardDraft);
+  const menu = useRef<HTMLDetailsElement>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const headingId = useId();
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  async function confirmDiscard() {
+    if (busy) return;
+    setBusy(true);
+    setFailed(false);
+    try {
+      await discard({ draft });
+      dialog.current?.close();
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <>
+    <details ref={menu} className="relative" onBlur={event => {
+      if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false;
+    }} onKeyDown={event => {
+      if (event.key === "Escape") {
+        event.currentTarget.open = false;
+        event.currentTarget.querySelector("summary")?.focus();
+      }
+    }}>
+      <summary aria-label={`More actions for ${title}`} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+        <EllipsisVertical aria-hidden="true" className="size-5" />
+      </summary>
+      <div className="absolute right-0 z-20 mt-1 w-max rounded-control border border-border bg-surface-elevated p-1 shadow-lg">
+        <Button size="sm" variant="dangerGhost" onClick={() => {
+          if (menu.current) menu.current.open = false;
+          setFailed(false);
+          dialog.current?.showModal();
+        }}>Discard draft</Button>
+      </div>
+    </details>
+    <dialog ref={dialog} aria-labelledby={headingId} className="m-auto max-w-[calc(100%-2rem)] rounded-control border border-border bg-surface p-6 text-foreground backdrop:bg-black/60 sm:max-w-md" onCancel={event => {
+      if (busy) event.preventDefault();
+    }} onClose={() => menu.current?.querySelector("summary")?.focus()}>
+      <h2 id={headingId} className="text-xl font-semibold">Discard draft?</h2>
+      <p className="mt-2 break-words text-sm text-muted">{title}</p>
+      {failed ? <Notice className="mt-3" role="alert" variant="error">Could not discard this draft. Close this dialog and try again.</Notice> : null}
+      <div className="mt-5 flex flex-wrap gap-2">
+        <Button autoFocus disabled={busy} onClick={() => dialog.current?.close()}>Keep draft</Button>
+        <Button disabled={busy} variant="danger" onClick={() => void confirmDiscard()}>Discard draft</Button>
+      </div>
+    </dialog>
+  </>;
+}
+
 function InventoryRow({ row }: { row: EventInventoryRow }) {
   const titleId = useId();
   const title = row.title ?? "Untitled event";
+  const draft: DiscardableDraft | null = row.kind === "intake_draft"
+    ? { kind: row.kind, id: row.draftId, version: row.version }
+    : row.kind === "managed_event" && row.discardVersion !== undefined
+      ? { kind: row.kind, id: row.eventId, version: row.discardVersion }
+      : null;
   return (
     <li className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-start gap-x-4 gap-y-3 px-4 py-5 sm:grid-cols-[6rem_minmax(0,1fr)_auto] sm:items-center sm:gap-x-5 sm:px-5">
       <EntityImage alt="" className="aspect-[4/3] w-full rounded-control" label={title} sizes="96px" src={row.thumbnailUrl} />
@@ -85,6 +150,7 @@ function InventoryRow({ row }: { row: EventInventoryRow }) {
           {row.kind === "intake_draft" ? <p className="mt-1 text-xs text-muted">Expires <ViewerLocalEventDateTime timestamp={row.expiresAt} /></p> : null}
         </div>
         <InventoryAction row={row} titleId={titleId} />
+        {draft ? <DraftActions draft={draft} title={title} /> : null}
       </div>
     </li>
   );

@@ -12,6 +12,31 @@ const schema = (schemaModule as unknown as { default?: typeof schemaModule }).de
 const list = makeFunctionReference<"query", { view: "all" | "upcoming" | "drafts" | "past"; query: string; timeZone: string; asOf: number; paginationOpts: PaginationOptions }, PaginationResult<InventoryRow>>("eventInventory:listPage");
 const save = makeFunctionReference<"mutation">("eventIntake:saveEventIntakeDraft");
 const criteria = { view: "all" as const, query: "", timeZone: "UTC", asOf: Date.parse("2026-10-22T12:00:00Z") };
+
+it("discards only an authorized, current unpublished draft", async () => {
+  const { t, actor, event } = await fixture();
+  const owner = actor("owner");
+  const intake = await owner.mutation(save, { patch: { title: "Personal draft" } });
+  const discard = api.eventInventory.discardDraft;
+  const intakeTarget = { kind: "intake_draft" as const, id: intake.draftId, version: intake.version };
+  await assert.rejects(actor("other").mutation(discard, { draft: intakeTarget }), /unavailable/);
+  await assert.rejects(owner.mutation(discard, { draft: { ...intakeTarget, version: 0 } }), /changed/);
+  await owner.mutation(discard, { draft: intakeTarget });
+  await assert.rejects(owner.mutation(save, { draftId: intake.draftId, expectedVersion: intake.version, patch: {} }), /Draft not found/);
+
+  const privateId = await event({ sourceType: "manual", contributorUserId: undefined, publicationState: "draft_private" });
+  const privateDraft = (await t.run(({ db }) => db.get(privateId)))!;
+  const target = { kind: "managed_event" as const, id: privateId, version: privateDraft.updatedAt };
+  await assert.rejects(actor("other").mutation(discard, { draft: target }), /unavailable/);
+  await owner.mutation(discard, { draft: target });
+  assert.ok((await t.run(({ db }) => db.get(privateId)))?.draftDiscardedAt);
+  assert.equal((await traverse(owner)).rows.some(row => row.id === privateId || row.id === intake.draftId), false);
+  await assert.rejects(owner.mutation(api.events.setCommunityEventPublished, { currentSlug: privateDraft.slug!, published: true }), /not found/);
+
+  const publishedId = await event({ sourceType: "manual" });
+  const published = (await t.run(({ db }) => db.get(publishedId)))!;
+  await assert.rejects(owner.mutation(discard, { draft: { ...target, id: publishedId, version: published.updatedAt } }), /unavailable/);
+});
 async function fixture() {
   process.env.EVENT_DATE_ONLY_ENABLED = "true";
   const t = convexTest({ schema, modules: {

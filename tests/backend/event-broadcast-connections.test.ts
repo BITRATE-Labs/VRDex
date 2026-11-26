@@ -34,6 +34,38 @@ it('rejects unauthorized setup, missing key and untrusted commit', async () => {
   const grant = await f.owner.mutation(ref('prepareConnection'), f.input);
   await assert.rejects(f.owner.mutation(ref('commitConnection'), { grantId: grant.grantId, credentialRef: prefix + grant.secretName + '-AbCd12', brokerToken: 'bad' }), /unavailable/);
 });
+it('lets the community owner and a scoped super-admin each manage both event connections', async () => {
+  const f = await fixture();
+  const subject = newClerkUserId();
+  await f.t.run(async ({ db }) => {
+    const now = Date.now();
+    const userId = await db.insert('users', { clerkUserId: subject });
+    await db.insert('accountFeatureGrants', {
+      userId, state: 'active', feature: 'super_admin', grantedAt: now, updatedAt: now,
+      grantedBy: { issuer: 'test', subject: 'operator', tokenIdentifier: 'test|operator' },
+    });
+  });
+  const admin = f.t.withIdentity({ subject, issuer: 'test', tokenIdentifier: `test|${subject}` });
+  await assert.rejects(admin.mutation(ref('prepareConnection'), f.input), /permission/);
+  await admin.mutation(api.events.setEventOwnerMode, { communitySlug: 'club' });
+  const testEvent = await admin.mutation(api.events.createCommunityEvent, {
+    title: 'Separate rehearsal', communitySlug: 'club', startAt: Date.now() + 1200000, timezone: 'UTC',
+  });
+  for (const [index, slug] of [f.event.slug, testEvent.slug].entries()) {
+    const grant = await f.owner.mutation(ref('prepareConnection'), { ...f.input, currentSlug: slug });
+    const credentialRef = prefix + grant.secretName + '-AbCd12';
+    await f.owner.mutation(ref('commitConnection'), { grantId: grant.grantId, credentialRef, brokerToken: process.env.VRDEX_EVENT_OUTPUT_BROKER_TOKEN });
+    const update = await admin.mutation(ref('prepareConnection'), {
+      ...f.input, currentSlug: slug, expectedRevision: 1, requestId: `${index + 2}2345678-1234-1234-1234-123456789012`, replaceKey: false, credentialDigest: '',
+    });
+    assert.equal(update.credentialRef, credentialRef);
+    const saved = await admin.mutation(ref('commitConnection'), { grantId: update.grantId, credentialRef, brokerToken: process.env.VRDEX_EVENT_OUTPUT_BROKER_TOKEN });
+    assert.equal(saved.connection.revision, 2);
+    assert.equal((await f.owner.query(api.eventBroadcastConnections.getSetup, { currentSlug: slug })).connection?.revision, 2);
+  }
+  await admin.mutation(api.events.setEventOwnerMode, { communitySlug: null });
+  await assert.rejects(admin.query(api.eventBroadcastConnections.getSetup, { currentSlug: testEvent.slug }), /permission/);
+});
 it('commits CAS metadata, retains a blank key and rejects changed server or stale revision', async () => {
   const f = await fixture(); const grant = await f.owner.mutation(ref('prepareConnection'), f.input);
   const args = { grantId: grant.grantId, credentialRef: prefix + grant.secretName + '-AbCd12', brokerToken: process.env.VRDEX_EVENT_OUTPUT_BROKER_TOKEN };

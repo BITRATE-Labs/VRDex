@@ -12,5 +12,6 @@ export function validateEventSlug(slug: string): EventSlugValidationResult {
 }
 
 export async function getEventBySlug(db: DatabaseReader, slug: string) {
-  return await db.query("events").withIndex("by_slug", (query) => query.eq("slug", slug)).unique();
+  const event = await db.query("events").withIndex("by_slug", (query) => query.eq("slug", slug)).unique();
+  return event?.draftDiscardedAt === undefined ? event : null;
 }
