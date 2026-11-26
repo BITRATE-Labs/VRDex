@@ -461,7 +461,8 @@ Current hosted mutation target: `https://staging.vrdex.net`, backed by the share
 local public events and profiles. `home-timeline.visual.spec.ts` compares desktop
 and mobile snapshots for ordinary browsing (long title, missing logo and original
 transparent 120×60 community artwork), selected poster, overlapping purple My
-night, empty range, failed range and the 81-slot detail fixture. The clock is fixed
+night, empty range, failed range and the 81-slot detail fixture. A settled empty
+range without saved plans uses a single 94px public row. The clock is fixed
 at October 26, 2026 21:30 UTC; configured browser timezone is UTC. Every case owns
 and exactly cleans its records through the gated helper. The default, prefetch
 and detail scenarios share that ownership boundary.

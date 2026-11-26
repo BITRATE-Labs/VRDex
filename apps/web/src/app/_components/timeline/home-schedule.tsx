@@ -248,6 +248,12 @@ function ScheduleContent({
     ? data.records.filter((event) => !inRange(event, range) && recentEventTime(event, now) !== undefined)
     : [];
   const empty = visible.length === 0 && recent.length === 0;
+  const compactEmpty =
+    data.isCurrentViewport &&
+    (data.kind === "ready" || data.revalidating) &&
+    data.savedState === "ready" &&
+    empty &&
+    actions.plan.length === 0;
   const nextEvent = empty ? data.records.flatMap((event) => {
     const schedule = event.schedule;
     if (schedule.kind === "date_only") {
@@ -341,6 +347,7 @@ function ScheduleContent({
         records={data.records}
         lanes={data.eventLanes}
         saved={data.saved}
+        compactEmpty={compactEmpty}
         range={range}
         now={now}
         slotCoverage={data.slotCoverage}

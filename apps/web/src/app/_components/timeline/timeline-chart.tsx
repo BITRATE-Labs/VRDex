@@ -16,6 +16,7 @@ export function TimelineChart({
   records,
   lanes,
   saved,
+  compactEmpty,
   range,
   now,
   slotCoverage,
@@ -27,6 +28,7 @@ export function TimelineChart({
   records: TimelineEvent[];
   lanes: ReadonlyArray<EventLane>;
   saved: SavedResolution[];
+  compactEmpty: boolean;
   range: TimelineRange;
   now: number;
   slotCoverage: Record<string, "partial" | "complete">;
@@ -59,7 +61,8 @@ export function TimelineChart({
   const nightHeight = nightLanes.length
     ? (Math.max(...nightLanes.map((l) => l.lane)) + 1) * 50
     : 0;
-  const height = Math.max(4, ...lanes.map((l) => l.lane + 1)) * 94;
+  const publicLanes = compactEmpty ? [] : lanes;
+  const height = Math.max(compactEmpty ? 1 : 4, ...publicLanes.map((l) => l.lane + 1)) * 94;
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
@@ -188,7 +191,7 @@ export function TimelineChart({
             />
           )}
           <div data-testid="public-timeline-lanes" className={styles.lanes} style={{ height }}>
-            {lanes.map((lane) => {
+            {publicLanes.map((lane) => {
               const event = records.find((e) => e.id === lane.eventId);
               return event ? (
                 <TimelineEventBar

@@ -213,6 +213,8 @@ still preserve the blocking lease and durable ownership manifest. See
 The [October 29 Home polish design](../superpowers/specs/2026-10-29-home-polish-design.md)
 supersedes Agenda, full-height My night lanes and roster-prefix discovery labels.
 Schedule uses public lanes with a 376px minimum, 94px pitch and 78px bars.
+A confirmed empty range with no saved plans uses one 94px row, including during
+background refresh while the retained range stays empty.
 My night uses 50px lanes and 44px bars. Date-only and open-end records retain
 authored markers without invented intervals. Old `scheduleView=agenda` URLs
 remain usable and lose that parameter on the next navigation update.
