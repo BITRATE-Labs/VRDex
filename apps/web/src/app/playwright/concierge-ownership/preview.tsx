@@ -1,11 +1,16 @@
 "use client";
 
 import { ConvexProvider, type ConvexReactClient } from "convex/react";
+import { getFunctionName, type FunctionReference } from "convex/server";
 import { ConciergeOwnershipPanel } from "@/app/account/concierge-ownership-panel";
 import { PageContainer, PageShell } from "@/components/ui/page-shell";
 
 const client = {
-  async query() {
+  async query(query: FunctionReference<"query">) {
+    if (getFunctionName(query) === "search:searchUniversal") {
+      return [{ entityType: "profile", profileType: "community", slug: "afterglow", title: "Afterglow", routePath: "/afterglow" }];
+    }
+    if (getFunctionName(query) === "profiles:getPublicBySlug") return null;
     return {
       profileId: "fixture-profile",
       profileName: "Afterglow",

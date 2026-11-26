@@ -6,9 +6,11 @@ import type { FunctionReturnType } from "convex/server";
 import { useState, type FormEvent } from "react";
 
 import { api } from "@convex-generated-api";
+import { EventIdentityPicker } from "@/app/events/event-identity-picker";
 import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/field";
+import { Field, Input, Select } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
+import type { EventIdentityOption } from "@/lib/event-editor-identity";
 
 type Assignment = FunctionReturnType<typeof api.conciergeOwnership.previewAssignment>;
 
@@ -16,13 +18,15 @@ export function ConciergeOwnershipPanel() {
   const convex = useConvex();
   const assign = useMutation(api.conciergeOwnership.assignProfile);
   const [preview, setPreview] = useState<Assignment | null>(null);
+  const [profileKind, setProfileKind] = useState<"community" | "person">("community");
+  const [profile, setProfile] = useState<EventIdentityOption | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [assigned, setAssigned] = useState("");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || (!preview && !profile)) return;
     const form = event.currentTarget;
     const values = new FormData(form);
     setBusy(true);
@@ -31,7 +35,7 @@ export function ConciergeOwnershipPanel() {
     try {
       if (!preview) {
         setPreview(await convex.query(api.conciergeOwnership.previewAssignment, {
-          slug: String(values.get("slug") ?? ""),
+          slug: profile?.slug ?? "",
           email: String(values.get("email") ?? ""),
         }));
       } else {
@@ -44,6 +48,7 @@ export function ConciergeOwnershipPanel() {
         });
         setAssigned(result.slug);
         setPreview(null);
+        setProfile(null);
         form.reset();
       }
     } catch (failure) {
@@ -71,10 +76,21 @@ export function ConciergeOwnershipPanel() {
           </>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field>
-              Profile slug
-              <Input name="slug" required maxLength={80} autoComplete="off" />
-            </Field>
+            <div className="grid min-w-0 gap-3">
+              <Field>
+                Profile type
+                <Select value={profileKind} disabled={busy} onChange={(event) => {
+                  setProfileKind(event.currentTarget.value === "person" ? "person" : "community");
+                  setProfile(null);
+                }}>
+                  <option value="community">Community</option>
+                  <option value="person">Person</option>
+                </Select>
+              </Field>
+              <EventIdentityPicker key={profileKind} kind={profileKind} label="Profile"
+                selectedSlug={profile?.slug} selectedOption={profile} disabled={busy}
+                onSelect={setProfile} onClear={() => setProfile(null)} />
+            </div>
             <Field>
               Recipient’s verified email
               <Input name="email" type="email" required maxLength={320} autoComplete="off" />
@@ -82,7 +98,7 @@ export function ConciergeOwnershipPanel() {
           </div>
         )}
         <div className="flex gap-2">
-          <Button type="submit" disabled={busy}>{preview ? "Assign owner" : "Review assignment"}</Button>
+          <Button type="submit" disabled={busy || (!preview && !profile)}>{preview ? "Assign owner" : "Review assignment"}</Button>
           {preview ? <Button type="button" variant="secondary" disabled={busy} onClick={() => { setPreview(null); setError(""); }}>Back</Button> : null}
         </div>
         {error ? <Notice role="alert" variant="error">{error}</Notice> : null}

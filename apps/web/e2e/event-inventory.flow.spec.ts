@@ -3,14 +3,15 @@ import { expect, test } from '@playwright/test';
 test('the event owner switch opens and closes scoped community access @flow @fixture', async ({ page }, info) => {
   await page.goto('/playwright/event-inventory');
   await expect(page.getByRole('heading', { name: 'My events', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Enter owner mode' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Manage as admin' })).toHaveCount(0);
   await page.goto('/playwright/event-inventory?session=owner-mode');
-  await page.getByLabel('Community slug').fill('district-one');
-  await page.getByRole('button', { name: 'Enter owner mode' }).click();
+  await page.getByRole('combobox', { name: 'Community', exact: true }).fill('District');
+  await page.getByRole('option', { name: /District One/ }).click();
+  await page.getByRole('button', { name: 'Manage as admin' }).click();
   const setup = page.getByRole('link', { name: 'Add event for District One' });
   await expect(setup).toHaveAttribute('href', '/district-one/events/create');
   await page.screenshot({ path: info.outputPath('event-owner-mode.png') });
-  await page.getByRole('button', { name: 'Exit owner mode' }).click();
+  await page.getByRole('button', { name: 'End admin access' }).click();
   await expect(setup).toHaveCount(0);
 });
 
