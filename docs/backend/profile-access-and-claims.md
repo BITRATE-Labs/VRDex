@@ -185,6 +185,16 @@ Locked decision: ownership is attached to a profile record, not inferred from pr
 - grants to a different active owner must fail until a future transfer or moderation flow revokes the old owner
 - claim approval must update the profile search document because trust rank and public trust labels can change
 
+### Concierge assignment
+
+A verified super-admin can use **Assign profile ownership** in Account. Enter the
+published, unclaimed profile's slug and the recipient's verified VRDex account email.
+Review the resolved profile and account, enter a reason, then assign ownership.
+The server rechecks the grant, matched IDs and eligibility in the same transaction
+that records ownership. The profile becomes claimed and unverified, and the
+audit entry records the operator, recipient and reason. Existing owners must use
+a separate transfer or recovery flow.
+
 ## Claim States
 
 `claimState` describes owner authority:

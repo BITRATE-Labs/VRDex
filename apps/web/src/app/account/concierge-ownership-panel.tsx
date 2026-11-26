@@ -1,0 +1,93 @@
+"use client";
+
+import { useConvex, useMutation } from "convex/react";
+import { ConvexError } from "convex/values";
+import type { FunctionReturnType } from "convex/server";
+import { useState, type FormEvent } from "react";
+
+import { api } from "@convex-generated-api";
+import { Button } from "@/components/ui/button";
+import { Field, Input } from "@/components/ui/field";
+import { Notice } from "@/components/ui/notice";
+
+type Assignment = FunctionReturnType<typeof api.conciergeOwnership.previewAssignment>;
+
+export function ConciergeOwnershipPanel() {
+  const convex = useConvex();
+  const assign = useMutation(api.conciergeOwnership.assignProfile);
+  const [preview, setPreview] = useState<Assignment | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [assigned, setAssigned] = useState("");
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    setBusy(true);
+    setError("");
+    setAssigned("");
+    try {
+      if (!preview) {
+        setPreview(await convex.query(api.conciergeOwnership.previewAssignment, {
+          slug: String(values.get("slug") ?? ""),
+          email: String(values.get("email") ?? ""),
+        }));
+      } else {
+        const result = await assign({
+          slug: preview.slug,
+          email: preview.email,
+          expectedProfileId: preview.profileId,
+          expectedUserId: preview.userId,
+          reason: String(values.get("reason") ?? ""),
+        });
+        setAssigned(result.slug);
+        setPreview(null);
+        form.reset();
+      }
+    } catch (failure) {
+      const data = failure instanceof ConvexError ? failure.data : null;
+      setError(typeof data?.message === "string" ? data.message : "Could not complete the assignment.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section aria-labelledby="concierge-ownership-heading" className="border-t border-border py-8 ph-no-capture" data-ph-no-capture>
+      <h2 id="concierge-ownership-heading" className="text-2xl font-semibold">Assign profile ownership</h2>
+      <form onSubmit={submit} className="mt-5 grid max-w-2xl gap-4">
+        {preview ? (
+          <>
+            <Notice className="[overflow-wrap:anywhere]">
+              <p className="font-medium">{preview.profileName} · {preview.slug}</p>
+              <p>{preview.recipientName ? <>{preview.recipientName} · </> : null}{preview.email}</p>
+            </Notice>
+            <Field>
+              Reason
+              <Input name="reason" required minLength={10} maxLength={500} autoComplete="off" />
+            </Field>
+          </>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field>
+              Profile slug
+              <Input name="slug" required maxLength={80} autoComplete="off" />
+            </Field>
+            <Field>
+              Recipient’s verified email
+              <Input name="email" type="email" required maxLength={320} autoComplete="off" />
+            </Field>
+          </div>
+        )}
+        <div className="flex gap-2">
+          <Button type="submit" disabled={busy}>{preview ? "Assign owner" : "Review assignment"}</Button>
+          {preview ? <Button type="button" variant="secondary" disabled={busy} onClick={() => { setPreview(null); setError(""); }}>Back</Button> : null}
+        </div>
+        {error ? <Notice role="alert" variant="error">{error}</Notice> : null}
+        {assigned ? <Notice role="status" variant="success">Owner assigned to {assigned}.</Notice> : null}
+      </form>
+    </section>
+  );
+}
