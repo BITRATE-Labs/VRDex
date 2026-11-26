@@ -528,7 +528,7 @@ export function SearchResultsPage({
           <section aria-label="Search results" className="space-y-5">
             <h2 className="text-2xl font-semibold tracking-[-0.03em]">Results for {query}</h2>
             <div className="flex flex-wrap items-center gap-3">
-              <nav aria-label="Entity type" className="flex flex-wrap gap-2">
+              <nav aria-label="Entity type" className="flex flex-wrap gap-x-0.5 gap-y-2 sm:gap-x-2">
                 {filters.map((filter) => {
                   const active = filter === activeFilter;
 
@@ -537,7 +537,7 @@ export function SearchResultsPage({
                       aria-current={active ? "page" : undefined}
                       className={cn(
                         buttonVariants({ size: "sm", variant: active ? "primary" : "secondary" }),
-                        "min-h-11",
+                        "min-h-11 min-w-11 px-1 sm:px-3",
                       )}
                       href={searchHref({ filter, query })}
                       key={filter}
