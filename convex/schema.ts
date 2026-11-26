@@ -3284,6 +3284,7 @@ export default defineSchema({
     profileId: v.id("profiles"),
     action: v.string(),
     actor: v.optional(authSubject),
+    targetUserId: v.optional(v.id("users")),
     sourceType,
     note: v.optional(v.string()),
     createdAt: v.number(),
