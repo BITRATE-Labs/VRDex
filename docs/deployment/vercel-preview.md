@@ -532,26 +532,26 @@ Keep your production VRDex session in a separate profile. Clerk scopes its sessi
 JWT to the application hostname, but sibling subdomains can still write cookies
 for the parent domain. See [Clerk's session token documentation](https://clerk.com/docs/guides/how-clerk-works/overview#session-token).
 
-Use the sandbox URL for manual review of one trusted PR at a time. Review the
-exact commit before assigning it to the branded URL. The workflow
-requires the current PR head SHA and checks the deployed commit, preview
-environment, Convex targets, development Clerk instance and disabled E2E helpers before moving
-[sandbox.vrdex.net](https://sandbox.vrdex.net/events/new).
-To verify a sandbox before testing, open
-[its deployment identity](https://sandbox.vrdex.net/api/deployment) and check
-that `environment` is `preview` and `commit` matches the PR head.
-The sandbox is a manual alias outside the Vercel production-domain list. A
-non-preview build rejects app and API requests to that hostname.
+For shared sandbox iteration, push the reviewed commit to `codex/sandbox`.
+When `VERCEL_SANDBOX_PROJECT_ID` is configured, only this branch can update the
+sandbox alias. Pushes queue and use the existing `sandbox-shared` Convex preview,
+so drafts and OAuth grants survive deploys. Before deployment the workflow
+verifies the existing backend and resolves its preview credential. If that
+identity check fails, recover the existing alias or bootstrap it explicitly.
 
 ```powershell
-$pr = 478 # Replace with the PR you want to try.
-$sha = gh pr view $pr --json headRefOid --jq .headRefOid
-gh workflow run vercel-preview-deploy.yml --ref main -f pull_number=$pr -f head_sha=$sha -f sandbox=true
+git push origin HEAD:codex/sandbox
 ```
 
-Sandbox requests run one at a time. Each refresh recreates its separate
-`sandbox-pr-<number>` Convex deployment, clearing any drafts saved in that
-sandbox. The URL stays the same. Ordinary previews and CI use their own deployments.
+Check the [deployment identity](https://sandbox.vrdex.net/api/deployment) for
+the expected commit, preview environment, and disabled E2E helpers. The
+sandbox has its own preview OAuth runtime and reuses its secrets on later pushes.
+A non-preview build rejects requests for the sandbox hostname.
+
+Use the ordinary PR preview for a separate review deployment. Installations
+without a dedicated sandbox project can still request manual PR sandbox mode
+with `sandbox=true` and the exact PR head. That mode recreates its
+`sandbox-pr-<number>` backend, clearing its test data and OAuth grants.
 
 Before reclaiming a closed PR's sandbox backend, compare its Convex URL with
 `https://sandbox.vrdex.net/api/deployment`. If they match, move the alias with

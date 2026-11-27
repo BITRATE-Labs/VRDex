@@ -121,6 +121,62 @@ describe("fork-aware preview workflows", () => {
     assert.equal(outputs.head_sha, undefined, "Do not report a successful acceptance request over skipped private coverage");
   });
 
+  it("deploys only the trusted shared sandbox push without a PR", async () => {
+    assert.deepEqual((deployDocument.on as { push: unknown }).push, { branches: ["codex/sandbox"] });
+    const resolve = deploySteps.find(step => step.name === "Resolve pull request");
+    const execute = new Function("core", "github", "context", "process", `return (async () => { ${resolve?.with?.script} })()`);
+    for (const [ref, repositoryId, sha, accepted] of [
+      ["refs/heads/codex/sandbox", 1176245711, "a".repeat(40), true],
+      ["refs/heads/main", 1176245711, "a".repeat(40), false],
+      ["refs/heads/codex/sandbox", 123, "a".repeat(40), false],
+      ["refs/heads/codex/sandbox", 1176245711, "invalid", false],
+    ] as const) {
+      let failure = "";
+      const outputs: Record<string, unknown> = {};
+      await execute(
+        { setFailed(message: string) { failure = message; }, setOutput(name: string, value: unknown) { outputs[name] = value; } },
+        {},
+        { eventName: "push", ref, sha, payload: { repository: { id: repositoryId } } },
+        { env: {} },
+      );
+      assert.equal(!failure, accepted);
+      assert.equal(outputs.head_sha, accepted ? sha : undefined);
+      if (accepted) {
+        assert.equal(outputs.sandbox, "true");
+        assert.equal(outputs.preview_name, "sandbox-shared");
+        assert.equal(outputs.pr_number, "");
+      }
+    }
+    assert.ok(String(deploy.jobs["hosted-mcp-preview-smoke"].if).includes("outputs.sandbox != 'true'"));
+    for (const step of deploySteps) {
+      for (const [name, value] of Object.entries(step.env ?? {})) {
+        if (/^HOSTED_E2E_|^VRDEX_E2E_BROWSER_TOKEN$/.test(name)) {
+          assert.ok(String(value).includes("steps.pr.outputs.sandbox != 'true'"), name);
+        }
+      }
+    }
+  });
+
+  it("gives sandbox its own OAuth keys without enabling auth helpers", () => {
+    const generate = deploySteps.find(step => step.name === "Generate sandbox OAuth runtime");
+    assert.equal(generate?.if, "steps.pr.outputs.sandbox == 'true'");
+    assert.ok(generate?.run?.includes("generate-preview-developer-runtime-secrets.mjs --reuse-sandbox"));
+    const reuse = deploySteps.find(step => step.name === "Resolve existing shared sandbox backend");
+    assert.equal(reuse?.if, "steps.pr.outputs.sandbox == 'true' && steps.pr.outputs.head_ref == 'codex/sandbox'");
+    const backend = deploySteps.find(step => step.name === "Deploy Convex preview functions");
+    const shared = backend?.run?.split("else")[0] ?? "";
+    assert.ok(shared.includes('--url "$VRDEX_PREVIEW_BACKEND_URL" --admin-key "$VRDEX_PREVIEW_ADMIN_TOKEN"'));
+    assert.ok(!shared.includes("--preview-create"));
+    const deployScript = deploySteps.find(step => step.name === "Deploy Vercel preview output")?.run ?? "";
+    const sandboxKeys = deployScript.slice(deployScript.indexOf('for setting in'), deployScript.indexOf('deployment_url='));
+    for (const name of ["VRDEX_API_TOKEN_PEPPER", "VRDEX_OAUTH_ACCESS_TOKEN_SIGNING_KEY", "VRDEX_OAUTH_CLIENT_SECRET_PEPPER", "VRDEX_OAUTH_REFRESH_TOKEN_PEPPER"]) {
+      assert.ok(sandboxKeys.includes(name));
+    }
+    assert.ok(sandboxKeys.includes('::add-mask::$value'));
+    assert.ok(!sandboxKeys.includes("E2E"));
+    assert.ok(deployScript.includes('--env "VRDEX_ENABLE_E2E_AUTH_HELPERS=false"'));
+  });
+
   it("withholds hosted e2e secrets from fork heads", () => {
     const hosted = [
       "VRDEX_HOSTED_E2E_BROWSER_TOKEN",
@@ -238,8 +294,8 @@ describe("optional browser and visual evidence contract", () => {
     assert.ok(preview.concurrency.group.includes("github.event_name"));
     assert.ok(resolve.with.script.includes('context.eventName === "pull_request" ? "ci" : "manual-accept"'));
     assert.ok(resolve.with.script.includes("${purpose}-pr-${pull.number}`"));
-    assert.ok(preview.concurrency.group.includes("inputs.sandbox && 'vrdex-sandbox-alias'"));
-    assert.equal(preview.concurrency["cancel-in-progress"], "${{ !inputs.browser_acceptance && !inputs.sandbox }}");
+    assert.ok(preview.concurrency.group.includes("(inputs.sandbox || github.ref == 'refs/heads/codex/sandbox') && 'vrdex-sandbox-alias'"));
+    assert.equal(preview.concurrency["cancel-in-progress"], "${{ !inputs.browser_acceptance && !inputs.sandbox && github.ref != 'refs/heads/codex/sandbox' }}");
     for (const job of [preview.jobs["deploy-preview"], preview.jobs["candidate-browser-acceptance"]]) {
       assert.deepEqual(job.permissions, { contents: "read", "pull-requests": "read" });
     }
