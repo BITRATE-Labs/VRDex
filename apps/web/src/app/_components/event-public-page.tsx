@@ -222,7 +222,7 @@ export function EventPreviewCard({
   seriesSummary,
 }: {
   event: PublicEventPreview;
-  variant?: "default" | "series";
+  variant?: "default" | "series" | "community";
   seriesSummary?: string;
 }) {
   const titleId = useId();
@@ -289,6 +289,7 @@ export function EventPreviewCard({
               className={cn(
                 "rounded-sm underline decoration-1 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current",
                 compactWithoutArtwork ? "underline-offset-[6px]" : "underline-offset-4",
+                variant === "community" && "max-sm:flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center",
               )}
               href={eventPath}
               id={hasDatedTitle ? titleId : undefined}
@@ -305,7 +306,7 @@ export function EventPreviewCard({
         isSeries ? "gap-2 py-2.5" : compactWithoutArtwork ? "gap-2 pb-4 pt-3" : "gap-3 py-4",
       )}>
         {summary ? <p className="leading-6 text-muted">{summary}</p> : null}
-        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+        <div className={cn("flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted", variant === "community" && "max-sm:items-center")}>
           {details.map((detail) => (
             <span key={detail}>{detail}</span>
           ))}
@@ -314,6 +315,7 @@ export function EventPreviewCard({
               className={cn(
                 "inline-flex min-w-0 items-center gap-1 font-medium text-accent-strong underline decoration-accent/35 underline-offset-4 [overflow-wrap:anywhere]",
                 compactWithoutArtwork && "min-h-6 text-sm",
+                variant === "community" && "max-sm:min-h-11 max-sm:min-w-11",
               )}
               href={sourceUrl}
               rel="noreferrer"

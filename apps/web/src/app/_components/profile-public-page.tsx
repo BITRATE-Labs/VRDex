@@ -1,6 +1,7 @@
 import type { PublicVerifiedConnection } from "@vrdex/api-contracts";
 import { mergeVerifiedVrchatLinks, isVerifiedVrchatLink } from "@/lib/profile-link-verification";
 import Link from "next/link";
+import { ArrowDown } from "lucide-react";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { profileLinkHasCustomLabel,profileLinkPresentation,type ProfileLinkDestinationMetadata } from "../../../../../convex/_profileLinkPresentation";
 import { parseProfileLinkDestination } from "../../../../../convex/_profileLinkDestination";
@@ -433,11 +434,13 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
     && !hasMediaKit && !mediaKit.featuredAsset && mediaKit.assets.length === 0 && galleryAssets.length === 0
     && eventPreviews.length === 0 && profile.worldCredits.length === 0;
   const groupDestination = creatorLinks.length === 1 ? parseProfileLinkDestination(creatorLinks[0].link) : null;
+  const hasPrimaryGroupLink = groupDestination?.kind === "vrchat_group";
   const useCompactCommunity = !isPerson && hasSparseIdentity && !profile.telemetry && !profile.groupMembership
-    && (visibleLinks.length === 0 || (visibleLinks.length === 1 && groupDestination?.kind === "vrchat_group"));
+    && (visibleLinks.length === 0 || (visibleLinks.length === 1 && hasPrimaryGroupLink));
   const useCompactIdentity = useCompactCommunity || (isPerson && hasSparseIdentity && visibleLinks.length === 0);
   const isRichPublicCommunity = !isPerson && !embedded && !useCompactIdentity;
   const hasSingleCommunityEvent = isRichPublicCommunity && eventPreviews.length === 1;
+  const hasCommunityEventShortcut = isRichPublicCommunity && eventPreviews.length > 0;
   const isRichPublicPerson = isPerson && !embedded && !useCompactIdentity;
   const useSideBySideMobileIdentity = isRichPublicCommunity || isRichPublicPerson;
   const moveOwnershipBelowContent = !embedded && (!isPerson || isRichPublicPerson);
@@ -477,7 +480,18 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
         <div className="flex flex-wrap items-center justify-between gap-3">
           {isPerson
             ? visitorHeading("events")
-            : <SectionTitle className={useCompactCommunity ? "text-xl" : "max-sm:text-xl"}>Hosted events</SectionTitle>}
+            : (
+              <SectionTitle
+                className={cn(
+                  useCompactCommunity ? "text-xl" : "max-sm:text-xl",
+                  hasCommunityEventShortcut && "scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent [@media(scripting:none)]:scroll-mt-32",
+                )}
+                id={hasCommunityEventShortcut ? "profile-events" : undefined}
+                tabIndex={hasCommunityEventShortcut ? -1 : undefined}
+              >
+                Hosted events
+              </SectionTitle>
+            )}
           {!isPerson ? (
             <Link
               className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "min-h-11 shrink-0 whitespace-nowrap", quietContributionStyle)}
@@ -495,7 +509,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
             !hasSingleCommunityEvent && linksColumnSection !== "events" && "lg:grid-cols-2",
           )}>
             {eventPreviews.map((event) => (
-              <EventPreviewCard event={event} key={`${event.slug ?? event.title}-${event.startAt}`} />
+              <EventPreviewCard event={event} key={`${event.slug ?? event.title}-${event.startAt}`} variant={isRichPublicCommunity ? "community" : undefined} />
             ))}
           </div>
         ) : useCompactCommunity ? <p className="mt-2 text-sm font-medium text-foreground">No events</p> : null}
@@ -606,6 +620,18 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
       }))}
     />
   );
+  const communityEventShortcut = hasCommunityEventShortcut ? (
+    <a
+      className={cn(
+        "-mt-2 inline-flex min-h-11 w-fit items-center gap-1.5 rounded-control text-sm font-medium underline decoration-current/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 sm:hidden",
+        hasPrimaryGroupLink ? "text-accent-strong focus-visible:outline-accent" : "text-white focus-visible:outline-white",
+      )}
+      href="#profile-events"
+    >
+      Hosted events
+      <ArrowDown aria-hidden="true" className="size-3.5" />
+    </a>
+  ) : null;
   const stackOwnershipPrompt = !embedded && isPerson && !useCompactIdentity;
   const profileOwnership = canClaim ? (
     <aside
@@ -751,6 +777,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                     <p className="mt-2 max-w-xl text-base leading-7 text-white/88">{aboutCopy}</p>
                   </div>
                 ) : null}
+                {!hasPrimaryGroupLink ? communityEventShortcut : null}
               </div>
             </div>
             {useCompactCommunity && creatorLinks.length > 0 ? profileLinks : null}
@@ -761,6 +788,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
 
         {profile.profileType === "person" && <HomeLiveNow key={profile.slug} performerSlug={profile.slug} />}
         {!useCompactCommunity ? profileLinks : null}
+        {hasPrimaryGroupLink ? communityEventShortcut : null}
 
         {!isPerson ? <CommunityActivity profile={profile} /> : null}
 
