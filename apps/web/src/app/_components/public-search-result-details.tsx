@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
 import type { PublicSearchPerson } from "@/lib/public-search";
 import { orderedPublicSearchGenres, publicSearchGenreLabel } from "@/lib/public-search-genres";
 
-const summaryClassName = "min-h-6 min-w-6 w-fit cursor-pointer list-none rounded-control leading-6 font-medium text-accent-strong underline decoration-accent/55 underline-offset-2 hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring [&::-webkit-details-marker]:hidden";
+const summaryClassName = "inline-flex min-h-11 min-w-11 w-fit cursor-pointer list-none items-center justify-center gap-1 rounded-control leading-6 font-medium text-accent-strong underline decoration-accent/55 underline-offset-2 hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring max-sm:border max-sm:border-border max-sm:px-2.5 max-sm:no-underline max-sm:hover:bg-surface-strong sm:min-h-6 sm:min-w-6 [&::-webkit-details-marker]:hidden";
 const disclosureClassName = cn("min-w-0 open:basis-full", styles.disclosure);
 const detailPanelClassName = "order-last min-w-0 flex-[1_0_100%] -ms-[3.25rem] border-s border-border py-1 ps-2 sm:ms-0";
 
@@ -18,25 +18,26 @@ export function PublicSearchResultDetails({ person }: { person: PublicSearchPers
   if (genres.length === 0 && person.outboundLinks.length === 0) return null;
 
   return (
-    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-1 ps-16 pe-3 pb-2.5 text-xs leading-5 text-muted sm:ps-[5.25rem] sm:pe-4 sm:pb-3 sm:text-sm">
+    <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5 sm:items-baseline sm:gap-y-1 ps-16 pe-3 pb-2.5 text-xs leading-5 text-muted sm:ps-[5.25rem] sm:pe-4 sm:pb-3 sm:text-sm">
       {visibleGenres.length > 0 ? (
-        <span className="min-w-0 [overflow-wrap:anywhere]">{visibleGenres.join(" · ")}</span>
+        <span className="min-w-0 [overflow-wrap:anywhere] max-sm:basis-full">{visibleGenres.join(" · ")}</span>
       ) : null}
       {remainingGenres.length > 0 ? (
-        <details className={disclosureClassName}>
-          <summary aria-label={`${remainingGenres.length} more genres`} className={cn(summaryClassName, "text-center")}>
+        <details className={cn(disclosureClassName, "group/genres")}>
+          <summary aria-label={`${remainingGenres.length} more genres`} className={summaryClassName}>
             +{remainingGenres.length}
+            <ChevronDown aria-hidden="true" className="size-3 shrink-0 group-open/genres:rotate-180 sm:hidden" />
           </summary>
           <p className={cn(detailPanelClassName, "[overflow-wrap:anywhere]")}>{remainingGenres.join(" · ")}</p>
         </details>
       ) : null}
       {person.outboundLinks.length > 0 ? (
         <details className={cn(disclosureClassName, "group/links")}>
-          <summary className={cn(summaryClassName, "flex items-center gap-1")}>
+          <summary className={summaryClassName}>
             <ChevronDown aria-hidden="true" className="size-3 shrink-0 group-open/links:rotate-180" />
             Links
           </summary>
-          <div className={detailPanelClassName}>
+          <div className={cn(detailPanelClassName, styles.linksPanel)}>
             <PublicProfileLinks links={person.outboundLinks} />
           </div>
         </details>
