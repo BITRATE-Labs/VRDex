@@ -1,5 +1,30 @@
 import { test, expect } from "@playwright/test";
 import { prepareVisualPage, waitForVisualReady } from "./public-routes";
+
+test("discovery rail fades the overflow edge and clears the fade on focus @storybook-snapshot", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto(
+    "/iframe.html?id=home-discovery--two-clubs-no-events&viewMode=story",
+  );
+  const clubs = page.getByRole("group", { name: "Clubs", exact: true });
+  const rail = clubs.getByTestId("discovery-club-card").first().locator("../..");
+  const firstFavorite = clubs.getByRole("button").first();
+
+  await expect(rail).toHaveAttribute("data-scroll-right", "");
+  await expect(rail).not.toHaveAttribute("data-scroll-left", "");
+  await expect(rail).toHaveCSS("mask-image", /linear-gradient/);
+  await firstFavorite.focus();
+  await expect(rail).toHaveCSS("mask-image", "none");
+
+  await firstFavorite.blur();
+  await rail.evaluate((element) => element.scrollTo(element.scrollWidth, 0));
+  await expect(rail).toHaveAttribute("data-scroll-left", "");
+  await expect(rail).not.toHaveAttribute("data-scroll-right", "");
+  await expect(rail).toHaveCSS("mask-image", /linear-gradient/);
+});
+
 for (const state of [
   "mixed",
   "cold-start",

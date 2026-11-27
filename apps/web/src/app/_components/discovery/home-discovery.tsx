@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { ArrowRight, LoaderCircle } from "lucide-react";
-import { useEffect, useState, type Ref, type FocusEventHandler } from "react";
+import {
+  Children,
+  useEffect,
+  useRef,
+  useState,
+  type FocusEventHandler,
+  type ReactNode,
+  type Ref,
+} from "react";
 import type { DiscoverySnapshot } from "@/lib/discovery/controller";
 import type { FavoriteLineupSnapshot } from "@/lib/discovery/favorite-lineup";
 import { togglePlanAction } from "@/lib/timeline/plan-actions";
@@ -50,6 +58,42 @@ function retainFocused<T extends { id: string }>(
   result.splice(Math.min(focused.index, result.length), 0, current);
   return result.slice(0, 2);
 }
+
+function updateRailEdges(rail: HTMLDivElement) {
+  const { clientWidth, scrollLeft, scrollWidth } = rail;
+  // Snap can advance through the 3px focus gutter at rest.
+  const edgeTolerance = 4;
+  rail.toggleAttribute("data-scroll-left", scrollLeft > edgeTolerance);
+  rail.toggleAttribute(
+    "data-scroll-right",
+    scrollWidth - clientWidth - scrollLeft > edgeTolerance,
+  );
+}
+
+function CardRail({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const count = Children.count(children);
+  useEffect(() => {
+    const rail = ref.current;
+    if (!rail) return;
+    updateRailEdges(rail);
+    const observer = new ResizeObserver(() => updateRailEdges(rail));
+    observer.observe(rail);
+    return () => observer.disconnect();
+  }, [count]);
+
+  return (
+    <div
+      className={styles.cards}
+      data-scroll-right={count > 1 ? "" : undefined}
+      ref={ref}
+      onScroll={(event) => updateRailEdges(event.currentTarget)}
+    >
+      {children}
+    </div>
+  );
+}
+
 type EventCardsProps = Pick<
   HomeDiscoveryViewProps,
   | "preferences"
@@ -71,7 +115,7 @@ function EventCards({
   ...props
 }: EventCardsProps) {
   return (
-    <div className={styles.cards}>
+    <CardRail>
       {events.map((event, index) => (
         <div
           key={event.id}
@@ -90,7 +134,7 @@ function EventCards({
           />
         </div>
       ))}
-    </div>
+    </CardRail>
   );
 }
 function LiveEventCards(props: EventCardsProps) {
@@ -190,7 +234,7 @@ function AvailableDiscovery({
         <h3 id="discovery-clubs-heading" className={styles.groupHeading}>
           Clubs
         </h3>
-        <div className={styles.cards}>
+        <CardRail>
           {clubs.map((club, index) =>
             club.profileType === "community" ? (
               <div
@@ -210,7 +254,7 @@ function AvailableDiscovery({
               </div>
             ) : null,
           )}
-        </div>
+        </CardRail>
         {clubs.length === 0 &&
           (noClubs ? (
             <p className={styles.status}>No clubs</p>
@@ -229,7 +273,7 @@ function DiscoveryFrames() {
       {["Events", "Clubs"].map((group, index) => (
         <div key={group}>
           <h3 className={styles.groupHeading}>{group}</h3>
-          <div className={styles.cards}>
+          <CardRail>
             {[0, 1].map((slot) => (
               <div
                 key={slot}
@@ -247,7 +291,7 @@ function DiscoveryFrames() {
                 </div>
               </div>
             ))}
-          </div>
+          </CardRail>
         </div>
       ))}
     </div>
