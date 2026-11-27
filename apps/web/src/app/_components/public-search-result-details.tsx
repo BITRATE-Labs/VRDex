@@ -12,9 +12,9 @@ export function PublicSearchResultDetails({ person }: { person: PublicSearchPers
   if (genres.length === 0 && person.outboundLinks.length === 0) return null;
 
   return (
-    <div className="grid min-w-0 gap-3 px-4 pb-4 sm:pl-22">
+    <div className="grid min-w-0 gap-1 px-3 pb-3 sm:px-4 sm:pl-[5.25rem]">
       {visibleGenres.length > 0 ? (
-        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 text-sm leading-6 text-muted">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 text-sm leading-5 text-muted">
           <span>{visibleGenres.join(" · ")}</span>
           {remainingGenres.length > 0 ? (
             <details className="min-w-0">

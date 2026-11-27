@@ -64,8 +64,8 @@ function resultSubtitle(result: PublicSearchResult): string | undefined {
   return redundantLabels.includes(subtitle.toLowerCase()) ? undefined : subtitle;
 }
 
-function ResultImage({ result, quietFallback = false, compact = false }: { result: PublicSearchResult; quietFallback?: boolean; compact?: boolean }) {
-  const size = compact ? "size-10 sm:size-14" : "size-14";
+function ResultImage({ result, quietFallback = false }: { result: PublicSearchResult; quietFallback?: boolean }) {
+  const size = "size-14";
   const primaryImageUrl = result.entityType === "profile"
     ? result.profileImageUrl ?? result.imageUrl
     : result.imageUrl;
@@ -236,21 +236,53 @@ function DiscoveryCard({
   );
 }
 
+function SearchResultImage({ result }: { result: PublicSearchResult }) {
+  const src = result.imageUrl ?? result.profileImageUrl ?? result.logoImageUrl;
+  const logo = Boolean(src && src === result.logoImageUrl && src !== result.profileImageUrl);
+  const appearance = result.avatarAppearance;
+  const customAppearance = appearance && Object.entries(defaultAvatarAppearance).some(
+    ([key, value]) => appearance[key as keyof AvatarAppearance] !== value,
+  );
+  const imageProps = {
+    alt: "",
+    className: "size-10 rounded-card border border-border bg-surface-strong text-foreground sm:size-14",
+    label: result.title,
+    sizes: "(min-width: 640px) 56px, 40px",
+    src,
+  };
+
+  return (
+    <span className="relative shrink-0">
+      {result.entityType === "profile" && !logo && (src || customAppearance) ? (
+        <ProfileAvatarImage {...imageProps} appearance={appearance} />
+      ) : (
+        <EntityImage {...imageProps} imageClassName={logo ? "!object-contain p-1" : undefined} />
+      )}
+      {result.entityType === "profile" && result.trustLabel === "claimed_verified" ? (
+        <VerifiedTrustMark className="verified-trust-mark--avatar" />
+      ) : null}
+    </span>
+  );
+}
+
 function SearchResultCard({ result }: { result: PublicSearchResult }) {
   const subtitle = resultSubtitle(result);
   const trustLabel = result.trustLabel === "community_submitted"
     ? "Community submitted"
     : result.trustLabel === "unclaimed" ? "Unclaimed" : undefined;
-  const roleLabels = result.person
-    ? [...new Set([...result.person.roleTags, ...result.person.tags])].slice(0, 3)
-    : [];
+  const shownLabels = [subtitle, result.summary].flatMap((text) =>
+    text?.toLowerCase().split(/[|·•\n]/u).map((part) => part.trim()) ?? [],
+  );
+  const roleLabels = [...new Set([...(result.person?.roleTags ?? []), ...(result.person?.tags ?? [])])]
+    .filter((label) => !shownLabels.includes(label.trim().toLowerCase()))
+    .slice(0, 3);
 
   return (
     <div className="rounded-panel border border-border bg-surface transition-colors hover:border-border-strong">
       <TrackedDiscoveryLink
         className={cn(
-          "group relative flex min-h-11 items-start gap-3 rounded-panel p-4 transition-colors hover:bg-surface-strong focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-strong",
-          result.claimEntryPath && "pb-2",
+          "group relative flex min-h-11 items-start gap-3 rounded-panel p-3 transition-colors hover:bg-surface-strong focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-strong sm:p-4",
+          (result.person?.genres.length || result.person?.outboundLinks.length || result.claimEntryPath) && "pb-2 sm:pb-2",
         )}
         eventName={result.entityType === "event" ? "event_card_clicked" : "search_result_clicked"}
         href={result.routePath}
@@ -260,27 +292,25 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
           surface: "search_results",
         }}
       >
-        <ResultImage compact result={result} quietFallback />
-        <span className="flex min-w-0 flex-1 flex-col gap-2">
-          <span className="flex flex-col gap-1">
-            <span className="text-xl font-semibold text-accent-strong underline decoration-accent/55 underline-offset-4 pe-6 group-hover:decoration-current [overflow-wrap:anywhere]">
-              {result.title}
-            </span>
-            <span className="flex flex-col items-start gap-x-3 gap-y-0.5 text-sm text-muted sm:flex-row sm:flex-wrap sm:items-baseline">
-              <span>{entityLabel(result)}</span>
-              {trustLabel ? <span className="text-xs font-medium">{trustLabel}</span> : null}
-            </span>
+        <SearchResultImage result={result} />
+        <span className="flex min-w-0 flex-1 flex-col gap-1 [overflow-wrap:anywhere]">
+          <span className="pe-5 text-xl leading-tight font-semibold text-accent-strong underline decoration-accent/55 underline-offset-4 group-hover:decoration-current">
+            {result.title}
           </span>
-          {subtitle ? <span className="text-sm text-muted">{subtitle}</span> : null}
-          {result.startsAt === undefined && result.eventDate === undefined ? null : <ViewerLocalEventDateTime className="text-sm text-accent-strong" timestamp={result.startsAt} eventDate={result.eventDate} scheduleKind={result.scheduleKind} />}
-          {result.summary ? <span className="line-clamp-2 text-sm leading-6 text-muted">{result.summary}</span> : null}
+          <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0 text-xs text-muted sm:text-sm">
+            <span>{entityLabel(result)}</span>
+            {trustLabel ? <span className="text-xs font-medium">{trustLabel}</span> : null}
+            {subtitle ? <span>{subtitle}</span> : null}
+            {result.startsAt === undefined && result.eventDate === undefined ? null : <ViewerLocalEventDateTime className="text-sm text-accent-strong" timestamp={result.startsAt} eventDate={result.eventDate} scheduleKind={result.scheduleKind} />}
+          </span>
+          {result.summary ? <span className="line-clamp-2 text-sm leading-5 text-muted">{result.summary}</span> : null}
           {roleLabels.length > 0 ? <span className="text-xs text-muted">{roleLabels.join(" · ")}</span> : null}
         </span>
-        <ChevronRight aria-hidden="true" className="absolute end-4 top-5 size-4 text-accent-strong" />
+        <ChevronRight aria-hidden="true" className="absolute end-3 top-4 size-4 text-accent-strong sm:end-4 sm:top-5" />
       </TrackedDiscoveryLink>
       {result.person ? <PublicSearchResultDetails person={result.person} /> : null}
       {result.claimEntryPath ? (
-        <div className="ml-[4.25rem] w-fit pb-3 pr-4 sm:ml-[5.25rem]">
+        <div className="ml-16 w-fit pb-3 pr-3 sm:ml-[5.25rem] sm:pr-4">
           <Link
             className="inline-flex min-h-11 items-center rounded-control border border-border px-3 text-sm font-medium text-muted transition-colors hover:border-border-strong hover:bg-surface-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-strong"
             href={result.claimEntryPath}
@@ -578,7 +608,7 @@ export function SearchResultsPage({
                 )}
               </Card>
             ) : (
-              <div className="grid gap-4">
+              <div className="grid gap-3 sm:gap-4">
                 {results.map((result) => <SearchResultCard key={`${result.entityType}-${result.slug}`} result={result} />)}
               </div>
             )}
