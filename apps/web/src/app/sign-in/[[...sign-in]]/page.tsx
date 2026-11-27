@@ -6,6 +6,14 @@ import {
 } from "@/components/auth-page-shell";
 import { validateSignInReturnTo } from "@/lib/safe-return-to";
 
+function contributionLabel(returnTo: string) {
+  const pathname = returnTo.split(/[?#]/, 1)[0] ?? "";
+
+  if (pathname === "/submit") return "Add profile";
+  if (/^\/claim\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(pathname)) return "Claim profile";
+  if (/^\/[a-z0-9]+(?:-[a-z0-9]+)*\/edit$/.test(pathname)) return "Edit profile";
+}
+
 export default async function SignInPage({
   searchParams,
 }: {
@@ -22,6 +30,7 @@ export default async function SignInPage({
   return (
     <AuthPageShell
       headingId="sign-in-heading"
+      journeyLabel={contributionLabel(returnTo)}
       subtitle="Manage your VRDex profile and events."
       title="Sign in"
     >

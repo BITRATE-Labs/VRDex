@@ -58,6 +58,10 @@ and ownership actions together at 320 px and on desktop. A separate
 multi-stream fixture checks the exact clipboard destinations and accessible
 control names for both playback devices.
 
+The signed-out contribution smoke checks how Sign in names recognized
+profile actions. Unknown or rejected return paths keep the generic heading
+and guidance, and the test never signs in or enters credentials.
+
 PowerShell data-flow run with video:
 
 ```powershell
