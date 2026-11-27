@@ -47,6 +47,35 @@ test.describe("timeline time regressions @flow @fixture", () => {
     await page.clock.setFixedTime(TIMELINE_NOW);
   });
 
+  test("keeps a compact schedule steady while loading an uncached date", async ({ page }, info) => {
+    let hold = false;
+    const buffered: (() => void)[] = [];
+    await page.routeWebSocket("**/api/**/sync", (socket) => {
+      const server = socket.connectToServer();
+      server.onMessage((message) => {
+        if (hold) buffered.push(() => socket.send(message));
+        else socket.send(message);
+      });
+    });
+    await page.goto(`/?at=${Date.UTC(2026, 9, 27, 12)}&tz=UTC`);
+    const status = page.getByLabel("Schedule data state");
+    const lanes = page.getByTestId("public-timeline-lanes");
+    await expect(status).toHaveAttribute("data-state", "ready");
+    await expect(lanes).toHaveCSS("height", "94px");
+
+    hold = true;
+    try {
+      await page.getByLabel("Schedule date", { exact: true }).fill("2026-11-02");
+      await expect(status).toHaveAttribute("data-state", "loading");
+      await expect(lanes).toHaveCSS("height", "94px");
+      await page.screenshot({ path: info.outputPath("schedule-loading-uncached-date.png") });
+    } finally {
+      hold = false;
+      buffered.splice(0).forEach((send) => send());
+    }
+    await expect(status).toHaveAttribute("data-state", "ready");
+  });
+
   test("fractional zoom pan retains the viewed date and Back anchor", async ({
     page,
   }, info) => {
@@ -200,7 +229,7 @@ test.describe("timeline time regressions @flow @fixture", () => {
           await expect(shell.getByRole("status")).toHaveCount(1);
           await expect(shell.locator("[data-loading-axis]")).toHaveCount(2);
           await expect(shell.getByLabel("Schedule date", { exact: true })).toHaveCount(0);
-          expect(await placeholder.evaluate((element) => getComputedStyle(element, "::before").display)).toBe("block");
+          expect(await placeholder.evaluate((element) => getComputedStyle(element, "::before").content)).toBe("none");
           const loading = await shell.boundingBox();
           expect(loading?.height).toBeGreaterThanOrEqual(376 + 56 + 48);
           await page.screenshot({ path: info.outputPath(`startup-${size.width}.png`) });

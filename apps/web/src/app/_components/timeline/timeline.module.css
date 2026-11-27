@@ -207,19 +207,8 @@
 .lanes[data-loading-placeholder] {
   --timeline-grid-line: color-mix(in srgb, var(--border) 55%, transparent);
 }
-.lanes[data-loading-placeholder]::before {
-  content: "";
-  display: block;
-  position: sticky;
-  inset-inline-start: 1.25rem;
-  width: clamp(5rem, 30vw, 14rem);
-  height: 0.75rem;
-  transform: translateY(3.75rem);
-  border-radius: var(--radius-control);
-  color: var(--timeline-placeholder-fill);
-  background: currentColor;
-  box-shadow: 0.65rem 94px 0 -2px, 0 188px 0, 1.3rem 282px 0 -1px;
-  pointer-events: none;
+.lanes[data-viewport-loading] {
+  overflow: clip;
 }
 .chartLoadingStatus {
   position: sticky;

@@ -414,6 +414,7 @@ function ScheduleContent({
         saved={data.saved}
         compactEmpty={compactEmpty || showInlineFavoritesRecovery}
         hour12={runtime.hour12}
+        viewportLoading={!data.isCurrentViewport || data.kind === "loading"}
         loadingStatus={loadingWithoutContent ? <ScheduleChartLoading /> : undefined}
         emptyState={showFavoritesEmptyState ? (
           <div className={styles.emptyState}>

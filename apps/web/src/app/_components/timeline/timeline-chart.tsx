@@ -1,5 +1,5 @@
 "use client";
-import { useId, useLayoutEffect, useRef, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type {
   SavedResolution,
   TimelineEvent,
@@ -18,6 +18,7 @@ export function TimelineChart({
   saved,
   compactEmpty,
   loadingStatus,
+  viewportLoading,
   emptyState,
   hour12,
   range,
@@ -33,6 +34,7 @@ export function TimelineChart({
   saved: SavedResolution[];
   compactEmpty: boolean;
   loadingStatus?: ReactNode;
+  viewportLoading: boolean;
   emptyState?: ReactNode;
   hour12: boolean;
   range: TimelineRange;
@@ -70,7 +72,12 @@ export function TimelineChart({
     ? (Math.max(...nightLanes.map((l) => l.lane)) + 1) * 50
     : 0;
   const publicLanes = compactEmpty ? [] : lanes;
-  const height = Math.max(compactEmpty ? 1 : 4, ...publicLanes.map((l) => l.lane + 1)) * 94;
+  const viewportHeight = Math.max(compactEmpty ? 1 : 4, ...publicLanes.map((l) => l.lane + 1)) * 94;
+  const [settledHeight, setSettledHeight] = useState(viewportHeight);
+  if (!viewportLoading && viewportHeight !== settledHeight) {
+    setSettledHeight(viewportHeight);
+  }
+  const height = viewportLoading ? settledHeight : viewportHeight;
   const showEmptyState = Boolean(emptyState);
   useLayoutEffect(() => {
     const el = scroller.current;
@@ -226,6 +233,7 @@ export function TimelineChart({
           <div
             data-testid="public-timeline-lanes"
             data-loading-placeholder={loadingStatus ? true : undefined}
+            data-viewport-loading={viewportLoading || undefined}
             className={styles.lanes}
             style={{ height }}
           >
