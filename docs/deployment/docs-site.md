@@ -34,6 +34,12 @@ Create or import the docs-only Vercel project through `infra/terraform/docs-site
 
 Use root-level `pnpm verify:docs` in CI before deployment, but keep the Vercel project build command relative to the docs app root.
 
+### Search index
+
+The Docusaurus build generates a static, same-origin search index for the Docs landing page, Public Docs, and Developer Docs. It honors `noindex` and excludes the engineering and maintainer sections. The missing-page form submits to `/search/?q=…`.
+
+On a preview, submit a known Public Docs query on the missing page and follow a result. Check that the generated index has no routes outside the configured search scope.
+
 ## Terraform Setup
 
 The provider setup stack lives at `infra/terraform/docs-site` and uses the shared S3 backend:

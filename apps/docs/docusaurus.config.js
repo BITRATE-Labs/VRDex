@@ -38,6 +38,23 @@ const config = {
       },
     ],
   ],
+  themes: [
+    [
+      require.resolve("@easyops-cn/docusaurus-search-local"),
+      {
+        docsDir: "../../docs",
+        docsRouteBasePath: "/docs",
+        language: "en",
+        hashed: "filename",
+        indexBlog: false,
+        indexPages: false,
+        searchBarShortcut: false,
+        forceIgnoreNoIndex: false,
+        // Keep maintainer and planning material out of the public search download.
+        ignoreFiles: /^(?!docs(?:$|\/(?:public|developers)(?:\/|$)))/,
+      },
+    ],
+  ],
   themeConfig: {
     navbar: {
       title: "VRDex Docs",

@@ -1,17 +1,21 @@
 import clsx from "clsx";
 import Link from "@docusaurus/Link";
 import Translate from "@docusaurus/Translate";
+import useBaseUrl from "@docusaurus/useBaseUrl";
 import Heading from "@theme/Heading";
 
 import styles from "./styles.module.css";
 
 const sections = [
+  { label: "Browse docs", to: "/docs/" },
   { label: "Public Docs", to: "/docs/public/" },
   { label: "Developer Docs", to: "/docs/developers/" },
   { label: "Engineering Docs", to: "/docs/engineering/" },
 ];
 
 export default function NotFoundContent({ className }) {
+  const searchPath = useBaseUrl("/search/");
+
   return (
     <main className={clsx(styles.main, className)}>
       <div className={styles.recovery}>
@@ -20,9 +24,12 @@ export default function NotFoundContent({ className }) {
             Page Not Found
           </Translate>
         </Heading>
-        <Link className={clsx("button button--primary", styles.primary)} to="/docs/">
-          Browse docs
-        </Link>
+        <form action={searchPath} className={styles.search} method="get" role="search">
+          <input aria-label="Search docs" name="q" placeholder="Search docs" required type="search" />
+          <button className={clsx("button button--primary", styles.primary)} type="submit">
+            Search
+          </button>
+        </form>
         <nav aria-label="Docs" className={styles.sections}>
           <ul>
             {sections.map(({ label, to }) => (
