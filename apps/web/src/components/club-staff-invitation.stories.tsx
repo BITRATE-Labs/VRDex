@@ -11,6 +11,7 @@ class InvitationClient extends ConvexReactClient {
   previews = 0;
   accepts = 0;
   fail = false;
+  invalid = false;
   release: (() => void) | undefined;
   hold = false;
   constructor() { super("https://fixture.invalid"); }
@@ -37,6 +38,7 @@ class InvitationClient extends ConvexReactClient {
     const nameAtRequest = this.previews === 1 ? "Afterhours" : "Second club";
     if (this.hold && this.previews === 1) await new Promise<void>((resolve) => { this.release = resolve; });
     if (this.fail) throw new ConvexError({ code: "STAFF_INVITATION_RATE_LIMITED", retryAfterMs: 60_000 });
+    if (this.invalid) return null as FunctionReturnType<Action>;
     // This transport fixture supplies the validator-shaped response of the real action.
     return {
       community: { displayName: nameAtRequest, slug: "afterhours" },
@@ -47,11 +49,12 @@ class InvitationClient extends ConvexReactClient {
 }
 
 const fetchAccessToken = async () => "fixture-token";
-function InvitationFixture({ signedIn = false, fail = false, hold = false }) {
+function InvitationFixture({ signedIn = false, fail = false, hold = false, invalid = false }) {
   const [client] = useState(() => {
     const value = new InvitationClient();
     value.fail = fail;
     value.hold = hold;
+    value.invalid = invalid;
     return value;
   });
   const [revision, setRevision] = useState(0);
@@ -62,12 +65,14 @@ function InvitationFixture({ signedIn = false, fail = false, hold = false }) {
   return <ConvexProviderWithAuth client={client} useAuth={useFixtureAuth}>
     <PageShell><PageContainer max="3xl">
       <ClubErrorBoundary><ClubInvitation communitySlug="afterhours" token={token} /></ClubErrorBoundary>
-      <button onClick={() => setRevision((value) => value + 1)}>Rerender</button>
-      <button onClick={() => setToken("B_b-0123Zz")}>Next invitation</button>
-      <button onClick={() => { client.release?.(); }}>Release first preview</button>
-      <button onClick={() => client.recover()}>Recover service</button>
-      <output aria-label="Preview calls" data-revision={revision}>{client.previews}</output>
-      <output aria-label="Acceptance calls">{client.accepts}</output>
+      {!invalid ? <>
+        <button onClick={() => setRevision((value) => value + 1)}>Rerender</button>
+        <button onClick={() => setToken("B_b-0123Zz")}>Next invitation</button>
+        <button onClick={() => { client.release?.(); }}>Release first preview</button>
+        <button onClick={() => client.recover()}>Recover service</button>
+        <output aria-label="Preview calls" data-revision={revision}>{client.previews}</output>
+        <output aria-label="Acceptance calls">{client.accepts}</output>
+      </> : null}
     </PageContainer></PageShell>
   </ConvexProviderWithAuth>;
 }
@@ -79,5 +84,6 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 export const Anonymous: Story = { render: () => <InvitationFixture /> };
 export const SignedIn: Story = { render: () => <InvitationFixture signedIn /> };
+export const Invalid: Story = { render: () => <InvitationFixture invalid /> };
 export const Unavailable: Story = { render: () => <InvitationFixture fail /> };
 export const SlowPreview: Story = { render: () => <InvitationFixture hold /> };

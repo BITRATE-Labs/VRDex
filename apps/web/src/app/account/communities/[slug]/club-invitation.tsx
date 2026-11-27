@@ -60,7 +60,14 @@ export function ClubInvitation({
   const invitation = preview.outcome.value;
   if (!invitation)
     return (
-      <Notice variant="warning">This invitation is no longer valid.</Notice>
+      <Card aria-labelledby="invalid-staff-invitation" className="mx-auto max-w-lg" padding="lg" surface="strong">
+        <h1 className="text-2xl font-semibold leading-tight text-balance sm:text-3xl" id="invalid-staff-invitation">
+          This invitation is no longer valid.
+        </h1>
+        <Link className={buttonVariants({ className: "mt-5", size: "lg", variant: "primary" })} href="/">
+          Return to VRDex
+        </Link>
+      </Card>
     );
   return (
     <Card padding="lg" surface="strong">

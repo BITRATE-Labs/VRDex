@@ -242,10 +242,15 @@ test("@flow @club-invitations real invitation sign-in, acceptance and denials", 
   for (const invalid of [expired, revoked, invite]) {
     await recipientPage.goto(`${root}/invite/${invalid.token}`);
     await expect(
-      recipientPage.getByText("This invitation is no longer valid.", {
+      recipientPage.getByRole("heading", {
+        name: "This invitation is no longer valid.",
+        level: 1,
         exact: true,
       }),
     ).toBeVisible();
+    await expect(
+      recipientPage.getByRole("link", { name: "Return to VRDex", exact: true }),
+    ).toHaveAttribute("href", "/");
     await expect(
       recipientPage.getByRole("button", { name: "Accept invitation" }),
     ).toHaveCount(0);

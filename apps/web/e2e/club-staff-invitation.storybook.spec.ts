@@ -19,6 +19,15 @@ test("signed-in acceptance uses the action and preserves verified-email recovery
   await expect(page.getByLabel("Acceptance calls")).toHaveText("1");
 });
 
+test("invalid staff invitations give a clear way back on narrow screens @storybook", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.goto("/iframe.html?id=clubs-staff-invitation--invalid&viewMode=story");
+  await expect(page.getByRole("heading", { level: 1, name: "This invitation is no longer valid.", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Return to VRDex", exact: true })).toHaveAttribute("href", "/");
+  await expect(page.getByRole("link", { name: "Sign in to accept" })).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+});
+
 test("preview failures allow retry and sign-in without revealing backend errors @storybook", async ({ page }) => {
   await page.goto("/iframe.html?id=clubs-staff-invitation--unavailable&viewMode=story");
   await expect(page.getByRole("alert")).toContainText("Unable to load this page.");
