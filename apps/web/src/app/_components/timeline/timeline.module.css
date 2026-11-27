@@ -31,9 +31,13 @@
   font-size: 0.75rem;
   min-height: 36px;
 }
-.toolbar button[aria-pressed="true"] {
-  color: var(--accent);
+.toolbar .favoritesToggle[aria-pressed="true"] {
+  border-color: var(--accent);
   background-color: var(--accent-muted);
+}
+.toolbar .favoritesToggle[aria-pressed="true"] svg {
+  color: var(--accent);
+  fill: currentColor;
 }
 .metadata {
   display: flex;
@@ -64,6 +68,11 @@
   width: 140px;
   border: 0;
   background: transparent;
+}
+@media (forced-colors: none) {
+  :global(html[data-theme="dark"]) .navigation input::-webkit-calendar-picker-indicator {
+    filter: brightness(0) invert(1);
+  }
 }
 .scroller {
   width: 100%;
@@ -516,7 +525,6 @@
     flex: 1;
   }
   .navigation {
-    order: 3;
     width: 100%;
     justify-content: space-between;
     flex-wrap: wrap;
@@ -525,12 +533,11 @@
     margin-left: auto;
   }
   .status {
-    order: 4;
-    width: 100%;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
     min-height: 40px;
   }
   .metadata {
-    order: 5;
     width: 100%;
     margin-left: 0;
   }

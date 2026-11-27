@@ -4,6 +4,7 @@ import {
   AuthPageShell,
   AuthUnavailableNotice,
 } from "@/components/auth-page-shell";
+import styles from "@/components/clerk-auth-controls.module.css";
 import { validateSignInReturnTo } from "@/lib/safe-return-to";
 
 function contributionLabel(returnTo: string) {
@@ -40,6 +41,12 @@ export default async function SignInPage({
     >
       {configured ? (
         <SignIn
+          appearance={journeyHeading ? {
+            elements: {
+              formFieldInput: styles.input,
+              socialButtonsBlockButton: styles.socialButton,
+            },
+          } : undefined}
           fallbackRedirectUrl={returnTo}
           signUpFallbackRedirectUrl={returnTo}
           signUpUrl="/sign-up"

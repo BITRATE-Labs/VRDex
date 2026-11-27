@@ -158,6 +158,57 @@ test.describe("continuous schedule @flow @fixture", () => {
     expect(params.get("tz")).toBe("America/New_York");
     expect(params.get("tag")).toBe("keep");
   });
+  test("mobile Favorites follows visual keyboard order and clears the filter", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.goto(`/?at=${TIMELINE_NOW}&tz=UTC&favorites=1&tag=keep`);
+    const schedule = page.locator("[data-home-schedule]");
+    const heading = schedule.getByRole("heading", { name: "Schedule", exact: true });
+    const date = schedule.getByLabel("Schedule date", { exact: true });
+    const earlier = schedule.getByRole("button", { name: "Earlier", exact: true });
+    const now = schedule.getByRole("button", { name: "Now", exact: true });
+    const later = schedule.getByRole("button", { name: "Later", exact: true });
+    const favorites = schedule.getByRole("button", { name: "Favorites only", exact: true });
+    const star = favorites.locator("svg");
+    const status = schedule.getByRole("status", { name: "Schedule data state" });
+    await expect(status).toHaveText("No favorites in this range");
+    await expect(favorites).toHaveAttribute("aria-pressed", "true");
+    await expect(star).not.toHaveCSS("fill", "none");
+
+    const dateBounds = (await date.boundingBox())!;
+    const laterBounds = (await later.boundingBox())!;
+    const favoriteBounds = (await favorites.boundingBox())!;
+    expect(dateBounds.y).toBeLessThan(laterBounds.y);
+    expect(laterBounds.y).toBeLessThan(favoriteBounds.y);
+
+    await heading.focus();
+    await page.keyboard.press("Tab");
+    await expect(date).toBeFocused();
+    // Chromium can visit several date segments before leaving the native field.
+    for (let index = 0; index < 6 && await date.evaluate((el) => el === document.activeElement); index += 1) {
+      await page.keyboard.press("Tab");
+    }
+    await expect(earlier).toBeFocused();
+    for (const next of [now, later, favorites]) {
+      await page.keyboard.press("Tab");
+      await expect(next).toBeFocused();
+    }
+    for (const previous of [later, now, earlier, date]) {
+      await page.keyboard.press("Shift+Tab");
+      await expect(previous).toBeFocused();
+    }
+
+    await favorites.focus();
+    await page.keyboard.press("Space");
+    await expect(favorites).toBeFocused();
+    await expect(favorites).toHaveAttribute("aria-pressed", "false");
+    await expect(star).toHaveCSS("fill", "none");
+    const query = new URL(page.url()).searchParams;
+    expect(query.has("favorites")).toBe(false);
+    expect(query.get("at")).toBe(String(TIMELINE_NOW));
+    expect(query.get("tz")).toBe("UTC");
+    expect(query.get("tag")).toBe("keep");
+    await expect(status).not.toContainText("No favorites in this range");
+  });
   test("defaultHomeGeometry", async ({ page, isMobile }, info) => {
     const sizes = isMobile ? [page.viewportSize()!] : [{ width: 1280, height: 800 }, { width: 1440, height: 900 }];
     for (const size of sizes) {
