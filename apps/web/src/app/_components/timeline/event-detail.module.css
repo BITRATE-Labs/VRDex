@@ -22,15 +22,18 @@ dialog.panel:not([open]) {
 }
 .header {
   display: flex;
-  justify-content: flex-end;
   align-items: center;
+  gap: 0.5rem;
   padding: 0.35rem 0.55rem;
   border-bottom: 1px solid var(--border);
   flex: none;
 }
-.fullPage {
-  min-width: 40px;
-  min-height: 40px;
+.fullPage,
+.close {
+  min-height: 44px;
+}
+.close {
+  margin-inline-start: auto;
 }
 .scroll {
   overflow-y: auto;
@@ -39,22 +42,20 @@ dialog.panel:not([open]) {
   scrollbar-gutter: stable;
 }
 .poster {
-  min-height: 320px;
-  flex: none;
-  padding: 0.8rem;
+  height: min(32dvh, 15rem);
+  padding: 0.5rem;
+  border-radius: var(--radius-card);
   background: var(--canvas-muted);
 }
 .poster img {
-  aspect-ratio: 4 / 5;
   display: block;
   width: 100%;
-  height: auto;
-  max-height: 62dvh;
+  height: 100%;
   object-fit: contain;
 }
 .content {
   display: grid;
-  gap: 0.8rem;
+  gap: 0.65rem;
   padding: 1.1rem;
 }
 .content h3 {
@@ -66,15 +67,25 @@ dialog.panel:not([open]) {
 }
 .identity {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.15rem;
   align-items: center;
-  justify-content: space-between;
   font-size: 0.875rem;
 }
-.time,
+.identity button,
+.lineup .actions button {
+  min-inline-size: 44px;
+  min-block-size: 44px;
+}
+.time {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.time time {
+  white-space: nowrap;
+}
 .meta {
   font-size: 0.75rem;
-  color: var(--muted);
+  color: color-mix(in srgb, var(--foreground) 38%, var(--muted));
 }
 .description {
   font-size: 0.85rem;
@@ -87,9 +98,25 @@ dialog.panel:not([open]) {
   flex-wrap: wrap;
   align-items: center;
 }
+.actions button:has(.interestLabel) {
+  min-height: 44px;
+  gap: 0.45rem;
+  padding-inline: 0.7rem;
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--interest) 9%, var(--surface-strong));
+}
+.interestLabel {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.lineupHeading {
+  padding-bottom: 0.4rem;
+  font-size: 0.875rem;
+  font-weight: 650;
+}
 .lineup {
   list-style: none;
-  margin: 0.4rem 0 0;
+  margin: 0;
   padding: 0;
   border-top: 1px solid var(--border);
 }
@@ -119,11 +146,35 @@ dialog.panel:not([open]) {
   font-weight: 550;
   overflow-wrap: anywhere;
 }
+.rowIdentity time {
+  white-space: nowrap;
+}
 .rowIdentity > :first-child {
   flex-basis: 100%;
 }
 .lineup .actions {
   flex-wrap: nowrap;
+}
+.lineup .actions button:has(.setInterestLabel) {
+  inline-size: 104px;
+  gap: 0.2rem;
+  padding: 0.3rem 0.35rem;
+  justify-content: flex-start;
+}
+button[data-state="saved"]:has(.setInterestLabel) {
+  border-color: color-mix(in srgb, var(--interest) 55%, var(--surface-strong));
+  background: color-mix(in srgb, var(--interest) 12%, var(--surface-strong));
+}
+.lineup .actions button:disabled:has(.setInterestLabel) {
+  opacity: 1;
+  color: color-mix(in srgb, var(--foreground) 25%, var(--muted));
+  background: color-mix(in srgb, var(--foreground) 6%, var(--surface-strong));
+}
+.setInterestLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: start;
 }
 .notice {
   padding: 1rem;
@@ -144,8 +195,5 @@ dialog.panel:not([open]) {
     max-height: 100dvh;
     border-radius: 0;
     padding-bottom: env(safe-area-inset-bottom);
-  }
-  .poster {
-    min-height: 240px;
   }
 }

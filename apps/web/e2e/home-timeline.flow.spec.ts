@@ -41,6 +41,7 @@ test.describe("continuous schedule @flow @fixture", () => {
     await marker.getByRole("button", { name: "Open Day Gathering, Time TBA", exact: true }).click();
     const panel = page.getByLabel("Event details", { exact: true });
     await expect(panel.getByRole("heading", { name: "Day Gathering", exact: true })).toBeVisible();
+    await expect(panel.locator("time").first()).toHaveText("Oct 26, 2026 · Time TBA");
     await panel.getByRole("button", { name: "Close", exact: true }).click();
     await page.getByRole("button", { name: "Later", exact: true }).click();
     const query = new URL(page.url()).searchParams;
@@ -659,7 +660,7 @@ test.describe("continuous schedule @flow @fixture", () => {
     await panel.getByRole("button", { name: "Close", exact: true }).click();
     await expect(trigger).toBeFocused();
   });
-  test("fullEventLinksPreserveNativeActivation", async ({
+  test("fullEventLinkPreservesNativeActivation", async ({
     page,
     context,
     timelineFixture,
@@ -673,22 +674,16 @@ test.describe("continuous schedule @flow @fixture", () => {
       .click();
     const panel = page.getByLabel("Event details", { exact: true });
     const href = `/${timelineFixture.runId}-community/events/${timelineFixture.runId}-3`;
-    const links = [
-      panel.getByRole("link", {
-        name: "ORBIT: Interstellar Bassline Orchestra",
-        exact: true,
-      }),
-      panel.getByRole("link", { name: "Open full event page", exact: true }),
-    ];
-    for (const link of links) {
-      await expect(link).toHaveAttribute("href", href);
-      const opened = context.waitForEvent("page");
-      await link.click({ modifiers: ["ControlOrMeta"] });
-      const tab = await opened;
-      await expect(tab).toHaveURL(new RegExp(href + "$"));
-      await tab.close();
-      await expect(panel).toBeVisible();
-    }
+    const link = panel.getByRole("link", { name: "Open full event page", exact: true });
+    await expect(link).toHaveAttribute("href", href);
+    await expect(link).toHaveText("Event page");
+    await expect(panel.locator(`a[href="${href}"]`)).toHaveCount(1);
+    const opened = context.waitForEvent("page");
+    await link.click({ modifiers: ["ControlOrMeta"] });
+    const tab = await opened;
+    await expect(tab).toHaveURL(new RegExp(href + "$"));
+    await tab.close();
+    await expect(panel).toBeVisible();
     await expect(
       panel.getByRole("link", { name: "Open event", exact: true }),
     ).toHaveCount(0);
@@ -757,6 +752,7 @@ test.describe("continuous schedule @flow @fixture", () => {
         exact: true,
       }),
     ).toBeVisible();
+    await expect(panel.getByRole("list", { name: "Lineup", exact: true }).getByRole("listitem")).toHaveCount(2);
     const poster = panel.getByRole("img", {
       name: "ORBIT: Interstellar Bassline Orchestra poster",
     });
@@ -799,22 +795,29 @@ test.describe("continuous schedule @flow @fixture", () => {
     ).toHaveCount(0);
     await expect(panel.getByText("DJ", { exact: true })).toHaveCount(0);
     await expect(
-        panel.getByText(/ (12|24)h$/, { exact: true }),
-    ).toHaveText("UTC · 12h");
+      panel.getByText(/ (12|24)h$/, { exact: true }),
+    ).toHaveCount(0);
+    await expect(panel.locator("time").first()).toHaveText(/\b2026,.*\s(?:AM|PM)\sUTC$/);
+    await expect(panel.getByRole("heading", { name: "Lineup", exact: true })).toBeVisible();
+    await expect(panel.getByRole("list", { name: "Lineup", exact: true })).toBeVisible();
     if (isMobile) {
       expect((await panel.boundingBox())?.height).toBeCloseTo(page.viewportSize()?.height ?? 0, 0);
     }
-    await panel
-      .getByRole("button", {
-        name: "Interested: ORBIT: Interstellar Bassline Orchestra",
-        exact: true,
-      })
-      .click();
+    const eventInterest = panel.getByRole("button", {
+      name: "Interested: ORBIT: Interstellar Bassline Orchestra",
+      exact: true,
+    });
+    await expect(eventInterest).toHaveAttribute("aria-pressed", "false");
+    await eventInterest.click();
+    await expect(eventInterest).toHaveText("Interested");
+    await expect(eventInterest).toHaveAttribute("aria-pressed", "true");
+    await expect(eventInterest).toHaveAttribute("title", "Remove interest");
     const included = panel.getByRole("button", {
       name: "Included with event: Aurora",
       exact: true,
     });
     await expect(included).toBeDisabled();
+    await expect(included).toHaveText("Included with event");
     await panel
       .getByRole("button", { name: "Favorite: Aurora", exact: true })
       .first()
@@ -824,21 +827,19 @@ test.describe("continuous schedule @flow @fixture", () => {
         .getByRole("button", { name: "Remove favorite: Aurora", exact: true })
         .first(),
     ).toBeVisible();
-    await panel
-      .getByRole("button", {
-        name: "Remove interest: ORBIT: Interstellar Bassline Orchestra",
-        exact: true,
-      })
-      .click();
+    await eventInterest.click();
+    await expect(eventInterest).toHaveAttribute("aria-pressed", "false");
     await expect(
       panel.getByRole("button", {
         name: "Interested: Aurora",
         exact: true,
       }),
     ).toBeEnabled();
-    await panel
-      .getByRole("button", { name: "Interested: Aurora", exact: true })
-      .click();
+    const setInterest = panel.getByRole("button", { name: "Interested: Aurora", exact: true });
+    await setInterest.click();
+    await expect(setInterest).toHaveText("Interested");
+    await expect(setInterest).toHaveAttribute("aria-pressed", "true");
+    await expect(setInterest).toHaveAttribute("title", "Remove interest");
     expect(
       await page.evaluate(
         () =>
@@ -864,12 +865,13 @@ test.describe("continuous schedule @flow @fixture", () => {
       path: info.outputPath("detail-compact-lineup.png"),
     });
     const scroll = panel.getByTestId("event-detail-scroll");
+    const maxScroll = await scroll.evaluate((el) => el.scrollHeight - el.clientHeight);
     await scroll.evaluate((el) => {
       el.scrollTop = el.scrollHeight;
     });
     await expect
       .poll(() => scroll.evaluate((el) => el.scrollTop))
-      .toBeGreaterThan(0);
+      .toBe(maxScroll);
     await scroll.evaluate((el) => {
       el.scrollTop = 0;
     });
@@ -1141,8 +1143,10 @@ test.describe("continuous schedule @flow @fixture", () => {
     await included.dispatchEvent("click");
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("vrdex.timeline.preferences.v1") ?? "null").plan)).toEqual([{ kind: "event", eventId: timelineFixture.eventIds[3] }]);
     await page.screenshot({ path: info.outputPath("schedule-included.png"), fullPage: true });
-    const remove = panel.getByRole("button", { name: `Remove interest: ${title}`, exact: true });
-    if (isMobile) await remove.tap(); else await remove.click();
+    const eventInterest = panel.getByRole("button", { name: `Interested: ${title}`, exact: true });
+    await expect(eventInterest).toHaveAttribute("aria-pressed", "true");
+    if (isMobile) await eventInterest.tap(); else await eventInterest.click();
+    await expect(eventInterest).toHaveAttribute("aria-pressed", "false");
     await expect(panel.getByRole("button", { name: "Interested: Aurora", exact: true })).toBeEnabled();
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("vrdex.timeline.preferences.v1") ?? "null").plan)).toEqual([]);
     await panel.getByRole("button", { name: "Close", exact: true }).click();

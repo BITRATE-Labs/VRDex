@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useEffectEvent, useRef, useSyncExternalStore } from "react";
-import { ExternalLink } from "lucide-react";
 import { publicEventPath } from "@/lib/event-path";
 import { Button, buttonVariants } from "@/components/ui/button";
 import type { TimelineSelection } from "../home-browse-provider";
@@ -83,13 +82,12 @@ export function EventDetailPanel({
           <a
             href={href}
             aria-label="Open full event page"
-            title="Open full event page"
-            className={`${buttonVariants({ size: "sm", variant: "ghost" })} ${styles.fullPage}`}
+            className={`${buttonVariants({ size: "sm", variant: "secondary" })} ${styles.fullPage}`}
           >
-            <ExternalLink size={18} aria-hidden="true" />
+            Event page
           </a>
         ) : null}
-        <Button autoFocus={narrow} size="sm" variant="ghost" onClick={dismiss}>
+        <Button className={styles.close} autoFocus={narrow} size="sm" variant="ghost" onClick={dismiss}>
           Close
         </Button>
       </div>
