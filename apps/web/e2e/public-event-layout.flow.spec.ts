@@ -190,6 +190,7 @@ test.describe("public event across the viewer's midnight", () => {
     await expect(main.getByRole("button", { name: /^Play / })).toHaveCount(0);
 
     const schedule = main.locator("section").first();
+    await expect(schedule.locator('time[datetime="2026-06-15T02:00:00.000Z"]')).toHaveText("Jun 14, 2026, 10:00 PM EDT");
     const doors = schedule.locator('time[datetime="2026-06-15T01:30:00.000Z"]');
     const end = schedule.locator('time[datetime="2026-06-15T05:00:00.000Z"]');
 
@@ -211,7 +212,7 @@ for (const timezoneId of ["UTC", "America/Los_Angeles"]) {
         expect(result?.status()).toBe(200);
         const main = page.getByRole("main");
         const time = main.locator("section").first().locator("time").first();
-        await expect(time).toContainText(slug === sparseSlug ? "Jul 4, 2026 · Time TBA" : expectedZone);
+        await expect(time).toHaveText(slug === sparseSlug ? "Jul 4, 2026 · Time TBA" : timezoneId === "UTC" ? "Jan 1, 2025, 12:00 PM UTC" : "Jan 1, 2025, 4:00 AM PST");
         if (slug !== sparseSlug) {
           const schedule = main.locator("section").first();
           const doors = schedule.locator('time[datetime="2025-01-01T11:30:00.000Z"]');

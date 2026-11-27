@@ -35,8 +35,9 @@ export function EventPublicHero({
   const startTime = (
     <ViewerLocalEventDateTime className={cn(
       "block text-base leading-snug font-semibold tabular-nums sm:text-lg",
+      event.scheduleKind !== "date_only" && "max-[360px]:text-sm",
       bannerStyle ? "text-white" : "text-foreground",
-    )} timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />
+    )} timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} showYear />
   );
 
   return (
@@ -55,7 +56,7 @@ export function EventPublicHero({
               <p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em]">Cancelled</p>
             ) : null}
             {hasLineup ? (
-              <div className="flex flex-wrap items-center gap-x-4">
+              <div className={cn("flex flex-wrap items-center gap-x-4", event.scheduleKind !== "date_only" && "max-[360px]:gap-x-2")}>
                 {startTime}
                 <a
                   className="inline-flex min-h-11 min-w-11 items-center rounded-control text-sm font-medium underline decoration-current/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-current sm:min-h-8"

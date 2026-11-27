@@ -545,7 +545,7 @@ export async function expectCommunityProfilePage(page: Page) {
 
 export async function expectEventPage(page: Page) {
   await expect(page.getByRole("heading", { name: "Afterglow Harbor Sessions" })).toBeVisible();
-  await expect(page.getByText(/Jun 15, 2:00 AM UTC/i).first()).toBeVisible();
+  await expect(page.locator('main time[datetime="2026-06-15T02:00:00.000Z"]').first()).toHaveText("Jun 15, 2026, 2:00 AM UTC");
   await expect(page.getByText(/Your time/i)).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Lineup", exact: true })).toBeVisible();
   const schedule = page.getByRole("list").filter({ has: page.getByRole("link", { name: "DJ Aurora", exact: true }) });
