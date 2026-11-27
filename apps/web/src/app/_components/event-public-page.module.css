@@ -106,6 +106,10 @@
     margin-top: 0.5rem;
   }
 
+  .watch:has(> :not([data-event-watch-external-only])) + .locationLinks:has(> .worldLink:first-child + a:last-child:not(.worldLink)) > a {
+    flex-basis: max-content;
+  }
+
   .mobileHost > :first-child {
     min-height: 2.75rem;
     gap: 0.5rem;
