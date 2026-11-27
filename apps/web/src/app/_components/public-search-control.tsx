@@ -68,6 +68,9 @@ function SearchControl({
   const expanded = isOpen && preview.length > 0;
   const selectedIndex = expanded && activeIndex < preview.length ? activeIndex : -1;
   const isInverse = tone === "inverse";
+  const trimmedQuery = query.trim();
+  const hasQueryDraft = Boolean(defaultQuery && trimmedQuery !== defaultQuery.trim());
+  const hasPendingQuery = surface === "search" && hasQueryDraft && Boolean(trimmedQuery);
   const resultsHref = searchHref({ query, filter }).replace(/^\/search/, action);
 
   useEffect(() => {
@@ -111,7 +114,7 @@ function SearchControl({
     <form
       action={action}
       className={cn("relative flex flex-col gap-3 sm:flex-row", compact && "flex-row gap-2 sm:gap-3", className)}
-      data-search-draft={defaultQuery && query.trim() !== defaultQuery.trim() ? "" : undefined}
+      data-search-draft={hasQueryDraft ? "" : undefined}
       method="get"
       onSubmit={onSubmit}
     >
@@ -236,7 +239,12 @@ function SearchControl({
       <button
         className={cn(
           compact === true
-            ? cn(buttonVariants({ size: "sm", variant: "surface" }), "min-h-11 shrink-0", iconSubmit ? "w-11 p-0" : "max-sm:w-11 max-sm:p-0 sm:px-4")
+            ? cn(
+              buttonVariants({ size: "sm", variant: hasPendingQuery ? "primary" : "surface" }),
+              "min-h-11 shrink-0",
+              hasPendingQuery && "border border-transparent",
+              iconSubmit ? "w-11 p-0" : "max-sm:w-11 max-sm:p-0 sm:px-4",
+            )
             : cn(buttonVariants({ size: "lg", variant: isInverse ? "inversePrimary" : "primary" }), "min-h-14 font-semibold", iconSubmit ? "w-14 shrink-0 p-0" : "px-6"),
           compact === "mobile" && "max-sm:min-h-11 max-sm:w-11 max-sm:shrink-0 max-sm:p-0",
         )}
