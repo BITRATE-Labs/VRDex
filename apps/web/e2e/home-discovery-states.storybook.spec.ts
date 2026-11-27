@@ -70,6 +70,30 @@ test("club rail controls follow overflow and keep keyboard focus at the ends @st
   }
 });
 
+test("missing or failed club artwork shows one linked name in the art tile", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 840 });
+  await page.route("https://example.invalid/broken.png", (route) => route.abort());
+
+  for (const state of ["missing-artwork", "broken-artwork"]) {
+    await page.goto(`/iframe.html?id=home-discovery--${state}&viewMode=story`);
+    const card = page.getByTestId("discovery-club-card").first();
+    const title = card.getByRole("heading").getByRole("link", { name: "Prism Collective", exact: true });
+    const artwork = card.locator('[class*="clubArtwork_"]').first();
+    await expect(title).toBeVisible();
+    await expect(artwork.locator("img")).toHaveCount(0);
+    await expect(card.getByText("Prism Collective", { exact: true })).toHaveCount(1);
+    await expect(card.getByRole("link")).toHaveCount(1);
+    const [tile, name] = await Promise.all([artwork.boundingBox(), title.boundingBox()]);
+    if (!tile || !name) throw new Error("Missing club name or artwork");
+    expect(name.y).toBeGreaterThan(tile.y);
+    expect(name.y + name.height).toBeLessThan(tile.y + tile.height);
+
+    await title.focus();
+    await page.keyboard.press("Tab");
+    await expect(card.getByRole("button", { name: /favorite: Prism Collective$/i })).toBeFocused();
+  }
+});
+
 for (const state of [
   "mixed",
   "one-event-two-clubs",
