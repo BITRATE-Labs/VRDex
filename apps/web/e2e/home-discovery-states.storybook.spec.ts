@@ -30,7 +30,13 @@ for (const state of [
       const populatedName = emptyName === "Events" ? "Clubs" : "Events";
       const empty = page.getByRole("group", { name: emptyName, exact: true });
       const populated = page.getByRole("group", { name: populatedName, exact: true });
-      await expect(empty.getByText(`No ${emptyName.toLowerCase()}`, { exact: true })).toBeVisible();
+      const status = empty.getByText(`No ${emptyName.toLowerCase()}`, { exact: true });
+      await expect(status).toBeVisible();
+      const statusContentTop = await status.evaluate((element) =>
+        element.getBoundingClientRect().top + parseFloat(getComputedStyle(element).paddingTop),
+      );
+      const heading = (await empty.getByRole("heading", { name: emptyName, exact: true }).boundingBox())!;
+      expect(statusContentTop - (heading.y + heading.height)).toBeLessThanOrEqual(20);
       const emptyBounds = (await empty.boundingBox())!;
       const populatedBounds = (await populated.boundingBox())!;
       if (isMobile) {

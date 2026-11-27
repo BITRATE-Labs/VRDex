@@ -263,6 +263,12 @@
   font-size: 0.85rem;
   padding: 1.5rem 0;
 }
+.groups[data-empty-group] > div:has(> .status) > .cards:empty {
+  display: none;
+}
+.groups[data-empty-group] > div > .status {
+  padding: 0;
+}
 .loading {
   display: inline-flex;
   align-items: center;
