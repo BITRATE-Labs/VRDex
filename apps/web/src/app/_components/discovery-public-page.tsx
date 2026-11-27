@@ -718,7 +718,6 @@ export function SearchResultsPage({
     >
         {hasQuery ? (
           <section aria-describedby="search-results-query" aria-label="Search results" className="space-y-3 sm:space-y-5">
-            <p className="sr-only" id="search-results-query">Results for {query}</p>
             <nav aria-label="Entity type" className="flex flex-wrap gap-x-0.5 border-b border-border sm:gap-x-2">
               {filters.map((filter) => {
                 const active = filter === activeFilter;
@@ -740,6 +739,9 @@ export function SearchResultsPage({
                 );
               })}
             </nav>
+            <p className="sr-only wrap-anywhere text-sm font-medium text-muted group-has-[[data-search-draft]]/search-view:not-sr-only" id="search-results-query">
+              Results for {query}
+            </p>
             {status !== "live" ? (
               <Card className="flex flex-wrap items-center justify-between gap-3" surface="dashed">
                 <p className="text-pretty font-medium" role="status">

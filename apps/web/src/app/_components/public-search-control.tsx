@@ -111,6 +111,7 @@ function SearchControl({
     <form
       action={action}
       className={cn("relative flex flex-col gap-3 sm:flex-row", compact && "flex-row gap-2 sm:gap-3", className)}
+      data-search-draft={defaultQuery && query.trim() !== defaultQuery.trim() ? "" : undefined}
       method="get"
       onSubmit={onSubmit}
     >
