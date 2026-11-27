@@ -183,9 +183,9 @@ for (const state of [
       const event = events.first();
       await event.getByRole("link", { name: "ORBIT", exact: true }).focus();
       await page.keyboard.press("Tab");
-      await expect(event.getByRole("button", { name: "Interested: ORBIT" })).toBeFocused();
-      await page.keyboard.press("Tab");
       await expect(event.getByRole("link", { name: "Prism Collective" })).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(event.getByRole("button", { name: "Interested: ORBIT" })).toBeFocused();
       await page.keyboard.press("Tab");
       await expect(event.getByRole("link", { name: "Aurora" })).toBeFocused();
       await page.keyboard.press("Tab");

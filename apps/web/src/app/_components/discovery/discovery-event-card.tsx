@@ -84,6 +84,20 @@ export function DiscoveryEventCard({
             {event.title}
           </a>
         </h4>
+        <p className={styles.date}>
+          {date && (
+            <>
+              <time className={styles.eventTime} dateTime={date.dateTime}>{date.label}</time>
+              {" "}
+            </>
+          )}
+          <span className={styles.hostDetails}>
+            {date && <span aria-hidden="true">{"· "}</span>}
+            <a className={styles.host} href={`/${event.host.slug}`}>
+              {event.host.displayName}
+            </a>
+          </span>
+        </p>
         <InterestButton
           label={event.title}
           state={saved ? "saved" : "unsaved"}
@@ -91,17 +105,6 @@ export function DiscoveryEventCard({
           visibleLabelClassName={styles.preferenceLabel}
           onToggle={() => onSave({ kind: "event", eventId: event.id })}
         />
-        <p className={styles.date}>
-          {date && (
-            <>
-              <time className={styles.eventTime} dateTime={date.dateTime}>{date.label}</time>
-              {" · "}
-            </>
-          )}
-          <a className={styles.host} href={`/${event.host.slug}`}>
-            {event.host.displayName}
-          </a>
-        </p>
         <div className={styles.favoriteSummary}>
           {matchingPeople && matchingPeople.length > 0 && (
             <ul className={styles.performers} aria-label="Favorite people">
@@ -130,7 +133,7 @@ export function DiscoveryEventCard({
             label={event.title}
             alt=""
             src={event.posterImageUrl}
-            sizes="(max-width: 760px) 78vw, 23vw"
+            sizes="(max-width: 760px) 78vw, (max-width: 880px) 340px, 23vw"
           />
         </a>
       </div>
