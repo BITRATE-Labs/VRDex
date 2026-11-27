@@ -196,9 +196,9 @@ function EnabledAnalyticsPreferencesProvider({ children }: { children: ReactNode
           : "max-sm:fixed max-sm:inset-x-4 max-sm:bottom-4 max-sm:z-50 max-sm:mx-auto max-sm:max-h-[calc(100dvh-2rem)] max-sm:overflow-y-auto",
       )}
     >
-      <div className="flex items-center justify-between gap-4">
+      <div className={cn("flex items-center justify-between gap-4", isOffer && "max-sm:flex-wrap max-sm:gap-y-1")}>
         <h2 className="text-lg font-semibold">Analytics</h2>
-        <Button size="sm" variant="ghost" className={isOffer ? "max-sm:min-h-11" : undefined} onClick={dismiss} aria-label="Close analytics preferences">Close</Button>
+        <Button size="sm" variant="ghost" className={isOffer ? "max-sm:ms-auto max-sm:min-h-11" : undefined} onClick={dismiss} aria-label="Close analytics preferences">Close</Button>
       </div>
       <p className={cn("mt-2 text-sm text-muted", isOffer && "max-sm:mt-0")}>Usage analytics and masked session replay.</p>
       <div className={isOffer ? "contents max-sm:mt-1 max-sm:flex max-sm:flex-wrap max-sm:items-center max-sm:justify-between max-sm:gap-x-3" : "contents"}>
