@@ -64,7 +64,8 @@ function resultSubtitle(result: PublicSearchResult): string | undefined {
   return redundantLabels.includes(subtitle.toLowerCase()) ? undefined : subtitle;
 }
 
-function ResultImage({ result, quietFallback = false }: { result: PublicSearchResult; quietFallback?: boolean }) {
+function ResultImage({ result, quietFallback = false, compact = false }: { result: PublicSearchResult; quietFallback?: boolean; compact?: boolean }) {
+  const size = compact ? "size-10 sm:size-14" : "size-14";
   const primaryImageUrl = result.entityType === "profile"
     ? result.profileImageUrl ?? result.imageUrl
     : result.imageUrl;
@@ -76,7 +77,7 @@ function ResultImage({ result, quietFallback = false }: { result: PublicSearchRe
   if (result.entityType !== "profile") {
     return (
       <EntityImage
-        className="size-14 rounded-card bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] text-lg text-foreground"
+        className={cn(size, "rounded-card bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] text-lg text-foreground")}
         label={result.title}
         sizes="56px"
         src={primaryImageUrl}
@@ -95,7 +96,7 @@ function ResultImage({ result, quietFallback = false }: { result: PublicSearchRe
       <span className="relative shrink-0">
         {imageIsLogoOnly ? (
           <EntityImage
-            className="size-14 rounded-card border border-border bg-surface-strong text-xs"
+            className={cn(size, "rounded-card border border-border bg-surface-strong text-xs")}
             fallback="Logo"
             imageClassName="!object-contain p-1"
             label={`${result.title} logo`}
@@ -105,13 +106,13 @@ function ResultImage({ result, quietFallback = false }: { result: PublicSearchRe
         ) : useQuietFallback ? (
           <EntityImage
             alt=""
-            className="size-14 rounded-card border border-border bg-surface-strong font-semibold text-foreground"
+            className={cn(size, "rounded-card border border-border bg-surface-strong font-semibold text-foreground")}
             label={result.title}
           />
         ) : (
           <ProfileAvatarImage
             appearance={result.avatarAppearance}
-            className="size-14 rounded-card bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] text-lg text-foreground"
+            className={cn(size, "rounded-card bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] text-lg text-foreground")}
             label={result.title}
             sizes="56px"
             src={primaryImageUrl}
@@ -129,7 +130,7 @@ function ResultImage({ result, quietFallback = false }: { result: PublicSearchRe
       <span className="relative">
         <ProfileAvatarImage
           appearance={result.avatarAppearance}
-          className="size-14 rounded-card bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] text-lg text-foreground"
+          className={cn(size, "rounded-card bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] text-lg text-foreground")}
           label={result.title}
           sizes="56px"
           src={result.profileImageUrl}
@@ -139,7 +140,7 @@ function ResultImage({ result, quietFallback = false }: { result: PublicSearchRe
         ) : null}
       </span>
       <EntityImage
-        className="size-14 rounded-card border border-border bg-surface-strong text-xs"
+        className={cn(size, "rounded-card border border-border bg-surface-strong text-xs")}
         fallback="Logo"
         imageClassName="!object-contain p-1"
         label={`${result.title} logo`}
@@ -248,7 +249,7 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
     <div className="rounded-panel border border-border bg-surface transition-colors hover:border-border-strong">
       <TrackedDiscoveryLink
         className={cn(
-          "group flex min-h-11 items-start gap-3 rounded-panel p-4 transition-colors hover:bg-surface-strong focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-strong",
+          "group relative flex min-h-11 items-start gap-3 rounded-panel p-4 transition-colors hover:bg-surface-strong focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-strong",
           result.claimEntryPath && "pb-2",
         )}
         eventName={result.entityType === "event" ? "event_card_clicked" : "search_result_clicked"}
@@ -259,20 +260,15 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
           surface: "search_results",
         }}
       >
-        <ResultImage result={result} quietFallback />
+        <ResultImage compact result={result} quietFallback />
         <span className="flex min-w-0 flex-1 flex-col gap-2">
           <span className="flex flex-col gap-1">
-            <span className="text-xl font-semibold text-accent-strong underline decoration-accent/55 underline-offset-4 group-hover:decoration-current [overflow-wrap:anywhere]">
+            <span className="text-xl font-semibold text-accent-strong underline decoration-accent/55 underline-offset-4 pe-6 group-hover:decoration-current [overflow-wrap:anywhere]">
               {result.title}
             </span>
-            <span className="flex flex-wrap items-baseline gap-x-2 text-sm text-muted">
+            <span className="flex flex-col items-start gap-x-3 gap-y-0.5 text-sm text-muted sm:flex-row sm:flex-wrap sm:items-baseline">
               <span>{entityLabel(result)}</span>
-              {trustLabel ? (
-                <span className="inline-flex items-baseline gap-2">
-                  <span aria-hidden="true">·</span>
-                  <span>{trustLabel}</span>
-                </span>
-              ) : null}
+              {trustLabel ? <span className="text-xs font-medium">{trustLabel}</span> : null}
             </span>
           </span>
           {subtitle ? <span className="text-sm text-muted">{subtitle}</span> : null}
@@ -280,13 +276,13 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
           {result.summary ? <span className="line-clamp-2 text-sm leading-6 text-muted">{result.summary}</span> : null}
           {roleLabels.length > 0 ? <span className="text-xs text-muted">{roleLabels.join(" · ")}</span> : null}
         </span>
-        <ChevronRight aria-hidden="true" className="mt-1 size-4 shrink-0 text-accent-strong" />
+        <ChevronRight aria-hidden="true" className="absolute end-4 top-5 size-4 text-accent-strong" />
       </TrackedDiscoveryLink>
       {result.person ? <PublicSearchResultDetails person={result.person} /> : null}
       {result.claimEntryPath ? (
-        <div className="ml-[5.25rem] w-fit pr-4">
+        <div className="ml-[4.25rem] w-fit pb-3 pr-4 sm:ml-[5.25rem]">
           <Link
-            className="inline-flex min-h-11 items-center rounded-control text-sm font-medium text-muted underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-accent-strong"
+            className="inline-flex min-h-11 items-center rounded-control border border-border px-3 text-sm font-medium text-muted transition-colors hover:border-border-strong hover:bg-surface-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-strong"
             href={result.claimEntryPath}
           >
             Claim this profile
@@ -561,12 +557,12 @@ export function SearchResultsPage({
                 ) : null}
               </Card>
             ) : results.length === 0 ? (
-              <Card className="grid items-center justify-items-start gap-x-5 gap-y-2 sm:grid-cols-[minmax(0,1fr)_auto]" surface="strong">
+              <Card className="grid justify-items-start gap-2" surface="strong">
                 <p className="text-pretty font-semibold">No public results matched that search yet.</p>
-                <EditPublicSearchLink inputId={inputId} />
                 <p className="text-pretty text-sm leading-6 text-muted">
                   Try a community name, DJ alias, world name, event title, genre, or scene term.
                 </p>
+                <EditPublicSearchLink inputId={inputId} />
               </Card>
             ) : (
               <div className="grid gap-4">

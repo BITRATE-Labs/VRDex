@@ -7,6 +7,9 @@ test("world shows artwork and linked creator pictures without placeholder copy",
   await page.goto("/playwright-neon-harbor");
   await expect(page.getByText("Place, vibe, context", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "About this world", exact: true })).toBeVisible();
+  const platforms = page.locator("dl > div").filter({ has: page.getByText("Platforms", { exact: true }) });
+  await expect(platforms.getByText("PC", { exact: true })).toBeVisible();
+  await expect(platforms.getByText("Android / Quest", { exact: true })).toBeVisible();
   await expect(page.getByRole("img", { name: "Neon Harbor", exact: true })).toBeVisible();
   for (const creator of ["Afterglow Social", "DJ Aurora"]) {
     const credit = page.getByRole("link").filter({ hasText: creator });

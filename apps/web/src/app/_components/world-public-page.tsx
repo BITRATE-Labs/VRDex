@@ -324,7 +324,7 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
                 ) : null}
                 {world.platformCompatibility.length > 0 ? (
                   <div>
-                    <dt className={heroMetaClassName}>Platform hints</dt>
+                    <dt className={heroMetaClassName}>Platforms</dt>
                     <dd className="mt-1">
                       <PillList items={world.platformCompatibility.map(platformLabel)} onArtwork={Boolean(heroImageUrl)} />
                     </dd>
