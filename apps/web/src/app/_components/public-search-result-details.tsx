@@ -8,7 +8,7 @@ import { orderedPublicSearchGenres, publicSearchGenreLabel } from "@/lib/public-
 
 const summaryClassName = "inline-flex min-h-11 min-w-11 w-fit cursor-pointer list-none items-center justify-center gap-1 rounded-control leading-6 font-medium text-accent-strong underline decoration-accent/55 underline-offset-2 hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring max-sm:border max-sm:border-border max-sm:px-2.5 max-sm:no-underline max-sm:hover:bg-surface-strong sm:min-h-6 sm:min-w-6 [&::-webkit-details-marker]:hidden";
 const disclosureClassName = cn("min-w-0 open:basis-full", styles.disclosure);
-const detailPanelClassName = "order-last min-w-0 flex-[1_0_100%] -ms-[3.25rem] border-s border-border py-1 ps-2 sm:ms-0";
+const detailPanelClassName = "order-last min-w-0 flex-[1_0_100%]";
 
 export function PublicSearchResultDetails({ person }: { person: PublicSearchPerson }) {
   const genres = orderedPublicSearchGenres(person.genres);
@@ -33,7 +33,7 @@ export function PublicSearchResultDetails({ person }: { person: PublicSearchPers
             </span>
             <ChevronDown aria-hidden="true" className="size-3 shrink-0 group-open/genres:rotate-180 sm:hidden" />
           </summary>
-          <p className={cn(detailPanelClassName, "[overflow-wrap:anywhere]")}>{remainingGenres.join(" · ")}</p>
+          <p className={cn(detailPanelClassName, "[overflow-wrap:anywhere] sm:border-s sm:border-border sm:py-1 sm:ps-2")}>{remainingGenres.join(" · ")}</p>
         </details>
       ) : null}
       {person.outboundLinks.length > 0 ? (
@@ -42,7 +42,7 @@ export function PublicSearchResultDetails({ person }: { person: PublicSearchPers
             <ChevronDown aria-hidden="true" className="size-3 shrink-0 group-open/links:rotate-180" />
             Links
           </summary>
-          <div className={cn(detailPanelClassName, styles.linksPanel)}>
+          <div className={cn(detailPanelClassName, "-ms-[3.25rem] border-s border-border py-1 ps-2 sm:ms-0", styles.linksPanel)}>
             <PublicProfileLinks links={person.outboundLinks} />
           </div>
         </details>

@@ -81,6 +81,12 @@
   }
 }
 
+@media (width < 40rem) {
+  .linksPanel :global(.lookup-vrcdn-group .lookup-primary-url-value) {
+    color: var(--muted);
+  }
+}
+
 @media (width <= 40rem) {
   .linksPanel :global(.lookup-vrcdn-group) {
     padding-inline: 0.375rem;
