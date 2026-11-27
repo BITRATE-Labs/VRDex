@@ -301,7 +301,14 @@ function AvailableDiscovery({
         : undefined;
   const Cards = liveFavoriteLineup ? LiveEventCards : EventCards;
   return (
-    <div className={styles.groups} data-empty-group={emptyGroup}>
+    <div
+      className={styles.groups}
+      data-empty-group={emptyGroup}
+      data-single-event-with-clubs={
+        (events.length === 1 && clubs.length === 2 &&
+          clubs.every((club) => club.profileType === "community")) || undefined
+      }
+    >
       <div role="group" aria-labelledby="discovery-events-heading">
         <Cards
           {...props}

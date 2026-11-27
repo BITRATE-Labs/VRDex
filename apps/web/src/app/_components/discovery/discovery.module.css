@@ -32,9 +32,11 @@
   background: var(--surface-elevated);
 }
 .groups {
+  --group-gap: 1.5rem;
+  --card-gap: 1rem;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1.5rem;
+  gap: var(--group-gap);
 }
 @media (width > 760px) {
   .groups[data-empty-group="events"] {
@@ -42,6 +44,13 @@
   }
   .groups[data-empty-group="clubs"] {
     grid-template-columns: minmax(0, 40rem) clamp(7rem, 16%, 12rem);
+  }
+  .groups[data-single-event-with-clubs] {
+    --rail-width: calc((100% - var(--group-gap)) / 2);
+    grid-template-columns: calc((var(--rail-width) - var(--card-gap)) / 2) var(--rail-width);
+  }
+  .groups[data-single-event-with-clubs] .cards:not(.clubRail) {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 .groups > div {
@@ -92,7 +101,7 @@
 .cards {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  gap: var(--card-gap);
   align-items: start;
 }
 .cards > div,
