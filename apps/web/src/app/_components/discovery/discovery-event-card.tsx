@@ -68,7 +68,7 @@ export function DiscoveryEventCard({
     onSelect({ eventId: event.id, slug: event.slug }, activation.currentTarget);
   };
   return (
-    <article className={styles.card} data-testid="discovery-event-card">
+    <article className={`${styles.card} ${styles.eventCard}`} data-testid="discovery-event-card">
       <div className={styles.artwork}>
         <a
           className={styles.artworkLink}
@@ -84,13 +84,14 @@ export function DiscoveryEventCard({
             sizes="(max-width: 760px) 78vw, 23vw"
           />
         </a>
-        <InterestButton
-          label={event.title}
-          state={saved ? "saved" : "unsaved"}
-          className={styles.save}
-          onToggle={() => onSave({ kind: "event", eventId: event.id })}
-        />
       </div>
+      <InterestButton
+        label={event.title}
+        state={saved ? "saved" : "unsaved"}
+        className={styles.save}
+        visibleLabelClassName={styles.mobileActionLabel}
+        onToggle={() => onSave({ kind: "event", eventId: event.id })}
+      />
       <div className={styles.eventMetadata}>
         <h4 className={styles.name}>
           <a href={event.href} onClick={open}>

@@ -117,6 +117,13 @@
 .card {
   animation: arrive 140ms ease-out;
 }
+.eventCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.eventCard > .artwork {
+  grid-area: 1 / 1;
+}
 .artwork,
 .clubArtwork {
   position: relative;
@@ -149,12 +156,16 @@
   outline-offset: 3px;
 }
 .save {
-  position: absolute;
-  right: 0.65rem;
-  bottom: 0.65rem;
+  grid-area: 1 / 1;
+  place-self: end;
+  position: relative;
+  margin: 0 calc(0.65rem + 1px) calc(0.65rem + 1px) 0;
   opacity: 0;
   transition: opacity 120ms ease;
   background: color-mix(in srgb, var(--surface-strong) 90%, transparent);
+}
+.mobileActionLabel {
+  display: none;
 }
 .card:hover .save,
 .card:focus-within .save,
@@ -431,6 +442,36 @@
   }
   article .eventMetadata {
     min-height: 0;
+  }
+  .eventCard {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 0.4rem;
+  }
+  .eventCard > .artwork {
+    grid-column: 1 / -1;
+  }
+  .eventCard > .eventMetadata {
+    grid-area: 2 / 1;
+  }
+  .eventCard > .save {
+    grid-area: 2 / 2;
+    align-self: start;
+    margin: 0.5rem 0 0;
+    background: transparent;
+  }
+  .card .favorite {
+    min-height: 44px;
+  }
+  .card :is(.save, .favorite) {
+    gap: 0.3rem;
+    padding-inline: 0.4rem;
+  }
+  .mobileActionLabel {
+    display: inline;
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 500;
+    white-space: nowrap;
   }
   .favoriteSummary:empty {
     display: none;

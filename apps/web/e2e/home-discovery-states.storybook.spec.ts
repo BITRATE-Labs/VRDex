@@ -114,12 +114,27 @@ for (const state of [
       await expect(event).toBeFocused();
       await event.blur();
     }
-    if (isMobile && state === "mixed") {
-      const interest = page.getByRole("button", { name: /^Interested:/ }).first();
-      await expect(interest).toBeVisible();
-      const bounds = (await interest.boundingBox())!;
-      expect(bounds.width).toBeGreaterThanOrEqual(44);
-      expect(bounds.height).toBeGreaterThanOrEqual(44);
+    if (state === "mixed") {
+      const event = page.getByTestId("discovery-event-card").first();
+      const interest = event.getByRole("button", { name: /^Interested:/ });
+      const favorite = page.getByTestId("discovery-club-card").getByRole("button", { name: /^Favorite:/ }).first();
+      for (const [action, label] of [[interest, "Interested"], [favorite, "Favorite"]] as const) {
+        const visualLabel = action.getByText(label, { exact: true });
+        await expect(visualLabel).toHaveAttribute("aria-hidden", "true");
+        if (isMobile) {
+          await expect(visualLabel).toBeVisible();
+          const bounds = (await action.boundingBox())!;
+          expect(bounds.width).toBeGreaterThanOrEqual(44);
+          expect(bounds.height).toBeGreaterThanOrEqual(44);
+        } else {
+          await expect(visualLabel).toBeHidden();
+        }
+      }
+      if (isMobile) {
+        const artwork = (await event.getByRole("link", { name: /^Open / }).boundingBox())!;
+        const action = (await interest.boundingBox())!;
+        expect(action.y).toBeGreaterThanOrEqual(artwork.y + artwork.height);
+      }
     }
     if (state.includes("-no-")) {
       const emptyName = state.endsWith("-no-events") ? "Events" : "Clubs";
