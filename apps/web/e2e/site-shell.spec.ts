@@ -100,6 +100,71 @@ for (const width of [320, 390]) {
   });
 }
 
+test("mobile header search submits the query unless a suggestion is selected", async ({ page, isMobile }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  const match = "Aurora";
+  const noMatch = "vrdex-no-match & test";
+  await page.route(/\/search\/suggest\?q=/, (route) => {
+    const query = new URL(route.request().url()).searchParams.get("q");
+    return route.fulfill({
+      json: {
+        results: query === match
+          ? [{ entityType: "profile", profileType: "person", slug: "playwright-dj-aurora", title: "DJ Aurora", routePath: "/playwright-dj-aurora" }]
+          : [],
+      },
+    });
+  });
+  await page.goto("/support");
+
+  const nav = page.getByRole("navigation", { name: "Primary navigation", exact: true });
+  const toggle = nav.getByRole("button", { name: "Search", exact: true });
+  const input = nav.getByRole("combobox", { name: "Search VRDex", exact: true });
+  const option = nav.getByRole("option", { name: /DJ Aurora/ });
+
+  async function openSearch() {
+    await waitForSiteMenuHydration(toggle);
+    if (isMobile) await toggle.tap();
+    else await toggle.click();
+    await expect(input).toBeFocused();
+  }
+
+  await openSearch();
+  await input.fill(" ");
+  await input.press("Enter");
+  await expect(input).toBeFocused();
+  await expect(page).toHaveURL(/\/support$/);
+
+  await input.fill(match);
+  await expect(option).toBeVisible();
+  await input.press("Enter");
+  await expect(page).toHaveURL(/\/search\?q=Aurora$/);
+  await expect(page.getByRole("main").getByRole("link", { name: /DJ Aurora/ })).toBeVisible();
+  await expect(input).toHaveCount(0);
+  await page.goBack();
+
+  await openSearch();
+  const suggestions = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === "/search/suggest" && url.searchParams.get("q") === noMatch;
+  });
+  await input.fill(noMatch);
+  await suggestions;
+  await expect(nav.getByRole("option")).toHaveCount(0);
+  await input.press("Enter");
+  await expect(page).toHaveURL(/\/search\?q=vrdex-no-match\+%26\+test$/);
+  await expect(page.getByText("No public results matched that search yet.")).toBeVisible();
+  await expect(input).toHaveCount(0);
+  await page.goBack();
+
+  await openSearch();
+  await input.fill(match);
+  await expect(option).toBeVisible();
+  await input.press("ArrowDown");
+  await expect(option).toHaveAttribute("aria-selected", "true");
+  await input.press("Enter");
+  await expect(page).toHaveURL(/\/playwright-dj-aurora$/);
+});
+
 test("the mobile menu meets the desktop navigation at 639 and 640 pixels", async ({ page }) => {
   await page.setViewportSize({ width: 639, height: 720 });
   await page.goto("/support");
