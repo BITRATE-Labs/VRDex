@@ -1,5 +1,5 @@
 "use client";
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, type ReactNode } from "react";
 import type {
   SavedResolution,
   TimelineEvent,
@@ -41,6 +41,7 @@ export function TimelineChart({
   onNext: () => void;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
+  const rangeDescriptionId = useId();
   const drag = useRef<{ x: number; scroll: number; moved: boolean } | null>(
     null,
   );
@@ -91,6 +92,17 @@ export function TimelineChart({
     observer.observe(el);
     return () => observer.disconnect();
   }, [onWidth]);
+  useLayoutEffect(() => {
+    const root = scroller.current;
+    if (!root || showEmptyState) return;
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        entry.target.toggleAttribute("data-axis-label-visible", entry.intersectionRatio === 1);
+      }
+    }, { root, threshold: 1 });
+    root.querySelectorAll("[data-axis-label]").forEach((label) => observer.observe(label));
+    return () => observer.disconnect();
+  }, [origin, range.timeZone, showEmptyState]);
   if (showEmptyState) {
     return <div ref={scroller} className={styles.scroller} data-testid="favorites-empty-state">{emptyState}</div>;
   }
@@ -107,12 +119,21 @@ export function TimelineChart({
     hour: "numeric",
     minute: "2-digit",
   });
+  const formatRangeEndpoint = new Intl.DateTimeFormat(undefined, {
+    timeZone: range.timeZone,
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
   return (
       <div
         ref={scroller}
         className={styles.scroller}
         role="region"
         aria-label="Timeline chart"
+        aria-describedby={rangeDescriptionId}
         tabIndex={0}
         onScroll={(event) => {
           const anchor = origin + (event.currentTarget.scrollLeft / 100) * HOUR;
@@ -160,7 +181,7 @@ export function TimelineChart({
         }}
       >
         <div className={styles.canvas} style={{ width: 14400 }}>
-          <div className={styles.dayAxis}>
+          <div className={styles.dayAxis} aria-hidden="true">
             {localDayBands(canvasRange).map((day) => (
               <div
                 key={day.startAt}
@@ -173,13 +194,13 @@ export function TimelineChart({
                   width: ((day.endAt - day.startAt) / HOUR) * 100,
                 }}
               >
-                <span>{day.label}</span>
+                <span data-axis-label>{day.label}</span>
               </div>
             ))}
           </div>
-          <div className={styles.hourAxis}>
+          <div className={styles.hourAxis} aria-hidden="true">
             {Array.from({ length: 144 }, (_, i) => (
-              <span key={i} style={{ left: i * 100 }}>
+              <span key={i} data-axis-label style={{ left: i * 100 }}>
                 {Number(formatMinute.format(origin + i * HOUR)) === 0
                   ? formatHour.format(origin + i * HOUR)
                   : formatHourMinute.format(origin + i * HOUR)}
@@ -238,6 +259,9 @@ export function TimelineChart({
             </div>
           )}
         </div>
+        <span id={rangeDescriptionId} hidden>
+          {formatRangeEndpoint.format(range.startAt)} to {formatRangeEndpoint.format(range.endAt)}
+        </span>
       </div>
   );
 }
