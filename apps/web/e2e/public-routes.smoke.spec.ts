@@ -1153,3 +1153,27 @@ test.describe("fixture lookup smoke", () => {
     await expect(summaryRow.locator(".text-sm")).toHaveText("BASICBIT");
   });
 });
+
+test("public OAuth failure groups the status and documented recovery", async ({ page }) => {
+  for (const [query, message] of [
+    ["?problem=invalid_request", "response_type, client_id, redirect_uri, scope, resource, and an S256 PKCE code challenge are required."],
+    ["", "The OAuth consent transaction is invalid or expired."],
+  ]) {
+    expect((await page.goto("/oauth/authorize/review" + query))?.status()).toBe(200);
+    const main = page.getByRole("main");
+    const card = main.getByRole("region", { name: "Authorization request failed" });
+    const heading = card.getByRole("heading", { level: 1, name: "Authorization request failed", exact: true });
+    const status = card.getByText(message, { exact: true });
+    const recovery = card.getByRole("link", { name: "API docs", exact: true });
+    await expect(heading).toBeVisible();
+    await expect(status).toBeVisible();
+    await expect(recovery).toHaveAttribute("href", "/developers/api");
+    await expect(recovery).toBeVisible();
+    const [titleBox, statusBox, linkBox] = await Promise.all([
+      heading.boundingBox(), status.boundingBox(), recovery.boundingBox(),
+    ]);
+    if (!titleBox || !statusBox || !linkBox) throw new Error("Expected all OAuth problem card elements");
+    expect(titleBox.y + titleBox.height).toBeLessThanOrEqual(statusBox.y);
+    expect(statusBox.y + statusBox.height).toBeLessThanOrEqual(linkBox.y);
+  }
+});

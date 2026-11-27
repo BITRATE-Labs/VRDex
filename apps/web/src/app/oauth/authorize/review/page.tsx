@@ -24,18 +24,18 @@ function firstParam(value: string | string[] | undefined) {
 
 function AuthorizationProblem({ detail }: { detail: string }) {
   return (
-    <PageShell className="py-10">
-      <PageContainer max="4xl">
-        <PageActions>
-
-          <Link className={buttonVariants({ variant: "secondary" })} href="/developers/api">
+    <PageShell className="py-6 sm:py-12">
+      <PageContainer className="max-w-xl">
+        <Card aria-labelledby="oauth-problem-title" className="grid gap-5" padding="lg" surface="white">
+          <h1 className="text-2xl leading-tight font-semibold sm:text-3xl" id="oauth-problem-title">
+            Authorization request failed
+          </h1>
+          <Notice className="border-danger/55 text-base leading-7 text-foreground" variant="error">
+            {detail}
+          </Notice>
+          <Link className={buttonVariants({ size: "lg", variant: "primary", className: "justify-self-start" })} href="/developers/api">
             API docs
           </Link>
-        </PageActions>
-
-        <Card className="grid gap-4" padding="lg" surface="white">
-          <h1 className="text-3xl font-semibold">Authorization request failed</h1>
-          <Notice variant="error">{detail}</Notice>
         </Card>
       </PageContainer>
     </PageShell>
