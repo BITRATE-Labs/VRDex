@@ -28,6 +28,7 @@ export const suggestionAppearance = {
   elements: {
     ...journeyAppearance.elements,
     card: cn(styles.journeyCard, styles.suggestionCard),
+    footerAction: styles.suggestionFooterAction,
     footerActionLink: styles.suggestionFooterLink,
     formFieldInputShowPasswordButton: styles.suggestionPasswordToggle,
   },
