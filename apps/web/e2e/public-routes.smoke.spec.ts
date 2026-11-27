@@ -355,6 +355,7 @@ test("the public suggestion keeps the profile and task through account entry", a
   const main = page.getByRole("main");
   await page.goto(path);
   await main.getByRole("link", { name: "Suggest an edit", exact: true }).click();
+  await expect(page).toHaveURL((url) => url.pathname === `${path}/edit` || url.pathname === "/sign-in");
 
   if (new URL(page.url()).pathname === `${path}/edit`) {
     await expect(main.getByRole("heading", { name: "Suggest an edit", exact: true })).toBeVisible();
