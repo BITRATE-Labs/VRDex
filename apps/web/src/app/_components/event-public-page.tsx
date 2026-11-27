@@ -327,12 +327,42 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
   const seriesPath = event.seriesId && event.communitySlug ? `/${event.communitySlug}/series/${event.seriesId}` : null;
   const publicLinks = event.mediaLinks.filter((link) => parseVrcdnStreamLinks(link.url) === null);
   const eventPath = publicEventPath(event);
+  const standaloneHost = Boolean(event.communitySlug || event.communityName)
+    && !bannerStyle && !event.posterImageUrl && !event.watchSurfaceEnabled
+    && event.worlds.length === 0 && lineup.length === 0 && event.slots.length === 0
+    && !seriesPath && !sourceUrl && event.mediaLinks.length === 0;
+
+  const hostDetails = event.communitySlug ? (
+    <Link
+      className={cn(
+        actionCardVariants({ variant: standaloneHost ? "surface" : "accent" }),
+        "flex items-center gap-3",
+        standaloneHost && "max-w-full justify-self-start focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+      )}
+      href={`/${event.communitySlug}`}
+    >
+      <EntityImage appearance={event.communityAvatarAppearance} imageUrl={event.communityImageUrl} label={event.communityName ?? "Community profile"} />
+      <span className="min-w-0 [overflow-wrap:anywhere]">
+        <span className={actionLabelClassName}>
+          {event.communityName ?? "Community profile"}
+        </span>
+        <span className={actionMetaClassName}>Host</span>
+      </span>
+    </Link>
+  ) : event.communityName ? (
+    <div className={cn(
+      "rounded-control border border-border bg-surface px-4 py-3 font-medium",
+      standaloneHost && "max-w-full justify-self-start [overflow-wrap:anywhere]",
+    )}>
+      {event.communityName}
+    </div>
+  ) : (
+    <p className="leading-6 text-muted">No host listed.</p>
+  );
 
   return (
     <PageShell className="py-5 sm:py-6 lg:py-7" tone="event">
       <PageContainer className="gap-5">
-
-
         <EventPublicHero
           bannerStyle={bannerStyle}
           canHost={canHost === true}
@@ -354,39 +384,25 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
             </div>
           ) : null}
 
-          <Card className={styles.details} surface="white">
-            <div className="grid gap-3 text-sm">
-              {event.communitySlug ? (
-                <Link className={cn(actionCardVariants({ variant: "accent" }), "flex items-center gap-3")} href={`/${event.communitySlug}`}>
-                  <EntityImage appearance={event.communityAvatarAppearance} imageUrl={event.communityImageUrl} label={event.communityName ?? "Community profile"} />
-                  <span className="min-w-0">
-                    <span className={actionLabelClassName}>
-                      {event.communityName ?? "Community profile"}
+          {standaloneHost ? hostDetails : (
+            <Card className={styles.details} surface="white">
+              <div className="grid gap-3 text-sm">
+                {hostDetails}
+                {event.worlds.map((world) => (
+                  <Link className={cn(actionCardVariants({ variant: "accent" }), "flex items-center gap-3")} href={`/${world.slug}`} key={world.slug}>
+                    <EntityImage imageUrl={world.heroImageUrl} label={world.displayName} />
+                    <span className="min-w-0">
+                      <span className={actionLabelClassName}>
+                        {world.displayName}
+                      </span>
+                      {world.summary ? <span className="mt-1 block text-muted">{world.summary}</span> : null}
+                      <span className={actionMetaClassName}>World</span>
                     </span>
-                    <span className={actionMetaClassName}>Host</span>
-                  </span>
-                </Link>
-              ) : event.communityName ? (
-                <div className="rounded-control border border-border bg-surface px-4 py-3 font-medium">
-                  {event.communityName}
-                </div>
-              ) : (
-                <p className="leading-6 text-muted">No host listed.</p>
-              )}
-              {event.worlds.map((world) => (
-                <Link className={cn(actionCardVariants({ variant: "accent" }), "flex items-center gap-3")} href={`/${world.slug}`} key={world.slug}>
-                  <EntityImage imageUrl={world.heroImageUrl} label={world.displayName} />
-                  <span className="min-w-0">
-                    <span className={actionLabelClassName}>
-                      {world.displayName}
-                    </span>
-                    {world.summary ? <span className="mt-1 block text-muted">{world.summary}</span> : null}
-                    <span className={actionMetaClassName}>World</span>
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </Card>
+                  </Link>
+                ))}
+              </div>
+            </Card>
+          )}
         </section>
 
         {lineup.length > 0 ? (

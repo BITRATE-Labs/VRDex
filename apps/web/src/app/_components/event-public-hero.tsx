@@ -20,27 +20,33 @@ export function EventPublicHero({
   eventPath: string | undefined;
   onReport: () => void;
 }) {
+  const actionClassName = cn(
+    buttonVariants({ variant: bannerStyle ? "secondary" : "inverse" }),
+    "size-9 p-0",
+    !bannerStyle && "focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-media",
+  );
+
   return (
-    <section className="overflow-hidden rounded-hero border border-border bg-media shadow-hero">
+    <section className={cn("overflow-hidden rounded-hero border border-border bg-media", bannerStyle ? "shadow-hero" : "shadow-sm")}>
       <div
         className="relative flex min-h-56 flex-col bg-[linear-gradient(135deg,var(--media),var(--media-raised))] bg-cover bg-center p-5 text-white sm:block sm:p-6 lg:p-8"
         style={bannerStyle}
       >
         <nav aria-label="Event actions" className="flex shrink-0 justify-end gap-2 sm:absolute sm:right-4 sm:top-4">
           {eventPath && canHost ? <span className="group relative inline-flex">
-            <Link aria-label="Host view" className={cn(buttonVariants({ variant: "secondary" }), "size-9 p-0")} href={`${eventPath}/host`}>
+            <Link aria-label="Host view" className={actionClassName} href={`${eventPath}/host`}>
               <ListMusic aria-hidden="true" className="size-4" />
             </Link>
             <span role="tooltip" className="pointer-events-none absolute right-0 top-full z-20 mt-2 hidden whitespace-nowrap rounded-control border border-border bg-surface px-2 py-1 text-xs text-foreground shadow-lg group-hover:block group-focus-within:block">Host view</span>
           </span> : null}
           {eventPath ? <span className="group relative inline-flex">
-            <a aria-label="Add to calendar" className={cn(buttonVariants({ variant: "secondary" }), "size-9 p-0")} href={`${eventPath}/calendar.ics`}>
+            <a aria-label="Add to calendar" className={actionClassName} href={`${eventPath}/calendar.ics`}>
               <CalendarDays aria-hidden="true" className="size-4" />
             </a>
             <span role="tooltip" className="pointer-events-none absolute right-0 top-full z-20 mt-2 hidden whitespace-nowrap rounded-control border border-border bg-surface px-2 py-1 text-xs text-foreground shadow-lg group-hover:block group-focus-within:block">Add to calendar</span>
           </span> : null}
           <span className="group relative inline-flex">
-            <button type="button" aria-label="Report event" aria-haspopup="dialog" className={cn(buttonVariants({ variant: "secondary" }), "size-9 p-0")} onClick={onReport}>
+            <button type="button" aria-label="Report event" aria-haspopup="dialog" className={actionClassName} onClick={onReport}>
               <Flag aria-hidden="true" className="size-4" />
             </button>
             <span role="tooltip" className="pointer-events-none absolute right-0 top-full z-20 mt-2 hidden whitespace-nowrap rounded-control border border-border bg-surface px-2 py-1 text-xs text-foreground shadow-lg group-hover:block group-focus-within:block">Report event</span>
