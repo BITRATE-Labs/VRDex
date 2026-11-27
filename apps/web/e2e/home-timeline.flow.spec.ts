@@ -223,6 +223,7 @@ test.describe("continuous schedule @flow @fixture", () => {
       await expect(status).toHaveAttribute("data-state", "loading");
       await expect(status.getByText("Loading events", { exact: true })).toHaveCount(0);
       await expect(refresh).toHaveText("Loading events");
+      await expect(page.locator("[data-home-schedule] [data-loading-placeholder]")).toHaveCount(0);
       expect(await discoverTop()).toBe(initialDiscoverTop);
       await expect(clear).toBeFocused();
       await expect(page.getByText("No favorites in this range", { exact: true })).toBeVisible();

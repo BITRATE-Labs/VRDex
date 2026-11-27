@@ -1,4 +1,5 @@
 "use client";
+import { LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 import type {
   PlanReference,
@@ -34,6 +35,14 @@ type Runtime = {
   timeZone: string;
   hour12: boolean;
 };
+function ScheduleLoadingMessage() {
+  return (
+    <span className={styles.loadingMessage}>
+      <LoaderCircle aria-hidden="true" className="shrink-0 motion-safe:animate-spin" size={14} />
+      Loading events
+    </span>
+  );
+}
 export function HomeSchedule(props: { onSelectionChange?: (selection: TimelineSelection | null) => void } = {}) {
   const browse = useOptionalHomeBrowse();
   return browse ? <HomeScheduleContent {...props} /> : <HomeBrowseProvider><HomeScheduleContent {...props} /></HomeBrowseProvider>;
@@ -77,14 +86,14 @@ function HomeScheduleContent({
           <TimelineToolbar navigation={{ anchor: null, timeZone: null, favoritesOnly: false }}
             date="" timeZone="" hour12 disabled onNavigate={() => {}} onDate={() => {}} onPan={() => {}} onNow={() => {}}>
             <div className={styles.status} role="status">
-              <span className={styles.loadingMessage}>Loading events</span>
+              <ScheduleLoadingMessage />
             </div>
           </TimelineToolbar>
           <div aria-hidden="true" inert className={styles.scroller}>
             <div className={styles.canvas} style={{ width: 14400 }}>
               <div className={styles.dayAxis} />
               <div className={styles.hourAxis} />
-              <div className={styles.lanes} style={{ height: 376 }} />
+              <div className={styles.lanes} data-loading-placeholder style={{ height: 376 }} />
             </div>
           </div>
         </section>
@@ -260,6 +269,8 @@ function ScheduleContent({
     navigation.favoritesOnly && data.isCurrentViewport &&
     data.kind === "ready" && !data.revalidating && empty;
   const retainedRefresh = data.revalidating && data.isCurrentViewport;
+  const loadingWithoutContent = data.kind === "loading" && !retainedRefresh &&
+    data.records.length === 0 && actions.plan.length === 0;
   const showFavoritesEmptyState = navigation.favoritesOnly && compactEmpty;
   const clearFilterFocused = useRef(false);
   useLayoutEffect(() => {
@@ -315,7 +326,7 @@ function ScheduleContent({
           data-state={data.kind}
         >
           {data.kind === "loading" && !retainedRefresh && (
-            <span className={styles.loadingMessage}>Loading events</span>
+            <ScheduleLoadingMessage />
           )}
           {data.kind === "error" && (
             <>
@@ -367,12 +378,14 @@ function ScheduleContent({
         lanes={data.eventLanes}
         saved={data.saved}
         compactEmpty={compactEmpty}
+        loadingPlaceholder={loadingWithoutContent}
         emptyState={showFavoritesEmptyState ? (
           <div className={styles.emptyState}>
             <p role="status">No favorites in this range</p>
             <Button
               size="sm"
               type="button"
+              variant="primary"
               onFocus={() => { clearFilterFocused.current = true; }}
               onBlur={() => { clearFilterFocused.current = false; }}
               onClick={(event) => {

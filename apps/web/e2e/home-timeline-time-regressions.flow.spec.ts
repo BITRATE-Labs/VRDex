@@ -194,11 +194,15 @@ test.describe("timeline time regressions @flow @fixture", () => {
           const shell = page.locator("[data-home-schedule]");
           await expect(shell).toBeVisible();
           await expect(shell.getByRole("status").filter({ hasText: "Loading events" })).toBeVisible();
+          const placeholder = shell.locator("[data-loading-placeholder]");
+          await expect(placeholder).toBeVisible();
+          expect(await placeholder.evaluate((element) => getComputedStyle(element, "::before").display)).toBe("block");
           const loading = await shell.boundingBox();
           expect(loading?.height).toBeGreaterThanOrEqual(376 + 56 + 48);
           await page.screenshot({ path: info.outputPath(`startup-${size.width}.png`) });
           release();
           await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready", { timeout: 20000 });
+          await expect(placeholder).toHaveCount(0);
           await expect(page.getByTestId("discovery-event-card").first()).toBeVisible();
           const ready = await shell.boundingBox();
           const chart = page.getByRole("region", { name: "Timeline chart", exact: true });
