@@ -132,9 +132,49 @@ test("an artless occurrence on a sparse profile uses its theme colors @fixture",
   }
 });
 
+test("populated person profiles give visitors keyboard shortcuts before ownership actions @fixture", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 760 });
+  expect((await page.goto("/playwright-dj-aurora"))?.status()).toBe(200);
+
+  const identity = page.getByRole("region", { name: "DJ Aurora", exact: true });
+  const nav = identity.getByRole("navigation", { name: "Profile sections" });
+  const ownership = page.getByRole("complementary", { name: "Profile ownership" });
+  await expect(identity.getByText("Unclaimed", { exact: true })).toBeVisible();
+  await expect(page.getByText("Unclaimed", { exact: true })).toHaveCount(1);
+  await expect(nav.getByRole("link")).toHaveText(["Links", "Upcoming events", "Media kit", "Worlds"]);
+  await expect(nav.getByRole("link", { name: "Upcoming events", exact: true })).toBeInViewport();
+  await expect(ownership.getByRole("link", { name: "Claim profile", exact: true })).toHaveAttribute("href", "/claim/playwright-dj-aurora?source=profile");
+  await expect(ownership.getByRole("link", { name: "Suggest an edit", exact: true })).toHaveAttribute("href", "/playwright-dj-aurora/edit");
+
+  for (const [label, id] of [["Links", "profile-links"], ["Upcoming events", "profile-events"], ["Media kit", "profile-media-kit"], ["Worlds", "profile-worlds"]]) {
+    const shortcut = nav.getByRole("link", { name: label, exact: true });
+    const heading = page.getByRole("heading", { name: label, exact: true });
+    const section = heading.locator("xpath=ancestor::section[1]");
+    const firstAction = section.locator("a[href]:visible, button:not([disabled]):visible").first();
+    await expect(shortcut).toHaveAttribute("href", "#" + id);
+    await expect(heading).toHaveAttribute("id", id);
+    await shortcut.focus();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(url => url.hash === "#" + id);
+    await expect(heading).toBeFocused();
+    await expect(heading).toBeInViewport();
+    const [target, header] = await Promise.all([heading.boundingBox(), page.getByRole("banner").boundingBox()]);
+    if (!target || !header) throw new Error("Missing profile section heading or header bounds");
+    expect(target.y).toBeGreaterThanOrEqual(header.y + header.height);
+    await page.keyboard.press("Tab");
+    await expect(firstAction).toBeFocused();
+  }
+
+  expect(await ownership.evaluate(element => Boolean(
+    document.getElementById("profile-worlds")!.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ))).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+});
+
 test("a sparse person profile puts its identity and ownership together @fixture", async ({ page }) => {
   expect((await page.goto("/playwright-sparse-import"))?.status()).toBe(200);
   const identity = page.getByRole("region", { name: "Sparse Import", exact: true });
+  await expect(page.getByRole("navigation", { name: "Profile sections" })).toHaveCount(0);
   const ownership = page.getByRole("complementary", { name: "Profile ownership" });
   await expect(identity.getByRole("img", { name: "Sparse Import display image", exact: true })).toBeVisible();
   await expect(ownership.getByText("Unclaimed", { exact: true })).toBeVisible();

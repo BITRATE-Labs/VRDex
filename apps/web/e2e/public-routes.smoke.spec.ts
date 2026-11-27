@@ -136,6 +136,37 @@ test("mobile discovery jumps to the directory without hiding the heading", async
   await expect(shortcuts).toBeHidden();
 });
 
+test("discovery puts a single event and featured world beside each other at xl", async ({ page }) => {
+  test.skip(isHostedRun, "The single event and featured world use a local fixture.");
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/discovery");
+
+  const events = page.getByRole("heading", { name: "Upcoming events", exact: true }).locator("xpath=ancestor::section[1]");
+  const worlds = page.getByRole("heading", { name: "Featured worlds", exact: true }).locator("xpath=ancestor::section[1]");
+  const event = events.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true });
+  const performer = events.getByRole("link", { name: "DJ Aurora", exact: true });
+  const world = worlds.getByRole("link", { name: "Neon Harbor", exact: true });
+  await expect(event).toHaveAttribute("href", "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions");
+  await expect(performer).toHaveAttribute("href", "/playwright-dj-aurora");
+  await expect(world).toHaveAttribute("href", "/playwright-neon-harbor");
+  await expect(performer).toHaveCSS("text-decoration-line", "underline");
+  await expect(world.getByRole("heading")).toHaveCSS("text-decoration-line", "underline");
+
+  const [eventSection, worldSection] = await Promise.all([events.boundingBox(), worlds.boundingBox()]);
+  if (!eventSection || !worldSection) throw new Error("Missing Discovery section bounds");
+  expect(worldSection.y).toBe(eventSection.y);
+  expect(worldSection.x).toBeGreaterThan(eventSection.x + eventSection.width);
+  expect(eventSection.width).toBeGreaterThan(worldSection.width);
+
+  await page.setViewportSize({ width: 320, height: 760 });
+  const [mobileEvents, mobileWorlds] = await Promise.all([events.boundingBox(), worlds.boundingBox()]);
+  if (!mobileEvents || !mobileWorlds) throw new Error("Missing mobile Discovery section bounds");
+  expect(mobileWorlds.y).toBeGreaterThanOrEqual(mobileEvents.y + mobileEvents.height);
+  expect(mobileWorlds.x).toBe(mobileEvents.x);
+  expect(mobileWorlds.width).toBe(mobileEvents.width);
+});
+
 test("sign-in offers a route to create an account", async ({ page }) => {
   await page.goto("/sign-in");
 
