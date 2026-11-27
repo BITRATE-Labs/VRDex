@@ -77,6 +77,8 @@
 }
 
 .hero--primary .button-group {
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.9rem;
 }
 
@@ -84,22 +86,34 @@
   margin: 0;
 }
 
-.hero--primary .button--outline.button--secondary {
+.hero--primary .button-group .button.button--outline.button--secondary {
   --ifm-button-background-color: rgba(255, 255, 255, 0.04);
   --ifm-button-border-color: rgba(225, 232, 255, 0.78);
-  --ifm-button-color: #edf2ff;
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
+  color: #edf2ff;
 }
 
-.hero--primary .button--outline.button--secondary:hover {
+.hero--primary .button-group .button.button--outline.button--secondary:hover {
   --ifm-button-background-color: rgba(185, 195, 255, 0.15);
   --ifm-button-border-color: #c9b8ff;
-  --ifm-button-color: #ffffff;
+  color: #ffffff;
+}
+
+.hero--primary .button-group .button:focus-visible {
+  outline: 2px solid #edf2ff;
+  outline-offset: 3px;
 }
 
 .markdown h2 {
   margin-top: 2.25rem;
+}
+
+@media (max-width: 996px) {
+  .docs-doc-id-developers\/public-api .theme-doc-markdown table th,
+  .docs-doc-id-developers\/public-api .theme-doc-markdown table td {
+    overflow-wrap: anywhere;
+  }
 }
 
 html[data-theme="dark"] {
@@ -171,7 +185,19 @@ html[data-theme="dark"] #__docusaurus,
 }
 
 .docs-lanes .row {
-  gap: 1rem 0;
+  display: grid;
+  gap: 1rem;
+  margin-inline: 0;
+}
+
+.docs-lanes .row > .docs-lane {
+  max-width: none;
+}
+
+@media (min-width: 997px) {
+  .docs-lanes .row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .docs-lane {
