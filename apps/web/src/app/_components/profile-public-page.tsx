@@ -1,7 +1,7 @@
 import type { PublicVerifiedConnection } from "@vrdex/api-contracts";
 import { mergeVerifiedVrchatLinks, isVerifiedVrchatLink } from "@/lib/profile-link-verification";
 import Link from "next/link";
-import { ArrowDown } from "lucide-react";
+import { ArrowDown, ChevronRight } from "lucide-react";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { profileLinkHasCustomLabel,profileLinkPresentation,type ProfileLinkDestinationMetadata } from "../../../../../convex/_profileLinkPresentation";
 import { parseProfileLinkDestination } from "../../../../../convex/_profileLinkDestination";
@@ -570,16 +570,24 @@ export function ProfilePublicPage({
         <div className={cn("mt-5 grid gap-3", linksColumnSection !== "worlds" && "lg:grid-cols-2")}>
           {profile.worldCredits.map((world) => (
             <Link
-              className="flex min-w-0 items-start gap-4 rounded-card border border-border bg-surface-strong p-4 text-sm transition hover:border-border-strong"
+              className="group grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-card border border-border bg-surface-strong p-4 text-sm transition hover:border-border-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:items-start sm:gap-x-4 sm:gap-y-3"
               href={`/${world.slug}`}
               key={world.slug}
             >
-              <EntityImage label={world.displayName} src={world.heroImageUrl} className="h-16 w-24 rounded-control" sizes="96px" />
-              <span className="min-w-0">
-              <span className="block text-lg font-semibold">{world.displayName}</span>
-              <span className="mt-1 block text-muted">{world.roles.map(roleLabel).join(", ")}</span>
-              {world.summary ? <span className="mt-3 line-clamp-2 block leading-6 text-muted">{world.summary}</span> : null}
+              <EntityImage
+                className={cn("h-11 w-16 rounded-control border border-border bg-canvas-muted text-foreground sm:h-16 sm:w-24", world.summary && "sm:row-span-2")}
+                label={world.displayName}
+                sizes="(min-width: 640px) 96px, 64px"
+                src={world.heroImageUrl}
+              />
+              <span className="min-w-0 break-words">
+                <span className="block text-lg font-semibold">{world.displayName}</span>
+                <span className="mt-1 block font-medium text-foreground">{world.roles.map(roleLabel).join(", ")}</span>
               </span>
+              <ChevronRight aria-hidden="true" className="size-4 text-muted group-hover:text-accent-strong sm:mt-1" />
+              {world.summary ? (
+                <span className="col-span-3 line-clamp-3 break-words leading-6 text-muted sm:col-span-2 sm:col-start-2 sm:line-clamp-2">{world.summary}</span>
+              ) : null}
             </Link>
           ))}
         </div>
