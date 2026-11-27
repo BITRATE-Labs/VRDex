@@ -212,6 +212,7 @@ export function ProfileVrcdnStreams({
   const hasLinks = links.length > 0 || discordHandles.length > 0;
   const hasWatchSurface = streams.length > 0;
   const compactPhoneTransitions = Boolean(streamsSectionId) && hasLinks && hasWatchSurface;
+  const linkCardClassName = cn(profileLinkCardClassName, linksHeadingId && "max-sm:min-h-[4.25rem] max-sm:py-2");
 
   return (
     <div className={cn(
@@ -226,7 +227,7 @@ export function ProfileVrcdnStreams({
             className={cn(
               compactLinks ? "px-4 pb-4 sm:px-6" : "py-8",
               compactMobileSpacing && "max-sm:py-4",
-              linksHeadingId && "max-sm:pt-4",
+              linksHeadingId && "max-sm:pt-3",
               compactPhoneTransitions && "max-sm:pb-4",
             )}
           >
@@ -240,7 +241,7 @@ export function ProfileVrcdnStreams({
             <div className={cn(
               compactLinks ? "grid" : "mt-5 grid gap-3 sm:grid-cols-2",
               compactMobileSpacing && "max-sm:mt-3",
-              linksHeadingId && "max-sm:mt-2",
+              linksHeadingId && "max-sm:mt-2 max-sm:gap-2",
             )}>
               {links.map((link) => {
                 const vrchat = link.kind === "vrchat_user" || link.kind === "vrchat_group" || link.type === "vrchat_profile";
@@ -250,7 +251,7 @@ export function ProfileVrcdnStreams({
                   <a
                     className={cn(
                       buttonVariants({ variant: compactLinks ? "primary" : "secondary" }),
-                      profileLinkCardClassName,
+                      linkCardClassName,
                       compactLinks && "min-h-12 rounded-control border border-transparent px-3 py-2",
                     )}
                     href={link.href}
@@ -272,7 +273,7 @@ export function ProfileVrcdnStreams({
                 );
               })}
               {discordHandles.map(({ handle, key }) => (
-                <CopyValueRow actionOnly className={profileLinkCardClassName} key={key} label="Discord" value={handle}>
+                <CopyValueRow actionOnly className={linkCardClassName} key={key} label="Discord" value={handle}>
                   <span aria-hidden="true" className={cn(profileLinkIconClassName, "[&>svg]:size-6")}><LinkTypeIcon type="discord" /></span>
                   <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
                     <span className="block font-medium">Discord</span>

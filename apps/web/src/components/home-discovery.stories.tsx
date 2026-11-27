@@ -139,6 +139,9 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Mixed: Story = {};
+export const OneEventTwoClubs: Story = {
+  args: { snapshot: { ...available, events: events.slice(0, 1) } },
+};
 export const ColdStart: Story = {
   args: {
     snapshot: { kind: "loading" },

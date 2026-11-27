@@ -56,12 +56,13 @@ test("new Home submissions and old root bookmarks retain distinct destinations @
   await expectHomePage(page);
   const input = page.getByRole("combobox", { name: /Search/i });
   await waitForPublicSearchHydration(page);
-  if (isMobile) {
-    const submit = page.getByRole("main").getByRole("button", { name: "Search VRDex", exact: true });
-    const [inputBounds, submitBounds] = await Promise.all([input.boundingBox(), submit.boundingBox()]);
-    expect(Math.abs(inputBounds!.y - submitBounds!.y)).toBeLessThanOrEqual(1);
-    expect(Math.min(submitBounds!.width, submitBounds!.height, inputBounds!.height)).toBeGreaterThanOrEqual(44);
-  }
+  const submit = page.getByRole("main").getByRole("button", { name: "Search VRDex", exact: true });
+  await expect(submit.locator("svg")).toBeVisible();
+  const [inputBounds, submitBounds] = await Promise.all([input.boundingBox(), submit.boundingBox()]);
+  expect(Math.abs(inputBounds!.y - submitBounds!.y)).toBeLessThanOrEqual(1);
+  const expectedSize = isMobile ? 44 : 56;
+  expect(submitBounds).toMatchObject({ width: expectedSize, height: expectedSize });
+  expect(inputBounds!.height).toBeGreaterThanOrEqual(expectedSize);
   await input.fill("  BASICBIT  ");
   await input.press("Enter");
   await expect(page).toHaveURL(/\/search\?q=BASICBIT$/, { timeout: 15_000 });

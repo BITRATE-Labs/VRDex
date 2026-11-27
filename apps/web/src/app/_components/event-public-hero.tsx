@@ -42,7 +42,7 @@ export function EventPublicHero({
     <section className={cn("overflow-hidden rounded-hero border border-border shadow-sm", bannerStyle ? "bg-media" : "bg-surface-strong")}>
       <div
         className={cn(
-          "flex flex-col bg-cover bg-center p-4 sm:min-h-56 sm:p-6 lg:min-h-60 lg:p-8",
+          "flex flex-col bg-cover bg-center px-4 py-[var(--event-watch-mobile-space,1rem)] sm:min-h-56 sm:p-6 lg:min-h-60 lg:p-8",
           bannerStyle ? "text-white" : "bg-[linear-gradient(135deg,var(--surface-strong),var(--surface-raised))] text-foreground",
         )}
         style={bannerStyle}

@@ -72,6 +72,7 @@ test("club rail controls follow overflow and keep keyboard focus at the ends @st
 
 for (const state of [
   "mixed",
+  "one-event-two-clubs",
   "cold-start",
   "sparse",
   "empty",
@@ -95,6 +96,21 @@ for (const state of [
       page.getByRole("heading", { name: "Discover", exact: true }),
     ).toBeVisible();
     await waitForVisualReady(page);
+    if (!isMobile && state === "one-event-two-clubs") {
+      const event = page.getByRole("link", { name: "Open ORBIT", exact: true });
+      const clubs = page.getByTestId("discovery-club-card");
+      await expect(page.getByTestId("discovery-event-card")).toHaveCount(1);
+      await expect(clubs).toHaveCount(2);
+      const posterBounds = (await event.locator("..").boundingBox())!;
+      const firstClub = (await clubs.first().boundingBox())!;
+      const secondClub = (await clubs.last().boundingBox())!;
+      expect(posterBounds.width).toBeCloseTo(firstClub.width);
+      expect(posterBounds.width).toBeCloseTo(secondClub.width);
+      expect(firstClub.x - posterBounds.x - posterBounds.width).toBe(24);
+      await event.focus();
+      await expect(event).toBeFocused();
+      await event.blur();
+    }
     if (isMobile && state === "mixed") {
       const interest = page.getByRole("button", { name: /^Interested:/ }).first();
       await expect(interest).toBeVisible();
