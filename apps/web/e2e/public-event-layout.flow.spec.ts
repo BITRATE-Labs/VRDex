@@ -47,8 +47,12 @@ test("published lineups are directly reachable from the event hero @flow @fixtur
       const main = page.getByRole("main");
       const shortcut = main.getByRole("link", { name: "Lineup", exact: true });
       const heading = main.getByRole("heading", { name: "Lineup", exact: true });
-      const lineup = heading.locator("..");
+      const lineup = heading.locator("xpath=ancestor::section[1]");
       const firstPerformer = lineup.getByRole("link", { name: "DJ Aurora", exact: true });
+      const watch = lineup.getByRole("link", { name: "Watch", exact: true });
+
+      if (slug === guestWatchSlug) await expect(watch).toBeVisible();
+      else await expect(watch).toHaveCount(0);
 
       await expect(shortcut).toHaveAttribute("href", "#event-lineup");
       await expect(shortcut).toBeInViewport({ ratio: 1 });
@@ -66,6 +70,33 @@ test("published lineups are directly reachable from the event hero @flow @fixtur
       expect(headingBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height);
 
       await page.keyboard.press("Tab");
+      if (slug === guestWatchSlug) {
+        await expect(watch).toHaveAttribute("href", "#event-watch");
+        await expect(watch).toBeFocused();
+        await expect(watch).toBeInViewport({ ratio: 1 });
+        if (width === 320) {
+          const target = await watch.boundingBox();
+          expect(target?.width).toBeGreaterThanOrEqual(44);
+          expect(target?.height).toBeGreaterThanOrEqual(44);
+        }
+        await page.keyboard.press("Enter");
+        await expect(page).toHaveURL(/#event-watch$/);
+        await expect(main.getByRole("region", { name: "Watch", exact: true })).toBeFocused();
+        const play = main.getByRole("button", { name: /^Play / });
+        const playControl = play.locator("[data-watch-play-control]");
+        await expect(playControl).toBeInViewport({ ratio: 1 });
+        expect((await playControl.boundingBox())?.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height);
+        await page.keyboard.press("Tab");
+        await expect(play).toBeFocused();
+        await expect(main.locator("video, iframe")).toHaveCount(0);
+
+        await shortcut.focus();
+        await page.keyboard.press("Enter");
+        await expect(heading).toBeFocused();
+        await page.keyboard.press("Tab");
+        await expect(watch).toBeFocused();
+        await page.keyboard.press("Tab");
+      }
       await expect(firstPerformer).toBeFocused();
       await expect(firstPerformer).toHaveAttribute("href", "/playwright-dj-aurora");
       await expect(firstPerformer).toHaveAccessibleDescription(/^House .+ - .+$/);
@@ -143,7 +174,7 @@ test("listed events order visitor links on mobile and group context beside the p
   await page.keyboard.press("Tab");
   await expect(host).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(lineup.locator("..").getByRole("link").first()).toBeFocused();
+  await expect(lineup.locator("xpath=ancestor::section[1]").getByRole("link").first()).toBeFocused();
 });
 
 test.describe("public event across the viewer's midnight", () => {
@@ -356,6 +387,7 @@ test("desktop watch shares the media row with event details @flow @fixture", asy
   await page.clock.setFixedTime(new Date("2025-01-01T11:00:00Z"));
   await page.reload();
   await expect(stage).toHaveCount(0);
+  await expect(main.getByRole("link", { name: "Watch", exact: true })).toHaveCount(0);
   const [idlePoster, idleHost] = await Promise.all([poster.boundingBox(), host.boundingBox()]);
   if (!idlePoster || !idleHost) throw new Error("Missing pre-doors event layout");
   expect(idleHost.x).toBeGreaterThan(idlePoster.x + idlePoster.width);

@@ -1,7 +1,7 @@
 "use client";
 import { inferLineupEnds } from "@vrdex/api-contracts";
 import { useQuery } from "convex/react";
-import { ChevronRight, ExternalLink, MapPin } from "lucide-react";
+import { ArrowUp, ChevronRight, ExternalLink, MapPin } from "lucide-react";
 import Link from "next/link";
 import { type CSSProperties, useId, useState } from "react";
 import type { FunctionReturnType } from "convex/server";
@@ -463,7 +463,11 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
           <section className={cn(styles.media, "grid grid-cols-[minmax(0,1fr)] items-start gap-4")}>
             <div className={styles.lead}>
               <div
-                className={styles.watch}
+                aria-label="Watch"
+                className={cn(styles.watch, "scroll-mt-24 focus-visible:rounded-card focus-visible:outline-2 focus-visible:outline-accent max-sm:scroll-mt-[4.5rem]")}
+                id="event-watch"
+                role="region"
+                tabIndex={-1}
                 style={watchArt ? {
                   "--event-watch-art": watchArt.backgroundImage,
                   "--event-watch-desktop-art": desktopWatchArt?.backgroundImage,
@@ -513,13 +517,22 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
 
           {lineup.length > 0 ? (
             <Card className={styles.lineup} surface="white">
-              <h2
-                className="scroll-mt-24 text-xl font-semibold tracking-tight focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent"
-                id="event-lineup"
-                tabIndex={-1}
-              >
-                Lineup
-              </h2>
+              <div className="flex items-center justify-between gap-2 sm:justify-start sm:gap-4">
+                <h2
+                  className="scroll-mt-24 text-xl font-semibold tracking-tight focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent"
+                  id="event-lineup"
+                  tabIndex={-1}
+                >
+                  Lineup
+                </h2>
+                <a
+                  className={cn(styles.watchReturn, "min-h-11 min-w-11 shrink-0 items-center gap-1.5 rounded-control text-sm font-medium underline decoration-current/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-accent sm:min-h-7")}
+                  href="#event-watch"
+                >
+                  <ArrowUp aria-hidden="true" className="size-3.5" />
+                  Watch
+                </a>
+              </div>
               <ol className="mt-5 divide-y divide-border">
                 {lineup.map((row, index) => {
                   const roleLabel = row.roleLabel?.trim().toLowerCase() === "participant" ? undefined : row.roleLabel;
