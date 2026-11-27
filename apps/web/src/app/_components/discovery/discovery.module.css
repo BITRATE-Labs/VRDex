@@ -334,6 +334,7 @@
     container-type: inline-size;
   }
   .cards {
+    --rail-edge-fade: 2.65rem;
     grid-template-columns: none;
     grid-auto-flow: column;
     grid-auto-columns: min(78vw, 340px);
@@ -358,8 +359,8 @@
       mask-image: linear-gradient(
         to right,
         var(--rail-left, #000),
-        #000 2.65rem,
-        #000 calc(100% - 2.65rem),
+        #000 var(--rail-edge-fade),
+        #000 calc(100% - var(--rail-edge-fade)),
         var(--rail-right, #000)
       );
     }
@@ -369,6 +370,12 @@
   }
   .name {
     font-size: 0.95rem;
+  }
+}
+@media (width <= 360px) {
+  .cards {
+    --rail-edge-fade: 0.75rem;
+    column-gap: 0.5rem;
   }
 }
 @media (hover: none), (pointer: coarse), (max-width: 760px) {
