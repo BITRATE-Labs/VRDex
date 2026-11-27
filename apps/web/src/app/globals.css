@@ -738,7 +738,7 @@ body > .ph-no-capture {
   background: var(--genre-bg);
   border: 1px solid var(--genre-border);
   border-radius: calc(var(--radius-control) - 0.24rem);
-  color: color-mix(in srgb, var(--genre-accent) 78%, var(--foreground));
+  color: var(--foreground);
   display: inline-flex;
   font-size: 0.66rem;
   font-weight: 680;
@@ -1206,7 +1206,6 @@ body > .ph-no-capture {
   padding: 0.25rem 0.38rem !important;
 }
 
-.lookup-brand-circle--commissions,
 .lookup-brand-circle--generic_store,
 .lookup-brand-circle--gumroad,
 .lookup-brand-circle--jinxxy,
@@ -1296,6 +1295,10 @@ body > .ph-no-capture {
   grid-column: 1;
   justify-content: flex-start;
   min-width: 0;
+}
+
+.lookup-commission-action svg {
+  flex-shrink: 0;
 }
 
 .lookup-copy-list {
@@ -1423,6 +1426,11 @@ body > .ph-no-capture {
   .lookup-icon-actions {
     grid-column: 1;
     justify-self: start;
+  }
+
+  .lookup-icon-actions:has(> .lookup-commission-action) > .lookup-destination-action {
+    flex-basis: 100%;
+    justify-content: flex-start;
   }
 
   .lookup-copy-list {

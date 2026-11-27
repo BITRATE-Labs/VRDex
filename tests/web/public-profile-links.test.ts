@@ -26,8 +26,10 @@ it("groups distinct VRCDN addresses and keeps explicit previews without duplicat
     assert.equal(html.split('href="' + separatePreview + '"').length - 1, 1);
     assert.ok(html.includes('aria-label="Live preview"'));
     assert.ok(!html.includes("Duplicate preview"));
-    assert.equal(html.split(">rtspt://stream.vrcdn.live/live/test-first</code>").length - 1, 1);
-    assert.ok(html.includes(">https://example.invalid/listen</code>"));
+    assert.ok(html.includes("rtspt://stream.vrcdn.live/<wbr/>live/<wbr/>test-first"));
+    const textHtml = html.replaceAll("<wbr/>", "");
+    assert.equal(textHtml.split(">rtspt://stream.vrcdn.live/live/test-first</code>").length - 1, 1);
+    assert.ok(textHtml.includes(">https://example.invalid/listen</code>"));
   `], {
     cwd: path.resolve("apps/web"), encoding: "utf8",
     env: { ...process.env, TSX_TSCONFIG_PATH: "tsconfig.json" },
