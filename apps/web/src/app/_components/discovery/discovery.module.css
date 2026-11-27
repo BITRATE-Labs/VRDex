@@ -23,10 +23,11 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  color: var(--muted);
+  color: var(--foreground);
   font-size: 0.8rem;
   padding: 0.45rem 0.65rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
   border-radius: var(--radius-control);
 }
 .browse:hover {
@@ -155,9 +156,10 @@
   min-height: 44px;
   gap: 0.3rem;
   padding-inline: 0.4rem;
+  border-color: var(--border);
 }
 .preferenceLabel {
-  color: var(--muted);
+  color: var(--foreground);
   font-size: 0.75rem;
   font-weight: 500;
   white-space: nowrap;

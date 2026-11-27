@@ -121,8 +121,8 @@ for (const state of [
       for (const [action, label] of [[interest, "Interested"], [favorite, "Favorite"]] as const) {
         const visualLabel = action.getByText(label, { exact: true });
         await expect(visualLabel).toHaveAttribute("aria-hidden", "true");
-
         await expect(visualLabel).toBeVisible();
+        await expect(action).not.toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
         const bounds = (await action.boundingBox())!;
         expect(bounds.width).toBeGreaterThanOrEqual(44);
         expect(bounds.height).toBeGreaterThanOrEqual(44);
