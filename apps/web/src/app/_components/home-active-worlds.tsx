@@ -1,6 +1,7 @@
+import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 
-import { Eyebrow, SectionHeading } from "@/components/ui/card";
+import { SectionHeading } from "@/components/ui/card";
 import { EntityImage } from "@/components/ui/entity-image";
 import { Notice } from "@/components/ui/notice";
 import { ViewerLocalEventDateTime } from "./viewer-local-event-times";
@@ -35,22 +36,28 @@ export type PublicActiveWorld = {
 };
 
 function ActiveWorldCard({ world }: { world: PublicActiveWorld }) {
+  const titleId = `featured-world-${world.slug}`;
+
   return (
     <Link
-      className="group relative grid min-h-72 w-full min-w-0 grid-cols-1 overflow-hidden rounded-panel border border-border bg-media !text-white shadow-panel transition before:col-start-1 before:row-start-1 before:aspect-[4/3] hover:-translate-y-1"
+      aria-labelledby={titleId}
+      className="group relative grid min-h-72 w-full min-w-0 grid-cols-1 overflow-hidden rounded-panel border border-border bg-media !text-white shadow-panel transition before:col-start-1 before:row-start-1 before:aspect-[4/3] hover:-translate-y-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
       href={`/${world.slug}`}
     >
-      <EntityImage className="absolute inset-0 size-full rounded-none bg-media text-4xl text-white" label={world.displayName} sizes="(min-width: 1024px) 33vw, 100vw" src={world.heroImageUrl} />
+      <EntityImage alt="" className="absolute inset-0 size-full rounded-none bg-media" fallback={false} label={world.displayName} sizes="(min-width: 1024px) 33vw, 100vw" src={world.heroImageUrl} />
       <span aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(135deg,color-mix(in_srgb,var(--media)_80%,transparent),color-mix(in_srgb,var(--accent)_16%,transparent))]" />
 
       <div className="relative col-start-1 row-start-1 p-5 [overflow-wrap:anywhere]">
-        <h3 className="text-3xl font-semibold text-white">{world.displayName}</h3>
+        <div className="flex items-start justify-between gap-3">
+          <h3 id={titleId} className="min-w-0 text-3xl font-semibold text-white">{world.displayName}</h3>
+          <ChevronRight aria-hidden="true" className="mt-2 size-4 shrink-0 text-white/75 group-hover:text-white" />
+        </div>
         <p className="mt-3 line-clamp-2 text-sm leading-6 text-white/76">
           {world.summary ?? "Upcoming public events are linked here."}
         </p>
-        <div className="mt-5 rounded-card border border-white/16 bg-white/12 p-4 backdrop-blur">
-          <Eyebrow className="text-white/62" tone="inverse">Next event</Eyebrow>
-          <p className="mt-2 font-medium text-white">{world.nextEvent.title}</p>
+        <div className="mt-4 border-t border-white/20 pt-3">
+          <p className="text-xs font-medium text-white/72">Next event</p>
+          <p className="mt-1 text-sm font-medium text-white">{world.nextEvent.title}</p>
           <p className="mt-1 text-sm text-white/72">
             <ViewerLocalEventDateTime timestamp={world.nextEvent.startAt} eventDate={world.nextEvent.eventDate} scheduleKind={world.nextEvent.scheduleKind} />
             {world.nextEvent.communityName ? ` by ${world.nextEvent.communityName}` : ""}
