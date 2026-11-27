@@ -313,20 +313,20 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
   const hasLaunchDetails = hasPlatforms && Boolean(canonicalWorldUrl);
   const heroMetaClassName = heroImageUrl ? "text-white/76" : "text-muted";
   const platformDetails = (
-    <div>
+    <div className={cn(isSparse && "sm:ps-4")}>
       <dt className={cn(
         heroMetaClassName,
         hasLaunchDetails && "max-sm:font-medium max-sm:text-inherit",
       )}>Platforms</dt>
-      <dd className={cn("mt-1", isSparse ? "font-semibold" : "font-medium")}>
+      <dd className={cn("mt-1", isSparse ? "text-base font-semibold" : "font-medium")}>
         {hasPlatforms ? <PillList items={world.platformCompatibility.map(platformLabel)} onArtwork={Boolean(heroImageUrl)} /> : "Unknown"}
       </dd>
     </div>
   );
   const visibilityDetails = (
-    <div className={cn(isSparse && "max-sm:col-span-2 max-sm:border-t max-sm:border-border max-sm:pt-3")}>
+    <div className={cn(isSparse && "border-s border-border ps-4")}>
       <dt className={heroMetaClassName}>{isSparse ? "World visibility" : "Visibility"}</dt>
-      <dd className={cn("mt-1", isSparse ? "font-semibold" : "font-medium")}>{visibilityLabel(world.visibilityStatus)}</dd>
+      <dd className={cn("mt-1", isSparse ? "text-base font-semibold" : "font-medium")}>{visibilityLabel(world.visibilityStatus)}</dd>
     </div>
   );
   const launchAction = canonicalWorldUrl ? (
@@ -366,11 +366,12 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
   ) : null;
 
   return (
-    <PageShell tone="world">
+    <PageShell tone="world" className={cn(isSparse && "sm:grid sm:content-center sm:pb-24")}>
       <PageContainer max={!heroImageUrl && !hasDetails ? "3xl" : undefined}>
         <section className={cn(
           "overflow-hidden rounded-hero border border-border",
           heroImageUrl ? "bg-media text-white shadow-hero" : "bg-surface-strong text-foreground shadow-sm",
+          isSparse && "border-border-strong",
         )}>
           <div className={cn(
             "p-6 sm:p-8",
@@ -382,6 +383,7 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
               <h1 className={cn(
                 "font-semibold leading-none tracking-[-0.05em] [overflow-wrap:anywhere]",
                 heroImageUrl ? "text-5xl sm:text-7xl" : "text-4xl sm:text-5xl",
+                isSparse && "sm:text-[2.625rem]",
                 hasLaunchDetails && "sm:col-span-2 sm:row-start-1",
                 hasLaunchDetails && heroImageUrl && "max-sm:text-[2.625rem]",
               )}>{world.displayName}</h1>
@@ -397,12 +399,12 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
                 heroImageUrl ? "text-white/82" : "text-muted",
               )}>{world.summary}</p> : null}
               {isSparse ? (
-                <dl className="mt-5 grid grid-cols-2 gap-3 rounded-card border border-border bg-surface p-3 text-sm sm:mt-7 sm:grid-cols-3 sm:px-4">
-                  {platformDetails}
-                  <div>
-                    <dt className={heroMetaClassName}>VRChat link</dt>
-                    <dd className="mt-1 font-semibold">Not listed</dd>
+                <dl className="mt-5 grid grid-cols-2 items-center gap-y-4 border-t border-border-strong pt-5 text-sm sm:mt-7 sm:grid-cols-[1.2fr_1fr_1fr] sm:pt-6">
+                  <div className="max-sm:col-span-2 max-sm:border-b max-sm:border-border max-sm:pb-4 sm:border-e sm:border-border sm:pe-4">
+                    <dt className="font-medium text-muted">VRChat link</dt>
+                    <dd className="mt-1 text-xl font-semibold leading-7 sm:text-2xl">Not listed</dd>
                   </div>
+                  {platformDetails}
                   {visibilityDetails}
                 </dl>
               ) : (
