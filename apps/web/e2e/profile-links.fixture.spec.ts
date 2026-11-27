@@ -329,15 +329,14 @@ test("a sparse community highlights its group and confirms empty hosted events @
 
   expect((await page.goto("/playwright-afterglow-social-group"))?.status()).toBe(200);
   const richGroup = page.getByRole("link", { name: /^VRChat group(?:\s|$)/ });
-  const groupedShortcut = page.getByRole("link", { name: "Hosted events", exact: true });
+  const groupedEntry = page.getByRole("region", { name: "Afterglow Social", exact: true }).getByRole("link", { name: /Afterglow Harbor Sessions/ });
   await expect(richGroup).toHaveAttribute("href", groupUrl);
-  await expect(groupedShortcut).toHaveAttribute("href", "#profile-events");
-  const [richGroupBox, groupedShortcutBox] = await Promise.all([richGroup.boundingBox(), groupedShortcut.boundingBox()]);
-  if (!richGroupBox || !groupedShortcutBox) throw new Error("Missing group or event shortcut bounds");
-  expect(groupedShortcutBox.y).toBeGreaterThanOrEqual(richGroupBox.y + richGroupBox.height);
-  await richGroup.focus();
-  await page.keyboard.press("Tab");
-  await expect(groupedShortcut).toBeFocused();
+  await expect(groupedEntry).toHaveAttribute("href", "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions");
+  const [richGroupBox, groupedEntryBox] = await Promise.all([richGroup.boundingBox(), groupedEntry.boundingBox()]);
+  if (!richGroupBox || !groupedEntryBox) throw new Error("Missing group or event entry bounds");
+  expect(groupedEntryBox.y + groupedEntryBox.height).toBeLessThanOrEqual(richGroupBox.y);
+  await expect(groupedEntry).toBeInViewport({ ratio: 1 });
+  await expect(groupedEntry.getByText("Hosted event", { exact: true })).toBeVisible();
 
   expect((await page.goto("/playwright-afterglow-social"))?.status()).toBe(200);
   const richIdentity = page.getByRole("region", { name: "Afterglow Social", exact: true });
@@ -369,44 +368,80 @@ test("a sparse community highlights its group and confirms empty hosted events @
   }
   await expect(page.getByText("No events", { exact: true })).toHaveCount(0);
 
-  const shortcut = richIdentity.getByRole("link", { name: "Hosted events", exact: true, includeHidden: true });
+  const entry = richIdentity.getByRole("link", { name: /Afterglow Harbor Sessions/ });
   const event = page.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true });
   const eventPath = "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions";
   const source = event.locator("xpath=ancestor::article[1]").getByRole("link", { name: "Afterglow event listing", exact: true });
   await expect(source).toHaveAttribute("href", "https://example.invalid/events/afterglow-harbor-sessions");
   await expect(source).toHaveAttribute("target", "_blank");
-  await expect(shortcut).toHaveAttribute("href", "#profile-events");
-  await expect(shortcut).toBeInViewport({ ratio: 1 });
+  await expect(richIdentity.getByRole("link", { name: "Hosted events", exact: true, includeHidden: true })).toHaveCount(0);
+  await expect(entry).toHaveAttribute("href", eventPath);
   await expect(event).toHaveAttribute("href", eventPath);
-  for (const action of [shortcut, event, source]) {
+  for (const action of [entry, event, source]) {
     const bounds = await action.boundingBox();
     expect(bounds?.height).toBeGreaterThanOrEqual(44);
     expect(bounds?.width).toBeGreaterThanOrEqual(44);
   }
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await expect(shortcut).toBeHidden();
-  await page.setViewportSize({ width: 320, height: 720 });
-  await shortcut.focus();
+  for (const [width, height] of [[320, 568], [390, 750], [1280, 800]]) {
+    await page.setViewportSize({ width, height });
+    await expect(entry).toBeInViewport({ ratio: 1 });
+    await expect(entry.locator("time")).toHaveAttribute("datetime", /Z$/);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+  }
+  await page.setViewportSize({ width: 320, height: 568 });
+  await entry.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(url => url.pathname === eventPath);
+  await expect(page.getByRole("heading", { level: 1, name: "Afterglow Harbor Sessions", exact: true })).toBeVisible();
+});
+
+test("an event entry stays above rich community content and the list follows the owner order @fixture", async ({ page, isMobile }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto("/playwright-group-population-multiple-events");
+  const identity = page.getByRole("region", { name: "Afterglow Social", exact: true });
+  const entry = identity.getByRole("link", { name: /Afterglow Harbor Sessions/ });
+  const list = identity.getByRole("link", { name: "Hosted events", exact: true });
+  const links = page.getByRole("heading", { name: "Links", exact: true });
+  const activity = page.getByRole("heading", { name: "Activity", exact: true });
+  const worlds = page.getByRole("heading", { name: "Worlds", exact: true });
+  const events = page.getByRole("heading", { name: "Hosted events", exact: true });
+  const eventSection = events.locator("xpath=ancestor::section[1]");
+  const addEvent = eventSection.getByRole("link", { name: "Add event", exact: true });
+  const firstEvent = eventSection.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true });
+  const source = eventSection.getByRole("link", { name: "Afterglow event listing", exact: true }).first();
+
+  await expect(entry).toBeInViewport({ ratio: 1 });
+  await expect(identity.getByRole("link", { name: /July Fourth Sessions/ })).toHaveCount(0);
+  for (const [first, second] of [[entry, links], [links, activity], [activity, worlds], [worlds, events]]) {
+    await expect(first).toBeVisible();
+    await expect(second).toBeVisible();
+    const [firstBox, secondBox] = await Promise.all([first.boundingBox(), second.boundingBox()]);
+    if (!firstBox || !secondBox) throw new Error("Missing community section bounds");
+    expect(firstBox.y).toBeLessThan(secondBox.y);
+  }
+  await list.focus();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/#profile-events$/);
-  await expect(richEventsHeading).toBeFocused();
-  const heading = await richEventsHeading.boundingBox();
-  const header = await page.getByRole("banner").boundingBox();
-  if (!heading || !header) throw new Error("Missing anchored heading or header bounds");
-  expect(heading.y).toBeGreaterThanOrEqual(header.y + header.height);
-  await expect(event).toBeInViewport({ ratio: 1 });
+  await expect(events).toBeFocused();
+  const [headerBox, headingBox] = await Promise.all([page.getByRole("banner").boundingBox(), events.boundingBox()]);
+  if (!headerBox || !headingBox) throw new Error("Missing anchored heading or header bounds");
+  expect(headingBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height);
+  await expect(firstEvent).toBeInViewport({ ratio: 1 });
   await page.keyboard.press("Tab");
-  await expect(richAddEvent).toBeFocused();
+  await expect(addEvent).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(event).toBeFocused();
+  await expect(firstEvent).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(source).toBeFocused();
   await page.keyboard.press("Shift+Tab");
-  await expect(event).toBeFocused();
-  await Promise.all([
-    page.waitForURL(url => url.pathname === eventPath, { waitUntil: "domcontentloaded" }),
-    page.keyboard.press("Enter"),
-  ]);
+  await expect(firstEvent).toBeFocused();
+  await expect(eventSection.getByRole("link", { name: "July Fourth Sessions", exact: true })).toBeVisible();
+
+  await page.goto("/playwright-group-population-events");
+  await expect(entry).toBeInViewport({ ratio: 1 });
+  if (isMobile) await entry.tap();
+  else await entry.click();
+  await expect(page).toHaveURL(url => url.pathname === "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions");
   await expect(page.getByRole("heading", { level: 1, name: "Afterglow Harbor Sessions", exact: true })).toBeVisible();
 });
 

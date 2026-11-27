@@ -8,6 +8,7 @@ import { parseProfileLinkDestination } from "../../../../../convex/_profileLinkD
 import { Fragment, type CSSProperties, type ReactNode } from "react";
 
 import { EventPreviewCard, type PublicEventPreview } from "./event-public-page";
+import { ViewerLocalEventDateTime } from "./viewer-local-event-times";
 import { PublicMediaAssetCard } from "./public-media-asset-card";
 import { EntityImage } from "@/components/ui/entity-image";
 import { ProfileAvatarImage } from "./profile-avatar-image";
@@ -25,6 +26,7 @@ import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { VerifiedTrustMark } from "@/components/ui/verified-trust-mark";
 import { avatarFrameStyle, defaultAvatarAppearance, type AvatarAppearance } from "@/lib/avatar-appearance";
 import { cn } from "@/lib/cn";
+import { publicEventPath } from "@/lib/event-path";
 import { uniqueProfileIdentityItems } from "@/lib/profile-identity-items";
 import { PROFILE_SUGGESTION_LABEL, PROFILE_SUGGESTION_QUERY } from "@/lib/auth-copy";
 import { profileClaimPath } from "@/lib/profile-claim";
@@ -452,7 +454,10 @@ export function ProfilePublicPage({
   const useCompactIdentity = useCompactCommunity || (isPerson && hasSparseIdentity && visibleLinks.length === 0);
   const isRichPublicCommunity = !isPerson && !embedded && !useCompactIdentity;
   const hasSingleCommunityEvent = isRichPublicCommunity && eventPreviews.length === 1;
-  const hasCommunityEventShortcut = isRichPublicCommunity && eventPreviews.length > 0;
+  const hasCommunityEvents = isRichPublicCommunity && eventPreviews.length > 0;
+  const featuredEvent = hasCommunityEvents ? eventPreviews.find((event) => publicEventPath(event)) : undefined;
+  const featuredEventPath = featuredEvent ? publicEventPath(featuredEvent) : undefined;
+  const showCommunityEventListLink = hasCommunityEvents && (!featuredEventPath || eventPreviews.length > 1);
   const isRichPublicPerson = isPerson && !embedded && !useCompactIdentity;
   const useSideBySideMobileIdentity = isRichPublicCommunity || isRichPublicPerson;
   const moveOwnershipBelowContent = !embedded && (!isPerson || isRichPublicPerson);
@@ -496,10 +501,10 @@ export function ProfilePublicPage({
               <SectionTitle
                 className={cn(
                   useCompactCommunity ? "text-xl" : "max-sm:text-xl",
-                  hasCommunityEventShortcut && "scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent [@media(scripting:none)]:scroll-mt-32",
+                  hasCommunityEvents && "scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent [@media(scripting:none)]:scroll-mt-32",
                 )}
-                id={hasCommunityEventShortcut ? "profile-events" : undefined}
-                tabIndex={hasCommunityEventShortcut ? -1 : undefined}
+                id={hasCommunityEvents ? "profile-events" : undefined}
+                tabIndex={hasCommunityEvents ? -1 : undefined}
               >
                 Hosted events
               </SectionTitle>
@@ -640,17 +645,37 @@ export function ProfilePublicPage({
       }))}
     />
   );
-  const communityEventShortcut = hasCommunityEventShortcut ? (
-    <a
-      className={cn(
-        "-mt-2 inline-flex min-h-11 w-fit items-center gap-1.5 rounded-control text-sm font-medium underline decoration-current/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 sm:hidden",
-        hasPrimaryGroupLink ? "text-accent-strong focus-visible:outline-accent" : "text-white focus-visible:outline-white",
-      )}
-      href="#profile-events"
-    >
-      Hosted events
-      <ArrowDown aria-hidden="true" className="size-3.5" />
-    </a>
+  const communityEventEntry = hasCommunityEvents ? (
+    <div className={cn("grid min-w-0 gap-1", aboutCopy && "lg:col-start-1 lg:row-start-2")}>
+      {featuredEvent && featuredEventPath ? (
+        <Link
+          className="group grid min-h-11 w-full max-w-lg grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-control border border-white/25 bg-black/30 px-3 py-2 text-white hover:border-white/50 hover:bg-black/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:gap-3"
+          href={featuredEventPath}
+        >
+          <span className="min-w-0">
+            <span className="block text-xs leading-4 text-white/75">Hosted event</span>
+            <span className="block wrap-anywhere text-sm leading-5 font-semibold group-hover:underline">{featuredEvent.title}</span>
+            <ViewerLocalEventDateTime
+              className="block text-sm leading-5 text-white/90"
+              eventDate={featuredEvent.eventDate}
+              scheduleKind={featuredEvent.scheduleKind}
+              timestamp={featuredEvent.startAt}
+              yearReferenceAt={yearReferenceAt}
+            />
+          </span>
+          <ChevronRight aria-hidden="true" className="size-4 text-white/75" />
+        </Link>
+      ) : null}
+      {showCommunityEventListLink ? (
+        <a
+          className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-control text-sm font-medium text-white underline decoration-current/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          href="#profile-events"
+        >
+          Hosted events
+          <ArrowDown aria-hidden="true" className="size-3.5" />
+        </a>
+      ) : null}
+    </div>
   ) : null;
   const stackOwnershipPrompt = !embedded && isPerson && !useCompactIdentity;
   const profileOwnership = canClaim ? (
@@ -805,13 +830,16 @@ export function ProfilePublicPage({
                     })}
                   </nav>
                 ) : null}
+                {communityEventEntry}
                 {aboutCopy ? (
-                  <div className="border-white/20 lg:border-l lg:pl-7">
+                  <div className={cn(
+                    "border-white/20 lg:border-l lg:pl-7",
+                    hasCommunityEvents && "lg:col-start-2 lg:row-span-2 lg:row-start-1",
+                  )}>
                     <h2 className="text-sm font-semibold text-white/70">About</h2>
                     <p className="mt-2 max-w-xl text-base leading-7 text-white/88">{aboutCopy}</p>
                   </div>
                 ) : null}
-                {!hasPrimaryGroupLink ? communityEventShortcut : null}
               </div>
             </div>
             {useCompactCommunity && creatorLinks.length > 0 ? profileLinks : null}
@@ -822,7 +850,6 @@ export function ProfilePublicPage({
 
         {profile.profileType === "person" && <HomeLiveNow key={profile.slug} performerSlug={profile.slug} />}
         {!useCompactCommunity ? profileLinks : null}
-        {hasPrimaryGroupLink ? communityEventShortcut : null}
 
         {!isPerson ? <CommunityActivity profile={profile} /> : null}
 
