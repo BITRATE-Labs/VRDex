@@ -43,6 +43,9 @@ The Support flow checks the exact required field names, persistent Message
 instructions, conditional profile lookup, and mock submission and retry.
 Public Contact and Privacy request snapshots cover their initial topic states.
 
+The shared shell flow checks that the signed-out 320 px header uses two rows.
+It also checks that Search opens within the viewport and Escape restores focus.
+
 PowerShell data-flow run with video:
 
 ```powershell
