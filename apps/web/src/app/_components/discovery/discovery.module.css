@@ -40,12 +40,6 @@
   gap: var(--group-gap);
 }
 @media (width > 760px) {
-  .eventCard {
-    display: grid;
-  }
-  .eventCard > .artwork {
-    grid-row: 1;
-  }
   .groups[data-empty-group="events"] {
     grid-template-columns: clamp(7rem, 16%, 12rem) minmax(0, 40rem);
   }
@@ -117,6 +111,19 @@
   gap: var(--card-gap);
   align-items: start;
 }
+.cards:has(> div > .eventCard) {
+  grid-template-rows: auto auto;
+  row-gap: 0;
+}
+.cards > div:has(> .eventCard),
+.eventCard {
+  display: grid;
+  grid-row: span 2;
+  grid-template-rows: subgrid;
+}
+.cards > div:has(> .eventCard) {
+  align-self: stretch;
+}
 .cards > div,
 .card {
   min-width: 0;
@@ -182,8 +189,12 @@
   flex-direction: column;
   align-items: flex-start;
 }
+.card.eventCard {
+  container-type: normal;
+}
 .eventCard > .eventMetadata {
-  padding-top: 0.3rem;
+  min-height: 0;
+  padding-block: 0.3rem 0.5rem;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   column-gap: 0.4rem;
@@ -194,13 +205,6 @@
   grid-column: 1 / -1;
 }
 @container (width < 12rem) {
-  .eventCard > .eventMetadata {
-    grid-template-columns: minmax(0, 1fr);
-    padding-top: 0.75rem;
-  }
-  .card .save {
-    justify-self: start;
-  }
   .clubName {
     flex-wrap: wrap;
     row-gap: 0;
@@ -210,6 +214,30 @@
   }
   .card .favorite {
     margin-left: 0;
+  }
+}
+@media (width > 760px) {
+  .cards:has(> div > .eventCard) {
+    container: event-rail / inline-size;
+  }
+  /* Two narrow cards plus the rail gap. */
+  @container event-rail (width < 25rem) {
+    .groups:not([data-single-event-with-clubs]) .eventCard > .eventMetadata {
+      grid-template-columns: minmax(0, 1fr);
+      padding-top: 0.75rem;
+    }
+    .groups:not([data-single-event-with-clubs]) .eventCard .save {
+      justify-self: start;
+    }
+  }
+  @container event-rail (width < 12rem) {
+    .groups[data-single-event-with-clubs] .eventCard > .eventMetadata {
+      grid-template-columns: minmax(0, 1fr);
+      padding-top: 0.75rem;
+    }
+    .groups[data-single-event-with-clubs] .eventCard .save {
+      justify-self: start;
+    }
   }
 }
 .clubMetadata {
@@ -244,6 +272,9 @@
 .host {
   display: inline-block;
   max-width: 100%;
+}
+.favoriteSummary:empty {
+  display: none;
 }
 .favoriteSummary {
   min-height: 1.65rem;
@@ -455,25 +486,6 @@
   .cards > div {
     scroll-snap-align: start;
   }
-  .cards:has(> div > .eventCard) {
-    grid-template-rows: auto auto;
-    row-gap: 0;
-  }
-  .cards > div:has(> .eventCard),
-  .eventCard {
-    display: grid;
-    grid-row: span 2;
-    grid-template-rows: subgrid;
-  }
-  .cards > div:has(> .eventCard) {
-    align-self: stretch;
-  }
-  .eventCard {
-    container-type: normal;
-  }
-  .eventCard > .eventMetadata {
-    padding-bottom: 0.5rem;
-  }
   /* Before hydration, two 340px cards and the gap determine where a peek fits. */
   @container (width < calc(680px + 0.8rem)) {
     .cards[data-scroll-left] {
@@ -494,14 +506,6 @@
   }
   .clubMetadata {
     min-height: 80px;
-  }
-  article .eventMetadata {
-    min-height: 0;
-  }
-
-
-  .favoriteSummary:empty {
-    display: none;
   }
   .name {
     font-size: 0.95rem;
