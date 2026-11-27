@@ -100,6 +100,38 @@
     grid-template-areas: "poster lead" "details lead";
   }
 
+  .media:has(.watch:not(:empty) + .locationLinks):has(> .poster) {
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      "poster watch"
+      "locations watch"
+      "details watch";
+  }
+
+  .media:has(.watch:not(:empty) + .locationLinks):has(> .poster) > .lead {
+    display: contents;
+  }
+
+  .media:has(.watch:not(:empty) + .locationLinks):has(> .poster) .watch {
+    grid-area: watch;
+  }
+
+  .media:has(.watch:not(:empty) + .locationLinks):has(> .poster) .locationLinks {
+    grid-area: locations;
+    margin-top: 0;
+  }
+
+  .media:has(.watch:not(:empty) + .locationLinks):has(> .poster) .locationLinks > a {
+    flex: 1 1 auto;
+  }
+
+  .media:has(.watch:not(:empty) + .locationLinks):has(> .poster) > .details {
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+  }
+
   .lead:has(> .watch:not(:empty)) + .poster {
     position: static;
   }
