@@ -65,6 +65,67 @@ test("multiple profile streams expose distinct copy actions and keep exact desti
   }
 });
 
+test("an artless occurrence on a sparse profile uses its theme colors @fixture", async ({ page }, testInfo) => {
+  await page.addInitScript(() => localStorage.setItem("vrdex-theme", "light"));
+  expect((await page.goto("/playwright-event-only-profile"))?.status()).toBe(200);
+
+  const title = page.getByRole("link", { name: "July Fourth Sessions", exact: true });
+  await expect(title).toHaveAttribute("href", "/playwright-afterglow-social/events/playwright-date-only-sparse-guest");
+  const card = page.getByRole("article").filter({ has: title });
+  const date = card.locator("time");
+  await expect(date).toHaveText(/Time TBA/);
+  const header = card.locator(":scope > div").first();
+  await expect(header).toHaveCSS("background-image", /^linear-gradient\(/);
+  await expect(header).not.toHaveCSS("background-image", /url\(/);
+
+  const seenGradients = new Set<string>();
+  for (const theme of ["light", "dark"] as const) {
+    if (theme === "dark") {
+      await page.getByRole("button", { name: "Toggle color theme" }).click();
+    }
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    await expect(page.locator("html")).not.toHaveAttribute("data-theme-transition", "true");
+    const [titleColor, dateColor, gradient] = await Promise.all([
+      title.evaluate((element) => getComputedStyle(element).color),
+      date.evaluate((element) => getComputedStyle(element).color),
+      header.evaluate((element) => getComputedStyle(element).backgroundImage),
+    ]);
+    expect(seenGradients.has(gradient)).toBe(false);
+    seenGradients.add(gradient);
+    const stops = gradient.match(/rgb\([^)]*\)/g) ?? [];
+    expect(stops).toHaveLength(2);
+
+    const luminance = (color: string) => {
+      const channels = color.match(/[\d.]+/g)?.map(Number);
+      if (channels?.length !== 3) throw new Error(`Expected an opaque RGB color, got ${color}`);
+      const [red, green, blue] = channels.map((channel) => {
+        const value = channel / 255;
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+    };
+    const ratios = stops.map((stop) => {
+      const contrast = (color: string) => {
+        const first = luminance(color);
+        const second = luminance(stop);
+        return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
+      };
+      return { stop, title: contrast(titleColor), date: contrast(dateColor) };
+    });
+    await testInfo.attach(`artless-occurrence-${theme}-contrast`, {
+      body: JSON.stringify({ titleColor, dateColor, ratios }, null, 2),
+      contentType: "application/json",
+    });
+    for (const { title, date } of ratios) {
+      expect(title).toBeGreaterThanOrEqual(4.5);
+      expect(date).toBeGreaterThanOrEqual(4.5);
+    }
+    if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+      await card.screenshot({ path: testInfo.outputPath(`artless-occurrence-${theme}.png`), animations: "disabled" });
+    }
+  }
+});
+
 test("a sparse person profile puts its identity and ownership together @fixture", async ({ page }) => {
   expect((await page.goto("/playwright-sparse-import"))?.status()).toBe(200);
   const identity = page.getByRole("region", { name: "Sparse Import", exact: true });

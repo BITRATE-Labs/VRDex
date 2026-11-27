@@ -59,6 +59,8 @@ multi-stream fixture checks the exact clipboard destinations and accessible
 control names for both playback devices. The media-kit flow covers keyboard
 disclosure, missing history, and a failed thumbnail on a 320 px layout.
 It verifies that Retry fits and that the asset keeps its download link.
+The event-only profile fixture checks that an occurrence with no artwork
+keeps its link and date legible in both themes.
 
 The signed-out contribution smoke checks how Sign in names recognized
 profile actions. Unknown or rejected return paths keep the generic heading

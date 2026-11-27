@@ -1331,6 +1331,15 @@ export function getPlaywrightPublicProfileFixture(
   }
 
   if (profileType === "person") {
+    if (slug === "playwright-event-only-profile") {
+      const event = getPlaywrightPublicEventFixture(playwrightGuestEventSlugs.sparseDate);
+      return event && {
+        ...toPublicFixturePersonProfile(sparseImportedProfile),
+        slug,
+        displayName: "Sparse Profile with Event",
+        upcomingEvents: [event],
+      };
+    }
     const profile = personProfiles.find((entry) => entry.slug === slug);
 
     return profile ? toPublicFixturePersonProfile(profile) : null;
