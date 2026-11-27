@@ -88,7 +88,8 @@ test.describe("Home discovery @flow @fixture", () => {
       const server = socket.connectToServer();
       server.onMessage(message => { if (held) messages.push(() => socket.send(message)); else socket.send(message); });
     });
-    await page.reload();
+    // Use the existing ORBIT range so Schedule's empty-range compaction is outside this geometry check.
+    await page.goto(`/?at=${TIMELINE_NOW + 7 * 86400000 - 3600000}`);
     const discover = page.getByRole("region", { name: "Discover", exact: true });
     await expect(discover).toHaveAttribute("aria-busy", "true");
     const shell = discover.getByTestId("discovery-placeholder").first();
@@ -97,7 +98,7 @@ test.describe("Home discovery @flow @fixture", () => {
     const geometry = () => page.evaluate(() => ({
       footerDocumentY: (document.querySelector("footer")?.getBoundingClientRect().top ?? 0) + scrollY,
       scheduleDocumentY: (document.querySelector("[data-home-schedule]")?.getBoundingClientRect().top ?? 0) + scrollY,
-      discoveryDocumentY: (document.querySelector('[aria-label="Discover"]')?.getBoundingClientRect().top ?? 0) + scrollY,
+      discoveryDocumentY: (document.querySelector('[aria-labelledby="discover-heading"]')?.getBoundingClientRect().top ?? 0) + scrollY,
       documentWidth: document.documentElement.scrollWidth,
       viewportWidth: innerWidth,
       scrollY,
@@ -112,6 +113,20 @@ test.describe("Home discovery @flow @fixture", () => {
     await usableDiscovery(page);
     await expect(discover).toHaveAttribute("aria-busy", "false");
     await expect(discover.getByTestId("discovery-placeholder")).toHaveCount(0);
+    for (const name of ["Open ORBIT", "Open Low Tide"]) {
+      await expect(
+        discover.getByRole("link", { name, exact: true }),
+      ).toHaveCount(1);
+    }
+    await expect(page.getByLabel("Schedule data state")).toHaveAttribute(
+      "data-state",
+      "ready",
+      { timeout: 20000 },
+    );
+    await expect(
+      page.getByRole("region", { name: "Schedule", exact: true })
+        .getByRole("button", { name: "Open ORBIT", exact: true }),
+    ).toBeVisible();
     const readyBounds = await discover.getByTestId("discovery-event-card").first().boundingBox();
     const after = await geometry();
     expect(Math.abs(after.footerDocumentY - before.footerDocumentY)).toBeLessThanOrEqual(1);

@@ -269,6 +269,14 @@
 .groups[data-empty-group] > div > .status {
   padding: 0;
 }
+@media (width > 760px) {
+  .groups[data-empty-group] > div > .status {
+    padding: 0.35rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+  }
+}
 .loading {
   display: inline-flex;
   align-items: center;
@@ -322,6 +330,9 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 1.5rem;
   }
+  .groups > div {
+    container-type: inline-size;
+  }
   .cards {
     grid-template-columns: none;
     grid-auto-flow: column;
@@ -334,6 +345,24 @@
   }
   .cards > div {
     scroll-snap-align: start;
+  }
+  /* Before hydration, two 340px cards and the gap determine where a peek fits. */
+  @container (width < calc(680px + 0.8rem)) {
+    .cards[data-scroll-left] {
+      --rail-left: transparent;
+    }
+    .cards[data-scroll-right] {
+      --rail-right: transparent;
+    }
+    .cards:is([data-scroll-left], [data-scroll-right]):not(:focus-within, :active) {
+      mask-image: linear-gradient(
+        to right,
+        var(--rail-left, #000),
+        #000 2.65rem,
+        #000 calc(100% - 2.65rem),
+        var(--rail-right, #000)
+      );
+    }
   }
   .clubMetadata {
     min-height: 80px;
