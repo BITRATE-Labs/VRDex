@@ -1,7 +1,7 @@
 "use client";
 import { inferLineupEnds } from "@vrdex/api-contracts";
 import { useQuery } from "convex/react";
-import { ExternalLink, MapPin } from "lucide-react";
+import { ChevronRight, ExternalLink, MapPin } from "lucide-react";
 import Link from "next/link";
 import { type CSSProperties, useId, useState } from "react";
 import type { FunctionReturnType } from "convex/server";
@@ -391,6 +391,7 @@ export function EventPublicPage({ event: initialEvent }: { event: PublicEvent })
 
 function EventPublicPageContent({ event }: { event: PublicEvent }) {
   const [reportOpen, setReportOpen] = useState(false);
+  const lineupMetadataId = useId();
   const canHost = useQuery(api.events.getHostAccess, event.communitySlug ? { slug: event.slug, communitySlug: event.communitySlug } : "skip");
   const lineup = eventLineupForDisplay(event);
   const bannerStyle = safeImageBackground(event.bannerImageUrl, eventPosterOverlay);
@@ -520,18 +521,46 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
                 Lineup
               </h2>
               <ol className="mt-5 divide-y divide-border">
-                {lineup.map((row) => (
-                  <li className="flex min-w-0 items-center gap-4 py-4 first:pt-0 last:pb-0" key={row.key}>
-                    <EventAvatar appearance={row.performer?.avatarAppearance} imageUrl={row.performer?.imageUrl} label={row.displayLabel} />
-                    <div className="min-w-0">
+                {lineup.map((row, index) => {
+                  const roleLabel = row.roleLabel?.trim().toLowerCase() === "participant" ? undefined : row.roleLabel;
+                  const hasMetadata = Boolean(roleLabel) || row.startAt !== undefined;
+                  const metadataId = row.performer && hasMetadata ? `${lineupMetadataId}-${index}` : undefined;
+                  const content = (
+                    <>
+                      <EventAvatar appearance={row.performer?.avatarAppearance} imageUrl={row.performer?.imageUrl} label={row.displayLabel} />
+                      <div className="min-w-0">
+                        <span className={cn(
+                          "font-semibold [overflow-wrap:anywhere]",
+                          row.performer && inlineActionClassName,
+                          row.performer && "group-hover:decoration-accent",
+                        )}>{row.displayLabel}</span>
+                        {hasMetadata ? (
+                          <div className="flow-root" id={metadataId}>
+                            {roleLabel ? <div className="mt-1 text-sm text-muted">{roleLabel}</div> : null}
+                            {row.startAt !== undefined ? <ViewerLocalEventTimeRange className="mt-1 block text-sm text-muted" endAt={row.endAt} startAt={row.startAt} /> : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    </>
+                  );
+                  const rowClassName = "flex min-w-0 items-center gap-4";
+
+                  return (
+                    <li className="min-w-0 py-4 first:pt-0 last:pb-0" key={row.key}>
                       {row.performer ? (
-                        <Link className={cn(inlineActionClassName, "[overflow-wrap:anywhere]")} href={`/${row.performer.slug}`}>{row.displayLabel}</Link>
-                      ) : <span className="font-semibold [overflow-wrap:anywhere]">{row.displayLabel}</span>}
-                      {row.roleLabel && row.roleLabel.trim().toLowerCase() !== "participant" ? <div className="mt-1 text-sm text-muted">{row.roleLabel}</div> : null}
-                      {row.startAt !== undefined ? <ViewerLocalEventTimeRange className="mt-1 block text-sm text-muted" endAt={row.endAt} startAt={row.startAt} /> : null}
-                    </div>
-                  </li>
-                ))}
+                        <Link
+                          aria-label={row.displayLabel}
+                          aria-describedby={metadataId}
+                          className={cn(rowClassName, "group rounded-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent max-sm:min-h-11 sm:w-fit")}
+                          href={`/${row.performer.slug}`}
+                        >
+                          {content}
+                          <ChevronRight aria-hidden="true" className="ml-auto size-4 shrink-0 text-muted group-hover:text-accent-strong sm:hidden" />
+                        </Link>
+                      ) : <div className={rowClassName}>{content}</div>}
+                    </li>
+                  );
+                })}
               </ol>
             </Card>
           ) : null}
