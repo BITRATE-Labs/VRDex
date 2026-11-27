@@ -169,8 +169,10 @@ test.describe("artless card variants", () => {
     const source = sparse.getByRole("link", { name: "Guest event listing", exact: true });
     await expect(source).toHaveAttribute("href", "https://example.invalid/events/independence-day-guest-sessions");
     await expect(source).toHaveAttribute("target", "_blank");
-    await expect(timed.locator("time").first()).toHaveText(/Jun 14.*7:00 PM PDT/);
-    await expect(timed.locator("time").last().locator("..")).toHaveText(/Doors 6:30 PM/);
+    const start = timed.locator("time").first();
+    const doors = timed.locator("time").last().locator("..");
+    await expect(start).toHaveText(/Jun 14.*7:00 PM PDT/);
+    await expect(doors).toHaveText(/Doors 6:30 PM/);
     await expect(timed.getByText("Afterglow Social and the Interstellar Sound System Collective", { exact: true })).toBeVisible();
 
     for (const width of [320, 1280]) {
@@ -179,6 +181,12 @@ test.describe("artless card variants", () => {
       const [shortCard, richCard] = await Promise.all([sparse.boundingBox(), timed.boundingBox()]);
       if (!shortCard || !richCard) throw new Error("Expected both event cards");
       expect(shortCard.height).toBeLessThan(richCard.height);
+      const [startBox, doorsBox] = await Promise.all([start.boundingBox(), doors.boundingBox()]);
+      if (!startBox || !doorsBox) throw new Error("Expected the event start and Doors");
+      if (doorsBox.y > startBox.y + startBox.height) {
+        expect(doorsBox.x).toBe(startBox.x);
+        await expect(doors).toHaveCSS("padding-inline-start", "0px");
+      }
     }
     for (const path of [externalEvent, timedEvent]) {
       expect((await request.get(path)).status()).toBe(200);
