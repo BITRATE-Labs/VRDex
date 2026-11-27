@@ -11,11 +11,11 @@ import { PageContainer, PageShell } from "@/components/ui/page-shell";
 
 export function HomeSearchPage({ initialLiveEntries = [], beforeSchedule }: { initialLiveEntries?: LiveEntry[]; beforeSchedule?: ReactNode } = {}) {
   return (
-    <PageShell>
+    <PageShell className="max-sm:pt-5">
       <PageContainer className={styles.home} max="7xl">
         <header className={styles.searchRow}>
           <h1 className={styles.searchHeading}>DJs, clubs &amp; events</h1>
-          <PublicSearchControl action="/search" surface="home" tone="default" />
+          <PublicSearchControl action="/search" compact="mobile" placeholder="Search VRDex" surface="home" tone="default" />
         </header>
         <HomeBrowseProvider>
           {beforeSchedule ?? <HomeLiveNow initialEntries={initialLiveEntries} />}
