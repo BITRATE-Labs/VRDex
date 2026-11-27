@@ -181,6 +181,10 @@ html[data-theme="dark"] .navbar.navbar-sidebar--show {
   backdrop-filter: none;
 }
 
+html[data-theme="dark"] .navbar-sidebar {
+  background-color: var(--ifm-background-color);
+}
+
 [data-theme="dark"] .footer,
 [data-theme="dark"] .theme-doc-sidebar-container {
   border-color: rgba(185, 195, 255, 0.12);
