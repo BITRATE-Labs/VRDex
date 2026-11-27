@@ -15,8 +15,8 @@ import { ProfileVrcdnStreams } from "./profile-vrcdn-streams";
 import { ProfilePrivateRecord } from "./profile-private-record";
 import { PublicGroupMembershipChart, type GroupMembership } from "./public-group-membership-chart";
 import { CommunityPopulationHistory } from "./public-group-population-chart";
+import { CommunityActivityDetails, CommunityActivitySection, CommunityActivitySummary } from "./community-activity-layout";
 import type { PopulationSeries } from "@/lib/public-group-statistics";
-import { ViewerLocalEventDateTime } from "./viewer-local-event-times";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, Eyebrow, SectionHeading } from "@/components/ui/card";
 import { PageContainer, PageShell } from "@/components/ui/page-shell";
@@ -31,21 +31,6 @@ import type { TwitchLiveState } from "@/lib/server/twitch-live";
 import type { VrcdnLiveState } from "@/lib/vrcdn-live";
 import { twitchLinkForLiveClaim, twitchLoginFromUrl } from "@/lib/twitch-url";
 import { parseVrcdnStreamLinks, vrcdnPlaybackHref } from "../../../../../convex/_vrcdnLinks";
-
-/**
- * Rendered on the server, so the viewer's locale is unavailable and a
- * locale-dependent format would differ between the server pass and hydration.
- * UTC for the same reason: a submission timestamp is a fact about the record,
- * not something to shift into whichever timezone happens to be reading it.
- */
-function formatSubmittedDate(value: number) {
-  return new Date(value).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "long",
-    timeZone: "UTC",
-    year: "numeric",
-  });
-}
 
 type ProfileTrustLabel =
   | "community_submitted"
@@ -286,25 +271,25 @@ function CommunityActivity({ profile }: { profile: PublicCommunityProfile }) {
   const { telemetry, groupMembership } = profile;
   const showCount = profile.appearance?.showMemberCount !== false;
   const showHistory = profile.appearance?.showMemberHistory !== false;
+  if (telemetry?.populationSeries) return <CommunityPopulationHistory
+    key={profile.slug}
+    slug={profile.slug}
+    initialActivity={{ telemetry, groupMembership, showCount, showHistory }}
+    now={telemetry.populationSeries.endAt}
+  />;
   const memberCount = showCount ? groupMembership?.latest ?? telemetry?.groupMemberCount : undefined;
   const automatic = telemetry?.publicationPolicy === "automatic_aggregate";
-  const history = telemetry?.populationSeries ? [] : telemetry?.populationHistory ?? [];
+  const membershipHistory = showHistory && groupMembership ? <div className="mt-6"><PublicGroupMembershipChart membership={groupMembership} /></div> : null;
+  const instanceHistory = automatic ? undefined : telemetry?.instanceHistory;
+  const eventRecaps = automatic ? undefined : telemetry?.eventRecaps;
+  const history = telemetry?.populationHistory ?? [];
   const historyMax = Math.max(1, ...history.map((point) => point.peakConcurrency));
-  const hasSummary = (!telemetry?.populationSeries && telemetry?.currentPopulation) || memberCount || telemetry?.groupMemberGrowth;
-  if (!hasSummary && !telemetry?.populationSeries && !(showHistory && groupMembership) && history.length === 0 && !telemetry?.instanceHistory?.length && !telemetry?.eventRecaps?.length) return null;
+  const hasPopulation = telemetry?.currentPopulation || history.length > 0;
+  if (!hasPopulation && !memberCount && !telemetry?.groupMemberGrowth && !membershipHistory && !instanceHistory?.length && !eventRecaps?.length) return null;
   return (
-    <section className="border-t border-border py-8">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <SectionHeading>Activity</SectionHeading>
-        {telemetry && !telemetry.populationSeries ? <p className="text-xs text-muted">{telemetry.freshness === "current" ? "Current" : "Stale"}</p> : null}
-      </div>
-      {hasSummary ? <div className="mt-5 grid gap-3 sm:grid-cols-3">
-        {telemetry?.currentPopulation && !telemetry.populationSeries ? <Card padding="sm" surface="strong"><p className="text-sm text-muted">In group instances</p><p className="mt-2 text-3xl font-semibold">{telemetry.currentPopulation.value}</p><p className="mt-1 text-xs text-muted">{telemetry.currentPopulation.activeInstanceCount} active instances</p></Card> : null}
-        {memberCount ? <Card padding="sm" surface="strong"><p className="text-sm text-muted">Group members</p><p className="mt-2 text-3xl font-semibold">{memberCount.value.toLocaleString()}</p><time className="mt-1 block text-xs text-muted" dateTime={new Date(memberCount.observedAt).toISOString()}>{formatSubmittedDate(memberCount.observedAt)}</time></Card> : null}
-        {telemetry?.groupMemberGrowth ? <Card padding="sm" surface="strong"><p className="text-sm text-muted">Member growth</p><p className="mt-2 text-3xl font-semibold">{telemetry.groupMemberGrowth.value > 0 ? "+" : ""}{telemetry.groupMemberGrowth.value.toLocaleString()}</p></Card> : null}
-      </div> : null}
-      {telemetry?.populationSeries ? <CommunityPopulationHistory key={profile.slug} slug={profile.slug} initialSeries={telemetry.populationSeries} currentPopulation={telemetry.currentPopulation} /> : null}
-      {showHistory && groupMembership ? <div className="mt-6"><PublicGroupMembershipChart membership={groupMembership} /></div> : null}
+    <CommunityActivitySection freshness={hasPopulation ? telemetry?.freshness : undefined}>
+      <CommunityActivitySummary currentPopulation={telemetry?.currentPopulation} memberCount={memberCount} memberGrowth={telemetry?.groupMemberGrowth} />
+      {membershipHistory}
       {history.length > 0 ? <div className="mt-6" aria-label="Hourly peak population history. Missing buckets are blank." role="img">
         <div className="flex h-32 items-end gap-1 border-b border-border" aria-hidden="true">
           {history.map((point) => {
@@ -314,19 +299,8 @@ function CommunityActivity({ profile }: { profile: PublicCommunityProfile }) {
         </div>
         <p className="mt-2 text-xs text-muted">Hourly peak population · gaps remain unfilled</p>
       </div> : null}
-      {!automatic && telemetry?.instanceHistory && telemetry.instanceHistory.length > 0 ? <div className="mt-7">
-        <h3 className="text-sm font-semibold">Recent instances</h3>
-        <ul className="mt-3 grid gap-3 sm:grid-cols-2">
-          {telemetry.instanceHistory.map((session, index) => <li key={`${session.openedAt}-${index}`}>
-            <Card padding="sm" surface="strong">
-              {session.world ? <Link className="font-medium hover:underline" href={`/${session.world.slug}`}>{session.world.displayName}</Link> : <p className="font-medium">VRChat instance</p>}
-              <p className="mt-2 text-sm text-muted"><ViewerLocalEventDateTime timestamp={session.openedAt} /></p>
-            </Card>
-          </li>)}
-        </ul>
-      </div> : null}
-      {!automatic && telemetry?.eventRecaps && telemetry.eventRecaps.length > 0 ? <div className="mt-7 grid gap-3 sm:grid-cols-2">{telemetry.eventRecaps.map((recap) => <Card key={`${recap.event?.slug ?? "event"}-${recap.startAt}`} padding="sm" surface="strong"><p className="font-medium">{recap.event?.title ?? "Event recap"}</p><p className="mt-2 text-sm text-muted">Peak {recap.peakConcurrency.toLocaleString()} · {recap.playerHours.toFixed(1)} player hours · {Math.round(recap.durationMinutes)} min · {Math.round(recap.coverageRatio * 100)}% coverage</p></Card>)}</div> : null}
-    </section>
+      <CommunityActivityDetails instanceHistory={instanceHistory} eventRecaps={eventRecaps} />
+    </CommunityActivitySection>
   );
 }
 

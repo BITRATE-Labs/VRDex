@@ -63,12 +63,12 @@ export function PublicGroupMembershipChart({ membership }: { membership: GroupMe
   return <div className="min-w-0">
     <h3 className="text-sm font-semibold">Total group membership</h3>
     {unobservedLine.length > 0 ? <p className="mt-2 text-xs text-muted"><span className="mr-1 inline-block w-5 border-t-2 border-dotted border-muted align-middle" />Unobserved</p> : null}
-    <div className="mt-3 h-64 min-w-0" role="group" aria-label="Total group membership">
+    <div className="mt-3 h-64 min-w-0 pr-2 sm:pr-0" role="group" aria-label="Total group membership">
       <ResponsiveContainer width="100%" height="100%" minWidth={0}>
         <LineChart data={axisPoints} accessibilityLayer margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
           <CartesianGrid stroke="var(--border)" vertical={false} />
-          <XAxis dataKey="observedAt" type="number" domain={["dataMin", "dataMax"]} tickFormatter={date} tickCount={3} tickLine={false} axisLine={false} minTickGap={28} tick={{ fill: "var(--muted)", fontSize: 11 }} />
-          <YAxis width={48} allowDecimals={false} domain={[0, "dataMax"]} tickLine={false} axisLine={false} tick={{ fill: "var(--muted)", fontSize: 11 }} />
+          <XAxis dataKey="observedAt" type="number" domain={["dataMin", "dataMax"]} padding={{ left: 8 }} tickFormatter={date} tickCount={3} tickLine={false} axisLine={false} minTickGap={28} tick={{ fill: "var(--muted)", fontSize: 12 }} />
+          <YAxis width={52} allowDecimals={false} domain={[0, "auto"]} tickLine={false} axisLine={false} tick={{ fill: "var(--muted)", fontSize: 12 }} />
           <Tooltip cursor={false} content={({ active, label }) => {
             if (!active || typeof label !== "number") return null;
             const isCreation = bridge && label === membership.groupCreatedAt;

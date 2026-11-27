@@ -1419,7 +1419,7 @@ export function getPlaywrightPublicProfileFixture(
   if (profileType === "community" && slug === communitySlug) {
     return communityProfile;
   }
-  if (profileType === "community" && /^playwright-group-population(?:-empty|-stale|-managed-disabled|-managed|-dense)?$/.test(slug)) {
+  if (profileType === "community" && /^playwright-group-population(?:-empty|-stale|-managed-disabled|-managed|-dense|-membership)?$/.test(slug)) {
     const now = Date.now();
     const stale = slug.endsWith("-stale");
     const count = slug.endsWith("-dense") ? 720 : 181;
@@ -1452,7 +1452,24 @@ export function getPlaywrightPublicProfileFixture(
           durationMinutes: 360, activeInstanceCount: 2, peakConcurrency: 45, playerHours: 123, coverageRatio: 0.9, worldDistribution: [] }],
       } : {}),
     });
-    return { ...communityProfile, profileType: "community", community: { categoryTags: [] }, id: `fixture-${slug}`, slug, displayName: "Afterglow Social", hostedEvents: [], worldCredits: [], telemetry };
+    const memberObservation = { value: 125, observedAt: now };
+    return {
+      ...communityProfile,
+      profileType: "community",
+      community: { categoryTags: [] },
+      id: `fixture-${slug}`,
+      slug,
+      displayName: "Afterglow Social",
+      hostedEvents: [],
+      worldCredits: [],
+      telemetry,
+      ...(slug.endsWith("-membership") ? {
+        groupMembership: {
+          latest: memberObservation,
+          points: [{ value: 120, observedAt: now - 86_400_000 }, memberObservation],
+        },
+      } : {}),
+    };
   }
 
   return null;

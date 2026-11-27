@@ -10,6 +10,7 @@ test("count and graph switches stay independent @storybook-visual", async ({ pag
     ["neither", false, false],
   ] as const) {
     await page.goto(story(name));
+    await expect(page.getByRole("heading", { name: "Afterglow Social", level: 1 })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText("Group members", { exact: true })).toHaveCount(count ? 1 : 0);
     await expect(page.getByRole("group", { name: "Total group membership" })).toHaveCount(graph ? 1 : 0);
     if (name === "both") {
@@ -17,10 +18,22 @@ test("count and graph switches stay independent @storybook-visual", async ({ pag
         await testInfo.attach("membership-both", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
       }
     }
+    if (name === "neither" || name === "count-only") {
+      const activity = page.locator("section").filter({ has: page.getByRole("heading", { name: "Activity", exact: true }) });
+      const label = activity.getByText(name === "neither" ? "Member growth" : "Group members", { exact: true });
+      const card = label.locator("..");
+      await expect(label).toBeVisible();
+      await expect(activity.getByText("Stale", { exact: true })).toHaveCount(0);
+      expect((await card.boundingBox())?.width).toBeCloseTo((await activity.boundingBox())!.width);
+      if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
+        await testInfo.attach(`membership-${name}`, { body: await activity.screenshot(), contentType: "image/png" });
+      }
+    }
     if (name === "neither") {
       await expect(page.getByRole("heading", { name: "Activity" })).toBeVisible();
       await expect(page.getByText("Member growth", { exact: true })).toBeVisible();
       await expect(page.getByText("+20", { exact: true })).toBeVisible();
+      await expect(page.getByText(/Sep 20\s*–\s*28, 2026/)).toBeVisible();
     }
   }
 });
