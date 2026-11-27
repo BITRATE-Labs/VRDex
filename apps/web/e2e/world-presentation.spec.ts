@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const neonHarborWorldUrl = "https://vrchat.com/home/world/wrld_00000000-0000-4000-8000-000000000001";
 const neonHarborReferenceUrl = "https://example.invalid/neon-harbor-notes";
+const afterglowEventPath = "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions";
 
 test("world shows artwork and linked creator pictures without placeholder copy", async ({ page }) => {
   await page.goto("/playwright-neon-harbor");
@@ -30,20 +31,30 @@ test("world shows artwork and linked creator pictures without placeholder copy",
     await expect(event.getByText("Confirmed venue", { exact: true })).toBeVisible();
     await expect(event.getByText("/", { exact: true })).toHaveCount(0);
   }
+  const upcomingEvent = upcoming.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true });
   const upcomingSource = upcoming.getByRole("link", { name: "Afterglow event listing", exact: true });
   const upcomingSummary = upcoming.getByText("Late-night harbor club session with house, trance, and warm social energy.");
+  await expect(upcomingEvent).toHaveAttribute("href", afterglowEventPath);
+  await expect(upcomingEvent).not.toHaveAttribute("target", "_blank");
   await expect(upcomingSource).toHaveAttribute("href", "https://example.invalid/events/afterglow-harbor-sessions");
+  await expect(upcomingSource).toHaveAttribute("target", "_blank");
   await expect(recent.getByText("Community-submitted event", { exact: true })).toBeVisible();
   await expect(recent.getByRole("link")).toHaveCount(0);
-  const [phoneUpcoming, phoneRecent, phoneSource, phoneSummary] = await Promise.all([
+  const [phoneUpcoming, phoneRecent, phoneEvent, phoneSource, phoneSummary] = await Promise.all([
     upcoming.boundingBox(),
     recent.boundingBox(),
+    upcomingEvent.boundingBox(),
     upcomingSource.boundingBox(),
     upcomingSummary.boundingBox(),
   ]);
-  if (!phoneUpcoming || !phoneRecent || !phoneSource || !phoneSummary) {
+  if (!phoneUpcoming || !phoneRecent || !phoneEvent || !phoneSource || !phoneSummary) {
     throw new Error("Missing phone event card bounds");
   }
+  for (const link of [phoneEvent, phoneSource]) {
+    expect(link.height).toBeGreaterThanOrEqual(44);
+    expect(link.width).toBeGreaterThanOrEqual(44);
+  }
+  expect(phoneEvent.y + phoneEvent.height).toBeLessThan(phoneSource.y);
   expect(phoneSource.y + phoneSource.height).toBeLessThan(phoneSummary.y);
   expect(phoneRecent.x).toBeCloseTo(phoneUpcoming.x, 0);
   expect(phoneRecent.y).toBeGreaterThan(phoneUpcoming.y + phoneUpcoming.height);
@@ -58,11 +69,11 @@ test("world shows artwork and linked creator pictures without placeholder copy",
 
 test("world references have thumbnails and world page has no duplicate add action", async({page})=>{
  for(const path of ['/playwright-dj-aurora','/playwright-afterglow-social']){
-  await page.goto(path,{waitUntil:'networkidle'});
+  await page.goto(path,{waitUntil:'domcontentloaded'});
   const world=page.getByRole('link').filter({has:page.getByText('Neon Harbor',{exact:true})}).last();
   await expect(world.getByRole('img',{name:'Neon Harbor',exact:true})).toBeVisible();
  }
- await page.goto('/playwright-neon-harbor');
+ await page.goto('/playwright-neon-harbor',{waitUntil:'domcontentloaded'});
  await expect(page.getByRole('link',{name:'Add a missing profile',exact:true})).toHaveCount(0);
 });
 
@@ -144,6 +155,7 @@ test("sparse world renders real identity without fabricating a destination", asy
   const destination = main.locator("dl > div").filter({ has: page.getByText("VRChat link", { exact: true }) });
   const visibility = main.locator("dl > div").filter({ has: page.getByText("World visibility", { exact: true }) });
   await expect(platforms.getByText("Unknown", { exact: true })).toBeVisible();
+  await expect(main.locator("dl")).toHaveCount(1);
   const record = main.locator("section");
   for (const width of [320, 1280]) {
     await page.setViewportSize({ width, height: 720 });
@@ -162,6 +174,7 @@ test("sparse world renders real identity without fabricating a destination", asy
     if (width === 320) {
       expect(status.y).toBeGreaterThan(Math.max(platform.y + platform.height, link.y + link.height));
     } else {
+      expect(status.y).toBeCloseTo(platform.y, 0);
       expect(status.x).toBeGreaterThan(link.x + link.width);
     }
   }
@@ -181,13 +194,13 @@ test("world event shortcut follows launch and puts keyboard focus on the populat
   const openWorld = main.getByRole("link", { name: "Open VRChat world", exact: true });
 
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto("/playwright-neon-harbor");
+  await page.goto("/playwright-neon-harbor", { waitUntil: "domcontentloaded" });
   await expect(shortcut).toBeHidden();
   await expect(eventHeading).toBeInViewport({ ratio: 1 });
 
   for (const width of [320, 768]) {
     await page.setViewportSize({ width, height: 800 });
-    await page.goto("/playwright-neon-harbor");
+    await page.goto("/playwright-neon-harbor", { waitUntil: "domcontentloaded" });
     await expect(shortcut).toBeInViewport({ ratio: 1 });
     await expect(shortcut).toHaveAttribute("href", "#world-events");
     await openWorld.focus();
@@ -201,11 +214,17 @@ test("world event shortcut follows launch and puts keyboard focus on the populat
     const [heading, header] = await Promise.all([eventHeading.boundingBox(), page.locator("header").boundingBox()]);
     if (!heading || !header) throw new Error("Missing focused heading or sticky header bounds");
     expect(heading.y).toBeGreaterThan(header.y + header.height);
+    const event = main.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true });
+    await page.keyboard.press("Tab");
+    await expect(event).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(main.getByRole("link", { name: "Afterglow event listing", exact: true })).toBeFocused();
+    await event.focus();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(afterglowEventPath);
   }
 
-  await page.goto("/playwright-neon-harbor-reference-only");
+  await page.goto("/playwright-neon-harbor-reference-only", { waitUntil: "domcontentloaded" });
   await expect(openWorld).toHaveCount(0);
   await expect(shortcut).toBeInViewport({ ratio: 1 });
   await expect(main.getByRole("link", { name: "Discovery", exact: true })).toHaveCount(0);
