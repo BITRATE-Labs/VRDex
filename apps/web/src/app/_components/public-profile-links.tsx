@@ -133,7 +133,15 @@ export function LinkTypeIcon({ type }: { type: string }) {
   return <ExternalIcon className="size-5" />;
 }
 
-function IconCircleLink({ link, className }: { link: PublicProfileLink; className?: string }) {
+function IconCircleLink({
+  link,
+  className,
+  showDestinationLabels,
+}: {
+  link: PublicProfileLink;
+  className?: string;
+  showDestinationLabels: boolean;
+}) {
   const display = profileLinkPresentation(link);
   if (display.kind) {
     return (
@@ -163,16 +171,30 @@ function IconCircleLink({ link, className }: { link: PublicProfileLink; classNam
     );
   }
 
+  const hostname = hostLabel(link.url);
+  const linkName = `${link.label}: ${link.handle || hostname}`;
+  const destinationLabel = showDestinationLabels
+    ? (link.type === "website" ? hostname : link.type === "twitch" ? "Twitch" : undefined)
+    : undefined;
+
   return (
     <a
-      aria-label={link.handle ? `${link.label}: ${link.handle}` : `${link.label}: ${hostLabel(link.url)}`}
-      className={cn("lookup-brand-circle", `lookup-brand-circle--${link.type}`, className)}
+      aria-label={destinationLabel && !linkName.toLowerCase().includes(destinationLabel.toLowerCase())
+        ? `${destinationLabel}, ${linkName}`
+        : linkName}
+      className={cn(
+        destinationLabel
+          ? cn(buttonVariants({ variant: "secondary", size: "sm" }), "min-h-11 min-w-11 max-w-full gap-1.5 whitespace-normal px-2.5 text-left text-xs [&>svg]:size-4 [&>svg]:shrink-0")
+          : `lookup-brand-circle lookup-brand-circle--${link.type}`,
+        className,
+      )}
       href={link.url}
       rel="noreferrer"
       target="_blank"
-      title={link.handle ? `${link.label}: ${link.handle}` : `${link.label}: ${hostLabel(link.url)}`}
+      title={linkName}
     >
       <LinkTypeIcon type={link.type} />
+      {destinationLabel ? <span className="min-w-0 [overflow-wrap:anywhere]">{destinationLabel}</span> : null}
     </a>
   );
 }
@@ -249,7 +271,13 @@ function TwitchFeatureLink({ labelCh, link, valueCh }: { labelCh: number; link: 
   );
 }
 
-export function PublicProfileLinks({ links }: { links: PublicSearchPerson["outboundLinks"] }) {
+export function PublicProfileLinks({
+  links,
+  showDestinationLabels = false,
+}: {
+  links: PublicSearchPerson["outboundLinks"];
+  showDestinationLabels?: boolean;
+}) {
   if (links.length === 0) {
     return <span className="text-muted">No public links</span>;
   }
@@ -318,7 +346,7 @@ export function PublicProfileLinks({ links }: { links: PublicSearchPerson["outbo
         <div className="lookup-link-actions">
           {iconLinks.length > 0 ? (
             <div className="lookup-icon-actions">
-              {iconLinks.map((link) => <IconCircleLink key={`${link.type}-${link.url}`} link={link} />)}
+              {iconLinks.map((link) => <IconCircleLink key={`${link.type}-${link.url}`} link={link} showDestinationLabels={showDestinationLabels} />)}
             </div>
           ) : null}
           {standalonePreviews.map((link) => <VrcdnPreviewLink key={link.url} link={link} />)}

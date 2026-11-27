@@ -27,11 +27,8 @@ export function PublicSearchResultDetails({ person }: { person: PublicSearchPers
       {remainingGenreCount > 0 ? (
         <details className={cn(disclosureClassName, "group/genres")}>
           <summary aria-label={`${remainingGenreCount} more ${genreNoun}`} className={summaryClassName}>
-            <span>
-              +{remainingGenreCount}
-              <span className="sm:hidden"> {genreNoun}</span>
-            </span>
-            <ChevronDown aria-hidden="true" className="size-3 shrink-0 group-open/genres:rotate-180 sm:hidden" />
+            <span>+{remainingGenreCount} {genreNoun}</span>
+            <ChevronDown aria-hidden="true" className="size-3 shrink-0 group-open/genres:rotate-180" />
           </summary>
           <p className={cn(detailPanelClassName, "[overflow-wrap:anywhere] sm:border-s sm:border-border sm:py-1 sm:ps-2")}>{remainingGenres.join(" · ")}</p>
         </details>
@@ -39,11 +36,11 @@ export function PublicSearchResultDetails({ person }: { person: PublicSearchPers
       {person.outboundLinks.length > 0 ? (
         <details className={cn(disclosureClassName, "group/links")}>
           <summary className={summaryClassName}>
-            <ChevronDown aria-hidden="true" className="size-3 shrink-0 group-open/links:rotate-180" />
+            <ChevronDown aria-hidden="true" className="size-3 shrink-0 group-open/links:rotate-180 sm:order-last" />
             Links
           </summary>
           <div className={cn(detailPanelClassName, "-ms-[3.25rem] border-s border-border py-1 ps-2 sm:ms-0", styles.linksPanel)}>
-            <PublicProfileLinks links={person.outboundLinks} />
+            <PublicProfileLinks links={person.outboundLinks} showDestinationLabels />
           </div>
         </details>
       ) : null}
