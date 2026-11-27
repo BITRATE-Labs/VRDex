@@ -196,6 +196,10 @@ test.describe("timeline time regressions @flow @fixture", () => {
           await expect(shell.getByRole("status").filter({ hasText: "Loading events" })).toBeVisible();
           const placeholder = shell.locator("[data-loading-placeholder]");
           await expect(placeholder).toBeVisible();
+          await expect(placeholder.getByRole("status")).toHaveText("Loading events");
+          await expect(shell.getByRole("status")).toHaveCount(1);
+          await expect(shell.locator("[data-loading-axis]")).toHaveCount(2);
+          await expect(shell.getByLabel("Schedule date", { exact: true })).toHaveCount(0);
           expect(await placeholder.evaluate((element) => getComputedStyle(element, "::before").display)).toBe("block");
           const loading = await shell.boundingBox();
           expect(loading?.height).toBeGreaterThanOrEqual(376 + 56 + 48);

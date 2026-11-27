@@ -176,6 +176,9 @@ test.describe("continuous schedule @flow @fixture", () => {
     await expect(empty).toBeVisible();
     await expect(clear).toBeVisible();
     await expect(chart).toHaveCount(0);
+    const summaryBounds = (await empty.boundingBox())!;
+    const recoveryBounds = (await clear.boundingBox())!;
+    expect(recoveryBounds.y).toBeGreaterThan(summaryBounds.y + summaryBounds.height);
     const filteredWidth = await schedule.getByTestId("favorites-empty-state").evaluate((element) => element.clientWidth);
     await expect(favorites).toHaveAttribute("aria-pressed", "true");
     await expect(star).not.toHaveCSS("fill", "none");

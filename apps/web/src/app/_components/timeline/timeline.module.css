@@ -60,6 +60,27 @@
   align-items: center;
   gap: 0.3rem;
 }
+.navigation .pendingDate {
+  position: relative;
+  width: 140px;
+  height: 36px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-strong);
+  opacity: 0.6;
+}
+.navigation .pendingDate::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 0.5rem;
+  inline-size: 44%;
+  block-size: 0.5rem;
+  translate: 0 -50%;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--surface-strong) 85%, var(--foreground));
+}
 .navigation input {
   color-scheme: inherit;
   color: var(--foreground);
@@ -84,6 +105,9 @@
   background: var(--canvas-muted);
   scrollbar-color: var(--border-strong) var(--surface);
 }
+.scroller[data-pending-scroller] {
+  pointer-events: none;
+}
 .scroller:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
@@ -103,6 +127,7 @@
   min-height: 44px;
 }
 .canvas {
+  --timeline-placeholder-fill: color-mix(in srgb, var(--canvas-muted) 89%, var(--foreground));
   position: relative;
   user-select: none;
 }
@@ -136,6 +161,26 @@
   font-size: 0.65rem;
   color: var(--muted);
 }
+.dayAxis[data-loading-axis]::after,
+.hourAxis[data-loading-axis]::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 0.75rem;
+  block-size: 0.45rem;
+  translate: 0 -50%;
+}
+.dayAxis[data-loading-axis]::after {
+  inline-size: 4rem;
+  border-radius: 2px;
+  background: var(--timeline-placeholder-fill);
+}
+.hourAxis[data-loading-axis]::after {
+  inset-inline-end: 0;
+  background: repeating-linear-gradient(
+    to right, var(--timeline-placeholder-fill) 0 1.5rem, transparent 1.5rem 100px
+  );
+}
 .lanes {
   --timeline-grid-line: var(--border);
   position: relative;
@@ -156,12 +201,29 @@
   inset-inline-start: 1.25rem;
   width: clamp(5rem, 30vw, 14rem);
   height: 0.75rem;
-  transform: translateY(2rem);
+  transform: translateY(3.75rem);
   border-radius: var(--radius-control);
-  color: color-mix(in srgb, var(--canvas-muted) 89%, var(--foreground));
+  color: var(--timeline-placeholder-fill);
   background: currentColor;
   box-shadow: 0.65rem 94px 0 -2px, 0 188px 0, 1.3rem 282px 0 -1px;
   pointer-events: none;
+}
+.chartLoadingStatus {
+  position: sticky;
+  z-index: 2;
+  inset-inline-start: 1.25rem;
+  inline-size: max-content;
+  transform: translateY(0.35rem);
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-strong);
+  color: var(--foreground);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.chartLoadingStatus svg {
+  color: var(--accent);
 }
 .event {
   position: absolute;
@@ -570,7 +632,8 @@
   .navigation > div {
     flex-shrink: 0;
   }
-  .navigation input {
+  .navigation input,
+  .navigation .pendingDate {
     flex: 1 1 7rem;
     min-height: 44px;
     padding: 0.5rem;
@@ -587,13 +650,11 @@
   .status:empty {
     position: absolute;
   }
-  .status:has(> .loadingMessage:only-child) {
-    position: absolute;
-    inset-block-start: 0.5rem;
-    inset-inline-end: 0;
-  }
   .metadata {
-    flex: 1 1 7rem;
+    position: absolute;
+    inset-block-start: 0.125rem;
+    inset-inline-end: 0;
+    max-inline-size: min(calc(100% - 7rem), 13rem);
     min-width: 0;
     flex-direction: column;
     align-items: flex-end;
@@ -621,10 +682,13 @@
     min-height: 44px;
   }
   .emptyState {
-    gap: 0.75rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
   }
   .emptyState p {
-    flex: 1 1 8rem;
+    width: 100%;
   }
 }
 @media (max-width: 420px) {

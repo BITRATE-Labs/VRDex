@@ -21,8 +21,12 @@ export function TimelineToolbar({
     <div className={styles.toolbar}>
       <h2 id="schedule-heading" tabIndex={-1}>Schedule</h2>
       <div className={styles.navigation}>
-        <input disabled={disabled} aria-label="Schedule date" type="date" min="0002-01-01" max="9998-12-31"
-          value={date} onChange={(event) => onDate(event.target.value)} />
+        {disabled ? (
+          <span className={styles.pendingDate} aria-hidden="true" />
+        ) : (
+          <input aria-label="Schedule date" type="date" min="0002-01-01" max="9998-12-31"
+            value={date} onChange={(event) => onDate(event.target.value)} />
+        )}
         <div>
           <Button disabled={disabled} size="sm" aria-label="Earlier" onClick={() => onPan(-3)}><ChevronLeft size={14} /><span>Earlier</span></Button>
           <Button disabled={disabled} size="sm" onClick={onNow}>Now</Button>
