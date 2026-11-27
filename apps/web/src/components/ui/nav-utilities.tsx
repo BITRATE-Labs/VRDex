@@ -180,7 +180,11 @@ function ConnectedAccountControl({ showMyEvents }: { showMyEvents: boolean }) {
   const viewer = useQuery(api.accounts.viewer, isAuthenticated ? {} : "skip");
 
   if (isLoading) {
-    return <span aria-hidden="true" className={cn("rounded-control border border-border bg-surface-strong sm:w-24", NAV_CONTROL_HEIGHT, MOBILE_ACCOUNT_WIDTH)} />;
+    return (
+      <span aria-hidden="true" className={cn("inline-flex shrink-0 items-center justify-center sm:w-24", NAV_CONTROL_HEIGHT, MOBILE_ACCOUNT_WIDTH)}>
+        <span className="h-2 w-9 rounded bg-muted/30" />
+      </span>
+    );
   }
 
   if (!isAuthenticated) {
