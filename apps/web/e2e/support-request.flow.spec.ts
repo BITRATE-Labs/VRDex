@@ -73,7 +73,8 @@ test('pending support keeps focus and failure preserves the draft for a keyboard
  const error=form.locator('label').filter({has:message}).getByRole('alert');
  const success=form.getByRole('status');
  const send=form.getByRole('button',{name:'Send request',exact:true});
- await message.fill('Please review this profile listing.');
+ // Represent a short draft submitted past the browser's native length check.
+ await message.evaluate(field=>{(field as HTMLTextAreaElement).value='Review';});
  await expect(error).toBeEmpty();
  await expect(success).toBeEmpty();
  await page.evaluate(()=>{sessionStorage.setItem('fixture-support-defer','true');sessionStorage.setItem('fixture-support-fail','true');});
@@ -90,13 +91,13 @@ test('pending support keeps focus and failure preserves the draft for a keyboard
  await sending.focus();
  await sending.press('Enter');
  await expect(sending).toBeFocused();
- await message.fill('Please review this profile listing.');
+ await message.evaluate(field=>{(field as HTMLTextAreaElement).value='Review';});
  await sending.focus();
  await page.evaluate(()=>window.dispatchEvent(new Event('fixture-support-release')));
  await expect(error).toHaveText('Tell us a little more about what you need.');
  await expect(error).toBeInViewport({ ratio: 1 });
  await expect(page.getByLabel('Name',{exact:true})).toHaveValue('Missing person');
- await expect(message).toHaveValue('Please review this profile listing.');
+ await expect(message).toHaveValue('Review');
  await expect(message).toHaveAttribute('aria-invalid','true');
  await expect(message).toHaveAccessibleDescription('Tell us what happened. Paste links to anything that backs it up. Tell us a little more about what you need.');
  await expect(message).toBeFocused();
@@ -108,7 +109,11 @@ test('pending support keeps focus and failure preserves the draft for a keyboard
  await expect(error).toBeEmpty();
  await expect(message).not.toHaveAttribute('aria-invalid','true');
  await expect(success).toHaveText('Request sent. You did not leave a contact, so we cannot reply to this one.');
- await expect(success).toBeFocused();
+ const confirmation=success.getByRole('paragraph');
+ await expect(confirmation).toBeFocused();
  await expect(success).toBeInViewport({ ratio: 1 });
+ await expect(form.locator(':scope > :first-child')).toHaveAttribute('role','status');
  await expect(page.getByLabel('Request type')).toHaveValue('');
+ await confirmation.press('Tab');
+ await expect(page.getByLabel('Request type')).toBeFocused();
 });

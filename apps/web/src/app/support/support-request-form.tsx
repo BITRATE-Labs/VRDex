@@ -198,7 +198,7 @@ function ConnectedSupportRequestForm() {
   const [, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
-  const successRef = useRef<HTMLDivElement>(null);
+  const successRef = useRef<HTMLParagraphElement>(null);
   const inFlightGeneration = useRef<number | null>(null);
   // Bumped whenever the deep link changes. A submit captures the value it
   // started under and drops its own result if that no longer matches, because
@@ -340,6 +340,22 @@ function ConnectedSupportRequestForm() {
 
   return (
     <form className="grid gap-5" onSubmit={onSubmit} ref={formRef}>
+      <div role="status" className="empty:sr-only">
+        {status.kind === "success" ? (
+          <Notice variant="success">
+            <p
+              ref={successRef}
+              tabIndex={-1}
+              className="w-fit focus:outline-hidden focus-visible:underline focus-visible:decoration-2 focus-visible:underline-offset-4"
+            >
+              <strong>Request sent.</strong>{" "}
+              {status.repliable
+                ? "We reply to the contact you gave."
+                : "You did not leave a contact, so we cannot reply to this one."}
+            </p>
+          </Notice>
+        ) : null}
+      </div>
       <Field>
         <span><span id={`${messageId}-topic`}>Request type</span><FieldText aria-hidden="true" className="ml-2 font-normal">Required</FieldText></span>
         <Select
@@ -411,15 +427,6 @@ function ConnectedSupportRequestForm() {
       </Field>
 
       <div ref={actionsRef}>
-        <div ref={successRef} role="status" tabIndex={status.kind === "success" ? -1 : undefined}>
-          {status.kind === "success" ? (
-            <Notice className="mb-3" variant="success">
-              {status.repliable
-                ? "Request sent. We reply to the contact you gave."
-                : "Request sent. You did not leave a contact, so we cannot reply to this one."}
-            </Notice>
-          ) : null}
-        </div>
         <div role="alert">
           {status.kind === "error" && !messageError ? (
             <Notice className="mb-3" variant="error">{status.message}</Notice>
