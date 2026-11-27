@@ -351,7 +351,13 @@ export function PublicProfileLinks({ links }: { links: PublicSearchPerson["outbo
         const name = repeatedLabel && stream ? `${label} · ${stream.streamId}` : label;
         const previews = groupPreviews.get(key);
         return (
-          <div aria-label={name} className="lookup-vrcdn-group" key={key} role="group">
+          <div
+            aria-label={name}
+            className="lookup-vrcdn-group"
+            data-community-submitted={link.source === "community_submitted" || undefined}
+            key={key}
+            role="group"
+          >
             <div className="lookup-vrcdn-group__heading">
               <span>{name}</span>
               {previews?.map((preview) => <VrcdnPreviewLink key={preview.url} link={preview} />)}
