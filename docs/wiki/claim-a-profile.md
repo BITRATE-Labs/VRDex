@@ -1,15 +1,7 @@
-# Find and claim a profile
+# People and communities
 
-Search [VRDex](https://vrdex.net/search) for your name, an alias, or your community's name. If the matching profile is marked **Unclaimed**, choose **Claim profile**. Sign in and verify your email to continue.
+VRDex profiles bring together the people, clubs, and communities you meet in VRChat. A DJ's profile can link to their music or streams. A community's profile can link to its VRChat group, Discord server, and hosted events.
 
-If the profile is missing, use [Add a profile](https://vrdex.net/submit). For ownership recovery, transfers, or disputes, [contact support](https://vrdex.net/support).
+![The BITRATE profile in VRDex with links to its Discord server and verified VRChat group](./images/bitrate-profile.png)
 
-## Choose how to claim
-
-- **Verify with VRChat.** Enter your VRChat profile or group URL and choose **Create proof code**. Paste the code into your VRChat bio or group description and save. Return to VRDex to check the code. You can remove it once VRDex confirms the check.
-- **Use linked Discord** on a person profile. This gives you control of the VRDex profile. Use VRChat to verify your identity, or choose **Use VRCLinking** if VRDex offers it and a participating community has already verified the link between your Discord and VRChat accounts.
-- **Verify Discord admin** on a community profile. Verify your Discord access, choose your community's server, and select **Claim with this server**.
-
-## What the verified badge means
-
-Claiming gives you control of the profile. The verified badge means VRDex confirmed control of a VRChat account, VRChat group, or Discord server that it already recognizes as belonging to the profile. A VRChat connection can be verified while the profile remains claimed without a badge.
+Claiming a profile gives you control of its VRDex page. VRDex verifies a connection by checking who controls the linked account or group. The profile badge also depends on whether that account or group is recognized as belonging to the profile.

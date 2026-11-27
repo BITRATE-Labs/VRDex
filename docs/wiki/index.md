@@ -4,7 +4,7 @@ slug: /
 
 # VRDex Guides
 
-- [Find events and plan your night](./find-events.md)
-- [Find and claim a profile](./claim-a-profile.md)
+- [Events in VRDex](./find-events.md)
+- [People and communities](./claim-a-profile.md)
 
 [Open VRDex](https://vrdex.net/)

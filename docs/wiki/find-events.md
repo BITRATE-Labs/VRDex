@@ -1,15 +1,7 @@
-# Find events and plan your night
+# Events in VRDex
 
-On the [VRDex home page](https://vrdex.net/), open **Schedule**. Pick a date or use **Earlier**, **Now**, and **Later** to move through the schedule. If you know the event's name, search for it and select **Events** in the results. You can also browse **Upcoming events** in **Discovery**.
+The schedule shows what's on in VRChat and when each DJ is due to play. Times appear in your local time zone. A lineup can link to performer profiles, so you can look up a DJ before their set.
 
-## Check the lineup
+![VRDex schedule showing the BITRATE event and its timed DJ sets](./images/events-schedule.png)
 
-Select an event in **Schedule** to see its details. Choose **Open full event page** for the full listing. When a lineup is available, it shows the performers and any posted set times. Select a linked performer name to open their VRDex profile. Event pages show times in your local time zone.
-
-## Save an event or set
-
-In the event details, select the **Interested** plus button to save the whole event. To save one set, use the plus next to it in the lineup.
-
-Find your saves under **My night** in **Schedule**. Use **Remove interest** to take an item off your plan. VRDex keeps these saves in the browser you used.
-
-To put an event in your own calendar, choose **Add to calendar** on the full event page.
+**My night** is your shortlist. Save a whole event or just the sets you want to catch. Your shortlist stays in the browser where you made it.
