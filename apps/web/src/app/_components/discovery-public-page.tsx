@@ -106,7 +106,7 @@ function ResultImage({ result, quietFallback = false, compact = false }: { resul
         ) : useQuietFallback ? (
           <EntityImage
             alt=""
-            className={cn(size, "rounded-card border border-border bg-surface-strong font-semibold text-foreground")}
+            className="size-10 rounded-card border border-border bg-surface-strong font-semibold text-foreground sm:size-14"
             label={result.title}
           />
         ) : (
@@ -421,12 +421,15 @@ export function DiscoveryLandingPage({
   ];
   const populatedDirectory = directory.filter(({ results }) => results.length > 0);
   const directorySections = populatedDirectory.length > 0 ? populatedDirectory : directory;
+  const singleDirectory = status === "live" && activeWorldStatus === "live"
+    && !data.eventSchedule?.length && data.upcomingEvents.length === 0
+    && activeWorlds.length === 0 && directorySections.length === 1;
 
   return (
     <PageShell className="max-sm:py-5">
-      <PageContainer className="gap-4 sm:gap-6" max="7xl">
+      <PageContainer className="gap-4 sm:gap-6" max={singleDirectory ? "3xl" : "7xl"}>
 
-        <section className="grid gap-4 pb-1 sm:gap-5 lg:grid-cols-[0.7fr_1.3fr] lg:items-center lg:py-6">
+        <section className={cn("grid gap-4 pb-1 sm:gap-5 lg:items-center lg:py-6", singleDirectory ? "lg:grid-cols-[auto_minmax(0,1fr)]" : "lg:grid-cols-[0.7fr_1.3fr]")}>
           <div>
             <h1 className="max-w-md text-4xl leading-none font-semibold sm:text-5xl">
               Discover VR
@@ -440,7 +443,7 @@ export function DiscoveryLandingPage({
         {data.eventSchedule && data.eventSchedule.length > 0 ? (
           <DiscoveryEventSchedule events={data.eventSchedule} now={now} />
         ) : data.upcomingEvents.length === 0 ? (
-          <section className="flex flex-wrap items-center justify-between gap-x-3">
+          <section className="flex flex-wrap items-center justify-between gap-x-3 sm:justify-start sm:gap-x-5">
             <div className="sm:flex sm:items-baseline sm:gap-3">
               <SectionTitle className="text-base tracking-tight">Upcoming events</SectionTitle>
               {status === "live" ? <p className="text-sm leading-5 text-muted">No events</p> : null}
