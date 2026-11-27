@@ -521,7 +521,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
         <div className="flex flex-wrap items-center justify-between gap-3">
           {visitorHeading("media_kit")}
           {mediaKit.logoZipUrl ? (
-            <a className={buttonVariants({ size: "sm", variant: "secondary" })} download href={mediaKit.logoZipUrl}>
+            <a className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "max-sm:min-h-11")} download href={mediaKit.logoZipUrl}>
               Download logos
             </a>
           ) : null}

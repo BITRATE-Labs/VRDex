@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { PublicProfileMediaDetailsSchema, type PublicProfileMediaDetails, type PublicMediaActor } from "@vrdex/api-contracts";
 import { MediaPreviewImage } from "./media-preview-image";
 import { buttonVariants } from "@/components/ui/button";
@@ -97,14 +98,20 @@ export function PublicMediaAssetCardView({ asset, label, featured = false, compa
           <h3 className={cn("break-words font-medium", featured && "text-xl")}>{title}</h3>
           {asset.caption ? <p className="break-words leading-6 text-muted">{asset.caption}</p> : null}
         </div>
-        <a aria-label={`Download ${title}`} className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "mt-2 w-fit", tiled && "sm:row-start-3 sm:mx-4 sm:mt-4 sm:self-start")} download href={asset.downloadUrl}>Download</a>
+        <a aria-label={`Download ${title}`} className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "mt-2 w-fit max-sm:min-h-11", tiled && "sm:row-start-3 sm:mx-4 sm:mt-4 sm:self-start")} download href={asset.downloadUrl}>Download</a>
       </div>
       {hasHistory || mimeType || size || creditUrl ? <details className={cn(
-        "mt-5 min-w-0 border-t border-border pt-3",
+        "group/details mt-5 min-w-0 border-t border-border sm:pt-3",
         tiled && "sm:row-start-4 sm:mx-4 sm:self-start",
-        compact && "max-sm:col-span-full max-sm:mx-3 max-sm:mt-0 max-sm:mb-3 max-sm:pt-2",
+        compact && "max-sm:col-span-full max-sm:mx-3 max-sm:mt-0 max-sm:mb-3",
       )} open={open}>
-        <summary onClick={onOpenChange ? event => { event.preventDefault(); onOpenChange(!open); } : undefined} className="cursor-pointer rounded-sm py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent">Details &amp; history</summary>
+        <summary
+          onClick={onOpenChange ? event => { event.preventDefault(); onOpenChange(!open); } : undefined}
+          className="cursor-pointer rounded-sm py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent max-sm:flex max-sm:min-h-11 max-sm:list-none max-sm:items-center max-sm:justify-between max-sm:gap-2 max-sm:text-sm max-sm:[&::-webkit-details-marker]:hidden"
+        >
+          Details &amp; history
+          <ChevronDown aria-hidden="true" className="hidden size-4 shrink-0 text-muted group-open/details:rotate-180 max-sm:block" />
+        </summary>
         {open ? <div className="grid gap-3 pt-4">
         <p className="text-xs text-muted">{[mimeType?.replace(/^image\//, "").replace("svg+xml", "svg").toUpperCase(), size].filter(Boolean).join(" / ")}</p>
         {creditUrl ? <a className="w-fit text-xs text-muted underline underline-offset-4" href={creditUrl}>View source</a> : null}
