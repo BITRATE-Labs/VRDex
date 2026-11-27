@@ -739,8 +739,8 @@ export function SearchResultsPage({
                 );
               })}
             </nav>
-            <p className="sr-only wrap-anywhere text-sm font-medium text-muted group-has-[[data-search-draft]]/search-view:not-sr-only" id="search-results-query">
-              Results for {query}
+            <p className="sr-only wrap-anywhere text-sm font-medium text-muted group-has-[[data-search-draft]]/search-view:not-sr-only group-has-[[data-search-draft]]/search-view:pb-2" id="search-results-query">
+              Results for <span className="font-semibold text-foreground">{query}</span>
             </p>
             {status !== "live" ? (
               <Card className="flex flex-wrap items-center justify-between gap-3" surface="dashed">
