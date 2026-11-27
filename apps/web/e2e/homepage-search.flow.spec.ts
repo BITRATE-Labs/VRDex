@@ -116,6 +116,36 @@ test("Home search, filters, refresh and history keep URL and results aligned @fl
   await assertCommunityState();
 });
 
+test("Search identifies the applied query when the draft differs @flow @fixture", async ({ page, isMobile }) => {
+  if (isMobile) await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto("/search?q=Afterglow");
+  await waitForPublicSearchHydration(page);
+  const input = page.getByRole("main").getByRole("combobox", { name: "Search VRDex", exact: true });
+  const results = page.getByRole("region", { name: "Search results" });
+  const caption = results.locator("#search-results-query");
+  const timeout = { timeout: 15_000 };
+
+  await expect(results).toHaveAccessibleDescription("Results for Afterglow");
+  await expect(caption).toHaveCSS("position", "absolute");
+  await input.fill("  Afterglow  ");
+  await expect(caption).toHaveCSS("position", "absolute");
+
+  await input.fill("BASICBIT");
+  await input.press("Escape");
+  await expect(caption).toHaveCSS("position", "static");
+  await results.getByRole("link", { name: "Communities", exact: true }).click();
+  await expect(page).toHaveURL(/\/search\?q=Afterglow&type=community$/, timeout);
+  await expect(input).toHaveValue("BASICBIT");
+  await expect(caption).toHaveText("Results for Afterglow");
+  await expect(caption).toHaveCSS("position", "static");
+  await expect(publicResultRow(page, "/playwright-afterglow-social")).toBeVisible();
+
+  await page.getByRole("main").getByRole("button", { name: "Search VRDex", exact: true }).click();
+  await expect(page).toHaveURL(/\/search\?q=BASICBIT&type=community$/, timeout);
+  await expect(results).toHaveAccessibleDescription("Results for BASICBIT");
+  await expect(caption).toHaveCSS("position", "absolute");
+});
+
 test("Search recovers from empty Events with the same query and preserves history @flow @fixture", async ({ page }) => {
   await page.goto("/search");
   await waitForPublicSearchHydration(page);
