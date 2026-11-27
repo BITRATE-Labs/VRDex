@@ -2,16 +2,18 @@
 
 import { useConvex } from "convex/react";
 import type { FunctionReference } from "convex/server";
+import { ArrowDown } from "lucide-react";
 import Link from "next/link";
 import { usePostHog } from "posthog-js/react";
 import { type CSSProperties, useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { api } from "@convex-generated-api";
-import { PublicProfileLinks } from "./public-profile-links";
+import { isVrcdnStreamLink, PublicProfileLinks } from "./public-profile-links";
 import { LookupSearchBox } from "./lookup-search-box";
 import { mergeLookupSuggestions } from "./lookup-suggestion-merge";
 import { SearchViewShell } from "./search-view-shell";
 import { searchHref } from "./search-view-state";
+import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EntityImage } from "@/components/ui/entity-image";
 import { ProfileAvatarImage } from "@/components/ui/profile-avatar-image";
@@ -301,13 +303,24 @@ function LookupResultRow({ profile }: { profile: PublicProfileLookupResult }) {
 }
 
 function LookupResultCard({ profile }: { profile: PublicProfileLookupResult }) {
+  const streamAnchor = profile.outboundLinks.some(isVrcdnStreamLink) ? `lookup-streams-${profile.slug}` : undefined;
+
   return (
     <Card className="lookup-result-card grid gap-2" padding="sm">
       <LookupIdentity profile={profile} />
+      {streamAnchor ? (
+        <a
+          aria-label={`VRCDN for ${profile.displayName}`}
+          className={cn(buttonVariants({ size: "sm" }), "hidden min-h-11 w-fit gap-1.5 max-sm:inline-flex")}
+          href={`#${streamAnchor}`}
+        >
+          VRCDN <ArrowDown aria-hidden="true" className="size-3.5" />
+        </a>
+      ) : null}
       <div className="text-xs">
         <LookupGenres genres={profile.genres} />
       </div>
-      <PublicProfileLinks links={profile.outboundLinks} />
+      <PublicProfileLinks links={profile.outboundLinks} streamAnchor={streamAnchor} />
     </Card>
   );
 }
@@ -439,6 +452,10 @@ async function fetchLookupResults(query: string): Promise<LookupResponse> {
   return data;
 }
 
+function lookupLocation() {
+  return `${window.location.pathname}${window.location.search}`;
+}
+
 function updateLookupUrl(query: string, routePath: "/" | "/lookup" | "/search", view?: "dj") {
   const params = new URLSearchParams();
   if (query) {
@@ -449,10 +466,10 @@ function updateLookupUrl(query: string, routePath: "/" | "/lookup" | "/search", 
   }
   const nextUrl = params.size > 0 ? `${routePath}?${params.toString()}` : routePath;
 
-  const currentUrl = `${window.location.pathname}${window.location.search}`;
-  if (currentUrl !== nextUrl) {
+  if (lookupLocation() !== nextUrl) {
     window.history.pushState(null, "", nextUrl);
   }
+  return nextUrl;
 }
 
 type ProfileLookupPageProps = {
@@ -522,6 +539,10 @@ function ProfileLookupPageContent({
   const [pendingLabel, setPendingLabel] = useState<string | null>(
     initialPrivateLookupQuery && results.length === 0 ? `Searching ${initialPrivateLookupQuery}` : null,
   );
+  const lookupLocationRef = useRef<string | null>(null);
+  const syncLookupUrl = useCallback((nextQuery: string) => {
+    lookupLocationRef.current = updateLookupUrl(nextQuery, routePath, view);
+  }, [routePath, view]);
   const requestVersionRef = useRef(0);
   const [isPending, startTransition] = useTransition();
   const isSearching = pendingLabel !== null || isPending;
@@ -541,7 +562,12 @@ function ProfileLookupPageContent({
     bulkEntries.length === 0 && !visibleResults.length && Boolean(displayQuery.trim());
 
   useEffect(() => {
-    const handleHistoryNavigation = () => window.location.reload();
+    lookupLocationRef.current = lookupLocation();
+    const handleHistoryNavigation = () => {
+      if (lookupLocation() !== lookupLocationRef.current) {
+        window.location.reload();
+      }
+    };
     window.addEventListener("popstate", handleHistoryNavigation);
     return () => window.removeEventListener("popstate", handleHistoryNavigation);
   }, []);
@@ -651,7 +677,7 @@ function ProfileLookupPageContent({
         setSeedViewerAccess(nextLookup.viewerAccess);
         setLookupStatus("live");
         setBulkEntries([]);
-        updateLookupUrl(normalizedQuery, routePath, view);
+        syncLookupUrl(normalizedQuery);
       });
     } catch {
       if (requestVersionRef.current === requestVersion) {
@@ -662,7 +688,7 @@ function ProfileLookupPageContent({
         setPendingLabel(null);
       }
     }
-  }, [fetchAllowedPrivateResults, posthog, privateUiEnabled, routePath, seedViewerAccess.allowed, view]);
+  }, [fetchAllowedPrivateResults, posthog, privateUiEnabled, seedViewerAccess.allowed, syncLookupUrl]);
 
   const runBulkLookup = useCallback(async (
     lines: string[],
@@ -676,7 +702,7 @@ function ProfileLookupPageContent({
         setDisplayResults([]);
         setDisplayPrivateResults([]);
         setLookupStatus("live");
-        updateLookupUrl("", routePath, view);
+        syncLookupUrl("");
       });
       return;
     }
@@ -735,7 +761,7 @@ function ProfileLookupPageContent({
         setDisplayPrivateResults(nextViewerAccess.allowed ? nextPrivateResults : []);
         setSeedViewerAccess(nextViewerAccess);
         setLookupStatus("live");
-        updateLookupUrl("", routePath, view);
+        syncLookupUrl("");
       });
     } catch {
       if (requestVersionRef.current === requestVersion) {
@@ -750,10 +776,9 @@ function ProfileLookupPageContent({
     fetchAllowedPrivateResults,
     posthog,
     privateUiEnabled,
-    routePath,
     seedViewerAccessAllowed,
     seedViewerAccessSource,
-    view,
+    syncLookupUrl,
   ]);
 
   const clearLookup = useCallback(() => {
@@ -765,9 +790,9 @@ function ProfileLookupPageContent({
       setBulkEntries([]);
       setLookupStatus("live");
       setPendingLabel(null);
-      updateLookupUrl("", routePath, view);
+      syncLookupUrl("");
     });
-  }, [routePath, view]);
+  }, [syncLookupUrl]);
 
   const canonicalView = view ?? "dj";
   const switcherQuery = bulkEntries.length > 0 ? undefined : displayQuery;

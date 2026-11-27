@@ -26,7 +26,7 @@ function isVrcdnPreviewLink(link: PublicProfileLink) {
   return link.type === "vrcdn" && (link.label.toLowerCase().includes("preview") || link.url.includes("panel.vrcdn.live"));
 }
 
-function isVrcdnStreamLink(link: PublicProfileLink) {
+export function isVrcdnStreamLink(link: PublicProfileLink) {
   return link.type === "vrcdn" && !isVrcdnPreviewLink(link);
 }
 
@@ -274,9 +274,11 @@ function TwitchFeatureLink({ labelCh, link, valueCh }: { labelCh: number; link: 
 export function PublicProfileLinks({
   links,
   showDestinationLabels = false,
+  streamAnchor,
 }: {
   links: PublicSearchPerson["outboundLinks"];
   showDestinationLabels?: boolean;
+  streamAnchor?: string;
 }) {
   if (links.length === 0) {
     return <span className="text-muted">No public links</span>;
@@ -373,18 +375,21 @@ export function PublicProfileLinks({
           ))}
         </div>
       ) : null}
-      {[...streamGroups].map(([key, { link, stream }]) => {
+      {[...streamGroups].map(([key, { link, stream }], index) => {
         const label = link.label.trim() || "VRCDN";
         const repeatedLabel = (groupLabels.get(label.toLowerCase()) ?? 0) > 1;
         const name = repeatedLabel && stream ? `${label} · ${stream.streamId}` : label;
         const previews = groupPreviews.get(key);
+        const anchor = index === 0 ? streamAnchor : undefined;
         return (
           <div
             aria-label={name}
-            className="lookup-vrcdn-group"
+            className={cn("lookup-vrcdn-group", anchor && "scroll-mt-24 focus-visible:outline-2 focus-visible:outline-accent")}
             data-community-submitted={link.source === "community_submitted" || undefined}
+            id={anchor}
             key={key}
             role="group"
+            tabIndex={anchor ? -1 : undefined}
           >
             <div className="lookup-vrcdn-group__heading">
               <span className="text-foreground">
