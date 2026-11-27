@@ -175,6 +175,12 @@ html[data-theme="dark"] #__docusaurus,
   box-shadow: 0 16px 44px rgba(3, 7, 18, 0.22);
 }
 
+/* The open fixed drawer must use the viewport as its containing block. */
+html[data-theme="dark"] .navbar.navbar-sidebar--show {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 [data-theme="dark"] .footer,
 [data-theme="dark"] .theme-doc-sidebar-container {
   border-color: rgba(185, 195, 255, 0.12);
