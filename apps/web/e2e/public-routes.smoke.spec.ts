@@ -349,6 +349,46 @@ test("sign-in describes recognized contribution return paths without echoing the
   }
 });
 
+test("Clerk account switches retain the contribution return target", async ({ page }) => {
+  const returnTo = "/submit";
+  await page.goto("/sign-in?" + new URLSearchParams({ returnTo }));
+  await expectSignInPage(page, "Add profile");
+  const providerUnavailable = await page.getByText(AUTH_UNAVAILABLE_COPY, { exact: true }).count() > 0;
+
+  async function switchTo(label: string, pathname: string) {
+    const link = page.getByRole("main").getByRole("link", { name: label, exact: true });
+    await expect(link).toBeVisible();
+    const url = new URL((await link.getAttribute("href"))!, page.url());
+    expect(url.pathname).toBe(pathname);
+    expect(url.searchParams.get("returnTo")).toBe(returnTo);
+    await link.focus();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL((next) => next.pathname === pathname);
+  }
+
+  if (providerUnavailable) {
+    await page.goto("/sign-up?" + new URLSearchParams({ return_to: returnTo }));
+  } else {
+    await switchTo("Sign up", "/sign-up");
+  }
+  const signUpShell = page.locator('section[aria-labelledby="sign-up-heading"]');
+  await expect(signUpShell.getByText("Add profile", { exact: true })).toBeVisible();
+
+  if (!providerUnavailable) {
+    await switchTo("Sign in", "/sign-in");
+    await expectSignInPage(page, "Add profile");
+  }
+
+  await page.goto("/sign-in?" + new URLSearchParams({ return_to: returnTo }));
+  await expectSignInPage(page, "Add profile");
+  await page.goto("/sign-in?" + new URLSearchParams({ returnTo: "/events/new", return_to: returnTo }));
+  await expectSignInPage(page, "Add event");
+
+  await page.goto("/sign-up?" + new URLSearchParams({ return_to: "https://example.invalid/submit" }));
+  await expect(page.locator("h1#sign-up-heading")).toHaveText("Create account");
+  await expect(page.getByRole("main").getByText("Add profile", { exact: true })).toHaveCount(0);
+});
+
 test("add event sign-in keeps the contribution context and full return target", async ({ page }) => {
   for (const returnTo of [
     "/events/new",
