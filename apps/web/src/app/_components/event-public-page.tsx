@@ -18,6 +18,7 @@ import { safeImageBackground } from "@/lib/safe-image";
 import { publicEventPath } from "@/lib/event-path";
 import { avatarFrameStyle, type AvatarAppearance } from "@/lib/avatar-appearance";
 import { EventWatchForEvent } from "./event-live-watch";
+import styles from "./event-public-page.module.css";
 import { parseVrcdnStreamLinks } from "../../../../../convex/_vrcdnLinks";
 import { ViewerLocalEventDateTime, ViewerLocalEventTime, ViewerLocalEventTimeRange } from "./viewer-local-event-times";
 
@@ -377,8 +378,9 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
 
         {event.source.sourceType === "contributor" ? <p className="text-sm text-muted">{event.source.label}</p> : null}
         <EventContributionControls eventId={event.id} reportOpen={reportOpen} onReportClose={() => setReportOpen(false)} />
-        <section className="grid items-start gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="lg:sticky lg:top-6">
+        <section className={cn(styles.media, "grid items-start gap-4 lg:grid-cols-[0.9fr_1.1fr]")}>
+          <div className={styles.watch}><EventWatchForEvent event={event} /></div>
+          <div className={cn(styles.poster, "lg:sticky lg:top-6")}>
             {event.posterImageUrl ? (
               <a href={event.posterImageUrl} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-card border border-border bg-surface">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -387,43 +389,39 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
             ) : null}
           </div>
 
-          <div className="grid gap-4">
-            <EventWatchForEvent event={event} />
-
-            <Card surface="white">
-              <div className="grid gap-3 text-sm">
-                {event.communitySlug ? (
-                  <Link className={cn(actionCardVariants({ variant: "accent" }), "flex items-center gap-3")} href={`/${event.communitySlug}`}>
-                    <EntityImage appearance={event.communityAvatarAppearance} imageUrl={event.communityImageUrl} label={event.communityName ?? "Community profile"} />
-                    <span className="min-w-0">
-                      <span className={actionLabelClassName}>
-                        {event.communityName ?? "Community profile"}
-                      </span>
-                      <span className={actionMetaClassName}>Host</span>
+          <Card className={styles.details} surface="white">
+            <div className="grid gap-3 text-sm">
+              {event.communitySlug ? (
+                <Link className={cn(actionCardVariants({ variant: "accent" }), "flex items-center gap-3")} href={`/${event.communitySlug}`}>
+                  <EntityImage appearance={event.communityAvatarAppearance} imageUrl={event.communityImageUrl} label={event.communityName ?? "Community profile"} />
+                  <span className="min-w-0">
+                    <span className={actionLabelClassName}>
+                      {event.communityName ?? "Community profile"}
                     </span>
-                  </Link>
-                ) : event.communityName ? (
-                  <div className="rounded-control border border-border bg-surface px-4 py-3 font-medium">
-                    {event.communityName}
-                  </div>
-                ) : (
-                  <p className="leading-6 text-muted">No host listed.</p>
-                )}
-                {event.worlds.map((world) => (
-                  <Link className={cn(actionCardVariants({ variant: "accent" }), "flex items-center gap-3")} href={`/${world.slug}`} key={world.slug}>
-                    <EntityImage imageUrl={world.heroImageUrl} label={world.displayName} />
-                    <span className="min-w-0">
-                      <span className={actionLabelClassName}>
-                        {world.displayName}
-                      </span>
-                      {world.summary ? <span className="mt-1 block text-muted">{world.summary}</span> : null}
-                      <span className={actionMetaClassName}>World</span>
+                    <span className={actionMetaClassName}>Host</span>
+                  </span>
+                </Link>
+              ) : event.communityName ? (
+                <div className="rounded-control border border-border bg-surface px-4 py-3 font-medium">
+                  {event.communityName}
+                </div>
+              ) : (
+                <p className="leading-6 text-muted">No host listed.</p>
+              )}
+              {event.worlds.map((world) => (
+                <Link className={cn(actionCardVariants({ variant: "accent" }), "flex items-center gap-3")} href={`/${world.slug}`} key={world.slug}>
+                  <EntityImage imageUrl={world.heroImageUrl} label={world.displayName} />
+                  <span className="min-w-0">
+                    <span className={actionLabelClassName}>
+                      {world.displayName}
                     </span>
-                  </Link>
-                ))}
-              </div>
-            </Card>
-          </div>
+                    {world.summary ? <span className="mt-1 block text-muted">{world.summary}</span> : null}
+                    <span className={actionMetaClassName}>World</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </Card>
         </section>
 
         {lineup.length > 0 ? (
