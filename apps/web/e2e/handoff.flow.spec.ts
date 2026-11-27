@@ -26,9 +26,16 @@ for (const state of [
   { token: "revoked", heading: "Invitation revoked" },
 ] as const) {
   test(`handoff shows the ${state.token} state @flow @fixture`, async ({ page }) => {
+    await page.addInitScript(() => window.localStorage.setItem("vrdex-theme", "dark"));
     await page.goto(`/handoff/playwright-${state.token}`);
-    await expect(page.getByRole("heading", { name: state.heading })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Return to VRDex" })).toBeVisible();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    const main = page.getByRole("main");
+    await expect(main.getByRole("heading", { level: 1, name: state.heading, exact: true })).toBeVisible();
+    const recovery = main.getByRole("link", { name: "Return to VRDex", exact: true });
+    await expect(recovery).toBeVisible();
+    await expect(recovery).toHaveAttribute("href", "/");
+    await expect(recovery).toHaveCSS("color", "rgb(24, 47, 54)");
+    await expect(recovery).toHaveCSS("background-color", "rgb(255, 255, 255)");
   });
 }
 

@@ -1155,9 +1155,11 @@ test.describe("fixture lookup smoke", () => {
 });
 
 test("public OAuth failure groups the status and documented recovery", async ({ page }) => {
-  for (const [query, message] of [
-    ["?problem=invalid_request", "response_type, client_id, redirect_uri, scope, resource, and an S256 PKCE code challenge are required."],
-    ["", "The OAuth consent transaction is invalid or expired."],
+  const authorizationCodeDocs = "https://docs.vrdex.net/docs/developers/api-auth#authorization-code-with-pkce";
+  for (const [query, message, docsHref] of [
+    ["?problem=invalid_request", "response_type, client_id, redirect_uri, scope, resource, and an S256 PKCE code challenge are required.", authorizationCodeDocs],
+    ["", "The OAuth consent transaction is invalid or expired.", authorizationCodeDocs],
+    ["?problem=invalid_client", "This OAuth client cannot use the requested redirect URI, resource, or scopes.", "/developers/api"],
   ]) {
     expect((await page.goto("/oauth/authorize/review" + query))?.status()).toBe(200);
     const main = page.getByRole("main");
@@ -1167,7 +1169,8 @@ test("public OAuth failure groups the status and documented recovery", async ({ 
     const recovery = card.getByRole("link", { name: "API docs", exact: true });
     await expect(heading).toBeVisible();
     await expect(status).toBeVisible();
-    await expect(recovery).toHaveAttribute("href", "/developers/api");
+    await expect(recovery).toHaveAttribute("href", docsHref);
+    if (docsHref === authorizationCodeDocs) await expect(recovery).toHaveAttribute("referrerpolicy", "no-referrer");
     await expect(recovery).toBeVisible();
     const [titleBox, statusBox, linkBox] = await Promise.all([
       heading.boundingBox(), status.boundingBox(), recovery.boundingBox(),
@@ -1182,8 +1185,11 @@ test("VRDex Time sign-in keeps the visitor's return path", async ({ page }) => {
   test.skip(isHostedRun, "The signed-out Time surface is tested with the local Convex binding.");
   expect((await page.goto("/time"))?.status()).toBe(200);
   const main = page.getByRole("main");
-  await expect(main.getByRole("heading", { level: 1, name: "VRDex Time", exact: true })).toBeVisible();
-  const signIn = main.getByRole("link", { name: "Sign in", exact: true });
+  const gate = main.getByRole("region", { name: "VRDex Time", exact: true });
+  const heading = gate.getByRole("heading", { level: 1, name: "VRDex Time", exact: true });
+  await expect(heading).toBeVisible();
+  await expect(gate.getByText(/Turn phrases like/)).toContainText("next Friday at 8");
+  const signIn = gate.getByRole("link", { name: "Sign in", exact: true });
   await expect(signIn).toHaveAttribute("href", "/sign-in?returnTo=%2Ftime");
   const box = await signIn.boundingBox();
   if (!box) throw new Error("Expected a visible Time sign-in action");

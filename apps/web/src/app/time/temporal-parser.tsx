@@ -8,7 +8,7 @@ import type {
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { usePostHog } from "posthog-js/react";
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -114,7 +114,7 @@ async function readTemporalResponse(response: Response): Promise<Result> {
   throw new TemporalUserError(message);
 }
 
-function ConnectedTemporalParser() {
+function ConnectedTemporalParser({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const access = useQuery(api.temporalParsing.getAccess, isAuthenticated ? {} : "skip");
   const setRetention = useMutation(api.temporalParsing.setRetentionPreference);
@@ -261,64 +261,78 @@ function ConnectedTemporalParser() {
   }
 
   if (isLoading || access === undefined && isAuthenticated) {
-    return <Card aria-busy="true">Loading...</Card>;
+    return <>{children}<Card aria-busy="true">Loading...</Card></>;
   }
 
   if (!isAuthenticated) {
     return (
-      <Link
-        className={buttonVariants({ className: "-mt-4 self-start", size: "lg", variant: "primary" })}
-        href="/sign-in?returnTo=%2Ftime"
+      <Card
+        aria-labelledby="time-heading"
+        className="mx-auto mt-4 flex w-full max-w-lg flex-col gap-5 sm:mt-[clamp(2rem,12vh,8rem)] [&>header]:py-0"
+        padding="lg"
+        surface="strong"
       >
-        Sign in
-      </Link>
+        {children}
+        <Link
+          className={buttonVariants({ className: "w-full sm:w-fit", size: "lg", variant: "primary" })}
+          href="/sign-in?returnTo=%2Ftime"
+        >
+          Sign in
+        </Link>
+      </Card>
     );
   }
 
   if (!access?.emailVerified) {
-    return <Notice variant="warning">Verify your email before using VRDex Time.</Notice>;
+    return <>{children}<Notice variant="warning">Verify your email before using VRDex Time.</Notice></>;
   }
 
   if (!enabled) {
     return (
-      <TemporalRetentionUnavailableSurface
-        error={error}
-        onRetentionChange={(next) => void changeRetention(next)}
-        retainInput={retainInput}
-      />
+      <>
+        {children}
+        <TemporalRetentionUnavailableSurface
+          error={error}
+          onRetentionChange={(next) => void changeRetention(next)}
+          retainInput={retainInput}
+        />
+      </>
     );
   }
 
   return (
-    <TemporalParserSurface
-      country={country}
-      error={error}
-      locale={locale}
-      onCountryChange={setCountry}
-      onLocaleChange={setLocale}
-      onReferenceInstantChange={setReferenceInstant}
-      onRetentionChange={(next) => void changeRetention(next)}
-      onSubmit={submit}
-      onSubdivisionChange={setSubdivision}
-      onTextChange={setText}
-      onTimeZoneChange={setTimeZone}
-      referenceInstant={referenceInstant}
-      result={result}
-      resultSummary={resultSummary}
-      retainInput={retainInput}
-      submitting={submitting}
-      subdivision={subdivision}
-      text={text}
-      timeZone={timeZone}
-    />
+    <>
+      {children}
+      <TemporalParserSurface
+        country={country}
+        error={error}
+        locale={locale}
+        onCountryChange={setCountry}
+        onLocaleChange={setLocale}
+        onReferenceInstantChange={setReferenceInstant}
+        onRetentionChange={(next) => void changeRetention(next)}
+        onSubmit={submit}
+        onSubdivisionChange={setSubdivision}
+        onTextChange={setText}
+        onTimeZoneChange={setTimeZone}
+        referenceInstant={referenceInstant}
+        result={result}
+        resultSummary={resultSummary}
+        retainInput={retainInput}
+        submitting={submitting}
+        subdivision={subdivision}
+        text={text}
+        timeZone={timeZone}
+      />
+    </>
   );
 }
 
-export function TemporalParser() {
+export function TemporalParser({ children }: { children: ReactNode }) {
   if (!convexUrl) {
-    return <Notice>VRDex Time is unavailable in this environment.</Notice>;
+    return <>{children}<Notice>VRDex Time is unavailable in this environment.</Notice></>;
   }
-  return <ConnectedTemporalParser />;
+  return <ConnectedTemporalParser>{children}</ConnectedTemporalParser>;
 }
 
 export type TemporalParserSurfaceProps = {

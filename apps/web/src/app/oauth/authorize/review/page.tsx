@@ -18,22 +18,28 @@ type AuthorizeReviewPageProps = {
   searchParams: Promise<{ problem?: string | string[]; transaction?: string | string[] }>;
 };
 
+const authorizationCodeDocs = "https://docs.vrdex.net/docs/developers/api-auth#authorization-code-with-pkce";
+
 function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function AuthorizationProblem({ detail }: { detail: string }) {
+function AuthorizationProblem({ detail, docsHref = "/developers/api" }: { detail: string; docsHref?: string }) {
   return (
-    <PageShell className="py-6 sm:py-12">
+    <PageShell className="py-6 sm:grid sm:items-center sm:py-14">
       <PageContainer className="max-w-xl">
         <Card aria-labelledby="oauth-problem-title" className="grid gap-5" padding="lg" surface="white">
-          <h1 className="text-2xl leading-tight font-semibold sm:text-3xl" id="oauth-problem-title">
+          <h1 className="text-2xl leading-tight font-semibold tracking-tight text-balance sm:text-3xl" id="oauth-problem-title">
             Authorization request failed
           </h1>
           <Notice className="border-danger/55 text-base leading-7 text-foreground" variant="error">
             {detail}
           </Notice>
-          <Link className={buttonVariants({ size: "lg", variant: "primary", className: "justify-self-start" })} href="/developers/api">
+          <Link
+            className={buttonVariants({ size: "lg", variant: "primary", className: "justify-self-start" })}
+            href={docsHref}
+            referrerPolicy={docsHref === authorizationCodeDocs ? "no-referrer" : undefined}
+          >
             API docs
           </Link>
         </Card>
@@ -44,10 +50,11 @@ function AuthorizationProblem({ detail }: { detail: string }) {
 
 export default async function AuthorizeReviewPage({ searchParams }: AuthorizeReviewPageProps) {
   const params = await searchParams;
-  const problemDetail = oauthAuthorizeProblemDetail(firstParam(params.problem));
+  const problem = firstParam(params.problem);
+  const problemDetail = oauthAuthorizeProblemDetail(problem);
 
   if (problemDetail !== undefined) {
-    return <AuthorizationProblem detail={problemDetail} />;
+    return <AuthorizationProblem detail={problemDetail} docsHref={problem === "invalid_request" ? authorizationCodeDocs : undefined} />;
   }
 
   const transactionParam = firstParam(params.transaction);
@@ -56,7 +63,7 @@ export default async function AuthorizeReviewPage({ searchParams }: AuthorizeRev
   try {
     transaction = normalizeOAuthConsentTransactionValue(transactionParam ?? "");
   } catch {
-    return <AuthorizationProblem detail="The OAuth consent transaction is invalid or expired." />;
+    return <AuthorizationProblem detail="The OAuth consent transaction is invalid or expired." docsHref={authorizationCodeDocs} />;
   }
 
   const authToken = await convexAuthToken();
@@ -90,7 +97,7 @@ export default async function AuthorizeReviewPage({ searchParams }: AuthorizeRev
   }
 
   if (authorization === null) {
-    return <AuthorizationProblem detail="The OAuth consent transaction is invalid or expired." />;
+    return <AuthorizationProblem detail="The OAuth consent transaction is invalid or expired." docsHref={authorizationCodeDocs} />;
   }
 
   const client = await convexAdminHttpClient().query(internal.oauthApps.resolveAuthorizationClient, {

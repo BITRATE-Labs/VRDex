@@ -106,11 +106,17 @@ function TerminalInvitation({ preview }: { preview: Exclude<HandoffPreview, { st
   const content = terminalStates[preview.state];
 
   return (
-    <div className="py-16">
+    <div className="max-w-xl pb-12 pt-2 sm:pb-16 sm:pt-8">
       <p className="text-sm font-medium text-[#9f3f27]">Handoff unavailable</p>
-      <h1 className="mt-3 text-4xl font-semibold leading-tight sm:text-5xl">{content.title}</h1>
-      <p className="mt-4 max-w-xl text-base leading-7 text-muted">{content.message}</p>
-      <Link className={cn(buttonVariants({ size: "lg" }), "mt-7")} href="/">
+      <h1 className="mt-2 text-3xl font-semibold leading-tight text-balance sm:text-5xl">{content.title}</h1>
+      <p className="mt-3 text-base leading-7 text-muted">{content.message}</p>
+      <Link
+        className={cn(
+          buttonVariants({ size: "lg" }),
+          "mt-5 border-[#182f36]/30 bg-white hover:border-[#105c58] hover:bg-[#dcefed] focus-visible:ring-[#105c58]",
+        )}
+        href="/"
+      >
         Return to VRDex
       </Link>
     </div>
