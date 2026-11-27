@@ -1455,7 +1455,7 @@ export function getPlaywrightPublicProfileFixture(
       hostedEvents: [],
     };
   }
-  if (profileType === "community" && /^playwright-group-population(?:-empty|-stale|-managed-disabled|-managed|-dense|-membership)?$/.test(slug)) {
+  if (profileType === "community" && /^playwright-group-population(?:-empty|-stale|-managed-disabled|-managed|-dense|-membership|-events|-multiple-events)?$/.test(slug)) {
     const now = Date.now();
     const stale = slug.endsWith("-stale");
     const count = slug.endsWith("-dense") ? 720 : 181;
@@ -1489,6 +1489,7 @@ export function getPlaywrightPublicProfileFixture(
       } : {}),
     });
     const memberObservation = { value: 125, observedAt: now };
+    const withEvents = slug.endsWith("-events");
     return {
       ...communityProfile,
       profileType: "community",
@@ -1496,10 +1497,42 @@ export function getPlaywrightPublicProfileFixture(
       id: `fixture-${slug}`,
       slug,
       displayName: "Afterglow Social",
-      hostedEvents: [],
-      worldCredits: [],
+      hostedEvents: withEvents ? [
+        eventPreview,
+        ...(slug.endsWith("-multiple-events") ? [{
+          ...eventPreview,
+          slug: "playwright-date-only-event",
+          title: "July Fourth Sessions",
+          scheduleKind: "date_only" as const,
+          eventDate: "2026-07-04",
+          startAt: undefined,
+          doorsOpenAt: undefined,
+          endAt: undefined,
+        }] : []),
+      ] : [],
+      ...(withEvents ? {
+        outboundLinks: [
+          {
+            type: "vrchat_profile",
+            label: "VRChat group",
+            url: "https://vrchat.com/home/group/grp_12345678-1234-1234-1234-123456789abc",
+          },
+          ...communityProfile.outboundLinks,
+          {
+            type: "website",
+            label: "Bluesky",
+            url: "https://bsky.app/profile/afterglow.example.invalid",
+          },
+          {
+            type: "twitch",
+            label: "Twitch",
+            url: "https://www.twitch.tv/afterglow",
+          },
+        ],
+        appearance: { sectionOrder: ["worlds", "events", "media_kit", "links", "about", "details"] },
+      } : { worldCredits: [] }),
       telemetry,
-      ...(slug.endsWith("-membership") ? {
+      ...(withEvents || slug.endsWith("-membership") ? {
         groupMembership: {
           latest: memberObservation,
           points: [{ value: 120, observedAt: now - 86_400_000 }, memberObservation],
