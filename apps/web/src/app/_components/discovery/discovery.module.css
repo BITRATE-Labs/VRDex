@@ -34,12 +34,43 @@
   color: var(--foreground);
   background: var(--surface-elevated);
 }
+.clubsShortcut {
+  display: none;
+}
 .groups {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--group-gap);
 }
 @media (760px < width <= 880px) {
+  .clubsShortcut {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 44px;
+    padding-inline: 0.35rem;
+    color: var(--foreground);
+    font-size: 0.8rem;
+    text-underline-offset: 3px;
+    border-radius: var(--radius-control);
+  }
+  .clubsShortcut:hover {
+    text-decoration: underline;
+  }
+  .groupHeading[id="discovery-clubs-heading"] {
+    scroll-margin-top: 6rem;
+  }
+  .clubsShortcut:focus-visible,
+  .groupHeading[id="discovery-clubs-heading"]:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 2px;
+  }
+  @media (forced-colors: active) {
+    .clubsShortcut:focus-visible,
+    .groupHeading[id="discovery-clubs-heading"]:focus-visible {
+      outline-color: Highlight;
+    }
+  }
   .groups {
     grid-template-columns: minmax(0, calc(512px + var(--card-gap)));
     justify-content: center;

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, ChevronLeft, ChevronRight, LoaderCircle } from "lucide-react";
+import { ArrowDown, ArrowRight, ChevronLeft, ChevronRight, LoaderCircle } from "lucide-react";
 import {
   Children,
   useEffect,
@@ -124,7 +124,11 @@ function CardRail({
   return (
     <>
       <div className={styles.railHeading}>
-        <h3 id={headingId} className={styles.groupHeading}>
+        <h3
+          id={headingId}
+          className={styles.groupHeading}
+          tabIndex={!placeholder && title === "Clubs" ? -1 : undefined}
+        >
           {title}
         </h3>
         {!placeholder && count > 1 && (edges?.left || edges?.right) && (
@@ -430,6 +434,13 @@ export function HomeDiscoveryView(props: HomeDiscoveryViewProps) {
             </button>
           </div>
         )}
+        {snapshot.kind === "available" &&
+          snapshot.events.length > 1 &&
+          snapshot.clubs.some((club) => club.profileType === "community") && (
+            <a href="#discovery-clubs-heading" className={styles.clubsShortcut}>
+              Clubs <ArrowDown size={14} aria-hidden="true" />
+            </a>
+          )}
         <Link href="/discovery" className={styles.browse}>
           Browse <ArrowRight size={14} aria-hidden="true" />
         </Link>
