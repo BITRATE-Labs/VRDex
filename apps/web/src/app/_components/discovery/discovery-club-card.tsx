@@ -25,46 +25,44 @@ export function DiscoveryClubCard({
 }: DiscoveryClubCardProps) {
   const favorite = preferences.favoriteProfileIds.includes(club.id);
   return (
-    <article className={styles.card} data-testid="discovery-club-card">
-      <a
-        href={`/${club.slug}`}
-        className={styles.clubLink}
-        aria-label={club.displayName}
-      >
-        <span className={styles.clubArtwork}>
-          {club.bannerImageUrl && (
-            <EntityImage
-              label={club.displayName}
-              alt=""
-              src={club.bannerImageUrl}
-              className={styles.clubBackdrop}
-              fallback={<></>}
-              sizes={clubImageSizes}
-            />
-          )}
+    <article className={`${styles.card} ${styles.clubCard}`} data-testid="discovery-club-card">
+      <span className={styles.clubArtwork}>
+        {club.bannerImageUrl && (
           <EntityImage
             label={club.displayName}
             alt=""
-            src={club.logoImageUrl ?? club.imageUrl}
-            className={styles.clubLogo}
-            fallback={
-              <span
-                className={styles.clubTypography}
-                style={{
-                  fontSize: `clamp(1rem, ${Math.min(12, 70 / Math.sqrt(club.displayName.length))}cqi, 2.7rem)`,
-                }}
-              >
-                {club.displayName}
-              </span>
-            }
-            imageClassName={styles.contained}
+            src={club.bannerImageUrl}
+            className={styles.clubBackdrop}
+            fallback={<></>}
             sizes={clubImageSizes}
           />
-        </span>
-      </a>
+        )}
+        <EntityImage
+          label={club.displayName}
+          alt=""
+          src={club.logoImageUrl ?? club.imageUrl}
+          className={styles.clubLogo}
+          fallback={
+            <span
+              className={styles.clubTypography}
+              style={{
+                fontSize: `clamp(1rem, ${Math.min(12, 70 / Math.sqrt(club.displayName.length))}cqi, 2.7rem)`,
+              }}
+            >
+              {club.displayName}
+            </span>
+          }
+          imageClassName={styles.contained}
+          sizes={clubImageSizes}
+        />
+      </span>
       <div className={styles.clubMetadata}>
         <div className={styles.clubName}>
-          <h4 className={styles.name}>{club.displayName}</h4>
+          <h4 className={styles.name}>
+            <a href={`/${club.slug}`} className={styles.clubLink}>
+              {club.displayName}
+            </a>
+          </h4>
           <FavoriteButton
             label={club.displayName}
             pressed={favorite}
