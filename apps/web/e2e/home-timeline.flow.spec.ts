@@ -29,6 +29,61 @@ test.describe("continuous schedule @flow @fixture", () => {
     ).toBeVisible();
     await loadCompleteSchedule(page);
   });
+  test("past selections disappear and Next saved skips them without deleting saved history", async ({ page, timelineFixture }, info) => {
+    const plan = [0, 1].map(index => ({ kind: "event", eventId: timelineFixture.eventIds[index] }));
+    await page.evaluate(savedPlan => localStorage.setItem("vrdex.timeline.preferences.v1", JSON.stringify({
+      version: 1, plan: savedPlan, favoriteProfileIds: [],
+    })), plan);
+    await page.goto(`/?at=${TIMELINE_NOW + 7 * 86400000}&tz=UTC`);
+    await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready");
+    const night = page.getByRole("region", { name: "My night", exact: true });
+    await expect(night.getByRole("button", { name: "Remove Soft Focus from My night", exact: true })).toHaveCount(0);
+    await expect(night.getByRole("button", { name: "Remove Afterimage from My night", exact: true })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("vrdex.timeline.preferences.v1")!).plan)).toEqual(plan);
+    await page.getByRole("button", { name: "Next saved", exact: true }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.get("at")).toBe(String(TIMELINE_NOW + 1.5 * 3600000));
+    await expect(page.locator(`[data-night-reference="${timelineFixture.eventIds[1]}"]`)).toHaveCount(1);
+    await expect(page.locator(`[data-night-reference="${timelineFixture.eventIds[0]}"]`)).toHaveCount(0);
+    await loadCompleteSchedule(page);
+    await page.screenshot({ path: info.outputPath("my-night-skips-ended-selections.png"), fullPage: true });
+
+    await page.clock.setFixedTime(TIMELINE_NOW + 3 * 86400000);
+    await page.reload();
+    await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready");
+    await expect(page.getByRole("heading", { name: "My night", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Next saved", exact: true })).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("vrdex.timeline.preferences.v1")!).plan)).toEqual(plan);
+  });
+
+  test("a just-ended event deliberately saved this visit stays removable outside My night", async ({ page, timelineFixture }) => {
+    const past = page.getByTestId(`event-${timelineFixture.eventIds[0]}`);
+    await past.getByRole("button", { name: "Interested: Soft Focus", exact: true }).click();
+    await page.getByLabel("Schedule date", { exact: true }).fill("2026-11-02");
+    await loadCompleteSchedule(page);
+    await page.getByRole("button", { name: "Now", exact: true }).click();
+    await loadCompleteSchedule(page);
+    await expect(past.getByRole("button", { name: "Remove interest: Soft Focus", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "My night", exact: true })).toHaveCount(0);
+    await past.getByRole("button", { name: "Remove interest: Soft Focus", exact: true }).click();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("vrdex.timeline.preferences.v1")!).plan)).toEqual([]);
+  });
+
+  test("a full saved plan can clear past selections while keeping other saves", async ({ page, timelineFixture }) => {
+    const past = { kind: "event", eventId: timelineFixture.eventIds[0] };
+    const upcoming = { kind: "event", eventId: timelineFixture.eventIds[1] };
+    const unavailable = Array.from({ length: 198 }, (_, index) => ({ kind: "event", eventId: `unavailable-${index}` }));
+    await page.evaluate(plan => localStorage.setItem("vrdex.timeline.preferences.v1", JSON.stringify({
+      version: 1, plan, favoriteProfileIds: [],
+    })), [past, upcoming, ...unavailable]);
+    await page.reload();
+    const clear = page.getByRole("button", { name: "Clear past selections", exact: true });
+    await expect(clear).toBeVisible();
+    await clear.click();
+    await expect(clear).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("vrdex.timeline.preferences.v1")!).plan))
+      .toEqual([upcoming, ...unavailable]);
+  });
+
   test("dateOnlyRecordsRemainDiscoverableWithoutAgenda", async ({ page, timelineFixture }) => {
     await page.goto(`/?at=${TIMELINE_NOW - 3600000}&tz=America%2FNew_York&scheduleView=agenda&tag=a&tag=b`);
     await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready");

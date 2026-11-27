@@ -6,8 +6,23 @@ import {
   type AccountFeatureAccess,
 } from "./_accountFeatureModel";
 import { requireClaimSession } from "./_claimSession";
+import { canReadProfile } from "./_profilePermissions";
 
 export * from "./_accountFeatureModel";
+
+export async function hasEventOwnerMode(
+  db: DatabaseReader,
+  userId: Id<"users"> | null | undefined,
+  communityProfileId: Id<"profiles">,
+  now = Date.now(),
+): Promise<boolean> {
+  if (!userId) return false;
+  const mode = (await db.get(userId))?.eventOwnerMode;
+  if (mode?.communityProfileId !== communityProfileId || mode.expiresAt <= now) return false;
+  const profile = await db.get(communityProfileId);
+  if (profile?.profileType !== "community" || !canReadProfile("public", profile)) return false;
+  return (await getAccountFeatureAccess(db, userId, now)).superAdmin;
+}
 
 export async function getAccountFeatureAccess(
   db: DatabaseReader,

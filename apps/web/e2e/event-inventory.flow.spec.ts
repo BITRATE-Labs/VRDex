@@ -1,5 +1,77 @@
 import { expect, test } from '@playwright/test';
 
+test('draft row actions confirm discard without affecting other events @flow @fixture', async ({ page }, info) => {
+  await page.goto('/playwright/event-inventory');
+  const drafts = page.getByRole('listitem').filter({ hasText: 'Harbor sessions' });
+  await expect(drafts).toHaveCount(2);
+  await drafts.first().getByLabel('More actions for Harbor sessions').click();
+  await expect(drafts.first().getByRole('button', { name: 'Discard draft' })).toBeVisible();
+  await page.screenshot({ path: info.outputPath('draft-actions.png') });
+  await drafts.first().getByRole('button', { name: 'Discard draft' }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Discard draft?' });
+  await confirmation.getByRole('button', { name: 'Keep draft' }).click();
+  await expect(drafts).toHaveCount(2);
+  await drafts.first().getByLabel('More actions for Harbor sessions').click();
+  await drafts.first().getByRole('button', { name: 'Discard draft' }).click();
+  await confirmation.getByRole('button', { name: 'Discard draft' }).click();
+  await expect(drafts).toHaveCount(1);
+  await expect(page.getByRole('listitem').filter({ hasText: 'Date only night' })).toBeVisible();
+});
+
+test('discard shows the active broadcast error and keeps the draft @flow @fixture', async ({ page }) => {
+  await page.goto('/playwright/event-inventory?session=discard-locked');
+  const draft = page.getByRole('listitem').filter({ hasText: 'Harbor sessions' }).last();
+  await draft.getByLabel('More actions for Harbor sessions').click();
+  await draft.getByRole('button', { name: 'Discard draft' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Discard draft?' });
+  await dialog.getByRole('button', { name: 'Discard draft' }).click();
+  await expect(dialog.getByRole('alert')).toHaveText('Stop the active broadcast first.');
+  await dialog.getByRole('button', { name: 'Keep draft' }).click();
+  await expect(draft).toBeVisible();
+});
+
+test('the event owner switch opens and closes scoped community access @flow @fixture', async ({ page }, info) => {
+  await page.goto('/playwright/event-inventory');
+  await expect(page.getByRole('heading', { name: 'My events', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Manage as admin' })).toHaveCount(0);
+  await page.goto('/playwright/event-inventory?session=owner-mode');
+  await page.getByRole('combobox', { name: 'Community', exact: true }).fill('District');
+  await page.getByRole('option', { name: /District One/ }).click();
+  await page.getByRole('button', { name: 'Manage as admin' }).click();
+  const setup = page.getByRole('link', { name: 'Add event for District One' });
+  await expect(setup).toHaveAttribute('href', '/district-one/events/create');
+  await expect(page.getByText('Admin access · District One', { exact: true }).locator('..').locator('time')).toBeVisible();
+  await page.screenshot({ path: info.outputPath('event-owner-mode.png') });
+  await page.getByRole('button', { name: 'End admin access' }).click();
+  await expect(setup).toHaveCount(0);
+});
+
+test('preserves authenticated navigation, search focus and mobile width @flow @fixture', async ({ page }, testInfo) => {
+  test.setTimeout(60000);
+  await page.route(/\/search\/suggest\?q=aurora$/, (route) => route.fulfill({
+    json: { results: [{ entityType: 'profile', profileType: 'person', slug: 'aurora', title: 'Aurora', routePath: '/aurora' }] },
+  }));
+  await page.goto('/playwright/event-inventory?session=navigation');
+  const nav = page.getByTestId('inventory-navigation');
+  await expect(nav.getByRole('link', { name: 'My events', exact: true } )).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Add event', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Event reports', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Add event for Afterglow', exact: true })).toBeVisible();
+  const search = nav.getByRole('button', { name: 'Search', exact: true });
+  await search.click();
+  const input = nav.getByRole('combobox', { name: 'Search VRDex' });
+  await expect(input).toBeFocused();
+  await input.fill('aurora');
+  await expect(nav.getByRole('option')).toHaveCount(1);
+  await input.press('ArrowDown');
+  await input.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
+  await expect(page).toHaveURL(/playwright\/event-inventory\?session=navigation$/);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await input.press('Escape');
+  await expect(search).toBeFocused();
+  await page.screenshot({ path: testInfo.outputPath('my-events.png'), fullPage: true });
+});
+
 test.describe('My events @fixture', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/playwright/event-inventory');
@@ -81,25 +153,7 @@ test.describe('My events @fixture', () => {
     await expect(page.getByText('Recovered match')).toBeVisible();
   });
 
-  test('preserves authenticated navigation, search focus and mobile width', async ({ page }, testInfo) => {
-    await expect(page.getByRole('link', { name: 'My events', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Add event', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Event reports', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Add event for Afterglow', exact: true })).toBeVisible();
-    const search = page.getByRole('button', { name: 'Search', exact: true });
-    await search.click();
-    const input = page.getByRole('combobox', { name: 'Search VRDex' });
-    await expect(input).toBeFocused();
-    await input.fill('aurora');
-    await expect(page.getByRole('option')).toHaveCount(1);
-    await input.press('ArrowDown');
-    await input.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
-    await expect(page).toHaveURL(/playwright\/event-inventory$/);
-    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await input.press('Escape');
-    await expect(search).toBeFocused();
-    await page.screenshot({ path: testInfo.outputPath('my-events.png'), fullPage: true });
-  });
+
 });
 
 test('contributor-only inventory loads all filters with an empty search @fixture', async ({ page }) => {

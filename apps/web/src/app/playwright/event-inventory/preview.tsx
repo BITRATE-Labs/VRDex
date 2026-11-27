@@ -1,6 +1,7 @@
 "use client";
 
 import { ConvexProviderWithAuth, type ConvexReactClient } from "convex/react";
+import { ConvexError } from "convex/values";
 import { getFunctionName, type FunctionArgs, type FunctionReference, type FunctionReturnType } from "convex/server";
 import { useEffect, useState } from "react";
 import { api } from "@convex-generated-api";
@@ -9,6 +10,7 @@ import type { Id } from "../../../../../../convex/_generated/dataModel";
 import { ManagedEventsPanel } from "@/app/account/events/managed-events-panel";
 import type { EventInventoryRow } from "@/app/account/events/event-inventory-list";
 import { PageContainer, PageShell } from "@/components/ui/page-shell";
+import { SiteHeader } from "@/components/ui/site-header";
 
 type InventoryArgs = FunctionArgs<typeof api.eventInventory.listPage>;
 type InventoryPage = FunctionReturnType<typeof api.eventInventory.listPage>;
@@ -44,13 +46,15 @@ const sparseHeldRows: HeldImports = [
   { ...heldOrigin, connectorKind: "google_calendar", targetName: "Club calendar", kind: "flag", eventId: eventId("flag-2"), reason: "external_deleted", title: "Lantern Night", href: "/afterglow/events/lantern/edit", updatedAt: 1 },
 ];
 
-function inventoryFixture(contributorOnly: boolean, failShortcuts: boolean, held?: string) {
+function inventoryFixture(contributorOnly: boolean, failShortcuts: boolean, held?: string, superAdmin = false, discardLocked = false) {
   const listeners = new Set<() => void>();
   const cache = new Map<string, unknown>();
   let shortcutsUnavailable = failShortcuts;
+  let ownerMode: { slug: string; name: string; expiresAt: number } | null = null;
   let slowReleased = false;
   let failed = false;
   let reads = 0;
+  const discarded = new Set<string>();
   let heldImports = !held ? [] : held === "sparse" ? sparseHeldRows : heldRows;
   let heldUnavailable = held === "fail-query";
   sessionStorage.setItem("inventory-later-reads", "0");
@@ -83,13 +87,17 @@ function inventoryFixture(contributorOnly: boolean, failShortcuts: boolean, held
     }
     if (args.query === "slow" || args.query === "failure") return { page: [matchingRow(args.query === "slow" ? "Slow stale match" : "Recovered match")], isDone: true, continueCursor: "done" };
     const pageRows = rows.filter(row => {
+      if (discarded.has(row.id)) return false;
       if (contributorOnly && row.kind === "managed_event") return false;
       if (args.view === "drafts" && row.state !== "draft") return false;
       if (args.view === "upcoming" && row.title !== "Date only night") return false;
       if (args.view === "past" && row.title !== "Past session") return false;
       return `${row.title ?? ""} ${row.community?.displayName ?? ""}`.toLowerCase().includes(args.query);
     });
-    return { page: pageRows, isDone: true, continueCursor: "done" };
+    const visibleRows = discardLocked
+      ? pageRows.map(row => row.id === staffDraft.id ? { ...row, discardVersion: 1 } : row)
+      : pageRows;
+    return { page: visibleRows, isDone: true, continueCursor: "done" };
   }
 
   // The native Convex hook owns accumulation, cursors, loading and error
@@ -99,11 +107,24 @@ function inventoryFixture(contributorOnly: boolean, failShortcuts: boolean, held
     clearAuth() {},
     logger: { warn() {} },
     async query(query: FunctionReference<"query">, args: { query?: string }) {
+      if (getFunctionName(query) === "search:searchUniversal" && args.query?.toLowerCase().includes("district")) return [{ entityType: "profile", profileType: "community", slug: "district-one", title: "District One", routePath: "/district-one" }];
       if (getFunctionName(query) === "search:searchUniversal" && args.query?.toLowerCase().includes("aurora")) return [{ entityType: "profile", profileType: "person", slug: "playwright-dj-aurora", title: "Aurora", routePath: "/playwright-dj-aurora" }];
       return empty;
     },
-    async mutation(mutation: FunctionReference<"mutation">, args: { draftId?: string; eventId?: string }) {
+    async mutation(mutation: FunctionReference<"mutation">, args: { draftId?: string; eventId?: string; communitySlug?: string | null; draft?: { id: string; version: number } }) {
       const name = getFunctionName(mutation);
+      if (name === "eventInventory:discardDraft" && args.draft) {
+        if (discardLocked) throw new ConvexError({ code: "BROADCAST_ACTIVE", message: "Stop the active broadcast first." });
+        discarded.add(args.draft.id);
+        cache.clear();
+        notify();
+        return null;
+      }
+      if (name === "events:setEventOwnerMode") {
+        ownerMode = args.communitySlug ? { slug: args.communitySlug, name: "District One", expiresAt: Date.now() + 3600000 } : null;
+        notify();
+        return null;
+      }
       if (held === `fail-${name.split(":")[1]}`) throw new Error("Fixture held command failed");
       if (held === "slow") await new Promise(resolve => window.addEventListener("held-release", resolve, { once: true }));
       sessionStorage.setItem("held-command", JSON.stringify([name, args]));
@@ -117,9 +138,10 @@ function inventoryFixture(contributorOnly: boolean, failShortcuts: boolean, held
       return {
         localQueryResult() {
           if (name === "accounts:viewer") return viewer;
+          if (name === "events:getEventOwnerMode") return superAdmin ? { community: ownerMode } : null;
           if (name === "events:listManagedCommunities") {
             if (shortcutsUnavailable) throw new Error("Fixture community source failed");
-            return communities;
+            return ownerMode ? [...communities, { profileId: "fixture-district-one", slug: ownerMode.slug, displayName: ownerMode.name, roleLabel: "Owner mode" }] : communities;
           }
           if (name === "eventCorrections:getEventReportAccess") return !contributorOnly;
           if (name === "eventInventory:listHeldImports") {
@@ -156,12 +178,15 @@ function useFixtureAuth(session?: string) {
 export function EventInventoryPreview({ contributorOnly, held, session }: { contributorOnly: boolean; held?: string; session?: string }) {
   const [fixture, setFixture] = useState<ReturnType<typeof inventoryFixture> | null>(null);
   useEffect(() => {
-    const value = inventoryFixture(contributorOnly, session === "shortcuts-failure", held);
+    const value = inventoryFixture(contributorOnly, session === "shortcuts-failure", held, session === "owner-mode", session === "discard-locked");
     setFixture(value);
     return value.dispose;
   }, [contributorOnly, held, session]);
   const useInventoryFixtureAuth = () => useFixtureAuth(session);
   return fixture ? <ConvexProviderWithAuth client={fixture.client} useAuth={useInventoryFixtureAuth}>
-    <div className="ph-no-capture" data-ph-no-capture><PageShell className="py-10"><PageContainer max="5xl"><ManagedEventsPanel /></PageContainer></PageShell></div>
+    <div className="ph-no-capture" data-ph-no-capture>
+      {session === "navigation" ? <div data-testid="inventory-navigation"><SiteHeader /></div> : null}
+      <PageShell className="py-10"><PageContainer max="5xl"><ManagedEventsPanel /></PageContainer></PageShell>
+    </div>
   </ConvexProviderWithAuth> : null;
 }

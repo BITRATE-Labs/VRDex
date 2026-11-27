@@ -88,7 +88,8 @@ export async function heldTarget(db: DatabaseReader, draft: Doc<"eventIntakeDraf
     const run = source ? await db.get(source.runId) : null;
     if (run?.decision?.kind === "update") event = await getEventBySlug(db, run.decision.slug);
   }
-  return event?.slug && event.moderationRemovedAt === undefined && event.communityProfileId === connector.communityProfileId ? { event, links } : null;
+  return event?.slug && event.moderationRemovedAt === undefined && event.draftDiscardedAt === undefined &&
+    event.communityProfileId === connector.communityProfileId ? { event, links } : null;
 }
 
 /** Takes a draft off review. Its link stops blocking imports and exports, and the draft sweep removes the row after the usual TTL. */
@@ -158,7 +159,8 @@ export async function heldImportRows(db: DatabaseReader, community: Doc<"profile
       .filter(q => q.neq(q.field("eventId"), undefined)).take(HELD_IMPORT_LIMIT);
     for (const link of links) {
       const event = link.eventId ? await db.get(link.eventId) : null;
-      if (!event?.slug || event.moderationRemovedAt !== undefined || flagged.has(`${event._id}:${reason}`)) continue;
+      if (!event?.slug || event.moderationRemovedAt !== undefined || event.draftDiscardedAt !== undefined ||
+          flagged.has(`${event._id}:${reason}`)) continue;
       flagged.add(`${event._id}:${reason}`);
       rows.push({ ...origin, updatedAt: link.updatedAt, kind: "flag", eventId: event._id, reason, title: event.title, href: editHref(event.slug) });
     }

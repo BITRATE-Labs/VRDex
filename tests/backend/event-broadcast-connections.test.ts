@@ -4,7 +4,7 @@ import { it } from 'node:test';
 import { convexTest } from 'convex-test';
 import { makeFunctionReference } from 'convex/server';
 import schemaModule from '../../convex/schema';
-import { api } from '../../convex/_generated/api';
+import { api, internal } from '../../convex/_generated/api';
 import { newClerkUserId } from './_clerkTestIdentity';
 import { normalizeConnection, managedSecretRefAllowed } from '../../convex/_eventBroadcastConnections';
 import { bindVrcdnTestAccount } from './_eventOutputAccountFixture';
@@ -28,11 +28,81 @@ it('validates preset servers with friendly errors and exact namespace binding', 
   assert.equal(managedSecretRefAllowed(prefix + 'vrdex/broadcast/abc/def/12345678-1234-1234-1234-123456789012-AbCd12', 'abc', 'def', '12345678-1234-1234-1234-123456789012'), true);
   assert.equal(managedSecretRefAllowed(prefix + 'vrdex/broadcast/other/def/12345678-1234-1234-1234-123456789012-AbCd12', 'abc', 'def', '12345678-1234-1234-1234-123456789012'), false);
 });
+it('restricts sandbox connection credentials to the sandbox namespace', () => {
+  const key = '12345678-1234-1234-1234-123456789012';
+  const original = process.env.VRDEX_EVENT_OUTPUT_SECRET_NAMESPACE;
+  try {
+    process.env.VRDEX_EVENT_OUTPUT_SECRET_NAMESPACE = 'vrdex/sandbox/broadcast/';
+    assert.equal(managedSecretRefAllowed(prefix + `vrdex/sandbox/broadcast/abc/def/${key}-AbCd12`, 'abc', 'def', key), true);
+    assert.equal(managedSecretRefAllowed(prefix + `vrdex/broadcast/abc/def/${key}-AbCd12`, 'abc', 'def', key), false);
+  } finally {
+    if (original === undefined) delete process.env.VRDEX_EVENT_OUTPUT_SECRET_NAMESPACE;
+    else process.env.VRDEX_EVENT_OUTPUT_SECRET_NAMESPACE = original;
+  }
+});
 it('rejects unauthorized setup, missing key and untrusted commit', async () => {
   const f = await fixture(); await assert.rejects(f.t.mutation(ref('prepareConnection'), f.input), /signed-in/);
   await assert.rejects(f.owner.mutation(ref('prepareConnection'), { ...f.input, replaceKey: false, credentialDigest: '' }), /Enter a stream key/);
   const grant = await f.owner.mutation(ref('prepareConnection'), f.input);
   await assert.rejects(f.owner.mutation(ref('commitConnection'), { grantId: grant.grantId, credentialRef: prefix + grant.secretName + '-AbCd12', brokerToken: 'bad' }), /unavailable/);
+});
+it('lets the community owner and a scoped super-admin each manage both event connections', async (test) => {
+  test.mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.now() });
+  const f = await fixture();
+  const subject = newClerkUserId();
+  const userId = await f.t.run(async ({ db }) => {
+    const now = Date.now();
+    const userId = await db.insert('users', { clerkUserId: subject, email: 'admin@example.test', emailVerificationTime: now });
+    await db.insert('accountFeatureGrants', {
+      userId, state: 'active', feature: 'super_admin', grantedAt: now, updatedAt: now,
+      grantedBy: { issuer: 'test', subject: 'operator', tokenIdentifier: 'test|operator' },
+    });
+    return userId;
+  });
+  const identity = { subject, issuer: 'test', tokenIdentifier: `test|${subject}` };
+  const admin = f.t.withIdentity({ ...identity, emailVerified: true });
+  await assert.rejects(f.t.withIdentity({ ...identity, emailVerified: false }).mutation(
+    api.events.setEventOwnerMode, { communitySlug: 'club' },
+  ), /EMAIL_NOT_VERIFIED/);
+  await assert.rejects(admin.mutation(ref('prepareConnection'), f.input), /permission/);
+  await admin.mutation(api.events.setEventOwnerMode, { communitySlug: 'club' });
+  const testEvent = await admin.mutation(api.events.createCommunityEvent, {
+    title: 'Separate rehearsal', communitySlug: 'club', startAt: Date.now() + 1200000, timezone: 'UTC',
+  });
+  for (const [index, slug] of [f.event.slug, testEvent.slug].entries()) {
+    const grant = await f.owner.mutation(ref('prepareConnection'), { ...f.input, currentSlug: slug });
+    const credentialRef = prefix + grant.secretName + '-AbCd12';
+    await f.owner.mutation(ref('commitConnection'), { grantId: grant.grantId, credentialRef, brokerToken: process.env.VRDEX_EVENT_OUTPUT_BROKER_TOKEN });
+    const update = await admin.mutation(ref('prepareConnection'), {
+      ...f.input, currentSlug: slug, expectedRevision: 1, requestId: `${index + 2}2345678-1234-1234-1234-123456789012`, replaceKey: false, credentialDigest: '',
+    });
+    assert.equal(update.credentialRef, credentialRef);
+    const saved = await admin.mutation(ref('commitConnection'), { grantId: update.grantId, credentialRef, brokerToken: process.env.VRDEX_EVENT_OUTPUT_BROKER_TOKEN });
+    assert.equal(saved.connection.revision, 2);
+    assert.equal((await f.owner.query(api.eventBroadcastConnections.getSetup, { currentSlug: slug })).connection?.revision, 2);
+  }
+  await admin.mutation(api.events.setEventOwnerMode, { communitySlug: null });
+  await assert.rejects(admin.query(api.eventBroadcastConnections.getSetup, { currentSlug: testEvent.slug }), /permission/);
+  const audit = await f.t.run(({ db }) => db.query('profileAuditEvents').collect());
+  assert.deepEqual(audit.map(row => row.action), ['event_admin_access_started', 'event_admin_access_ended']);
+  assert.ok(audit.every(row => row.actor?.subject === subject && row.profileId === audit[0]?.profileId));
+  assert.equal(Date.parse(audit[0]!.note!.slice('Expires '.length)), audit[0]!.createdAt + 60 * 60_000);
+  await admin.mutation(api.events.setEventOwnerMode, { communitySlug: 'club' });
+  const previous = (await f.t.run(({ db }) => db.get(userId)))!.eventOwnerMode!;
+  test.mock.timers.setTime(Date.now() + 1000);
+  await admin.mutation(api.events.setEventOwnerMode, { communitySlug: 'club' });
+  const renewed = (await f.t.run(({ db }) => db.get(userId)))!.eventOwnerMode!;
+  const jobs = await f.t.run(({ db }) => db.system.query("_scheduled_functions").collect());
+  const expiryJob = jobs.find(job => job.name === "events:expireEventOwnerMode" && job.scheduledTime === renewed.expiresAt);
+  assert.deepEqual(expiryJob?.args, [{ userId, ...renewed }]);
+  test.mock.timers.setTime(previous.expiresAt);
+  await f.t.mutation(internal.events.expireEventOwnerMode, { userId, ...previous });
+  assert.equal((await admin.query(api.events.getEventOwnerMode, {}))?.community?.expiresAt, renewed.expiresAt);
+  test.mock.timers.setTime(renewed.expiresAt);
+  await f.t.mutation(internal.events.expireEventOwnerMode, { userId, ...renewed });
+  assert.equal((await f.t.run(({ db }) => db.get(userId)))?.eventOwnerMode, undefined);
+  assert.deepEqual(await admin.query(api.events.listManagedCommunities, {}), []);
+
 });
 it('commits CAS metadata, retains a blank key and rejects changed server or stale revision', async () => {
   const f = await fixture(); const grant = await f.owner.mutation(ref('prepareConnection'), f.input);

@@ -1,9 +1,11 @@
 import type { PlanReference } from "../../../../../convex/_eventTimelineTypes";
 
 export type TimelinePreferences = { version: 1; plan: PlanReference[]; favoriteProfileIds: string[] };
+export const PLAN_LIMIT = 200;
 export type PreferenceAction =
   | { type: "add-plan"; reference: PlanReference }
   | { type: "remove-plan"; reference: PlanReference }
+  | { type: "remove-plans"; references: readonly PlanReference[] }
   | { type: "add-favorite"; profileId: string }
   | { type: "remove-favorite"; profileId: string };
 export type PreferenceResult = { state: TimelinePreferences; outcome: "changed" | "unchanged" | "limit" };
@@ -24,14 +26,16 @@ export function reducePreferences(state: TimelinePreferences, action: Preference
       const plan = reference.kind === "event"
         ? state.plan.filter((saved) => saved.eventId !== reference.eventId)
         : state.plan;
-      if (plan.length >= 200) return { state, outcome: "limit" };
+      if (plan.length >= PLAN_LIMIT) return { state, outcome: "limit" };
       const stored: PlanReference = reference.kind === "event"
         ? { kind: "event", eventId: reference.eventId }
         : { kind: "set", eventId: reference.eventId, slotId: reference.slotId };
       return { state: { ...state, plan: [...plan, stored] }, outcome: "changed" };
     }
-    case "remove-plan": {
-      const plan = state.plan.filter((saved) => !sameReference(saved, action.reference));
+    case "remove-plan":
+    case "remove-plans": {
+      const references = action.type === "remove-plan" ? [action.reference] : action.references;
+      const plan = state.plan.filter((saved) => !references.some(reference => sameReference(saved, reference)));
       return plan.length === state.plan.length
         ? { state, outcome: "unchanged" }
         : { state: { ...state, plan }, outcome: "changed" };

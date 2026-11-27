@@ -73,3 +73,38 @@ vercel_output_broker            = {}
 This reuses the existing `oidc.vercel.com/basicbit` provider and restricts trust to the `vr-dex-web` production subject and team audience. The role receives only the generated output-secret namespace write policy; the ECS execution role receives the matching read policy. It creates no secrets or runtime environment variables. Use `output_broker_role_arn` and `managed_output_secret_arn_prefix` for the runtime bindings documented in [Broadcast output credentials](../../../docs/engineering/broadcast-output-credentials.md).
 
 Self-hosted deployments can use `output_broker_role_name` instead of `vercel_output_broker` to attach the policy to an existing workload role. Enabling both is rejected. An unset namespace and null role options create no broker trust, policy or OIDC lookup.
+
+## Persistent sandbox broadcasting
+
+Sandbox follows the same setup, connection test, and broadcast controls as
+production. It uses its own dispatcher, worker roles, kill switch, and credential
+namespace. The example keeps the stack idle and caps it at one running worker
+with a 15-minute maximum.
+
+1. Create the dedicated `vr-dex-sandbox` Vercel project under the existing team.
+   Restrict deployment access to the trusted `codex/sandbox` push workflow. Bind
+   the current sandbox Clerk and Convex settings, including the existing
+   `quick-yak-167` deployment. Set `VERCEL_SANDBOX_PROJECT_ID` for that workflow.
+   Review the new deployment before assigning `sandbox.vrdex.net`.
+2. From a separate Terraform working directory, initialize
+   `terraform init -reconfigure -backend-config=sandbox.s3.tfbackend`. Copy
+   `sandbox.tfvars.example` to an ignored local file and generate a saved plan
+   with that file. Check state is `restream-worker-sandbox/terraform.tfstate`
+   and all resource changes are sandbox-scoped before applying.
+3. Copy the reviewed worker image to the sandbox ECR repository and compare
+   digests. Upload the SHA256-addressed dispatcher ZIP to the sandbox artifact
+   bucket. Create an independent worker token in Secrets Manager under
+   `vrdex/sandbox/restream/` and bind it to sandbox Convex. Configure the broker
+   using the Terraform role and namespace outputs and an independent broker
+   token shared only by sandbox Next and Convex. Set the Convex concurrent-worker
+   cap to one. For the first trusted sandbox deploy only, supply the dispatcher
+   and broker tokens as `VRDEX_SANDBOX_EVENT_MEDIA_BRIDGE_TOKEN` and
+   `VRDEX_SANDBOX_EVENT_OUTPUT_BROKER_TOKEN`. Remove the temporary CI secrets
+   after the sandbox deployment reports successful binding.
+4. Plan the sandbox dispatcher with the matching artifact and token references,
+   empty legacy credential map, and intended sandbox networking. Provision it
+   with the timer disabled until runtime credentials are bound. Enable it for
+   the first private test event. From VRDex, save a test destination, run
+   **Test connection**, independently verify decoded playback, and confirm
+   worker cleanup. Keep the production Terraform state and credentials out of
+   this procedure.

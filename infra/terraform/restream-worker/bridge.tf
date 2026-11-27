@@ -5,8 +5,14 @@ variable "enable_event_media_bridge" {
   default     = false
 }
 
+variable "event_media_bridge_schedule_enabled" {
+  description = "Enable minute dispatch after the selected backend and credentials are ready."
+  type        = bool
+  default     = true
+}
+
 variable "event_media_bridge" {
-  description = "Owner-reviewed production configuration. Secret references only. Publish the Lambda ZIP with index.handler under its SHA256 key before enabling."
+  description = "Owner-reviewed hosted configuration. Secret references only. Publish the Lambda ZIP with index.handler under its SHA256 key before enabling."
   type = object({
     convex_url         = string
     image              = string
@@ -26,7 +32,8 @@ locals {
     convex_url      = "", image = "", bundle_key = "", bundle_sha256 = "", token_secret_arn = ""
     credential_refs = {}, subnet_ids = [], security_group_ids = [], assign_public_ip = "ENABLED"
   }
-  bridge_worker_family_arn = "arn:${data.aws_partition.current.partition}:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/vrdex-event-media-worker-*:*"
+  bridge_worker_family     = var.name_prefix == "vrdex-restream-worker" ? "vrdex-event-media-worker" : "${var.name_prefix}-event-media"
+  bridge_worker_family_arn = "arn:${data.aws_partition.current.partition}:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/${local.bridge_worker_family}-*:*"
   bridge_cluster_task_arn  = "arn:${data.aws_partition.current.partition}:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task/${aws_ecs_cluster.worker.name}/*"
   bridge_assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -42,7 +49,7 @@ locals {
     VRDEX_EVENT_MEDIA_ECS_EXECUTION_ROLE_ARN  = aws_iam_role.execution.arn
     VRDEX_EVENT_MEDIA_ECS_TASK_ROLE_ARN       = aws_iam_role.task.arn
     VRDEX_EVENT_MEDIA_ECS_LOG_GROUP           = aws_cloudwatch_log_group.worker.name
-    VRDEX_EVENT_MEDIA_ECS_TASK_FAMILY_PREFIX  = "vrdex-event-media-worker"
+    VRDEX_EVENT_MEDIA_ECS_TASK_FAMILY_PREFIX  = local.bridge_worker_family
     VRDEX_EVENT_MEDIA_ECS_SUBNETS             = join(",", local.bridge.subnet_ids)
     VRDEX_EVENT_MEDIA_ECS_SECURITY_GROUPS     = join(",", local.bridge.security_group_ids)
     VRDEX_EVENT_MEDIA_ECS_ASSIGN_PUBLIC_IP    = local.bridge.assign_public_ip
@@ -51,12 +58,14 @@ locals {
     VRDEX_EVENT_MEDIA_ECS_BASE_ENV_JSON = jsonencode({
       AWS_REGION                               = var.aws_region
       VRDEX_RESTREAM_KILL_SWITCH_SSM_PARAMETER = aws_ssm_parameter.hosted_worker_enabled.name
-      VRDEX_RESTREAM_MAX_SESSION_SECONDS       = "43200"
+      VRDEX_RESTREAM_MAX_SESSION_SECONDS       = var.name_prefix == "vrdex-restream-sandbox" ? tostring(var.max_session_seconds) : "43200"
       VRDEX_RESTREAM_MAX_CONCURRENT_WORKERS    = "1"
     })
     }, local.managed_output_secret_arn_prefix == null ? {} : {
     VRDEX_EVENT_OUTPUT_SECRET_ARN_PREFIX = local.managed_output_secret_arn_prefix
-  })
+    }, var.managed_output_secret_namespace == "vrdex/sandbox/broadcast/" ? {
+    VRDEX_EVENT_OUTPUT_SECRET_NAMESPACE = var.managed_output_secret_namespace
+  } : {})
 }
 
 resource "aws_iam_role" "bridge" {
@@ -172,14 +181,23 @@ resource "aws_lambda_function" "bridge" {
         can(regex("^[a-f0-9]{64}$", local.bridge.bundle_sha256)) &&
         local.bridge.bundle_key == "event-media-bridge/sha256/${local.bridge.bundle_sha256}.zip" &&
         can(regex("^arn:${data.aws_partition.current.partition}:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:[A-Za-z0-9/_+=.@-]+$", local.bridge.token_secret_arn)) &&
-        length(local.bridge.credential_refs) > 0 &&
+        (length(local.bridge.credential_refs) > 0 || (var.name_prefix == "vrdex-restream-sandbox" && local.managed_output_secret_arn_prefix != null)) &&
         alltrue([for ref, arn in local.bridge.credential_refs : trimspace(ref) != "" && can(regex("^arn:${data.aws_partition.current.partition}:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:[A-Za-z0-9/_+=.@-]+$", arn))]) &&
         length(local.bridge.subnet_ids) > 0 && alltrue([for id in local.bridge.subnet_ids : can(regex("^subnet-[a-f0-9]+$", id))]) &&
         length(local.bridge.security_group_ids) > 0 && alltrue([for id in local.bridge.security_group_ids : can(regex("^sg-[a-f0-9]+$", id))]) &&
         contains(["ENABLED", "DISABLED"], local.bridge.assign_public_ip) &&
         var.max_concurrent_workers == 1
       )
-      error_message = "Bridge enablement requires a production Convex URL, existing-repository digest image, SHA256-addressed Lambda ZIP, exact token and credential secret ARNs, networking, and concurrency cap 1."
+      error_message = "Bridge enablement requires a hosted Convex URL, existing-repository digest image, SHA256-addressed Lambda ZIP, exact token and output bindings, networking, and concurrency cap 1."
+    }
+    precondition {
+      condition = var.name_prefix != "vrdex-restream-sandbox" || (
+        local.bridge.convex_url == "https://quick-yak-167.convex.cloud" &&
+        var.managed_output_secret_namespace == "vrdex/sandbox/broadcast/" &&
+        can(regex(":secret:vrdex/sandbox/restream/", local.bridge.token_secret_arn)) &&
+        length(local.bridge.credential_refs) == 0
+      )
+      error_message = "Sandbox dispatch must target the shared sandbox deployment and use the sandbox token and managed output namespace."
     }
   }
 }
@@ -198,7 +216,7 @@ resource "aws_cloudwatch_event_rule" "bridge" {
   name                = "${var.name_prefix}-event-bridge"
   description         = "Reconcile event media workers once per minute."
   schedule_expression = "rate(1 minute)"
-  state               = "ENABLED"
+  state               = var.event_media_bridge_schedule_enabled ? "ENABLED" : "DISABLED"
   tags                = local.tags
 }
 

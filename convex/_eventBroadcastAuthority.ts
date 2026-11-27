@@ -5,13 +5,14 @@ import {
   type AuthSubject,
 } from "./_communityAuthority";
 import { userOwnsProfile } from "./_profileOwnership";
+import { hasEventOwnerMode } from "./_accountFeatures";
 export async function canManageEventMedia(
   db: DatabaseReader,
   event: Doc<"events">,
   subject: AuthSubject,
   userId?: Id<"users"> | null,
 ): Promise<boolean> {
-  if (event.communityProfileId === undefined) {
+  if (event.communityProfileId === undefined || event.draftDiscardedAt !== undefined) {
     return false;
   }
 
@@ -23,7 +24,7 @@ export async function canManageEventMedia(
     return true;
   }
 
-  return subjectHasCommunityCapability(
+  return (await hasEventOwnerMode(db, userId, event.communityProfileId)) || subjectHasCommunityCapability(
     db,
     event.communityProfileId,
     subject,

@@ -12,6 +12,7 @@ const store = createPreferenceStore({
 const actions = {
   addPlan: (reference: PlanReference) => store.dispatch({ type: "add-plan", reference }),
   removePlan: (reference: PlanReference) => store.dispatch({ type: "remove-plan", reference }),
+  removePlans: (references: readonly PlanReference[]) => store.dispatch({ type: "remove-plans", references }),
   addFavorite: (profileId: string) => store.dispatch({ type: "add-favorite", profileId }),
   removeFavorite: (profileId: string) => store.dispatch({ type: "remove-favorite", profileId }),
 };

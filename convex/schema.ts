@@ -801,6 +801,10 @@ export default defineSchema({
   // to deploy first and gives the sequence.
   users: defineTable({
     clerkUserId: v.string(),
+    eventOwnerMode: v.optional(v.object({
+      communityProfileId: v.id("profiles"),
+      expiresAt: v.number(),
+    })),
     name: v.optional(v.string()),
     image: v.optional(v.string()),
     email: v.optional(v.string()),
@@ -1412,6 +1416,7 @@ export default defineSchema({
     submitter: v.optional(authSubject),
     eventStatus,
     publicationState,
+    draftDiscardedAt: v.optional(v.number()),
     publishedAt: v.optional(v.number()),
     createdAt: v.optional(v.number()),
     updatedAt: v.number(),
@@ -1598,6 +1603,7 @@ export default defineSchema({
       v.literal("slots_replaced"),
       v.literal("published"),
       v.literal("unpublished"),
+      v.literal("draft_discarded"),
       v.literal("cancelled"),
       v.literal("restored"),
       v.literal("suppressed"),
@@ -3280,6 +3286,7 @@ export default defineSchema({
     profileId: v.id("profiles"),
     action: v.string(),
     actor: v.optional(authSubject),
+    targetUserId: v.optional(v.id("users")),
     sourceType,
     note: v.optional(v.string()),
     createdAt: v.number(),

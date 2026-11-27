@@ -4,7 +4,9 @@ export const connectionProvider = v.union(v.literal("vrcdn"), v.literal("twitch"
 export const managedConnectionValidator = v.object({ communityProfileId: v.id("profiles"), provider: connectionProvider, serverUrl: v.string(), revision: v.number(), requestId: v.string(), testState: v.union(v.literal("not_tested"), v.literal("passed"), v.literal("failed")) });
 export function managedSecretName(community: string, event: string, request: string) {
   if (![community, event].every(x => /^[a-zA-Z0-9]{1,64}$/.test(x)) || !/^[a-f0-9-]{36}$/.test(request)) throw Error("Invalid connection request.");
-  return `vrdex/broadcast/${community}/${event}/${request}`;
+  const namespace = process.env.VRDEX_EVENT_OUTPUT_SECRET_NAMESPACE ?? "vrdex/broadcast/";
+  if (namespace !== "vrdex/broadcast/" && namespace !== "vrdex/sandbox/broadcast/") throw Error("Connection service unavailable.");
+  return `${namespace}${community}/${event}/${request}`;
 }
 export function managedSecretRefAllowed(ref: string, community: string, event: string, request: string) {
   const prefix = process.env.VRDEX_EVENT_OUTPUT_SECRET_ARN_PREFIX;

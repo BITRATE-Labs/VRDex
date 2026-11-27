@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useConvexAuth, usePaginatedQuery, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { Component, useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "@convex-generated-api";
 
 import { buttonVariants } from "@/components/ui/button";
 import { SectionTitle } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
+import { EventIdentityPicker } from "@/app/events/event-identity-picker";
+import { ViewerLocalEventDateTime } from "@/app/_components/viewer-local-event-times";
+import type { EventIdentityOption } from "@/lib/event-editor-identity";
 import { EventInventoryControls, EventInventoryList, type EventInventoryCriteria, type EventInventoryView } from "./event-inventory-list";
 import { HeldImportsSection } from "./held-imports-section";
 
@@ -76,10 +79,59 @@ function InventoryTraversal({ timeZone, normalizedQuery, view, onRetry }: { time
   return <InventoryPager onRetry={onRetry} criteria={{ view, query: normalizedQuery, timeZone, asOf }} />;
 }
 
+function EventOwnerMode() {
+  const mode = useQuery(api.events.getEventOwnerMode, {});
+  const setMode = useMutation(api.events.setEventOwnerMode);
+  const [community, setCommunity] = useState<EventIdentityOption | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState(false);
+  if (!mode) return null;
+  const change = async (communitySlug: string | null) => {
+    setSaving(true);
+    setFailed(false);
+    try {
+      await setMode({ communitySlug });
+      setCommunity(null);
+    } catch {
+      setFailed(true);
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {mode.community ? (
+        <>
+          <span>Admin access · {mode.community.name}</span>
+          <span className="text-sm text-muted">Expires <ViewerLocalEventDateTime timestamp={mode.community.expiresAt} /></span>
+          <button className={buttonVariants({ variant: "secondary" })} disabled={saving} type="button"
+            onClick={() => void change(null)}>End admin access</button>
+        </>
+      ) : (
+        <form className="flex min-w-0 flex-wrap items-end gap-2" onSubmit={(event) => {
+          event.preventDefault();
+          if (community) void change(community.slug);
+        }}>
+          <div className="w-full min-w-0 sm:w-64">
+            <EventIdentityPicker kind="community" selectedSlug={community?.slug}
+              selectedOption={community} disabled={saving}
+              onSelect={setCommunity} onClear={() => setCommunity(null)} />
+          </div>
+          <button className={buttonVariants({ variant: "secondary" })} disabled={saving || !community} type="submit">
+            Manage as admin
+          </button>
+        </form>
+      )}
+      {failed ? <span role="alert">Could not change admin access</span> : null}
+    </div>
+  );
+}
+
 function InventoryShortcuts() {
   const communities = useQuery(api.events.listManagedCommunities, {});
   const reportsAllowed = useQuery(api.eventCorrections.getEventReportAccess, {});
   return <div className="flex flex-wrap gap-2">
+    <EventOwnerMode />
     {reportsAllowed ? <Link className={buttonVariants({ variant: "secondary" })} href="/account/events/reports">Event reports</Link> : null}
     {communities?.map(community => <Link aria-label={`Add event for ${community.displayName}`} className={buttonVariants({ variant: "secondary" })} href={`/${community.slug}/events/create`} key={community.profileId}>{`Manage ${community.displayName} event`}</Link>)}
   </div>;

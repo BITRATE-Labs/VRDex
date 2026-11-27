@@ -16,7 +16,8 @@ import {
   type TimelineNavigation,
 } from "@/lib/timeline/navigation";
 import { localDayBands } from "@/lib/timeline/geometry";
-import { togglePlanAction } from "@/lib/timeline/plan-actions";
+import { isPastSaved, nextSavedStart, togglePlanAction } from "@/lib/timeline/plan-actions";
+import { PLAN_LIMIT } from "@/lib/timeline/preferences";
 import { HOUR, inRange, recentEventTime, timelineQueryRange } from "@/lib/timeline/window-cache";
 import { useTimelinePreferences } from "./use-timeline-preferences";
 import { useTimelineData } from "./use-timeline-data";
@@ -157,7 +158,7 @@ function ScheduleContent({
     const next = { ...navigation, timeZone, ...changes };
     if (changes.timeZone) setDisplayTimeZone(changes.timeZone);
     const valid = normalizeTimelineAnchor(next.anchor);
-    next.anchor = valid ?? Date.now() - HOUR;
+    next.anchor = valid ?? now - HOUR;
     setNavigation(next);
     if (push) writeUrl(next, true);
     else {
@@ -218,6 +219,9 @@ function ScheduleContent({
     if (!action) return;
     browse.onPreferenceAction(action);
   };
+  const pastSelections = preference.preferences.plan.length >= PLAN_LIMIT
+    ? data.saved.filter(item => isPastSaved(item, now)).map(item => item.reference)
+    : [];
   const actions: TimelineActions = {
     selection,
     plan: preference.preferences.plan,
@@ -232,15 +236,7 @@ function ScheduleContent({
     },
   };
   const nextSaved = () => {
-    const instants = data.saved
-      .flatMap((item) => {
-        if (item.kind !== "available" || item.status === "cancelled") return [];
-        const schedule = item.slot?.schedule ?? item.event.schedule;
-        return schedule.kind === "date_only" ? [] : [schedule.startAt];
-      })
-      .sort((a, b) => a - b);
-    const next =
-      instants.find((instant) => instant > range.endAt) ?? instants[0];
+    const next = nextSavedStart(data.saved, range.endAt, now);
     if (next !== undefined) navigate({ anchor: next });
   };
   const visible = data.records.filter((event) => inRange(event, range));
@@ -316,6 +312,11 @@ function ScheduleContent({
             <Button size="sm" onClick={() => navigate({ anchor: nextEvent })}>Next event</Button>
           )}
           {preference.persistence === "session" && <span>Not saved</span>}
+          {pastSelections.length > 0 && (
+            <Button size="sm" onClick={() => browse.onPreferenceAction({ type: "remove-plans", references: pastSelections })}>
+              Clear past selections
+            </Button>
+          )}
           {data.savedState === "loading" && <span>Loading events</span>}
           {data.savedState === "error" && (
             <>

@@ -121,6 +121,81 @@ describe("fork-aware preview workflows", () => {
     assert.equal(outputs.head_sha, undefined, "Do not report a successful acceptance request over skipped private coverage");
   });
 
+  it("deploys only the trusted shared sandbox push without a PR", async () => {
+    assert.deepEqual((deployDocument.on as { push: unknown }).push, { branches: ["codex/sandbox"] });
+    const resolve = deploySteps.find(step => step.name === "Resolve pull request");
+    const execute = new Function("core", "github", "context", "process", `return (async () => { ${resolve?.with?.script} })()`);
+    for (const [ref, repositoryId, senderId, sha, accepted] of [
+      ["refs/heads/codex/sandbox", 1176245711, 2165323, "a".repeat(40), true],
+      ["refs/heads/main", 1176245711, 2165323, "a".repeat(40), false],
+      ["refs/heads/codex/sandbox", 123, 2165323, "a".repeat(40), false],
+      ["refs/heads/codex/sandbox", 1176245711, 123, "a".repeat(40), false],
+      ["refs/heads/codex/sandbox", 1176245711, 2165323, "invalid", false],
+    ] as const) {
+      let failure = "";
+      const outputs: Record<string, unknown> = {};
+      await execute(
+        { setFailed(message: string) { failure = message; }, setOutput(name: string, value: unknown) { outputs[name] = value; } },
+        {},
+        { eventName: "push", ref, sha, payload: { repository: { id: repositoryId }, sender: { id: senderId } } },
+        { env: {} },
+      );
+      assert.equal(!failure, accepted);
+      assert.equal(outputs.head_sha, accepted ? sha : undefined);
+      if (accepted) {
+        assert.equal(outputs.sandbox, "true");
+        assert.equal(outputs.preview_name, "sandbox-shared");
+        assert.equal(outputs.pr_number, "");
+      }
+    }
+    assert.ok(String(deploy.jobs["hosted-mcp-preview-smoke"].if).includes("outputs.sandbox != 'true'"));
+    for (const step of deploySteps) {
+      for (const [name, value] of Object.entries(step.env ?? {})) {
+        if (/^HOSTED_E2E_|^VRDEX_E2E_BROWSER_TOKEN$/.test(name)) {
+          assert.ok(String(value).includes("steps.pr.outputs.sandbox != 'true'"), name);
+        }
+      }
+    }
+  });
+
+  it("gives sandbox its own OAuth keys without enabling auth helpers", () => {
+    const generate = deploySteps.find(step => step.name === "Generate sandbox OAuth runtime");
+    assert.equal(generate?.if, "github.event_name == 'push' && steps.pr.outputs.sandbox == 'true'");
+    assert.ok(generate?.run?.includes("generate-preview-developer-runtime-secrets.mjs --reuse-sandbox"));
+    const backend = deploySteps.find(step => step.name === "Deploy Convex preview functions");
+    const shared = backend?.run?.split("else")[0] ?? "";
+    assert.ok(shared.includes('--url "$VRDEX_PREVIEW_BACKEND_URL" --admin-key "$VRDEX_PREVIEW_DEPLOYMENT_KEY"'));
+    assert.ok(!shared.includes("--preview-create"));
+    const deployScript = deploySteps.find(step => step.name === "Deploy Vercel preview output")?.run ?? "";
+    const sandboxKeys = deployScript.slice(deployScript.indexOf('for setting in'), deployScript.indexOf('deployment_url='));
+    for (const name of ["VRDEX_API_TOKEN_PEPPER", "VRDEX_OAUTH_ACCESS_TOKEN_SIGNING_KEY", "VRDEX_OAUTH_CLIENT_SECRET_PEPPER", "VRDEX_OAUTH_REFRESH_TOKEN_PEPPER"]) {
+      assert.ok(sandboxKeys.includes(name));
+    }
+    assert.ok(sandboxKeys.includes('::add-mask::$value'));
+    assert.ok(!sandboxKeys.includes("E2E"));
+    assert.ok(deployScript.includes('--env "VRDEX_ENABLE_E2E_AUTH_HELPERS=false"'));
+  });
+
+  it("archives the prebuilt preview before uploading it to Vercel", () => {
+    const upload = deploySteps.find(step => step.name === "Deploy Vercel preview output");
+    assert.match(upload?.run ?? "", /deploy_args=\(deploy --prebuilt --archive=tgz --target=preview /);
+    assert.match(upload?.run ?? "", /vercel@[^\s]+ "\$\{deploy_args\[@\]\}"/);
+  });
+
+  it("fails closed on the dedicated project and confines its credentials to the intended steps", () => {
+    const check = deploySteps.find(step => step.name === "Check Vercel deployment secrets")?.run ?? "";
+    assert.match(check, /shared sandbox push requires VERCEL_SANDBOX_PROJECT_ID/);
+    assert.ok(check.includes('.type == "sensitive" and .target == ["preview"]'));
+    const resolve = deploySteps.find(step => step.id === "sandbox-backend");
+    assert.equal(resolve?.if, "github.event_name == 'push' && steps.pr.outputs.sandbox == 'true'");
+    assert.ok(String(resolve?.env?.EXPECTED_CONVEX_PREVIEW_URL).includes("vars.VRDEX_SANDBOX_CONVEX_URL"));
+    const consumers = deploySteps.filter(step => Object.values(step.env ?? {}).some(value =>
+      String(value).includes("steps.sandbox-backend.outputs.deployment_key")));
+    assert.deepEqual(consumers.map(step => step.id), ["convex-preview"]);
+    assert.ok(deploySteps.find(step => step.name === "Build Vercel preview output")?.run?.includes("CONVEX_ADMIN_TOKEN=/d"));
+    assert.ok(!deploySteps.find(step => step.id === "deploy")?.run?.includes("CONVEX_ADMIN_TOKEN="));
+  });
+
   it("withholds hosted e2e secrets from fork heads", () => {
     const hosted = [
       "VRDEX_HOSTED_E2E_BROWSER_TOKEN",
@@ -187,7 +262,7 @@ describe("fork-aware preview workflows", () => {
 
 describe("optional browser and visual evidence contract", () => {
   const workflow = parseYaml(readFileSync(".github/workflows/baseline-checks.yml", "utf8"));
-  it("selects all browser consumers and Storybook build without changing normal trigger or deploy controls", () => {
+  it("selects browser consumers individually without changing normal triggers or deploy controls", () => {
     assert.deepEqual(workflow.on.pull_request.types, ["opened", "synchronize", "reopened", "ready_for_review"]);
     assert.equal(workflow.on.workflow_dispatch, undefined);
     assert.equal(workflow.jobs["visual-selection"].outputs.browsers, "${{ steps.selection.outputs.browsers }}");
@@ -196,6 +271,7 @@ describe("optional browser and visual evidence contract", () => {
       const job = workflow.jobs[name];
       assert.ok(job.needs.includes("visual-selection"), name);
       assert.ok(job.if.includes("needs.visual-selection.outputs.browsers == 'true'"), name);
+      assert.ok(job.if.includes(`contains(fromJSON(needs.visual-selection.outputs.jobs || '[]'), '${name}')`), name);
       assert.ok(job.if.includes("github.event_name == 'pull_request'"), name);
       assert.equal(job["continue-on-error"], undefined);
     }
@@ -204,14 +280,14 @@ describe("optional browser and visual evidence contract", () => {
     }
     for (const name of ["playwright-image-diff", "storybook-image-diff"]) {
       const job = workflow.jobs[name];
-      assert.equal(job.if, "github.event_name == 'pull_request' && needs.visual-selection.outputs.visuals == 'true'");
+      assert.equal(job.if, `github.event_name == 'pull_request' && needs.visual-selection.outputs.visuals == 'true' && contains(fromJSON(needs.visual-selection.outputs.jobs || '[]'), '${name}')`);
       assert.equal(job["continue-on-error"], undefined);
     }
     for (const name of ["lint-web", "verify-docs", "verify-api-mcp", "typecheck-web", "typecheck-backend", "verify-backend-local", "restream-local-checks", "build-web", "build-storybook"]) {
       assert.ok(workflow.jobs["pr-verification-report"].needs.includes(name), name);
       if (name !== "build-storybook") {
         assert.equal(workflow.jobs[name].if, undefined, name);
-        assert.ok(!(workflow.jobs[name].needs ?? []).includes("visual-selection"), name);
+        assert.equal((workflow.jobs[name].needs ?? []).includes("visual-selection"), ["verify-api-mcp", "restream-local-checks"].includes(name), name);
       }
     }
     assert.equal(workflow.jobs["deploy-convex-production"].if, "github.event_name == 'push' && github.ref == 'refs/heads/main'");
@@ -224,14 +300,22 @@ describe("optional browser and visual evidence contract", () => {
     assert.equal(candidate.with.capture_screenshots, "${{ needs.visual-selection.outputs.visuals == 'true' }}");
     const preview = parseYaml(readFileSync(".github/workflows/vercel-preview-deploy.yml", "utf8"));
     assert.notEqual(candidate.secrets, "inherit");
-    assert.deepEqual(Object.keys(candidate.secrets).sort(), Object.keys(preview.on.workflow_call.secrets).sort());
+    const sandboxOnlySecrets = new Set([
+      "VERCEL_SANDBOX_PROJECT_ID",
+      "VRDEX_SANDBOX_EVENT_MEDIA_BRIDGE_TOKEN",
+      "VRDEX_SANDBOX_EVENT_OUTPUT_BROKER_TOKEN",
+    ]);
+    assert.deepEqual(
+      Object.keys(candidate.secrets).sort(),
+      Object.keys(preview.on.workflow_call.secrets).filter((name) => !sandboxOnlySecrets.has(name)).sort(),
+    );
     assert.ok(preview.concurrency.group.includes("inputs.browser_acceptance"));
     const resolve = preview.jobs["deploy-preview"].steps.find((step: { id?: string }) => step.id === "pr");
     assert.ok(preview.concurrency.group.includes("github.event_name"));
     assert.ok(resolve.with.script.includes('context.eventName === "pull_request" ? "ci" : "manual-accept"'));
     assert.ok(resolve.with.script.includes("${purpose}-pr-${pull.number}`"));
-    assert.ok(preview.concurrency.group.includes("inputs.sandbox && 'vrdex-sandbox-alias'"));
-    assert.equal(preview.concurrency["cancel-in-progress"], "${{ !inputs.browser_acceptance && !inputs.sandbox }}");
+    assert.ok(preview.concurrency.group.includes("(inputs.sandbox || github.ref == 'refs/heads/codex/sandbox') && 'vrdex-sandbox-alias'"));
+    assert.equal(preview.concurrency["cancel-in-progress"], "${{ !inputs.browser_acceptance && !inputs.sandbox && github.ref != 'refs/heads/codex/sandbox' }}");
     for (const job of [preview.jobs["deploy-preview"], preview.jobs["candidate-browser-acceptance"]]) {
       assert.deepEqual(job.permissions, { contents: "read", "pull-requests": "read" });
     }
@@ -266,10 +350,10 @@ describe("optional browser and visual evidence contract", () => {
     const media = steps.findIndex((step: { name?: string }) => step.name === "Run isolated composed media acceptance");
     const audioCleanup = steps.findIndex((step: { name?: string }) => step.name === "Stop job-owned browser audio backend");
     assert.ok(audioPrepare >= 0 && audioPrepare < media && audioCleanup > media);
-    assert.equal(steps[audioCleanup].if, "always()");
+    assert.equal(steps[audioCleanup].if, "always() && needs.visual-selection.outputs.media == 'true'");
     const claim = steps.find((step: { id?: string }) => step.id === "claim-auth");
     assert.ok(claim, "The current-branch signed-in claim regression must have a CI execution target");
-    assert.equal(claim.if, "github.event.pull_request.head.repo.fork == false");
+    assert.equal(claim.if, "needs.visual-selection.outputs.claimAuth == 'true' && github.event.pull_request.head.repo.fork == false");
     assert.equal(claim.env.PLAYWRIGHT_BASE_URL, undefined, "Do not route the new contract to stale hosted staging");
     assert.equal(claim.env.VRDEX_ENABLE_E2E_CLERK_AUTH, "true");
     assert.equal(claim.env.VRDEX_ENABLE_E2E_AUTH_HELPERS, "true");
@@ -302,6 +386,31 @@ describe("optional browser and visual evidence contract", () => {
       assert.ok(steps[contracts].run.includes(file));
     }
   });
+  it("keeps every web-source script contract in the cheap baseline subset", async () => {
+    const scripts = JSON.parse(readFileSync("package.json", "utf8")).scripts;
+    const subset = scripts["test:scripts:web"];
+    const files = (await readdir("tests/scripts", { recursive: true })).map(file => file.replaceAll("\\", "/")).filter(file => /\.test\.(?:ts|mjs)$/.test(file));
+    for (const file of files) {
+      if ((await readFile(`tests/scripts/${file}`, "utf8")).includes("apps/web")) assert.ok(subset.includes(`tests/scripts/${file}`), file);
+    }
+    const steps = workflow.jobs["verify-api-mcp"].steps;
+    const cheap = steps.find((step: { name?: string }) => step.name === "Verify web source contracts");
+    const full = steps.find((step: { name?: string }) => step.name === "Verify affected script contracts");
+    assert.equal(cheap.if, "needs.visual-selection.outputs.scripts != 'true'");
+    assert.equal(cheap.run, "pnpm test:scripts:web");
+    assert.equal(full.if, "needs.visual-selection.outputs.scripts == 'true'");
+    assert.equal(full.run, "pnpm test:scripts");
+    assert.equal(workflow.env.CONVEX_LOCAL_BACKEND_VERSION, workflow.jobs["verify-backend-local"].env.CONVEX_LOCAL_BACKEND_VERSION);
+  });
+
+  it("broadcast rehearsal uses the shared job selection and pins the compatible backend", () => {
+    const job = workflow.jobs["broadcast-native-acceptance"];
+    assert.equal(job.env.CONVEX_LOCAL_BACKEND_VERSION, workflow.jobs["verify-backend-local"].env.CONVEX_LOCAL_BACKEND_VERSION);
+    assert.match(job.if, /contains\(fromJSON\(needs.visual-selection.outputs.jobs/);
+    assert.doesNotMatch(JSON.stringify(job.steps), /--broadcast|steps\.changes/);
+    assert.equal(job.steps.find((step: { name?: string }) => step.name === "Upload candidate broadcast evidence").if, "always()");
+  });
+
   it("either selector removal uses trusted inline code and cannot launch the app pipeline", () => {
     const optOut = parseYaml(readFileSync(".github/workflows/visual-evidence-opt-out.yml", "utf8"));
     assert.deepEqual(optOut.on.pull_request_target.types, ["unlabeled"]);

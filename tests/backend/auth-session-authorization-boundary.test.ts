@@ -181,6 +181,7 @@ describe("browser auth-session authorization boundary", () => {
       ["apps/web/src/app/api/media-relay/trial/route.ts", "api.mediaRelayPlayback.getNativeTrialConfiguration"],
       ["apps/web/src/app/[slug]/events/[eventSlug]/operate/setup/page.tsx", "api.events.getEventMediaControlStatus"],
       ["apps/web/src/app/api/event-broadcast/connections/route.ts", "eventBroadcastConnections:prepareConnection"],
+      ["apps/web/src/app/api/account/concierge-ownership/route.ts", "api.conciergeOwnership.prepareAssignment"],
       ["apps/web/src/app/[slug]/events/[eventSlug]/operate/page.tsx", "api.events.getEventMediaControlStatus"],
       ["apps/web/src/app/[slug]/events/[eventSlug]/operate/status/route.ts", "api.events.getEventMediaControlStatus"],
       ["apps/web/src/app/api/account/media-contributions/submissions/[submissionId]/file/route.ts", "api.profileMediaSubmissions.publisherDetail"],
@@ -270,6 +271,18 @@ describe("browser auth-session authorization boundary", () => {
         assert.match(route,/client\.setAuth\(token\)/);
         assert.ok(route.indexOf("if (!token)")<route.indexOf("await provisionConnection("));
         assert.ok(route.indexOf('request.headers.get("origin")')<route.indexOf("await provisionConnection("));
+      }
+      if (guardedCall === "api.conciergeOwnership.prepareAssignment") {
+        const route = source(file);
+        const prepare = route.indexOf("await fetchQuery(api.conciergeOwnership.prepareAssignment");
+        const lookup = route.indexOf("users.getUser(target.recipientClerkId)");
+        const assign = route.indexOf("mutation(internal.conciergeOwnership.assignProfile");
+        assert.match(route, /fetchQuery\(api\.conciergeOwnership\.prepareAssignment,.*\{ token \}/);
+        assert.ok(route.indexOf("if (!token)") < prepare);
+        assert.ok(route.indexOf('request.headers.get("origin")') < prepare);
+        assert.ok(prepare < lookup && lookup < assign);
+        assert.ok(route.indexOf('primaryEmail.verification?.status !== "verified"') < assign);
+        assert.match(source("convex/conciergeOwnership.ts"), /assignProfile = internalMutation/);
       }
       if (guardedCall === "api.events.getEventMediaControlStatus") {
         const page = source(file);

@@ -67,13 +67,14 @@ export function HomeBrowseProvider({ children }: { children: ReactNode }) {
     beforeTimeZoneChange.current.add(flush);
     return () => { beforeTimeZoneChange.current.delete(flush); };
   }, []);
-  const { addPlan, removePlan, addFavorite, removeFavorite } = preference;
+  const { addPlan, removePlan, removePlans, addFavorite, removeFavorite } = preference;
   const onPreferenceAction = useCallback((action: PreferenceAction) => {
     const result = action.type === "add-plan" ? addPlan(action.reference)
       : action.type === "remove-plan" ? removePlan(action.reference)
-        : action.type === "add-favorite" ? addFavorite(action.profileId) : removeFavorite(action.profileId);
+        : action.type === "remove-plans" ? removePlans(action.references)
+          : action.type === "add-favorite" ? addFavorite(action.profileId) : removeFavorite(action.profileId);
     setLimit(result.outcome === "limit");
-  }, [addPlan, removePlan, addFavorite, removeFavorite]);
+  }, [addPlan, removePlan, removePlans, addFavorite, removeFavorite]);
   const value = useMemo<HomeBrowse>(() => ({ ...runtime, selection, selectEvent, closeEvent, onPreferenceAction, setDisplayTimeZone, registerBeforeTimeZoneChange }), [runtime, selection, selectEvent, closeEvent, onPreferenceAction, setDisplayTimeZone, registerBeforeTimeZoneChange]);
   return <HomeBrowseContext.Provider value={value}>
     {children}

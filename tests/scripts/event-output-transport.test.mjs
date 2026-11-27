@@ -24,6 +24,11 @@ it('dispatcher retains exact static mappings and restricts managed references to
   assert.equal(resolveOutputSecretArn('legacy', config), 'old-arn'); assert.equal(resolveOutputSecretArn(ref, config), ref);
   assert.throws(() => resolveOutputSecretArn(ref.replace('123456789012:secret:', '999999999999:secret:'), config), /authorized mapping/);
   assert.throws(() => resolveOutputSecretArn(prefix + 'unrelated-secret', config), /authorized mapping/);
+  const sandboxRef = ref.replace('vrdex/broadcast/', 'vrdex/sandbox/broadcast/');
+  const sandbox = { ...config, managedOutputSecretNamespace: 'vrdex/sandbox/broadcast/' };
+  assert.equal(resolveOutputSecretArn(sandboxRef, sandbox), sandboxRef);
+  assert.throws(() => resolveOutputSecretArn(ref, sandbox), /authorized mapping/);
+  assert.throws(() => resolveOutputSecretArn(sandboxRef, config), /authorized mapping/);
 });
 
 it('custom RTMPS connects to the pinned IP with original TLS identity and RTMP application URL',async()=>{

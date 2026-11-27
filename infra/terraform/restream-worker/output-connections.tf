@@ -3,8 +3,12 @@ variable "managed_output_secret_namespace" {
   type        = string
   default     = null
   validation {
-    condition     = var.managed_output_secret_namespace == null || var.managed_output_secret_namespace == "vrdex/broadcast/"
-    error_message = "The supported managed output namespace is vrdex/broadcast/."
+    condition     = var.managed_output_secret_namespace == null ? true : contains(["vrdex/broadcast/", "vrdex/sandbox/broadcast/"], var.managed_output_secret_namespace)
+    error_message = "Use the exact production or sandbox managed output namespace."
+  }
+  validation {
+    condition     = var.managed_output_secret_namespace == null || (var.managed_output_secret_namespace == "vrdex/sandbox/broadcast/") == (var.name_prefix == "vrdex-restream-sandbox")
+    error_message = "The sandbox secret namespace belongs only to the vrdex-restream-sandbox stack."
   }
 }
 variable "output_broker_role_name" {
@@ -51,16 +55,25 @@ output "managed_output_secret_arn_prefix" {
   value       = local.managed_output_secret_arn_prefix
 }
 variable "vercel_output_broker" {
-  description = "Opt in to a dedicated broker role for the named Vercel project's production environment. Reuses the existing team OIDC provider; null creates no role or trust."
+  description = "Opt in to a dedicated broker role for the exact Vercel project and environment. Reuses the existing team OIDC provider; null creates no role or trust."
   type = object({
     team_slug    = optional(string, "basicbit")
     project_name = optional(string, "vr-dex-web")
     role_name    = optional(string, "vrdex-vercel-broadcast-output")
+    environment  = optional(string, "production")
   })
   default = null
   validation {
     condition     = var.vercel_output_broker == null || (var.managed_output_secret_namespace != null && var.output_broker_role_name == null)
     error_message = "A managed Vercel broker needs managed_output_secret_namespace and cannot also use output_broker_role_name."
+  }
+  validation {
+    condition = var.vercel_output_broker == null ? true : (
+      var.managed_output_secret_namespace == "vrdex/sandbox/broadcast/" ?
+      var.vercel_output_broker.environment == "preview" && var.vercel_output_broker.project_name == "vr-dex-sandbox" && var.vercel_output_broker.role_name != "vrdex-vercel-broadcast-output" :
+      var.vercel_output_broker.environment == "production" && var.vercel_output_broker.project_name != "vr-dex-sandbox"
+    )
+    error_message = "Sandbox output access requires the dedicated vr-dex-sandbox preview project and its own role. Production output access requires a production subject."
   }
   validation {
     condition = var.vercel_output_broker == null ? true : (
@@ -93,7 +106,7 @@ resource "aws_iam_role" "output_broker" {
       Principal = { Federated = data.aws_iam_openid_connect_provider.output_broker[0].arn }
       Condition = { StringEquals = {
         "${local.output_broker_issuer_path}:aud" = "https://vercel.com/${var.vercel_output_broker.team_slug}"
-        "${local.output_broker_issuer_path}:sub" = "owner:${var.vercel_output_broker.team_slug}:project:${var.vercel_output_broker.project_name}:environment:production"
+        "${local.output_broker_issuer_path}:sub" = "owner:${var.vercel_output_broker.team_slug}:project:${var.vercel_output_broker.project_name}:environment:${var.vercel_output_broker.environment}"
       } }
     }]
   })
@@ -101,6 +114,6 @@ resource "aws_iam_role" "output_broker" {
 }
 
 output "output_broker_role_arn" {
-  description = "Dedicated Vercel production broker role for VRDEX_EVENT_OUTPUT_BROKER_ROLE_ARN. Null when role creation is disabled."
+  description = "Dedicated Vercel broker role for VRDEX_EVENT_OUTPUT_BROKER_ROLE_ARN. Null when role creation is disabled."
   value       = try(aws_iam_role.output_broker[0].arn, null)
 }

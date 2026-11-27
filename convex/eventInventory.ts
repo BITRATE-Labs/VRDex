@@ -1,13 +1,14 @@
 import { paginationOptsValidator, type PaginationResult } from "convex/server";
-import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { ConvexError, v } from "convex/values";
+import { mutation, query } from "./_generated/server";
+import { resolvePersonalSubmission } from "./_eventIntake";
 import type { Id } from "./_generated/dataModel";
 import { requireActiveBrowserSessionSubject } from "./_browserSessionAuthority";
-import { managedCommunitiesForBrowser, canUpdateEvent } from "./events";
+import { managedCommunitiesForBrowser, canUpdateEvent, eventOutputConfigurationLocked, recordEventAuditEvent } from "./events";
 import { dateOnlyEventsEnabled } from "./_eventSchedule";
 import { EventIntakePatchSchema } from "../packages/api-contracts/src/event-intake";
 import { canReadProfile } from "./_profilePermissions";
-import { canonicalInventoryRow, intakeInventoryRow, inventoryCriteria, inventoryPagination, matchesInventory, type InventoryRow, type InventorySource } from "./_eventInventory";
+import { canDiscardManagedDraft, canonicalInventoryRow, intakeInventoryRow, inventoryCriteria, inventoryPagination, matchesInventory, type InventoryRow, type InventorySource } from "./_eventInventory";
 import { HELD_IMPORT_LIMIT, heldImportRows, type HeldImportRow } from "./_eventIntakeHeld";
 
 export const listPage = query({
@@ -47,6 +48,7 @@ export const listPage = query({
     const page: InventoryRow[] = [];
     const managementByCommunity = new Map<Id<"profiles">, Promise<boolean>>();
     for (const event of candidates.page) {
+      if (event.draftDiscardedAt !== undefined) continue;
       const communityId = event.communityProfileId;
       let managed = false;
       if (communityId && communities.some(entry => entry.profile._id === communityId)) {
@@ -60,6 +62,50 @@ export const listPage = query({
       if (matchesInventory(row, criteria)) page.push(row);
     }
     return wrap({ ...candidates, page });
+  },
+});
+
+export const discardDraft = mutation({
+  args: { draft: v.union(
+    v.object({ kind: v.literal("intake_draft"), id: v.id("eventIntakeDrafts"), version: v.number() }),
+    v.object({ kind: v.literal("managed_event"), id: v.id("events"), version: v.number() }),
+  ) },
+  handler: async (ctx, { draft }) => {
+    const { userId, subject } = await requireActiveBrowserSessionSubject(ctx);
+    const now = Date.now();
+    if (draft.kind === "intake_draft") {
+      const row = await ctx.db.get(draft.id);
+      if (!row || row.actorUserId !== userId || row.connectorId || row.publishedReceiptId ||
+          row.resolvedAt !== undefined || row.expiresAt <= now || row.version !== draft.version) {
+        throw new ConvexError({ code: "DRAFT_UNAVAILABLE", message: "Draft is unavailable or has changed." });
+      }
+      if (row.personalSubmissionId) {
+        const submission = await ctx.db.get(row.personalSubmissionId);
+        if (!submission || submission.actorUserId !== userId || submission.draftId !== row._id ||
+            submission.preparationStatus === "resolved") throw new ConvexError({ code: "DRAFT_UNAVAILABLE", message: "Draft is unavailable." });
+        await resolvePersonalSubmission(ctx, row._id, submission._id);
+      } else {
+        await ctx.db.patch(row._id, { resolvedAt: now, expiresAt: now });
+      }
+      return;
+    }
+    const event = await ctx.db.get(draft.id);
+    if (!event || !canDiscardManagedDraft(event) || draft.version !== event.updatedAt ||
+        !await canUpdateEvent(ctx.db, event, subject, userId)) throw new ConvexError({ code: "DRAFT_UNAVAILABLE", message: "Draft is unavailable or has changed." });
+    const programs = ctx.db.query("eventMediaPrograms").withIndex("by_eventId", q => q.eq("eventId", event._id));
+    for await (const program of programs) {
+      if (await eventOutputConfigurationLocked(ctx.db, program)) {
+        throw new ConvexError({ code: "BROADCAST_ACTIVE", message: "Stop the active broadcast first." });
+      }
+    }
+    const savedConnection = await ctx.db.query("eventMediaOutputs")
+      .withIndex("by_eventId_type", q => q.eq("eventId", event._id))
+      .filter(q => q.neq(q.field("managedConnection"), undefined)).first();
+    if (savedConnection) {
+      throw new ConvexError({ code: "BROADCAST_CONNECTED", message: "This draft has a saved broadcast connection." });
+    }
+    await ctx.db.patch(event._id, { draftDiscardedAt: now, updatedAt: now });
+    await recordEventAuditEvent(ctx.db, { eventId: event._id, actor: subject, actorSurface: "browser", action: "draft_discarded", now });
   },
 });
 

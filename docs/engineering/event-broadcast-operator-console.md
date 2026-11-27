@@ -5,6 +5,16 @@ selects the program's `activeSessionId`; a newer terminal session never replaces
 that session. An unresolved replacement subscription does not fall back to old
 permissions or source rows. Read-only operations staff retain diagnostics access.
 
+## Community event administration
+
+An account with a verified browser session and an active super-admin grant can open
+My events, search for a public
+community by name and select **Manage as admin**. This enables event setup, editing,
+hosting and media controls for that community for up to one hour. Select
+**End admin access** on the same page to exit. The server checks the grant, community and expiry at
+the time of access and when queued media commands are authorized. The operator
+keeps their own audit identity and the community retains its recorded owner. Entering, switching, and ending admin access records the operator and community in the profile audit log. My events displays the expiry and refreshes automatically when access ends.
+
 ## Control and observation
 
 The locked workspace adds person lookup and a pasted-link Quick switch, optional local previews, copyable destination URLs and a connection wizard. A single primary destination is plain text. The wizard supports VRCDN, Twitch and Custom ingest, derives VRCDN PC/Quest URLs, and permits skipping its bounded test. Saved but untested connections remain labeled Not tested. [Credential setup and self-hosting configuration](broadcast-output-credentials.md) must be ready before enabling the new setup route.
