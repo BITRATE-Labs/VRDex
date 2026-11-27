@@ -173,3 +173,60 @@ test("sparse world renders real identity without fabricating a destination", asy
   await expect(main.getByRole("link", { name: /VRChat/i })).toHaveCount(0);
   await expect(main.getByRole("link", { name: "Reference link", exact: true })).toHaveCount(0);
 });
+
+test("world event shortcut follows launch and puts keyboard focus on the populated section", async ({ page }) => {
+  const main = page.getByRole("main");
+  const shortcut = main.getByRole("link", { name: "Events", exact: true });
+  const eventHeading = main.getByRole("heading", { name: "Events at this world", exact: true });
+  const openWorld = main.getByRole("link", { name: "Open VRChat world", exact: true });
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/playwright-neon-harbor");
+  await expect(shortcut).toBeHidden();
+  await expect(eventHeading).toBeInViewport({ ratio: 1 });
+
+  for (const width of [320, 768]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto("/playwright-neon-harbor");
+    await expect(shortcut).toBeInViewport({ ratio: 1 });
+    await expect(shortcut).toHaveAttribute("href", "#world-events");
+    await openWorld.focus();
+    await page.keyboard.press("Tab");
+    await expect(shortcut).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/#world-events$/);
+    await expect(eventHeading).toBeFocused();
+    await expect(eventHeading).toBeInViewport({ ratio: 1 });
+
+    const [heading, header] = await Promise.all([eventHeading.boundingBox(), page.locator("header").boundingBox()]);
+    if (!heading || !header) throw new Error("Missing focused heading or sticky header bounds");
+    expect(heading.y).toBeGreaterThan(header.y + header.height);
+    await page.keyboard.press("Tab");
+    await expect(main.getByRole("link", { name: "Afterglow event listing", exact: true })).toBeFocused();
+  }
+
+  await page.goto("/playwright-neon-harbor-reference-only");
+  await expect(openWorld).toHaveCount(0);
+  await expect(shortcut).toBeInViewport({ ratio: 1 });
+  await expect(main.getByRole("link", { name: "Discovery", exact: true })).toHaveCount(0);
+});
+
+test("sparse world offers Discovery where the mobile header has no direct link", async ({ page }) => {
+  const inPageDiscovery = page.getByRole("main").getByRole("link", { name: "Discovery", exact: true });
+  const headerDiscovery = page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Discovery", exact: true });
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/playwright-lantern-cove");
+  await expect(inPageDiscovery).toBeHidden();
+  await expect(headerDiscovery).toBeVisible();
+
+  await page.setViewportSize({ width: 320, height: 800 });
+  await expect(headerDiscovery).toBeHidden();
+  await expect(page.getByRole("main").getByRole("link", { name: "Events", exact: true })).toHaveCount(0);
+  await expect(inPageDiscovery).toHaveAttribute("href", "/discovery");
+  await expect(inPageDiscovery).toBeInViewport({ ratio: 1 });
+  await inPageDiscovery.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/discovery$/);
+  await expect(page.getByRole("heading", { name: "Discover VR", exact: true })).toBeVisible();
+});
