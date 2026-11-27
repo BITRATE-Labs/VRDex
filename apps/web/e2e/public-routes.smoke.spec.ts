@@ -168,6 +168,9 @@ test("mobile discovery jumps to the directory without hiding the heading", async
   await page.keyboard.press("Tab");
   await expect(firstProfile).toBeFocused();
 
+  await page.setViewportSize({ width: 1279, height: 900 });
+  await expect(shortcuts).toBeVisible();
+
   await page.setViewportSize({ width: 1280, height: 900 });
   await expect(shortcuts).toBeHidden();
 });

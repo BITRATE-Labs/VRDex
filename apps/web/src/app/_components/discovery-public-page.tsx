@@ -586,7 +586,7 @@ export function DiscoveryLandingPage({
         </section>
 
         {showDirectoryShortcuts ? (
-          <nav aria-label="Discovery categories" className="-mt-3 -mb-2 flex flex-wrap gap-x-1 sm:hidden">
+          <nav aria-label="Discovery categories" className="-mt-3 -mb-2 flex flex-wrap gap-x-1 xl:hidden">
             {populatedDirectory.map(({ headingId, title }) => (
               <a
                 className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "min-h-11 underline decoration-border-strong underline-offset-4 hover:decoration-current")}
