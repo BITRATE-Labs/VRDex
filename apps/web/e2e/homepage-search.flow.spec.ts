@@ -403,6 +403,7 @@ test("sparse public results omit empty disclosure controls @flow @fixture", asyn
   await expect(profile.getByText("Unclaimed", { exact: true })).toBeVisible();
   const claim = row.getByRole("link", { name: "Claim this profile", exact: true });
   await expect(claim).toHaveAttribute("href", "/claim/playwright-sparse-import?source=search");
+  await expect(row.getByRole("link")).toHaveCount(2);
   await expect(row.getByText("Links", { exact: true })).toHaveCount(0);
   await expect(row.locator("summary")).toHaveCount(0);
   await expect(row.getByText("No public links", { exact: true })).toHaveCount(0);
@@ -430,6 +431,8 @@ test("sparse public results omit empty disclosure controls @flow @fixture", asyn
   await profile.focus();
   await page.keyboard.press("Tab");
   await expect(claim).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(profile).toBeFocused();
 });
 
 test("long public names and link destinations fit narrow results @flow @fixture", async ({ page, isMobile, createSearchProfiles }, info) => {
