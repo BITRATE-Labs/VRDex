@@ -60,6 +60,35 @@ function HomeScheduleContent({
 }: { onSelectionChange?: (selection: TimelineSelection | null) => void } = {}) {
   const browse = useHomeBrowse();
   const [runtime, setRuntime] = useState<Runtime | null>(null);
+  const releaseReturnScroll = useRef<(() => void) | null>(null);
+  useLayoutEffect(() => {
+    const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    if (navigation?.type !== "back_forward" || !window.history.state?.vrdexHomeClubPosition) return;
+
+    const root = document.documentElement;
+    const previous = root.style.overflowAnchor;
+    const interaction = new AbortController();
+    let frame = 0;
+    // The loading chart can shrink underneath the browser's restored page position.
+    root.style.overflowAnchor = "none";
+    function release() {
+      if (interaction.signal.aborted) return;
+      interaction.abort();
+      cancelAnimationFrame(frame);
+      root.style.overflowAnchor = previous;
+      releaseReturnScroll.current = null;
+    }
+    for (const event of ["wheel", "touchstart", "pointerdown", "keydown"]) {
+      window.addEventListener(event, release, { capture: true, passive: true, signal: interaction.signal });
+    }
+    releaseReturnScroll.current = () => {
+      if (frame) return;
+      // Keep anchoring off through the first paint of the settled lanes.
+      frame = requestAnimationFrame(() => { frame = requestAnimationFrame(release); });
+    };
+    return release;
+  }, []);
+  const onScheduleSettled = useCallback(() => releaseReturnScroll.current?.(), []);
   useEffect(() => {
     if (browse.kind !== "ready") return;
     const frame = requestAnimationFrame(() => {
@@ -84,6 +113,7 @@ function HomeScheduleContent({
         <ScheduleContent
           runtime={runtime}
           onSelectionChange={onSelectionChange}
+          onScheduleSettled={onScheduleSettled}
         />
       ) : (
         <section
@@ -112,9 +142,11 @@ function HomeScheduleContent({
 function ScheduleContent({
   runtime,
   onSelectionChange,
+  onScheduleSettled,
 }: {
   runtime: Runtime;
   onSelectionChange?: (selection: TimelineSelection | null) => void;
+  onScheduleSettled: () => void;
 }) {
   const [navigation, setNavigation] = useState<TimelineNavigation>({
     ...runtime.navigation,
@@ -150,6 +182,11 @@ function ScheduleContent({
     favoriteProfileIds: preference.preferences.favoriteProfileIds,
     plan: preference.preferences.plan,
   });
+  useEffect(() => {
+    if (data.isCurrentViewport && data.kind !== "loading" && data.savedState !== "loading") {
+      onScheduleSettled();
+    }
+  }, [data.isCurrentViewport, data.kind, data.savedState, onScheduleSettled]);
   const cancelReplace = useCallback(() => {
     if (pending.current !== null) {
       clearTimeout(pending.current.timer);
