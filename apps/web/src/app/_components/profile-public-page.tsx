@@ -641,7 +641,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
   ) : null;
   const Shell = embedded ? Fragment : PageShell;
   return (
-    <Shell>
+    <Shell {...(isRichPublicPerson && visitorDestinations.links.available ? { className: "max-sm:pt-6" } : {})}>
       <PageContainer className={cn(
         useCompactCommunity && "max-w-2xl lg:gap-4",
         isRichPublicCommunity && "max-sm:gap-3",
@@ -726,7 +726,10 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                 {visitorLinks.length > 0 ? (
                   <nav
                     aria-label="Profile sections"
-                    className={cn("flex flex-wrap gap-x-1", aboutCopy && "lg:col-span-2 lg:row-start-2")}
+                    className={cn(
+                      "flex flex-wrap gap-x-1 max-sm:rounded-control max-sm:ring-1 max-sm:ring-white/20 max-sm:ring-inset",
+                      aboutCopy && "lg:col-span-2 lg:row-start-2",
+                    )}
                   >
                     {visitorLinks.map(({ id, label }) => (
                       <a
