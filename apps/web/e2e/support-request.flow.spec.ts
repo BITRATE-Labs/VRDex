@@ -3,6 +3,8 @@ import { expect, test } from '@playwright/test';
 test('general support needs no profile and optional context stays removable @flow @fixture',async({page})=>{
  await page.goto('/support',{waitUntil:'networkidle'});
  await expect(page.getByLabel('Profile type',{exact:true})).toHaveCount(0);
+ await expect(page.getByLabel('Request type',{exact:true})).toHaveAttribute('required','');
+ await expect(page.getByLabel('Message',{exact:true})).toHaveAccessibleDescription('Tell us what happened. Paste links to anything that backs it up.');
  await page.getByLabel('Request type').selectOption('feedback');
  await page.getByLabel('Message',{exact:true}).fill('The site search is not working.');
  await expect.poll(()=>page.locator('form').evaluate(form=>(form as HTMLFormElement).checkValidity())).toBe(true);

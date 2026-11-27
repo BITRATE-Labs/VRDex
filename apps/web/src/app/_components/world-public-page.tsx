@@ -289,27 +289,39 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
   });
   const hasLinks = referenceUrl || outboundLinks.length > 0;
   const hasDetails = description || upcoming.length > 0 || recent.length > 0 || hasTags || hasCredits || hasLinks;
+  const isVisibilityOnly = !heroImageUrl && !hasDetails && !canonicalWorldUrl
+    && !world.vrchatWorldId && !world.summary?.trim()
+    && world.platformCompatibility.length === 0 && world.media.length === 0;
   const heroMetaClassName = heroImageUrl ? "text-white/76" : "text-muted";
 
   return (
-    <PageShell tone="world">
+    <PageShell tone="world" className={isVisibilityOnly ? "flex items-center" : undefined}>
       <PageContainer max={!heroImageUrl && !hasDetails ? "3xl" : undefined}>
         <section className={cn(
           "overflow-hidden rounded-hero border border-border",
           heroImageUrl ? "bg-media text-white shadow-hero" : "bg-surface-strong text-foreground shadow-sm",
         )}>
-          <div className={cn("p-6 sm:p-8", heroImageUrl && "grid items-center gap-6 lg:grid-cols-[1.1fr_1fr] lg:p-10")}>
+          <div className={cn("p-6 sm:p-8", isVisibilityOnly && "sm:p-10", heroImageUrl && "grid items-center gap-6 lg:grid-cols-[1.1fr_1fr] lg:p-10")}>
             <div className="min-w-0">
               <h1 className={cn(
                 "font-semibold leading-none tracking-[-0.05em] [overflow-wrap:anywhere]",
                 heroImageUrl ? "text-5xl sm:text-7xl" : "text-4xl sm:text-5xl",
               )}>{world.displayName}</h1>
-              {world.summary ? <p className={cn("mt-4 max-w-2xl text-base leading-7 sm:text-lg", heroImageUrl ? "text-white/82" : "text-muted")}>{world.summary}</p> : null}
-              <dl className="mt-5 flex flex-wrap items-start gap-x-6 gap-y-3 text-sm">
+              {!isVisibilityOnly && world.summary ? <p className={cn("mt-4 max-w-2xl text-base leading-7 sm:text-lg", heroImageUrl ? "text-white/82" : "text-muted")}>{world.summary}</p> : null}
+              <dl className={cn(
+                "mt-5 flex flex-wrap items-start gap-x-6 gap-y-3 text-sm",
+                isVisibilityOnly && "grid grid-cols-2 border-t border-border-strong pt-4 sm:mt-7 sm:pt-5",
+              )}>
                 <div>
-                  <dt className={heroMetaClassName}>Visibility</dt>
+                  <dt className={heroMetaClassName}>{isVisibilityOnly ? "World visibility" : "Visibility"}</dt>
                   <dd className="mt-1 font-medium">{visibilityLabel(world.visibilityStatus)}</dd>
                 </div>
+                {isVisibilityOnly ? (
+                  <div>
+                    <dt className={heroMetaClassName}>VRChat link</dt>
+                    <dd className="mt-1 font-medium">Not listed</dd>
+                  </div>
+                ) : null}
                 {world.platformCompatibility.length > 0 ? (
                   <div>
                     <dt className={heroMetaClassName}>Platform hints</dt>

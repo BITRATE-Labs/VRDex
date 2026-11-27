@@ -65,6 +65,7 @@ test("world retains a reference destination when it differs or stands alone", as
   await page.goto("/playwright-neon-harbor-reference-only");
   await expect(openWorld).toHaveCount(0);
   await expect(reference).toHaveAttribute("href", neonHarborReferenceUrl);
+  await expect(main.getByText("Not listed", { exact: true })).toHaveCount(0);
 });
 
 test("sparse world renders real identity without fabricating a destination", async ({ page }) => {
@@ -72,12 +73,19 @@ test("sparse world renders real identity without fabricating a destination", asy
   expect(response?.status()).toBe(200);
   const main = page.getByRole("main");
   await expect(main.getByRole("heading", { name: "Lantern Cove", exact: true })).toBeVisible();
-  await expect(main.getByText("Visibility", { exact: true })).toBeVisible();
+  await expect(main.getByText("World visibility", { exact: true })).toBeVisible();
+  await expect(main.getByText("VRChat link", { exact: true })).toBeVisible();
+  await expect(main.getByText("Not listed", { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 720 });
+  const record = main.locator("section");
+  await expect(record).toBeInViewport({ ratio: 1 });
+  const [shell, card] = await Promise.all([main.boundingBox(), record.boundingBox()]);
+  expect(shell && card && Math.abs(shell.y + shell.height / 2 - card.y - card.height / 2)).toBeLessThanOrEqual(2);
   await expect(main.getByText("Public", { exact: true })).toBeVisible();
   await expect(main.getByRole("img", { name: "Lantern Cove", exact: true })).toHaveCount(0);
   await expect(main.getByRole("heading", { name: "About this world", exact: true })).toHaveCount(0);
   await expect(main.getByRole("heading", { name: "Events at this world", exact: true })).toHaveCount(0);
   await expect(main.getByText(/No public|No confirmed/)).toHaveCount(0);
-  await expect(main.getByRole("link", { name: "Open VRChat world", exact: true })).toHaveCount(0);
+  await expect(main.getByRole("link", { name: /VRChat/i })).toHaveCount(0);
   await expect(main.getByRole("link", { name: "Reference link", exact: true })).toHaveCount(0);
 });

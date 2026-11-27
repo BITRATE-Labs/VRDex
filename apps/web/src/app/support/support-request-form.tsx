@@ -1,12 +1,12 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState, useTransition } from "react";
+import { FormEvent, useEffect, useId, useRef, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation } from "convex/react";
 import { api } from "@convex-generated-api";
 import { SupportProfileField } from "./support-profile-field";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { Field, FieldText, Input, Select, Textarea } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
 import { BACKEND_ERROR_COPY } from "@/lib/error-copy";
 
@@ -175,6 +175,7 @@ export function SupportRequestForm() {
 }
 
 function ConnectedSupportRequestForm() {
+  const messageId = useId();
   const searchParams = useSearchParams();
   const requestedTopic = searchParams.get("topic") ?? "";
   const submitSupportRequest = useMutation(api.supportRequests.submitSupportRequest);
@@ -311,13 +312,14 @@ function ConnectedSupportRequestForm() {
   return (
     <form className="grid gap-5" onSubmit={onSubmit} ref={formRef}>
       <Field>
-        Request type
+        <span><span id={`${messageId}-topic`}>Request type</span><FieldText aria-hidden="true" className="ml-2 font-normal">Required</FieldText></span>
         <Select
           // Locked while a request is in flight. Changing it mid-submit started
           // a fresh request, which made the generation guard drop the result of
           // the one already accepted: no success, no error, and a re-enabled
           // button, so the obvious next move was to send it again.
           disabled={status.kind === "submitting"}
+          aria-labelledby={`${messageId}-topic`}
           name="topic"
           onChange={(event) => startFreshRequest(event.currentTarget.value as Topic | "")}
           required
@@ -340,30 +342,41 @@ function ConnectedSupportRequestForm() {
       </details> : null}
 
       <Field>
-        Message
+        <span>
+          <span id={messageId}>Message</span>
+          <FieldText aria-hidden="true" className="ml-2 font-normal">Required</FieldText>
+          <FieldText id={`${messageId}-hint`} className="block font-normal">
+            Tell us what happened. Paste links to anything that backs it up.
+          </FieldText>
+        </span>
         <Textarea
-          className="min-h-40"
+          aria-describedby={`${messageId}-hint`}
+          aria-labelledby={messageId}
+          className="min-h-32"
           maxLength={selectedTopic?.noteLimit ?? 4_000}
           minLength={10}
           name="message"
-          placeholder="Tell us what happened. Paste links to anything that backs it up."
           required
         />
       </Field>
 
       <Field>
-        {contactRequired ? "Contact for follow-up" : "Contact for follow-up, if you want a reply"}
+        <span>
+          <span id={`${messageId}-contact`}>{contactRequired ? "Contact for follow-up" : "Contact for follow-up, if you want a reply"}</span>
+          {contactRequired ? <FieldText aria-hidden="true" className="ml-2 font-normal">Required</FieldText> : null}
+        </span>
         <Input
+          className="placeholder:text-muted"
           maxLength={CONTACT_MAX_LENGTH}
           name="requesterContact"
+          aria-labelledby={`${messageId}-contact`}
           placeholder="Email or Discord handle"
           required={contactRequired}
         />
       </Field>
 
-
       <Button
-        className="w-fit"
+        className="w-fit disabled:bg-surface-raised disabled:!text-muted disabled:opacity-100 disabled:hover:bg-surface-raised"
         disabled={status.kind === "submitting" || topic === ""}
         size="lg"
         type="submit"
