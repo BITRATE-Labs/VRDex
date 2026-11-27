@@ -128,7 +128,13 @@ test.describe("continuous schedule @flow @fixture", () => {
     const dateBounds = (await date.boundingBox())!;
     const laterBounds = (await later.boundingBox())!;
     const favoriteBounds = (await favorites.boundingBox())!;
-    expect(dateBounds.y).toBeLessThan(laterBounds.y);
+    expect(Math.abs(dateBounds.y - laterBounds.y)).toBeLessThanOrEqual(2);
+    expect(dateBounds.x + dateBounds.width).toBeLessThan((await earlier.boundingBox())!.x);
+    for (const control of [date, earlier, now, later, favorites, clear]) {
+      const bounds = (await control.boundingBox())!;
+      expect(bounds.width).toBeGreaterThanOrEqual(44);
+      expect(bounds.height).toBeGreaterThanOrEqual(44);
+    }
     expect(laterBounds.y).toBeLessThan(favoriteBounds.y);
 
     await heading.focus();

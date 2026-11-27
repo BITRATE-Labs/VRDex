@@ -54,8 +54,8 @@
 }
 
 .home > [aria-labelledby="discover-heading"] {
-  margin-top: 0;
-  padding-top: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
 }
 .home > [aria-labelledby="discover-heading"] > header {
   margin-bottom: 2px;
