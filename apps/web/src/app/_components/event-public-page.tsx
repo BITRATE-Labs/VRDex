@@ -20,6 +20,7 @@ import { publicEventPath } from "@/lib/event-path";
 import { avatarFrameStyle, type AvatarAppearance } from "@/lib/avatar-appearance";
 import { EventWatchForEvent } from "./event-live-watch";
 import { EventPublicHero } from "./event-public-hero";
+import { useEventLineupReturn } from "./event-lineup-return";
 import styles from "./event-public-page.module.css";
 import { parseVrcdnStreamLinks } from "../../../../../convex/_vrcdnLinks";
 import { ViewerLocalEventDateTime, ViewerLocalEventTimeRange } from "./viewer-local-event-times";
@@ -404,6 +405,7 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
   const lineupMetadataId = useId();
   const canHost = useQuery(api.events.getHostAccess, event.communitySlug ? { slug: event.slug, communitySlug: event.communitySlug } : "skip");
   const lineup = eventLineupForDisplay(event);
+  const { listRef, posterRef, rememberLineupRow } = useEventLineupReturn(event.slug, event.posterImageUrl);
   const bannerStyle = safeImageBackground(event.bannerImageUrl, eventPosterOverlay);
   const watchBannerArt = safeImageBackground(event.bannerImageUrl, watchArtScrim);
   const watchPosterArt = safeImageBackground(event.posterImageUrl, watchArtScrim);
@@ -520,7 +522,7 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
               <div className={cn(styles.poster, "lg:sticky lg:top-6")}>
                 <a href={event.posterImageUrl} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-card border border-border bg-surface">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={event.posterImageUrl} alt={event.title + " poster"} className="h-auto w-full object-contain" />
+                  <img ref={posterRef} src={event.posterImageUrl} alt={event.title + " poster"} className="h-auto w-full object-contain" />
                 </a>
               </div>
             ) : null}
@@ -550,7 +552,7 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
                   Watch
                 </a>
               </div>
-              <ol className="mt-5 divide-y divide-border">
+              <ol ref={listRef} className="mt-5 divide-y divide-border">
                 {lineup.map((row, index) => {
                   const roleLabel = row.roleLabel?.trim().toLowerCase() === "participant" ? undefined : row.roleLabel;
                   const hasMetadata = Boolean(roleLabel) || row.startAt !== undefined;
@@ -576,13 +578,14 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
                   const rowClassName = "flex min-w-0 items-center gap-4";
 
                   return (
-                    <li className="min-w-0 py-4 first:pt-0 last:pb-0" key={row.key}>
+                    <li className="min-w-0 py-4 first:pt-0 last:pb-0" data-lineup-row={row.key} key={row.key}>
                       {row.performer ? (
                         <Link
                           aria-label={row.displayLabel}
                           aria-describedby={metadataId}
                           className={cn(rowClassName, "group rounded-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent max-sm:min-h-11 sm:w-fit")}
                           href={`/${row.performer.slug}`}
+                          onNavigate={() => rememberLineupRow(row.key)}
                         >
                           {content}
                           <ChevronRight aria-hidden="true" className="ml-auto size-4 shrink-0 text-muted group-hover:text-accent-strong sm:hidden" />

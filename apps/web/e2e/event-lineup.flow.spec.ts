@@ -26,6 +26,85 @@ for (const timeZone of ["UTC", "America/Los_Angeles"]) test.describe(`standalone
   });
 });
 
+
+for (const userTakesOver of [false, true]) {
+  test(`Lineup Back ${userTakesOver ? "respects a new scroll" : "keeps the selected row"} when a cold poster loads @flow @fixture`, async ({ page }) => {
+    const startAt = Date.UTC(2026, 10, 28, 2);
+    const posterPath = "/held-lineup-poster.svg";
+    const performerPath = "/playwright-dj-aurora";
+    await page.setViewportSize({ width: 390, height: 750 });
+    await page.addInitScript(({ startAt, posterPath }) => {
+      // Exercise the app fallback even in engines with native scroll anchoring.
+      document.addEventListener("DOMContentLoaded", () => { document.documentElement.style.overflowAnchor = "none"; });
+      localStorage.setItem("event-lineup-fixture-public", JSON.stringify({
+        id: "held-poster-event", slug: "held-poster-event", title: "Afterglow Harbor Sessions",
+        source: { sourceType: "manual", label: "Organizer" },
+        posterImageUrl: posterPath, watchSurfaceEnabled: false, startAt,
+        slots: [], participants: [], worlds: [], mediaLinks: [], authoredMediaLinks: [],
+        lineup: Array.from({ length: 14 }, (_, i) => ({
+          key: `row-${i}`, position: i, displayLabel: i === 6 ? "DJ Aurora" : `Set ${i + 1}`,
+          startAt: startAt + i * 1_800_000, roleLabel: "DJ set",
+          ...(i === 6 ? { performer: { slug: "playwright-dj-aurora", displayName: "DJ Aurora", outboundLinks: [] } } : {}),
+        })),
+      }));
+    }, { startAt, posterPath });
+
+    let releasePoster!: () => void;
+    const heldPoster = new Promise<void>((resolve) => { releasePoster = resolve; });
+    await page.route(`**${posterPath}`, async (route) => {
+      await heldPoster;
+      await route.fulfill({
+        contentType: "image/svg+xml",
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="500"><rect width="400" height="500" fill="#174358"/></svg>',
+      });
+    });
+
+    try {
+      await page.goto("/playwright/event-lineup", { waitUntil: "domcontentloaded" });
+      const performer = page.getByRole("link", { name: "DJ Aurora", exact: true });
+      const row = performer.locator("xpath=ancestor::li");
+      const poster = page.getByAltText("Afterglow Harbor Sessions poster");
+      await performer.evaluate((link) => link.scrollIntoView({ block: "center", behavior: "instant" }));
+      const rowTop = await row.evaluate((element) => element.getBoundingClientRect().top);
+      const moved = () => row.evaluate((element, top) => Math.abs(element.getBoundingClientRect().top - top), rowTop);
+      expect(await poster.evaluate((image) => image.getBoundingClientRect().height)).toBe(0);
+
+      await performer.click();
+      await expect(page).toHaveURL(performerPath);
+      await page.goBack({ waitUntil: "domcontentloaded" });
+      await expect.poll(moved).toBeLessThan(3);
+
+      if (userTakesOver) {
+        await page.keyboard.press("ArrowDown");
+        await page.evaluate(() => window.scrollBy({ top: 80, behavior: "instant" }));
+      }
+      const scrollY = await page.evaluate(() => window.scrollY);
+      releasePoster();
+      await expect.poll(() => poster.evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+      const ratio = await poster.evaluate((image) => {
+        const box = image.getBoundingClientRect();
+        return box.height / box.width;
+      });
+      expect(ratio).toBeCloseTo(1.25);
+
+      if (userTakesOver) {
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve)))));
+        expect(await page.evaluate(() => window.scrollY)).toBeGreaterThanOrEqual(scrollY);
+        expect(await moved()).toBeGreaterThan(100);
+      } else {
+        await expect.poll(moved).toBeLessThan(3);
+        await expect(performer).toBeInViewport({ ratio: 1 });
+        await page.goForward({ waitUntil: "domcontentloaded" });
+        await expect(page).toHaveURL(performerPath);
+        await page.goBack({ waitUntil: "domcontentloaded" });
+        await expect.poll(moved).toBeLessThan(3);
+      }
+    } finally {
+      releasePoster();
+    }
+  });
+}
+
 for (const mode of ["create", "edit"]) test(`staff ${mode} keeps mounted values through steps and saves a draft`, async ({ page }, testInfo) => {
   await page.goto(`/playwright/event-lineup?editor&mode=${mode}`);
   const navigation = page.getByRole("navigation", { name: "Event editor" });
