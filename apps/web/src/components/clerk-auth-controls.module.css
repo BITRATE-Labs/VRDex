@@ -20,3 +20,34 @@
     outline: 1px solid ButtonText;
   }
 }
+
+.journeyRoot,
+.journeyCardBox {
+  width: 100%;
+  max-width: 100%;
+}
+
+.journeyCardBox,
+.journeyCard {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.journeyCard {
+  padding: 1.25rem;
+}
+
+.journeyHeader {
+  align-items: flex-start;
+  text-align: start;
+}
+
+.journeyTarget {
+  min-height: 44px;
+}
+
+@media (min-width: 640px) {
+  .journeyCard {
+    padding-inline: 1.75rem;
+  }
+}

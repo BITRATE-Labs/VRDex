@@ -18,6 +18,12 @@ test("approved wordmark is exact and visible on Home and both search shells @flo
     await page.goto(route);
     const wordmark = page.getByRole("navigation").first().getByRole("img", { name: "VRDex", exact: true });
     await expect(wordmark).toBeVisible();
+    const quickSearch = page.getByRole("banner").getByRole("button", { name: "Search", exact: true });
+    if (route === "/search?q=BASICBIT") {
+      await expect(quickSearch).toBeHidden();
+    } else {
+      await expect(quickSearch).toBeVisible();
+    }
     const dark = await page.locator("html").getAttribute("data-theme") === "dark";
     await expect(wordmark).toHaveAttribute("src", dark ? "/brand/vrdex-wordmark.svg" : "/brand/vrdex-wordmark-light.svg");
     const box = await wordmark.boundingBox();
@@ -40,6 +46,7 @@ test("approved wordmark is exact and visible on Home and both search shells @flo
   const discoveryBrand = page.getByRole("navigation").first().getByRole("link", { name: "VRDex", exact: true });
   await expect(discoveryBrand).toHaveAttribute("href", "/");
   await expect(discoveryBrand.getByRole("img", { name: "VRDex", exact: true })).toBeVisible();
+  await expect(page.getByRole("banner").getByRole("button", { name: "Search", exact: true })).toBeVisible();
 });
 
 test("new Home submissions and old root bookmarks retain distinct destinations @flow @fixture", async ({ page }) => {
@@ -131,12 +138,18 @@ for (const theme of ["light", "dark"] as const) {
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
     const edit = main.getByRole("link", { name: "Edit search", exact: true });
     await expect(edit).toHaveAttribute("href", "#standard-search-query");
+    const hint = main.getByText("Try a community name, DJ alias, world name, event title, genre, or scene term.", { exact: true });
+    const editBounds = (await edit.boundingBox())!;
+    expect(Math.min(editBounds.width, editBounds.height)).toBeGreaterThanOrEqual(44);
+    expect(editBounds.y + editBounds.height).toBeLessThan((await hint.boundingBox())!.y);
     await waitForPublicSearchHydration(page);
     const originalUrl = page.url();
     await edit.focus();
     await page.keyboard.press("Enter");
     await expect(input).toBeFocused();
     await expect(input).toHaveValue(query);
+    const selection = await input.evaluate((element: HTMLInputElement) => [element.selectionStart, element.selectionEnd]);
+    expect(selection).toEqual([0, query.length]);
     await expect(page).toHaveURL(originalUrl);
   });
 }
@@ -252,7 +265,9 @@ test("sparse public results omit empty disclosure controls @flow @fixture", asyn
   await page.addInitScript(() => localStorage.setItem("vrdex-theme", "dark"));
   await page.goto("/search?q=Sparse%20Import");
   const row = publicResultRow(page, "/playwright-sparse-import");
-  await expect(row.getByRole("link", { name: /Sparse Import/ })).toBeVisible();
+  const profile = row.getByRole("link", { name: /Sparse Import/ });
+  await expect(profile).toBeVisible();
+  await expect(profile.getByText("Unclaimed", { exact: true })).toBeVisible();
   const claim = row.getByRole("link", { name: "Claim this profile", exact: true });
   await expect(claim).toHaveAttribute("href", "/claim/playwright-sparse-import?source=search");
   await expect(row.getByText("Links", { exact: true })).toHaveCount(0);
@@ -265,6 +280,8 @@ test("sparse public results omit empty disclosure controls @flow @fixture", asyn
   const formBounds = (await form.boundingBox())!;
   expect(resultsBounds.x).toBe(formBounds.x);
   expect(resultsBounds.width).toBe(formBounds.width);
+  expect(resultsBounds.x * 2 + resultsBounds.width).toBeCloseTo(await page.evaluate(() => document.documentElement.clientWidth), 0);
+  expect((await profile.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   expect((await claim.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   expect((await claim.locator("..").boundingBox())!.width).toBeLessThan((await row.boundingBox())!.width);
   expect((await claim.boundingBox())!.x).toBe((await row.getByText("Sparse Import", { exact: true }).boundingBox())!.x);
@@ -272,6 +289,9 @@ test("sparse public results omit empty disclosure controls @flow @fixture", asyn
     expect((await row.boundingBox())!.y).toBeLessThan(410);
   }
   await page.screenshot({ path: info.outputPath("public-results-sparse.png"), fullPage: true });
+  await profile.focus();
+  await page.keyboard.press("Tab");
+  await expect(claim).toBeFocused();
 });
 
 test("long public names and link destinations fit narrow results @flow @fixture", async ({ page, isMobile, createSearchProfiles }, info) => {

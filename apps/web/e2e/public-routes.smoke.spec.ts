@@ -112,6 +112,7 @@ test("legacy root query and lookup URL keep the DJ lookup destination", async ({
     await expect(page).toHaveURL(/\/search\?q=BASICBIT&view=dj$/);
     await expect(page.getByLabel("DJ name")).toHaveValue("BASICBIT");
     await expect(page.getByRole("navigation", { name: "Search view" })).toHaveCount(0);
+    await expect(page.getByRole("banner").getByRole("button", { name: "Search", exact: true })).toBeVisible();
   }
 });
 

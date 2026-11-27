@@ -5,6 +5,7 @@ import {
   AuthUnavailableNotice,
 } from "@/components/auth-page-shell";
 import styles from "@/components/clerk-auth-controls.module.css";
+import { cn } from "@/lib/cn";
 import { validateSignInReturnTo } from "@/lib/safe-return-to";
 
 function contributionLabel(returnTo: string) {
@@ -36,6 +37,7 @@ export default async function SignInPage({
     <AuthPageShell
       compact={Boolean(journeyLabel)}
       headingId="sign-in-heading"
+      integrated={Boolean(journeyHeading)}
       subtitle={journeyHeading ? undefined : (journeyLabel ?? "Manage your VRDex profile and events.")}
       title={journeyHeading ?? "Sign in"}
     >
@@ -43,8 +45,23 @@ export default async function SignInPage({
         <SignIn
           appearance={journeyHeading ? {
             elements: {
-              formFieldInput: styles.input,
-              socialButtonsBlockButton: styles.socialButton,
+              rootBox: styles.journeyRoot,
+              cardBox: styles.journeyCardBox,
+              card: styles.journeyCard,
+              header: styles.journeyHeader,
+              formFieldInput: cn(styles.input, styles.journeyTarget),
+              socialButtonsBlockButton: cn(styles.socialButton, styles.journeyTarget),
+              formButtonPrimary: styles.journeyTarget,
+            },
+            variables: {
+              borderRadius: "var(--radius-control)",
+              colorBackground: "var(--surface-strong)",
+              colorForeground: "var(--foreground)",
+              colorInput: "var(--background)",
+              colorInputForeground: "var(--foreground)",
+              colorMutedForeground: "var(--muted)",
+              colorPrimary: "var(--accent)",
+              colorPrimaryForeground: "var(--inverse)",
             },
           } : undefined}
           fallbackRedirectUrl={returnTo}

@@ -17,6 +17,7 @@ import { EntityImage } from "@/components/ui/entity-image";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { cn } from "@/lib/cn";
 import { captureProductEvent } from "@/lib/posthog";
+import styles from "./site-header.module.css";
 
 const convexEnabled = Boolean(process.env.NEXT_PUBLIC_CONVEX_URL);
 
@@ -33,9 +34,8 @@ const NAV_CONTROL_HEIGHT = "h-10 py-0";
  * The nav's search: an icon that slides an input out to its left, rather than a
  * link to `/search`.
  *
- * The input is mounted only while open, and not just to keep the closed nav
- * quiet — a permanently rendered box would be a second `combobox` named
- * "Search" on every page, including `/search`, where the real one already is.
+ * The input is mounted only while open. The dedicated Search form also hides
+ * this utility so the page has one place to enter a query.
  *
  * There is no `<form>` and no submit: Enter on a highlighted suggestion goes to
  * that entity, and Enter on nothing does nothing. Sending a half-typed query to
@@ -78,7 +78,7 @@ function NavSearch() {
     // No `relative` here: the listbox spans `NavUtilities` instead, so it starts
     // under the input and ends under the account control. Anchored to this box
     // it overhung the left edge of a phone screen.
-    <div className="flex min-w-0 items-center">
+    <div className={cn("flex min-w-0 items-center", styles.quickSearch)}>
       {isOpen ? (
         <input
           aria-activedescendant={activeIndex >= 0 ? `${listboxId}-${activeIndex}` : undefined}

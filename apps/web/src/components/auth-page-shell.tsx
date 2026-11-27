@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Notice } from "@/components/ui/notice";
 import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { AUTH_UNAVAILABLE_COPY } from "@/lib/auth-copy";
+import { cn } from "@/lib/cn";
 
 /**
  * Shared chrome for the sign-in and sign-up routes. Both mount a Clerk component
@@ -14,6 +15,7 @@ export function AuthPageShell({
   children,
   compact,
   headingId,
+  integrated,
   subtitle,
   title,
   visuallyHiddenTitle,
@@ -21,6 +23,7 @@ export function AuthPageShell({
   children: ReactNode;
   compact?: boolean;
   headingId: string;
+  integrated?: boolean;
   subtitle?: string;
   title: string;
   visuallyHiddenTitle?: boolean;
@@ -34,9 +37,22 @@ export function AuthPageShell({
             ? "flex flex-1 items-start justify-center py-4 sm:items-center sm:py-14"
             : "flex flex-1 items-center justify-center py-10 sm:py-14"}
         >
-          <section aria-labelledby={headingId} className="w-full max-w-md">
-            <header className="text-center">
-              <h1 id={headingId} className={visuallyHiddenTitle ? "sr-only" : "text-3xl font-semibold sm:text-4xl"}>
+          <section
+            aria-labelledby={headingId}
+            className={cn(
+              "w-full max-w-md",
+              integrated && "max-w-[25rem] rounded-panel border border-border bg-surface-strong",
+            )}
+          >
+            <header className={integrated ? "border-b border-border px-5 py-4 sm:px-7" : "text-center"}>
+              <h1
+                id={headingId}
+                className={cn(
+                  "text-3xl font-semibold sm:text-4xl",
+                  integrated && "text-2xl sm:text-3xl",
+                  visuallyHiddenTitle && "sr-only",
+                )}
+              >
                 {title}
               </h1>
               {subtitle && (
@@ -46,7 +62,7 @@ export function AuthPageShell({
               )}
             </header>
 
-            <div className="mt-6 flex justify-center">{children}</div>
+            <div className={cn("flex justify-center", !integrated && "mt-6")}>{children}</div>
           </section>
         </div>
       </PageContainer>
