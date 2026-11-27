@@ -27,15 +27,18 @@ export default async function SignInPage({
   // Still validated locally rather than handed to Clerk unchecked, so an
   // attacker-supplied `returnTo` cannot bounce a signed-in user off-site.
   const returnTo = validateSignInReturnTo(params.returnTo ?? params.redirectTo);
+  const configured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+  const journeyLabel = contributionLabel(returnTo);
+  const journeyHeading = configured ? journeyLabel : undefined;
 
   return (
     <AuthPageShell
+      compact={Boolean(journeyLabel)}
       headingId="sign-in-heading"
-      journeyLabel={contributionLabel(returnTo)}
-      subtitle="Manage your VRDex profile and events."
-      title="Sign in"
+      subtitle={journeyHeading ? undefined : (journeyLabel ?? "Manage your VRDex profile and events.")}
+      title={journeyHeading ?? "Sign in"}
     >
-      {process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ? (
+      {configured ? (
         <SignIn
           fallbackRedirectUrl={returnTo}
           signUpFallbackRedirectUrl={returnTo}

@@ -9,6 +9,7 @@ import {
   expectEventPage,
   expectProfilePlaybackLinks,
   expectSearchPage,
+  expectSignInPage,
   prepareVisualPage,
   productionSmokeRoutes,
   visualProfilePaths,
@@ -170,16 +171,18 @@ test("sign-in describes recognized contribution return paths without echoing the
     ["/submit", "Add profile"],
     ["/claim/playwright-sparse-import?source=profile", "Claim profile"],
     ["/playwright-sparse-import/edit?section=media#media-contributions", "Edit profile"],
-    ["/account", "Manage your VRDex profile and events."],
-    ["https://example.invalid/submit", "Manage your VRDex profile and events."],
-    ["https://example.invalid/events/new", "Manage your VRDex profile and events."],
-    ["/events/newer", "Manage your VRDex profile and events."],
-    ["/claim/", "Manage your VRDex profile and events."],
-  ];
-  for (const [returnTo, label] of cases) {
+    ["/account"],
+    ["https://example.invalid/submit"],
+    ["https://example.invalid/events/new"],
+    ["/events/newer"],
+    ["/claim/"],
+  ] as const;
+  for (const [returnTo, journeyLabel] of cases) {
     expect((await page.goto("/sign-in?" + new URLSearchParams({ returnTo })))?.status()).toBe(200);
-    const signIn = page.getByRole("region", { name: "Sign in", exact: true });
-    await expect(signIn.getByText(label, { exact: true })).toBeVisible();
+    await expectSignInPage(page, journeyLabel);
+    if (!journeyLabel) {
+      await expect(page.getByText("Manage your VRDex profile and events.", { exact: true })).toBeVisible();
+    }
   }
 });
 
@@ -194,9 +197,8 @@ test("add event sign-in keeps the contribution context and full return target", 
     await expect(page).toHaveURL(
       (url) => url.pathname === "/sign-in" && url.searchParams.get("returnTo") === returnTo,
     );
-    const signIn = page.getByRole("region", { name: "Sign in", exact: true });
-    await expect(signIn.getByText("Add event", { exact: true })).toBeVisible();
-    await expect(signIn).not.toContainText(returnTo);
+    await expectSignInPage(page, "Add event");
+    await expect(page.locator('section[aria-labelledby="sign-in-heading"]')).not.toContainText(returnTo);
   }
 });
 

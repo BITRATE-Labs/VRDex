@@ -46,6 +46,20 @@ test("count and graph switches stay independent @storybook-visual", async ({ pag
   }
 });
 
+test("the narrow chart labels both ends and the first measured day @storybook-visual", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto(story("graph-only"));
+  const chart = page.getByRole("group", { name: "Total group membership" });
+  const labels = chart.locator(".recharts-xAxis-tick-labels text");
+  await expect(labels).toHaveText(["Sep 21, 2026", "Sep 24, 2026", "Sep 28, 2026"]);
+  const bounds = await labels.evaluateAll(elements => elements.map(element => {
+    const { left, right } = element.getBoundingClientRect();
+    return { left, right };
+  }));
+  expect(bounds[0].right).toBeLessThan(bounds[1].left);
+  expect(bounds[1].right).toBeLessThan(bounds[2].left);
+});
+
 test("a single observation and missing creation time remain honest @storybook-visual", async ({ page }, testInfo) => {
   await page.clock.install({ time: new Date("2026-09-29T12:00:00Z") });
   await page.goto(story("single-observation"));

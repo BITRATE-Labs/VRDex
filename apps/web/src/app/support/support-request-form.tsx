@@ -69,6 +69,7 @@ type Topic = (typeof TOPICS)[number]["value"];
 
 const TOPIC_VALUES: readonly string[] = TOPICS.map((topic) => topic.value);
 const CONTACT_MAX_LENGTH = 160;
+const MESSAGE_TOO_SHORT = "Tell us a little more about what you need.";
 
 // Feedback is the one topic that can be answered by nobody, so it is the one
 // that does not ask for a way to answer, or for a profile. Demanding either
@@ -190,8 +191,15 @@ function ConnectedSupportRequestForm() {
   );
   const [profileKey, setProfileKey] = useState(0);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const messageError = status.kind === "error" && status.message === MESSAGE_TOO_SHORT
+    ? status.message
+    : undefined;
+  const submitDisabled = status.kind === "submitting" || topic === "";
   const [, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const successRef = useRef<HTMLDivElement>(null);
+  const inFlightGeneration = useRef<number | null>(null);
   // Bumped whenever the deep link changes. A submit captures the value it
   // started under and drops its own result if that no longer matches, because
   // by then the visitor is filling in a different request: without it the old
@@ -236,8 +244,28 @@ function ConnectedSupportRequestForm() {
     submissionGeneration.current += 1;
   }, [requestedTopic]);
 
+  useEffect(() => {
+    const actions = actionsRef.current;
+    if (!actions?.contains(document.activeElement)) return;
+
+    if (status.kind === "success") {
+      successRef.current?.focus();
+    } else if (status.kind === "error") {
+      const message = formRef.current?.elements.namedItem("message");
+      if (messageError && message instanceof HTMLTextAreaElement) {
+        message.focus({ preventScroll: true });
+        message.closest("label")?.scrollIntoView({ block: "nearest" });
+      } else {
+        actions.scrollIntoView({ block: "nearest" });
+      }
+    }
+  }, [messageError, status.kind]);
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const generation = submissionGeneration.current;
+    if (status.kind === "submitting" || inFlightGeneration.current === generation) return;
+
     const form = event.currentTarget;
     const formData = new FormData(form);
     const selected = TOPICS.find((entry) => entry.value === topic);
@@ -258,8 +286,7 @@ function ConnectedSupportRequestForm() {
     const requesterContact = textField(formData.get("requesterContact")).trim() || undefined;
     const message = textField(formData.get("message"));
 
-    const generation = submissionGeneration.current;
-
+    inFlightGeneration.current = generation;
     setStatus({ kind: "submitting" });
 
     try {
@@ -302,6 +329,8 @@ function ConnectedSupportRequestForm() {
       }
 
       startTransition(() => setStatus({ kind: "error", message: requestErrorMessage(error) }));
+    } finally {
+      if (inFlightGeneration.current === generation) inFlightGeneration.current = null;
     }
   }
 
@@ -349,15 +378,21 @@ function ConnectedSupportRequestForm() {
             Tell us what happened. Paste links to anything that backs it up.
           </FieldText>
         </span>
-        <Textarea
-          aria-describedby={`${messageId}-hint`}
-          aria-labelledby={messageId}
-          className="min-h-32"
-          maxLength={selectedTopic?.noteLimit ?? 4_000}
-          minLength={10}
-          name="message"
-          required
-        />
+        <span className="grid">
+          <Textarea
+            aria-describedby={messageError ? `${messageId}-hint ${messageId}-error` : `${messageId}-hint`}
+            aria-invalid={messageError ? true : undefined}
+            aria-labelledby={messageId}
+            className="min-h-32 aria-invalid:border-danger"
+            maxLength={selectedTopic?.noteLimit ?? 4_000}
+            minLength={10}
+            name="message"
+            required
+          />
+          <FieldText id={`${messageId}-error`} role="alert" className="block text-danger-strong">
+            {messageError ? <span className="mt-2 block">{messageError}</span> : null}
+          </FieldText>
+        </span>
       </Field>
 
       <Field>
@@ -375,36 +410,37 @@ function ConnectedSupportRequestForm() {
         />
       </Field>
 
-      <Button
-        className="w-fit disabled:bg-surface-raised disabled:!text-muted disabled:opacity-100 disabled:hover:bg-surface-raised"
-        disabled={status.kind === "submitting" || topic === ""}
-        size="lg"
-        type="submit"
-        variant="primary"
-      >
-        {status.kind === "submitting" ? "Sending..." : "Send request"}
-      </Button>
-
-      {/* One live region, always mounted, rather than a notice appearing from
-          nowhere. Focus stays on the submit button after an async submit, and
-          `Notice` is a plain `div`, so neither outcome was announced: a
-          screen-reader user had no way to know a request had gone through and
-          could resend one that already had. `alert` for the error, because a
-          refusal needs interrupting for; `status` for the success, which does
-          not. */}
-      <div aria-live="polite" className="empty:hidden">
-        {status.kind === "success" ? (
-          <Notice role="status" variant="success">
-            {status.repliable
-              ? "Request sent. We reply to the contact you gave."
-              : "Request sent. You did not leave a contact, so we cannot reply to this one."}
-          </Notice>
-        ) : null}
-        {status.kind === "error" ? (
-          <Notice role="alert" variant="error">
-            {status.message}
-          </Notice>
-        ) : null}
+      <div ref={actionsRef}>
+        <div ref={successRef} role="status" tabIndex={status.kind === "success" ? -1 : undefined}>
+          {status.kind === "success" ? (
+            <Notice className="mb-3" variant="success">
+              {status.repliable
+                ? "Request sent. We reply to the contact you gave."
+                : "Request sent. You did not leave a contact, so we cannot reply to this one."}
+            </Notice>
+          ) : null}
+        </div>
+        <div role="alert">
+          {status.kind === "error" && !messageError ? (
+            <Notice className="mb-3" variant="error">{status.message}</Notice>
+          ) : null}
+        </div>
+        {/* Preserve focus through sending so retry stays in keyboard reach. */}
+        <Button
+          aria-disabled={submitDisabled}
+          className="aria-disabled:cursor-not-allowed aria-disabled:bg-surface-raised aria-disabled:!text-muted aria-disabled:opacity-100 aria-disabled:hover:bg-surface-raised"
+          disabled={topic === "" && status.kind !== "submitting" && status.kind !== "success"}
+          onClick={(event) => {
+            if (submitDisabled || inFlightGeneration.current === submissionGeneration.current) {
+              event.preventDefault();
+            }
+          }}
+          size="lg"
+          type="submit"
+          variant="primary"
+        >
+          {status.kind === "submitting" ? "Sending..." : "Send request"}
+        </Button>
       </div>
     </form>
   );

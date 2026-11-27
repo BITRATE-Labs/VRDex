@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
+import { AUTH_UNAVAILABLE_COPY } from "../src/lib/auth-copy";
 import { expectDecodedImage } from "./image-readiness";
 
 const screenshotDir = path.join(process.cwd(), "playwright-artifacts", "screenshots");
@@ -292,24 +293,28 @@ export async function expectPrivateSeedLookupPage(page: Page) {
 }
 
 export async function expectSubmitPage(page: Page) {
-  await expectProtectedRouteRedirect(page, "/submit");
+  await expectProtectedRouteRedirect(page, "/submit", "Add profile");
 }
 
-export async function expectSignInPage(page: Page) {
-  // Only the heading belongs to VRDex now. The provider buttons and the
-  // email/password fields are rendered by Clerk's own `<SignIn />`, and asserting
-  // a vendor's DOM would break on any upstream markup change. Which of Clerk's UI
-  // or the unconfigured-environment notice appears depends on whether the
-  // environment has Clerk credentials, so neither is asserted here; the callers
-  // that care about reaching this page already check the URL.
-  await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
+export async function expectSignInPage(page: Page, journeyLabel?: string) {
+  // Assert the VRDex shell rather than the provider's step-specific heading.
+  const heading = page.locator("h1#sign-in-heading");
+  await expect(heading).toBeVisible();
+  if (!journeyLabel) {
+    await expect(heading).toHaveText("Sign in");
+    return;
+  }
+  const shell = page.locator('section[aria-labelledby="sign-in-heading"]');
+  const unavailable = await shell.getByText(AUTH_UNAVAILABLE_COPY, { exact: true }).count() > 0;
+  await expect(heading).toHaveText(unavailable ? "Sign in" : journeyLabel);
+  await expect(shell.getByText(journeyLabel, { exact: true })).toHaveCount(1);
 }
 
-async function expectProtectedRouteRedirect(page: Page, returnTo: string) {
+async function expectProtectedRouteRedirect(page: Page, returnTo: string, journeyLabel?: string) {
   await expect(page).toHaveURL((url) =>
     url.pathname === "/sign-in" && url.searchParams.get("returnTo") === returnTo,
   );
-  await expectSignInPage(page);
+  await expectSignInPage(page, journeyLabel);
 }
 
 export async function expectHandoffPage(page: Page) {
@@ -396,7 +401,7 @@ export async function expectFooterReachesSupport(page: Page) {
 }
 
 export async function expectNewEventPage(page: Page) {
-  await expectProtectedRouteRedirect(page, "/events/new");
+  await expectProtectedRouteRedirect(page, "/events/new", "Add event");
 }
 
 export async function expectDeveloperApiPage(page: Page) {
