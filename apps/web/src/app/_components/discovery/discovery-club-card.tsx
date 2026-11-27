@@ -60,7 +60,9 @@ export function DiscoveryClubCard({
           >
             <a href={`/${club.slug}`} className={styles.clubLink}>
               <span>{club.displayName}</span>
-              <ArrowRight className={styles.clubProfileCue} size={18} aria-hidden="true" />
+              <span className={styles.clubProfileCue} aria-hidden="true">
+                View club <ArrowRight size={16} />
+              </span>
             </a>
           </h4>
           <FavoriteButton
