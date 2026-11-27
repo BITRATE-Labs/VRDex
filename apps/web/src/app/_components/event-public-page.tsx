@@ -442,8 +442,8 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
   );
 
   return (
-    <PageShell className="py-3 sm:py-6 lg:py-7" tone="event">
-      <PageContainer className="gap-3 sm:gap-5">
+    <PageShell className={cn(styles.page, "pt-[var(--event-watch-mobile-space,0.75rem)] pb-3 sm:py-6 lg:py-7")} tone="event">
+      <PageContainer className="gap-[var(--event-watch-mobile-space,0.75rem)] sm:gap-5">
         <EventPublicHero
           bannerStyle={bannerStyle}
           canHost={canHost === true}
