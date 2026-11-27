@@ -162,20 +162,24 @@ test("sparse world renders real identity without fabricating a destination", asy
     await expect(record).toBeInViewport({ ratio: 1 });
     const [shell, card] = await Promise.all([main.boundingBox(), record.boundingBox()]);
     if (!shell || !card) throw new Error("Missing sparse world bounds");
-    expect(card.y - shell.y).toBeGreaterThanOrEqual(24);
-    expect(card.y - shell.y).toBeLessThanOrEqual(40);
-
     const [platform, link, status] = await Promise.all([
       platforms.boundingBox(), destination.boundingBox(), visibility.boundingBox(),
     ]);
     if (!platform || !link || !status) throw new Error("Missing sparse world metadata bounds");
-    expect(link.y).toBeCloseTo(platform.y, 0);
-    expect(link.x).toBeGreaterThan(platform.x);
+    const topGap = card.y - shell.y;
+    const bottomGap = shell.y + shell.height - (card.y + card.height);
+    expect(status.y).toBeCloseTo(platform.y, 0);
+    expect(status.x).toBeGreaterThan(platform.x);
     if (width === 320) {
-      expect(status.y).toBeGreaterThan(Math.max(platform.y + platform.height, link.y + link.height));
+      expect(topGap).toBeGreaterThanOrEqual(24);
+      expect(topGap).toBeLessThanOrEqual(40);
+      expect(platform.y).toBeGreaterThanOrEqual(link.y + link.height);
+      expect(link.width).toBeGreaterThan(platform.width);
     } else {
-      expect(status.y).toBeCloseTo(platform.y, 0);
-      expect(status.x).toBeGreaterThan(link.x + link.width);
+      expect(topGap).toBeGreaterThan(64);
+      expect(bottomGap).toBeGreaterThan(topGap);
+      expect(link.x).toBeLessThan(platform.x);
+      expect(link.y + link.height / 2).toBeCloseTo(platform.y + platform.height / 2, 0);
     }
   }
   await expect(main.getByText("Public", { exact: true })).toBeVisible();
