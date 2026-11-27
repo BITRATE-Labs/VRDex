@@ -132,53 +132,6 @@ function EventOwnerMode() {
   );
 }
 
-function EventOwnerMode() {
-  const mode = useQuery(api.events.getEventOwnerMode, {});
-  const setMode = useMutation(api.events.setEventOwnerMode);
-  const [community, setCommunity] = useState<EventIdentityOption | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [failed, setFailed] = useState(false);
-  if (!mode) return null;
-  const change = async (communitySlug: string | null) => {
-    setSaving(true);
-    setFailed(false);
-    try {
-      await setMode({ communitySlug });
-      setCommunity(null);
-    } catch {
-      setFailed(true);
-    } finally {
-      setSaving(false);
-    }
-  };
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {mode.community ? (
-        <>
-          <span>Admin access · {mode.community.name}</span>
-          <button className={buttonVariants({ variant: "secondary" })} disabled={saving} type="button"
-            onClick={() => void change(null)}>End admin access</button>
-        </>
-      ) : (
-        <form className="flex min-w-0 flex-wrap items-end gap-2" onSubmit={(event) => {
-          event.preventDefault();
-          if (community) void change(community.slug);
-        }}>
-          <div className="w-full min-w-0 sm:w-64">
-            <EventIdentityPicker kind="community" selectedSlug={community?.slug}
-              selectedOption={community} disabled={saving}
-              onSelect={setCommunity} onClear={() => setCommunity(null)} />
-          </div>
-          <button className={buttonVariants({ variant: "secondary" })} disabled={saving || !community} type="submit">
-            Manage as admin
-          </button>
-        </form>
-      )}
-      {failed ? <span role="alert">Could not change admin access</span> : null}
-    </div>
-  );
-}
-
 function InventoryShortcuts() {
   const communities = useQuery(api.events.listManagedCommunities, {});
   const reportsAllowed = useQuery(api.eventCorrections.getEventReportAccess, {});
