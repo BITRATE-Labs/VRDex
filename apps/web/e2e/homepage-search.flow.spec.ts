@@ -271,7 +271,7 @@ function publicResultRow(page: Page, path: string) {
 }
 
 test("populated Search aligns titles and keeps media and role details available at 320px @flow @fixture", async ({ page }) => {
-  await page.setViewportSize({ width: 320, height: 800 });
+  await page.setViewportSize({ width: 320, height: 760 });
   await page.addInitScript(() => localStorage.setItem("vrdex-theme", "dark"));
   await page.goto("/search?q=DJ");
   const aurora = publicResultRow(page, "/playwright-dj-aurora");
@@ -292,7 +292,27 @@ test("populated Search aligns titles and keeps media and role details available 
   await expect(aurora.getByText("DJ · Producer · Host", { exact: true })).toBeVisible();
   await expect(basicbit.getByText("Software Dev | 3D Designer | VRDJ", { exact: true })).toBeVisible();
   await expect(basicbit.getByText("Software Dev · 3D Designer · VRDJ", { exact: true })).toHaveCount(0);
-  await expect(moth.getByText("DJ · VRDJ · Fixture lineup", { exact: true })).toBeVisible();
+  const mothRoles = moth.getByText("DJ · VRDJ · Fixture lineup", { exact: true });
+  await expect(mothRoles).toBeInViewport({ ratio: 1 });
+
+  const genrePreview = basicbit.getByText("DnB · House · Techno", { exact: true });
+  const moreGenres = basicbit.getByText("+8", { exact: true });
+  const links = basicbit.getByText("Links", { exact: true });
+  const [previewBounds, moreBounds, linksBounds] = await Promise.all([
+    genrePreview.boundingBox(),
+    moreGenres.boundingBox(),
+    links.boundingBox(),
+  ]);
+  expect(previewBounds!.x).toBe(titles[1]!.x);
+  expect(moreBounds!.x).toBeGreaterThan(previewBounds!.x);
+  expect(linksBounds!.x).toBeGreaterThan(moreBounds!.x);
+
+  await moreGenres.focus();
+  await moreGenres.press("Enter");
+  await expect(moreGenres).toBeFocused();
+  const expandedGenres = basicbit.getByText("Bass · 140 · Trap · Space Bass · Midtempo · UKG · Dancefloor · Neurofunk", { exact: true });
+  await expect(expandedGenres).toBeVisible();
+  expect((await expandedGenres.boundingBox())!.x).toBeLessThan(previewBounds!.x);
 
   const avatarRoute = "**/api/e2e/fixture-assets/fixture-aurora-profile-image";
   await page.route(avatarRoute, (route) => route.abort());
