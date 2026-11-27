@@ -19,6 +19,7 @@ export function TimelineChart({
   compactEmpty,
   loadingStatus,
   emptyState,
+  hour12,
   range,
   now,
   slotCoverage,
@@ -33,6 +34,7 @@ export function TimelineChart({
   compactEmpty: boolean;
   loadingStatus?: ReactNode;
   emptyState?: ReactNode;
+  hour12: boolean;
   range: TimelineRange;
   now: number;
   slotCoverage: Record<string, "partial" | "complete">;
@@ -213,6 +215,7 @@ export function TimelineChart({
               saved={visibleSaved}
               range={range}
               origin={origin}
+              hour12={hour12}
               onNext={onNext}
               records={records}
               slotCoverage={slotCoverage}

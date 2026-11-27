@@ -514,6 +514,11 @@
 .nightOpen strong {
   min-width: 0;
 }
+.nightStartTime {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .nightOpen > svg {
   flex-shrink: 0;
 }
@@ -679,6 +684,12 @@
     grid-column: 1 / -1;
     flex-wrap: wrap;
     min-height: 0;
+  }
+  .status[data-favorites-recovery] {
+    row-gap: 0.375rem;
+  }
+  .favoritesSummary {
+    text-wrap: balance;
   }
   .status:empty {
     position: absolute;
