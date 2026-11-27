@@ -215,7 +215,7 @@ function SearchControl({
         className={cn(
           compact === true
             ? cn(buttonVariants({ size: "sm", variant: "surface" }), "min-h-11 shrink-0", iconSubmit ? "w-11 p-0" : "max-sm:w-11 max-sm:p-0 sm:px-4")
-            : cn(buttonVariants({ size: "lg", variant: isInverse ? "inversePrimary" : "primary" }), "min-h-14 px-6 font-semibold"),
+            : cn(buttonVariants({ size: "lg", variant: isInverse ? "inversePrimary" : "primary" }), "min-h-14 font-semibold", iconSubmit ? "w-14 shrink-0 p-0" : "px-6"),
           compact === "mobile" && "max-sm:min-h-11 max-sm:w-11 max-sm:shrink-0 max-sm:p-0",
         )}
         type="submit"

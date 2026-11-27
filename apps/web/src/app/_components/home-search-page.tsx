@@ -15,7 +15,7 @@ export function HomeSearchPage({ initialLiveEntries = [], beforeSchedule }: { in
       <PageContainer className={styles.home} max="7xl">
         <header className={styles.searchRow}>
           <h1 className={styles.searchHeading}>DJs, clubs &amp; events</h1>
-          <PublicSearchControl action="/search" compact="mobile" placeholder="Search VRDex" surface="home" tone="default" />
+          <PublicSearchControl action="/search" compact="mobile" iconSubmit placeholder="Search VRDex" surface="home" tone="default" />
         </header>
         <HomeBrowseProvider>
           {beforeSchedule ?? <HomeLiveNow initialEntries={initialLiveEntries} />}
