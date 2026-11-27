@@ -13,6 +13,7 @@ import { EntityImage } from "@/components/ui/entity-image";
 import { ProfileAvatarImage } from "./profile-avatar-image";
 import { HomeLiveNow } from "./home-live-now";
 import { ProfileVrcdnStreams } from "./profile-vrcdn-streams";
+import streamStyles from "./profile-vrcdn-streams.module.css";
 import { ProfilePrivateRecord } from "./profile-private-record";
 import { PublicGroupMembershipChart, type GroupMembership } from "./public-group-membership-chart";
 import { CommunityPopulationHistory } from "./public-group-population-chart";
@@ -671,6 +672,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
       <PageContainer className={cn(
         useCompactCommunity && "max-w-2xl lg:gap-4",
         isRichPublicCommunity && "max-sm:gap-3",
+        isRichPublicPerson && streamStyles.profile,
       )}>
 
         <div className={useCompactIdentity ? cn("mx-auto w-full max-w-2xl rounded-panel border border-border-strong bg-surface-strong", !useCompactCommunity && "shadow-panel") : "contents"}>
@@ -760,15 +762,28 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                       aboutCopy && "lg:col-span-2 lg:row-start-2",
                     )}
                   >
-                    {visitorLinks.map(({ id, label }) => (
-                      <a
-                        className="inline-flex min-h-11 items-center rounded-control px-2 text-sm font-medium text-white underline decoration-white/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-white max-sm:min-w-11 max-sm:justify-center max-sm:px-1"
-                        href={"#" + id}
-                        key={id}
-                      >
-                        {label}
-                      </a>
-                    ))}
+                    {visitorLinks.map(({ id, label }) => {
+                      const streamShortcut = id === visitorDestinations.streams.id && vrcdnStreams[0]?.item.link.source !== "community_submitted";
+                      const link = (
+                        <a
+                          className={cn(
+                            "inline-flex min-h-11 items-center rounded-control px-2 text-sm font-medium text-white underline decoration-white/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-white max-sm:min-w-11 max-sm:justify-center max-sm:px-1",
+                            streamShortcut && streamStyles.streamShortcut,
+                          )}
+                          href={"#" + id}
+                          key={id}
+                        >
+                          {label}
+                        </a>
+                      );
+
+                      return streamShortcut ? (
+                        <span className="relative flex" key={id}>
+                          {link}
+                          <span className={streamStyles.shortcutStatus}>Live now</span>
+                        </span>
+                      ) : link;
+                    })}
                   </nav>
                 ) : null}
                 {aboutCopy ? (

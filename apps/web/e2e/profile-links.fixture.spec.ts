@@ -169,6 +169,7 @@ test("populated person profiles give visitors keyboard shortcuts before ownershi
   await expect(nav.getByRole("link")).toHaveText(["Links", "VRCDN", "Upcoming events", "Media kit", "Worlds"]);
   await expect(nav.getByRole("link", { name: "Upcoming events", exact: true })).toBeInViewport();
   await expect(nav.getByRole("link", { name: "VRCDN", exact: true })).toBeInViewport();
+  await expect(nav.getByText("Live now", { exact: true })).toBeInViewport();
   await page.evaluate(() => document.fonts.ready);
   const shortcutBounds = await nav.getByRole("link").evaluateAll(links => links.map(link => {
     const { y, width, height } = link.getBoundingClientRect();
