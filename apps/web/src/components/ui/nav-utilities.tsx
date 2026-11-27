@@ -263,7 +263,7 @@ function HeaderControls({ accountMode, pathname, showMyEvents }: { accountMode: 
   }
 
   return (
-    <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1 sm:relative sm:flex-nowrap">
+    <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1 sm:relative sm:flex-nowrap sm:gap-x-1">
       <NavSearch
         isOpen={panel === "search"}
         onOpen={() => setPanel("search")}
