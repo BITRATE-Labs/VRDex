@@ -212,13 +212,12 @@ function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[];
             time={<ViewerLocalEventDateTime className="text-xs font-medium text-foreground" groupTime timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />}
             title={publicEventPath(event) ? (
               <TrackedDiscoveryLink
-                className="rounded-control text-section font-semibold text-accent-strong underline decoration-accent/55 underline-offset-4 transition hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring max-sm:flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center max-sm:gap-2 sm:text-xl"
+                className="rounded-control text-section font-semibold text-accent-strong underline decoration-accent/55 underline-offset-4 transition hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring max-sm:flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center sm:text-xl"
                 eventName="event_card_clicked"
                 href={publicEventPath(event)!}
                 properties={{ entity_type: "event", surface: "upcoming_events" }}
               >
                 <span>{event.title}</span>
-                <ChevronRight aria-hidden="true" className="size-4 shrink-0 sm:hidden" />
               </TrackedDiscoveryLink>
             ) : event.title}
           />
@@ -258,7 +257,12 @@ function DiscoveryCard({
           {result.title}
         </span>
         {subtitle ? <span className="text-sm text-muted">{subtitle}</span> : null}
-        {result.summary ? <span className="line-clamp-2 text-sm leading-6 text-muted">{result.summary}</span> : null}
+        {result.summary ? (
+          <span className={cn(
+            "line-clamp-2 text-sm leading-6 text-muted",
+            result.profileType === "community" && "max-[360px]:line-clamp-3",
+          )}>{result.summary}</span>
+        ) : null}
       </span>
       <ChevronRight aria-hidden="true" className={cn(
         "size-4 shrink-0 self-center text-muted group-hover:text-accent-strong",
@@ -519,7 +523,7 @@ export function DiscoveryLandingPage({
     )}>
       <div className={singleDirectory ? "sm:flex sm:items-baseline sm:gap-3 lg:block" : "sm:flex sm:items-baseline sm:gap-3"}>
         <SectionTitle className="text-lg leading-6 tracking-tight">Upcoming events</SectionTitle>
-        {status === "live" ? <p className="text-sm leading-5 text-foreground">No events</p> : null}
+        {status === "live" ? <p className="text-sm font-medium leading-5 text-foreground">No events</p> : null}
       </div>
       <Link
         className={cn(
@@ -564,7 +568,7 @@ export function DiscoveryLandingPage({
         </section>
 
         {showDirectoryShortcuts ? (
-          <nav aria-label="Discovery categories" className="-mt-3 flex flex-wrap gap-x-1 sm:hidden">
+          <nav aria-label="Discovery categories" className="-mt-3 -mb-2 flex flex-wrap gap-x-1 sm:hidden">
             {populatedDirectory.map(({ headingId, title }) => (
               <a
                 className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "min-h-11 underline decoration-border-strong underline-offset-4 hover:decoration-current")}
