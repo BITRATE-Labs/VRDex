@@ -332,7 +332,16 @@ test("populated Search aligns titles and keeps media and role details available 
   expect(await links.boundingBox()).toEqual(linksBounds);
 
   const expandedLinks = links.locator("..").locator(":scope > div");
-  await expect(expandedLinks.getByRole("link", { name: "Website: basicbit.net", exact: true })).toHaveAttribute("href", "https://basicbit.net/");
+  const website = expandedLinks.getByRole("link", { name: "Website: basicbit.net", exact: true });
+  const twitch = expandedLinks.getByRole("link", { name: /^Twitch:/ });
+  await expect(website).toHaveAttribute("href", "https://basicbit.net/");
+  await expect(website.getByText("basicbit.net", { exact: true })).toBeVisible();
+  await expect(twitch.getByText("Twitch", { exact: true })).toBeVisible();
+  for (const destination of [website, twitch]) {
+    const bounds = await destination.boundingBox();
+    expect(bounds!.width).toBeGreaterThanOrEqual(44);
+    expect(bounds!.height).toBeGreaterThanOrEqual(44);
+  }
   const [genresPanel, linksPanel] = await Promise.all([expandedGenres.boundingBox(), expandedLinks.boundingBox()]);
   expect(genresPanel!.x).toBe(previewBounds!.x);
   expect(linksPanel!.x).toBeLessThan(genresPanel!.x);
@@ -378,8 +387,13 @@ test("public result genres and Links disclose independently per person @flow @fi
   await expect(first.getByText("Bass · 140 · Trap · Space Bass · Midtempo · UKG · Dancefloor · Neurofunk", { exact: true })).toBeHidden();
   await page.screenshot({ path: info.outputPath("public-results-collapsed.png"), fullPage: true });
   const overflow = first.getByLabel("8 more genres", { exact: true });
+  await expect(overflow.getByText("+8 genres", { exact: true })).toBeVisible();
+  const genreChevron = overflow.locator("svg");
+  await expect(genreChevron).toBeVisible();
+  await expect(genreChevron).toHaveCSS("rotate", "none");
   await overflow.focus();
   await overflow.press("Enter");
+  await expect(genreChevron).toHaveCSS("rotate", "180deg");
   await expect(first.getByText("Bass · 140 · Trap · Space Bass · Midtempo · UKG · Dancefloor · Neurofunk", { exact: true })).toBeVisible();
   await expect(first.getByRole("button", { name: "Copy", exact: true })).toHaveCount(0);
   await first.getByText("Links", { exact: true }).click();
