@@ -56,7 +56,13 @@ test.describe("Home discovery @flow @fixture", () => {
     const previous = clubs.getByRole("button", { name: "Previous clubs", exact: true });
     const link = rail.getByRole("link").last();
     const href = await link.getAttribute("href");
+    if (!href) throw new Error("Expected the club profile link to have a destination");
     const offset = () => rail.evaluate((element) => element.scrollLeft);
+    const openedClubInRail = () => rail.locator(`a[href="${href}"]`).evaluate((anchor) => {
+      const railBounds = anchor.closest("#discovery-clubs-rail")!.getBoundingClientRect();
+      const linkBounds = anchor.getBoundingClientRect();
+      return linkBounds.left >= railBounds.left - 1 && linkBounds.right <= railBounds.right + 1;
+    });
 
     await expect(next).toHaveAttribute("aria-disabled", "false");
     if (isMobile) await next.tap();
@@ -64,22 +70,30 @@ test.describe("Home discovery @flow @fixture", () => {
     await expect(next).toHaveAttribute("aria-disabled", "true");
     const openedPosition = await offset();
     expect(openedPosition).toBeGreaterThan(0);
-    await expect(link).toBeInViewport({ ratio: 1 });
+    await expect.poll(openedClubInRail).toBe(true);
 
     if (isMobile) await link.tap();
     else await link.press("Enter");
-    await expect(page).toHaveURL(new URL(href!, page.url()).href);
+    await expect(page).toHaveURL(new URL(href, page.url()).href);
     const profileURL = page.url();
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
       await page.goBack();
       await usableDiscovery(page);
       await expect.poll(offset).toBe(openedPosition);
-      await expect(rail.locator(`a[href="${href}"]`)).toBeInViewport({ ratio: 1 });
+      await expect.poll(openedClubInRail).toBe(true);
       await expect(previous).toHaveAttribute("aria-disabled", "false");
       await page.goForward();
       await expect(page).toHaveURL(profileURL);
     }
+
+    await page.setViewportSize({ width: isMobile ? 390 : 320, height: 740 });
+    await page.goBack();
+    await usableDiscovery(page);
+    await expect.poll(openedClubInRail).toBe(true);
+    expect(await offset()).not.toBe(openedPosition);
+    await page.goForward();
+    await expect(page).toHaveURL(profileURL);
 
     await page.getByRole("navigation", { name: "Primary navigation" })
       .getByRole("link", { name: "VRDex", exact: true }).click();
