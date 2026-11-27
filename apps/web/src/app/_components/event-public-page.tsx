@@ -12,6 +12,7 @@ import { actionCardVariants, actionLabelClassName, actionMetaClassName, inlineAc
 import { buttonVariants } from "@/components/ui/button";
 import { CopyValueRow } from "@/components/ui/copy-value-row";
 import { Card, Eyebrow } from "@/components/ui/card";
+import { EntityImage } from "@/components/ui/entity-image";
 import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { cn } from "@/lib/cn";
 import { safeImageBackground } from "@/lib/safe-image";
@@ -167,7 +168,6 @@ export type PublicEvent = Omit<PublicEventPreview, "worlds"> & {
 };
 
 const eventPosterOverlay = "linear-gradient(135deg, color-mix(in srgb, var(--media) 72%, transparent), color-mix(in srgb, var(--accent) 12%, transparent))";
-const eventEntityImageOverlay = "linear-gradient(135deg, color-mix(in srgb, var(--media) 28%, transparent), color-mix(in srgb, var(--accent) 8%, transparent))";
 
 function safeHttpsUrl(url: string | undefined): string | null {
   if (!url) {
@@ -193,7 +193,7 @@ function initialsFor(name: string): string {
   return initials || "V";
 }
 
-function EntityImage({
+function EventAvatar({
   appearance,
   imageUrl,
   label,
@@ -202,19 +202,16 @@ function EntityImage({
   imageUrl?: string;
   label: string;
 }) {
-  const imageStyle = safeImageBackground(imageUrl, eventEntityImageOverlay);
-
   return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "flex size-14 flex-none items-center justify-center overflow-hidden rounded-control border border-accent/20 bg-cover bg-center text-xs font-semibold text-accent-strong",
-        imageStyle ? "bg-media" : "bg-accent/10",
-      )}
-      style={appearance ? avatarFrameStyle(imageStyle, appearance) : imageStyle}
-    >
-      {imageStyle ? null : initialsFor(label)}
-    </span>
+    <EntityImage
+      alt=""
+      className="size-14 rounded-control border border-accent/20 bg-accent/10 text-xs text-accent-strong"
+      fallback={initialsFor(label)}
+      label={label}
+      sizes="56px"
+      src={imageUrl}
+      style={appearance ? avatarFrameStyle(undefined, appearance) : undefined}
+    />
   );
 }
 
@@ -414,7 +411,7 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
       )}
       href={`/${event.communitySlug}`}
     >
-      <EntityImage appearance={event.communityAvatarAppearance} imageUrl={event.communityImageUrl} label={event.communityName ?? "Community profile"} />
+      <EventAvatar appearance={event.communityAvatarAppearance} imageUrl={event.communityImageUrl} label={event.communityName ?? "Community profile"} />
       <span className="min-w-0 [overflow-wrap:anywhere]">
         <span className={actionLabelClassName}>
           {event.communityName ?? "Community profile"}
@@ -491,7 +488,7 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
             <ol className="mt-5 divide-y divide-border">
               {lineup.map((row) => (
                 <li className="flex min-w-0 items-center gap-4 py-4 first:pt-0 last:pb-0" key={row.key}>
-                  <EntityImage appearance={row.performer?.avatarAppearance} imageUrl={row.performer?.imageUrl} label={row.displayLabel} />
+                  <EventAvatar appearance={row.performer?.avatarAppearance} imageUrl={row.performer?.imageUrl} label={row.displayLabel} />
                   <div className="min-w-0">
                     {row.performer ? (
                       <Link className={cn(inlineActionClassName, "[overflow-wrap:anywhere]")} href={`/${row.performer.slug}`}>{row.displayLabel}</Link>
