@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowRight } from "lucide-react";
 import type { CSSProperties } from "react";
 
 import { FavoriteButton } from "@/components/ui/favorite-button";
@@ -54,11 +55,12 @@ export function DiscoveryClubCard({
           <h4
             className={styles.name}
             style={{
-              "--club-artwork-name-size": `clamp(1rem, ${Math.min(12, 70 / Math.sqrt(club.displayName.length))}cqi, 2.7rem)`,
+              "--club-artwork-name-size": `clamp(1rem, ${Math.min(12, 64 / Math.sqrt(club.displayName.length))}cqi, 2.7rem)`,
             } as CSSProperties}
           >
             <a href={`/${club.slug}`} className={styles.clubLink}>
-              {club.displayName}
+              <span>{club.displayName}</span>
+              <ArrowRight className={styles.clubProfileCue} size={18} aria-hidden="true" />
             </a>
           </h4>
           <FavoriteButton

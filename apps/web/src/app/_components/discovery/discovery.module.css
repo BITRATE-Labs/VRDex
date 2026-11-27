@@ -479,9 +479,23 @@
   line-height: 1.12;
   letter-spacing: -0.04em;
 }
+.clubArtwork:has(.clubArtworkFallback) {
+  background: var(--surface-elevated);
+  border-color: var(--border-strong);
+}
+.clubProfileCue {
+  display: none;
+}
 .clubCard:has(.clubArtworkFallback) .clubLink {
-  text-wrap: balance;
-  text-decoration-thickness: 2px;
+  display: grid;
+  justify-items: center;
+  gap: 0.45rem;
+  text-wrap: pretty;
+  text-decoration: none;
+}
+.clubCard:has(.clubArtworkFallback) .clubProfileCue {
+  display: block;
+  color: var(--accent-strong);
 }
 .clubCard:has(.clubArtworkFallback) .clubMetadata {
   display: grid;
