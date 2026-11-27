@@ -137,10 +137,32 @@ test("world retains a reference destination when it differs or stands alone", as
   await expect(main.getByRole("heading", { name: "Upcoming and active", exact: true })).toBeVisible();
   await expect(main.getByRole("heading", { name: "Recent", exact: true })).toHaveCount(0);
 
+  await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/playwright-neon-harbor-reference-only");
   await expect(openWorld).toHaveCount(0);
+  await expect(reference).toHaveCount(1);
   await expect(reference).toHaveAttribute("href", neonHarborReferenceUrl);
+  await expect(reference).toHaveAttribute("target", "_blank");
+  await expect(reference).toHaveAttribute("rel", "noreferrer");
+  await expect(reference.getByText("example.invalid", { exact: true })).toBeVisible();
+  await expect(reference).toHaveAccessibleDescription("example.invalid");
   await expect(main.getByText("Not listed", { exact: true })).toHaveCount(0);
+  await expect(main.getByText("Creator links", { exact: true })).toBeVisible();
+
+  const events = main.getByRole("link", { name: "Events", exact: true });
+  for (const [width, height] of [[320, 568], [390, 740], [1280, 900]]) {
+    await page.setViewportSize({ width, height });
+    await page.evaluate(() => scrollTo(0, 0));
+    await expect(reference).toBeInViewport({ ratio: 1 });
+    const bounds = await reference.boundingBox();
+    expect(bounds?.height).toBeGreaterThanOrEqual(44);
+    expect(bounds?.width).toBeGreaterThanOrEqual(44);
+    if (width < 640) {
+      await reference.focus();
+      await page.keyboard.press("Tab");
+      await expect(events).toBeFocused();
+    }
+  }
 });
 
 test("sparse world renders real identity without fabricating a destination", async ({ page }) => {

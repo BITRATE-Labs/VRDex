@@ -294,6 +294,8 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
     : null;
   const sourceUrl = world.sourceUrl ? safeHttpsUrl(world.sourceUrl) : null;
   const referenceUrl = sourceUrl === canonicalWorldUrl ? null : sourceUrl;
+  const heroDestinationUrl = canonicalWorldUrl ?? referenceUrl;
+  const lowerReferenceUrl = canonicalWorldUrl ? referenceUrl : null;
   const heroImageUrl = safeImageUrl(world.heroImageUrl);
   const { upcoming, recent } = world.eventContext;
   const hasEvents = upcoming.length > 0 || recent.length > 0;
@@ -304,8 +306,8 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
     const href = safeHttpsUrl(link.url);
     return href ? [{ ...link, href }] : [];
   });
-  const hasLinks = referenceUrl || outboundLinks.length > 0;
-  const hasDetails = description || hasEvents || hasTags || hasCredits || hasLinks;
+  const hasLowerLinks = lowerReferenceUrl || outboundLinks.length > 0;
+  const hasDetails = description || hasEvents || hasTags || hasCredits || referenceUrl || outboundLinks.length > 0;
   const hasPlatforms = world.platformCompatibility.length > 0;
   const isSparse = !heroImageUrl && !hasDetails && !canonicalWorldUrl
     && !world.vrchatWorldId && !world.summary?.trim()
@@ -329,30 +331,43 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
       <dd className={cn("mt-1", isSparse ? "text-base font-semibold" : "font-medium")}>{visibilityLabel(world.visibilityStatus)}</dd>
     </div>
   );
-  const launchAction = canonicalWorldUrl ? (
+  const heroDestination = heroDestinationUrl ? (
     <a
       className={cn(
         buttonVariants({ variant: "primary" }),
         hasLaunchDetails && "max-sm:min-h-11",
+        !canonicalWorldUrl && "min-h-11 max-w-full flex-col items-start gap-0.5 whitespace-normal py-1.5 text-left",
         heroImageUrl
           ? "focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-media"
           : "focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-strong",
       )}
-      href={canonicalWorldUrl}
+      aria-label={canonicalWorldUrl ? undefined : "Reference link"}
+      aria-describedby={canonicalWorldUrl ? undefined : "world-reference-host"}
+      href={heroDestinationUrl}
       rel="noreferrer"
       target="_blank"
     >
-      Open VRChat world
+      {canonicalWorldUrl ? "Open VRChat world" : (
+        <>
+          <span className="flex items-center gap-1.5">
+            Reference link
+            <ExternalLink aria-hidden="true" className="size-3.5 shrink-0" />
+          </span>
+          <span className="text-xs font-normal [overflow-wrap:anywhere]" id="world-reference-host">
+            {new URL(heroDestinationUrl).hostname}
+          </span>
+        </>
+      )}
     </a>
   ) : null;
   const navigationLinkClassName = "inline-flex min-h-11 items-center gap-1.5 rounded-control text-sm font-medium underline decoration-current/40 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2";
-  const actions = launchAction || hasEvents ? (
+  const actions = heroDestination || hasEvents ? (
     <div className={cn(
       "flex flex-wrap items-center gap-x-3 gap-y-1 lg:[@media(min-height:864px)]:block",
       hasLaunchDetails ? "mt-3 sm:col-span-2 sm:row-start-4 sm:mt-5 sm:justify-self-start" : "mt-5",
-      !launchAction && "lg:[@media(min-height:864px)]:hidden",
+      !heroDestination && "lg:[@media(min-height:864px)]:hidden",
     )}>
-      {launchAction}
+      {heroDestination}
       {hasEvents ? (
         <a
           className={cn(navigationLinkClassName, "lg:[@media(min-height:864px)]:hidden", heroImageUrl ? "text-white/90 focus-visible:outline-white" : "text-accent-strong focus-visible:outline-accent")}
@@ -513,14 +528,14 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
           </section>
         ) : null}
 
-        {hasLinks ? (
-          <section className={cn("grid gap-4", referenceUrl && outboundLinks.length > 0 && "lg:grid-cols-[0.9fr_1.1fr]")}>
-            {referenceUrl ? (
+        {hasLowerLinks ? (
+          <section className={cn("grid gap-4", lowerReferenceUrl && outboundLinks.length > 0 && "lg:grid-cols-[0.9fr_1.1fr]")}>
+            {lowerReferenceUrl ? (
               <Card surface="white">
                 <Eyebrow>Primary links</Eyebrow>
                 <a
                   className={cn(buttonVariants({ variant: "secondary" }), "mt-4")}
-                  href={referenceUrl}
+                  href={lowerReferenceUrl}
                   rel="noreferrer"
                   target="_blank"
                 >
