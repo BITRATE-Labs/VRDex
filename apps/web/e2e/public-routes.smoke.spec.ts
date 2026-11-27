@@ -1238,6 +1238,19 @@ test("public API reference puts endpoints in the first phone viewport", async ({
   expect(total).toBeGreaterThan(1);
   await expect(directory.getByRole("status")).toHaveText(`${total} operations`);
 
+  const utilityPosition = await tools.boundingBox();
+  expect(utilityPosition).not.toBeNull();
+  await filter.fill("gET   cLaImS");
+  await expect(directory.getByRole("status")).toHaveText("1 operation");
+  expect(await tools.boundingBox()).toEqual(utilityPosition);
+  expect(await firstEndpoint.evaluate((endpoint) => {
+    const range = document.createRange();
+    range.selectNodeContents(endpoint);
+    return range.toString();
+  })).toBe("/api/v0/claims/{slug}/status");
+  await filter.fill("");
+  await expect(rows).toHaveCount(total);
+
   for (const width of [320, 390, 1280]) {
     await page.setViewportSize({ width, height: width === 320 ? 760 : 900 });
     await expect(firstEndpoint).toBeInViewport();
