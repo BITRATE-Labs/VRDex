@@ -121,10 +121,7 @@ for (const state of [
       for (const [action, label] of [[interest, "Interested"], [favorite, "Favorite"]] as const) {
         const visualLabel = action.getByText(label, { exact: true });
         await expect(visualLabel).toHaveAttribute("aria-hidden", "true");
-        if (!isMobile && action === favorite) {
-          await expect(visualLabel).toBeHidden();
-          continue;
-        }
+
         await expect(visualLabel).toBeVisible();
         const bounds = (await action.boundingBox())!;
         expect(bounds.width).toBeGreaterThanOrEqual(44);

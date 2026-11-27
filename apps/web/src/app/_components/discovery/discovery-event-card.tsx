@@ -95,7 +95,7 @@ export function DiscoveryEventCard({
           label={event.title}
           state={saved ? "saved" : "unsaved"}
           className={styles.save}
-          visibleLabelClassName={styles.interestLabel}
+          visibleLabelClassName={styles.preferenceLabel}
           onToggle={() => onSave({ kind: "event", eventId: event.id })}
         />
         <p className={styles.date}>

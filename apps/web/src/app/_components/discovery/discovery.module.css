@@ -116,8 +116,6 @@
 }
 .card {
   animation: arrive 140ms ease-out;
-}
-.eventCard {
   container-type: inline-size;
 }
 .artwork,
@@ -151,22 +149,20 @@
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
-.card .save {
+.card :is(.save, .favorite) {
   justify-self: end;
   min-width: 44px;
   min-height: 44px;
   gap: 0.3rem;
   padding-inline: 0.4rem;
 }
-.interestLabel {
+.preferenceLabel {
   color: var(--muted);
   font-size: 0.75rem;
   font-weight: 500;
   white-space: nowrap;
 }
-.mobileActionLabel {
-  display: none;
-}
+
 .favorite {
   margin-left: auto;
   flex-shrink: 0;
@@ -196,6 +192,16 @@
   }
   .card .save {
     justify-self: start;
+  }
+  .clubName {
+    flex-wrap: wrap;
+    row-gap: 0;
+  }
+  .clubName .name {
+    width: 100%;
+  }
+  .card .favorite {
+    margin-left: 0;
   }
 }
 .clubMetadata {
@@ -462,18 +468,7 @@
     min-height: 0;
   }
 
-  .card .favorite {
-    min-height: 44px;
-    gap: 0.3rem;
-    padding-inline: 0.4rem;
-  }
-  .mobileActionLabel {
-    display: inline;
-    color: var(--muted);
-    font-size: 0.75rem;
-    font-weight: 500;
-    white-space: nowrap;
-  }
+
   .favoriteSummary:empty {
     display: none;
   }
