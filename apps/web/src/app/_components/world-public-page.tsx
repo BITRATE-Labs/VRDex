@@ -366,12 +366,12 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
   ) : null;
 
   return (
-    <PageShell tone="world" className={cn(isSparse && "sm:grid sm:content-center sm:pb-24")}>
+    <PageShell tone="world" className={cn(isSparse && "sm:pt-[clamp(3rem,16vh,9rem)]")}>
       <PageContainer max={!heroImageUrl && !hasDetails ? "3xl" : undefined}>
         <section className={cn(
           "overflow-hidden rounded-hero border border-border",
           heroImageUrl ? "bg-media text-white shadow-hero" : "bg-surface-strong text-foreground shadow-sm",
-          isSparse && "border-border-strong",
+          isSparse && "border-border-strong sm:[html:not([data-theme=light])_&]:border-muted/55",
         )}>
           <div className={cn(
             "p-6 sm:p-8",
@@ -402,7 +402,7 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
                 <dl className="mt-5 grid grid-cols-2 items-center gap-y-4 border-t border-border-strong pt-5 text-sm sm:mt-7 sm:grid-cols-[1.2fr_1fr_1fr] sm:pt-6">
                   <div className="max-sm:col-span-2 max-sm:border-b max-sm:border-border max-sm:pb-4 sm:border-e sm:border-border sm:pe-4">
                     <dt className="font-medium text-muted">VRChat link</dt>
-                    <dd className="mt-1 text-xl font-semibold leading-7 sm:text-2xl">Not listed</dd>
+                    <dd className="mt-1 text-xl font-semibold max-sm:leading-7 sm:text-base">Not listed</dd>
                   </div>
                   {platformDetails}
                   {visibilityDetails}
