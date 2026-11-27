@@ -29,6 +29,7 @@ import { TimelineNight } from "./timeline-night";
 import { type TimelineActions } from "./timeline-event-bar";
 import styles from "./timeline.module.css";
 import { HomeBrowseProvider, useHomeBrowse, useOptionalHomeBrowse, type TimelineSelection } from "../home-browse-provider";
+import { readHomeClubPosition } from "../home-club-history";
 export type { TimelineSelection } from "../home-browse-provider";
 type Runtime = {
   now: number;
@@ -63,20 +64,48 @@ function HomeScheduleContent({
   const releaseReturnScroll = useRef<(() => void) | null>(null);
   useLayoutEffect(() => {
     const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
-    if (navigation?.type !== "back_forward" || !window.history.state?.vrdexHomeClubPosition) return;
+    const saved = readHomeClubPosition();
+    if (navigation?.type !== "back_forward" || !saved) return;
 
     const root = document.documentElement;
     const previous = root.style.overflowAnchor;
     const interaction = new AbortController();
     let frame = 0;
+    let observer: MutationObserver | undefined;
     // The loading chart can shrink underneath the browser's restored page position.
     root.style.overflowAnchor = "none";
     function release() {
       if (interaction.signal.aborted) return;
       interaction.abort();
       cancelAnimationFrame(frame);
+      observer?.disconnect();
       root.style.overflowAnchor = previous;
       releaseReturnScroll.current = null;
+    }
+    function restore() {
+      if (interaction.signal.aborted) return;
+      const top = saved?.top;
+      if (top === undefined || !Number.isFinite(top) || top < 0 ||
+        saved?.viewportWidth !== window.innerWidth || saved.viewportHeight !== window.innerHeight ||
+        Math.abs(top - window.scrollY) <= 1) {
+        release();
+        return;
+      }
+
+      const discover = document.getElementById("discover-heading")?.closest("section");
+      if (discover?.getAttribute("aria-busy") === "true") {
+        if (!observer) {
+          observer = new MutationObserver(restore);
+          observer.observe(discover, { attributeFilter: ["aria-busy"] });
+        }
+        return;
+      }
+
+      const rail = document.getElementById("discovery-clubs-rail");
+      const club = Array.from(rail?.children ?? []).find(card => card.getAttribute("data-rail-club") === saved.clubId);
+      const maxTop = (document.scrollingElement?.scrollHeight ?? 0) - root.clientHeight;
+      if (club && top <= maxTop) window.scrollTo({ top, behavior: "instant" });
+      release();
     }
     for (const event of ["wheel", "touchstart", "pointerdown", "keydown"]) {
       window.addEventListener(event, release, { capture: true, passive: true, signal: interaction.signal });
@@ -84,7 +113,7 @@ function HomeScheduleContent({
     releaseReturnScroll.current = () => {
       if (frame) return;
       // Keep anchoring off through the first paint of the settled lanes.
-      frame = requestAnimationFrame(() => { frame = requestAnimationFrame(release); });
+      frame = requestAnimationFrame(() => { frame = requestAnimationFrame(restore); });
     };
     return release;
   }, []);
@@ -199,7 +228,10 @@ function ScheduleContent({
       searchParams: new URLSearchParams(window.location.search),
       state,
     });
-    window.history[push ? "pushState" : "replaceState"](null, "", href);
+    const clubPosition = push ? undefined : readHomeClubPosition();
+    window.history[push ? "pushState" : "replaceState"](
+      clubPosition ? { vrdexHomeClubPosition: clubPosition } : null, "", href,
+    );
   }, []);
   const flushReplace = useCallback(() => {
     const update = pending.current;

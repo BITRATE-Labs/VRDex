@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ArrowDown, ArrowRight, ChevronLeft, ChevronRight, LoaderCircle } from "lucide-react";
+import { readHomeClubPosition, type HomeClubPosition } from "../home-club-history";
 import {
   Children,
   useEffect,
@@ -112,7 +113,7 @@ function CardRail({
 
   useLayoutEffect(() => {
     const rail = ref.current;
-    const saved = window.history.state?.vrdexHomeClubPosition;
+    const saved = readHomeClubPosition();
     if (!restoreClubPosition || !rail || !saved || restoredClubPosition.current) return;
 
     const cards = Array.from(rail.children);
@@ -201,18 +202,22 @@ function CardRail({
           if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
           const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
           const club = link?.closest("[data-rail-club]");
-          if (!club || window.location.pathname !== "/") return;
+          const clubId = club?.getAttribute("data-rail-club");
+          if (!club || !clubId || window.location.pathname !== "/") return;
 
           // Save on the Home history entry before the native link leaves it.
           const rail = event.currentTarget;
           window.history.replaceState({
             ...window.history.state,
             vrdexHomeClubPosition: {
-              clubId: club.getAttribute("data-rail-club"),
+              clubId,
               index: Array.from(rail.children).indexOf(club),
               left: rail.scrollLeft,
               width: rail.clientWidth,
-            },
+              top: window.scrollY,
+              viewportWidth: window.innerWidth,
+              viewportHeight: window.innerHeight,
+            } satisfies HomeClubPosition,
           }, "");
         } : undefined}
         onScroll={(event) => updateEdges(event.currentTarget)}
