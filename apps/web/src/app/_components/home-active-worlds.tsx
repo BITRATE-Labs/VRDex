@@ -37,13 +37,13 @@ export type PublicActiveWorld = {
 function ActiveWorldCard({ world }: { world: PublicActiveWorld }) {
   return (
     <Link
-      className="group relative flex aspect-[4/3] min-h-72 min-w-0 flex-col justify-between overflow-hidden rounded-panel border border-border bg-media p-5 !text-white shadow-panel transition hover:-translate-y-1"
+      className="group relative grid min-h-72 w-full min-w-0 grid-cols-1 overflow-hidden rounded-panel border border-border bg-media !text-white shadow-panel transition before:col-start-1 before:row-start-1 before:aspect-[4/3] hover:-translate-y-1"
       href={`/${world.slug}`}
     >
       <EntityImage className="absolute inset-0 size-full rounded-none bg-media text-4xl text-white" label={world.displayName} sizes="(min-width: 1024px) 33vw, 100vw" src={world.heroImageUrl} />
       <span aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(135deg,color-mix(in_srgb,var(--media)_80%,transparent),color-mix(in_srgb,var(--accent)_16%,transparent))]" />
 
-      <div className="relative">
+      <div className="relative col-start-1 row-start-1 p-5 [overflow-wrap:anywhere]">
         <h3 className="text-3xl font-semibold text-white">{world.displayName}</h3>
         <p className="mt-3 line-clamp-2 text-sm leading-6 text-white/76">
           {world.summary ?? "Upcoming public events are linked here."}
@@ -73,7 +73,7 @@ export function HomeActiveWorldsSection({
       <SectionHeading>Featured worlds</SectionHeading>
 
       {worlds.length > 0 ? (
-        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
           {worlds.map((world) => (
             <ActiveWorldCard key={world.slug} world={world} />
           ))}

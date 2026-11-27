@@ -70,6 +70,23 @@ for (const route of routes) {
   });
 }
 
+test("featured world fits the narrow discovery viewport", async ({ page }) => {
+  test.skip(isHostedRun, "The featured world card uses a local fixture.");
+
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.goto("/discovery");
+
+  const card = page.getByRole("link").filter({
+    has: page.getByRole("heading", { name: "Neon Harbor", exact: true }),
+  });
+  await expect(card).toHaveAttribute("href", "/playwright-neon-harbor");
+  await expect(card.getByText("Afterglow Harbor Sessions", { exact: true })).toBeVisible();
+  expect(await card.evaluate((link) => link.getBoundingClientRect().right)).toBeLessThanOrEqual(320);
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
+    .toBe(320);
+});
+
 test("sign-in offers a route to create an account", async ({ page }) => {
   await page.goto("/sign-in");
 
