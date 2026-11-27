@@ -91,7 +91,7 @@
   cursor: pointer;
 }
 .railControls button[aria-disabled="true"] {
-  border-color: transparent;
+  border-color: color-mix(in srgb, var(--border) 75%, transparent);
   background: transparent;
   color: var(--muted);
   cursor: default;
@@ -118,11 +118,7 @@
   animation: arrive 140ms ease-out;
 }
 .eventCard {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-}
-.eventCard > .artwork {
-  grid-area: 1 / 1;
+  container-type: inline-size;
 }
 .artwork,
 .clubArtwork {
@@ -155,22 +151,21 @@
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
-.save {
-  grid-area: 1 / 1;
-  place-self: end;
-  position: relative;
-  margin: 0 calc(0.65rem + 1px) calc(0.65rem + 1px) 0;
-  opacity: 0;
-  transition: opacity 120ms ease;
-  background: color-mix(in srgb, var(--surface-strong) 90%, transparent);
+.card .save {
+  justify-self: end;
+  min-width: 44px;
+  min-height: 44px;
+  gap: 0.3rem;
+  padding-inline: 0.4rem;
+}
+.interestLabel {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
 }
 .mobileActionLabel {
   display: none;
-}
-.card:hover .save,
-.card:focus-within .save,
-.save[data-state="saved"] {
-  opacity: 1;
 }
 .favorite {
   margin-left: auto;
@@ -182,6 +177,26 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+}
+.eventCard > .eventMetadata {
+  padding-top: 0.3rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 0.4rem;
+  align-items: center;
+  align-content: start;
+}
+.eventMetadata > :is(.date, .favoriteSummary) {
+  grid-column: 1 / -1;
+}
+@container (width < 12rem) {
+  .eventCard > .eventMetadata {
+    grid-template-columns: minmax(0, 1fr);
+    padding-top: 0.75rem;
+  }
+  .card .save {
+    justify-self: start;
+  }
 }
 .clubMetadata {
   min-height: 72px;
@@ -206,8 +221,11 @@
   line-height: 1.5;
 }
 .date {
-  margin-top: 0.3rem;
   overflow-wrap: anywhere;
+}
+.host {
+  display: inline-block;
+  max-width: 100%;
 }
 .favoriteSummary {
   min-height: 1.65rem;
@@ -443,26 +461,9 @@
   article .eventMetadata {
     min-height: 0;
   }
-  .eventCard {
-    grid-template-columns: minmax(0, 1fr) auto;
-    column-gap: 0.4rem;
-  }
-  .eventCard > .artwork {
-    grid-column: 1 / -1;
-  }
-  .eventCard > .eventMetadata {
-    grid-area: 2 / 1;
-  }
-  .eventCard > .save {
-    grid-area: 2 / 2;
-    align-self: start;
-    margin: 0.5rem 0 0;
-    background: transparent;
-  }
+
   .card .favorite {
     min-height: 44px;
-  }
-  .card :is(.save, .favorite) {
     gap: 0.3rem;
     padding-inline: 0.4rem;
   }
@@ -496,17 +497,9 @@
     column-gap: 0.5rem;
   }
 }
-@media (hover: none), (pointer: coarse), (max-width: 760px) {
-  .card .save {
-    min-width: 44px;
-    min-height: 44px;
-    opacity: 1;
-  }
-}
+
 @media (prefers-reduced-motion: reduce) {
-  .save {
-    transition: none;
-  }
+
   .card,
   .loading svg {
     animation: none;
