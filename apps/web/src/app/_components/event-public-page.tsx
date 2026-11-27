@@ -589,13 +589,20 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
               {publicLinks.map((link) => link.presentation === "copy" ? (
                 <CopyValueRow compact key={`${link.type}-${link.url}`} label={link.label} value={link.url} />
               ) : (
-                <a className={actionCardVariants({ variant: "accent" })} href={link.url} key={`${link.type}-${link.url}`} rel="noreferrer" target="_blank">
+                <a
+                  className={cn(actionCardVariants({ variant: "accent" }), (link.type === "watch" || link.type === "stream") && styles.externalStreamLink)}
+                  href={link.url}
+                  key={`${link.type}-${link.url}`}
+                  rel="noreferrer"
+                  target="_blank"
+                >
                   <span className={actionLabelClassName}>
                     {link.label}
                   </span>
-                  <span className="mt-1 block text-xs text-muted">
+                  <span className={cn(actionMetaClassName, styles.openLinkLabel)}>
                     Open link
                   </span>
+                  <ExternalLink aria-hidden="true" className={cn(styles.outboundIcon, "size-3.5 shrink-0 text-muted")} />
                 </a>
               ))}
             </div>
