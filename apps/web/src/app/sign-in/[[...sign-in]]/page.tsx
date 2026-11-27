@@ -4,10 +4,9 @@ import {
   AuthPageShell,
   AuthUnavailableNotice,
 } from "@/components/auth-page-shell";
-import styles from "@/components/clerk-auth-controls.module.css";
+import { journeyAppearance, suggestionAppearance } from "@/components/clerk-auth-appearance";
 import { contributionLabel, PROFILE_SUGGESTION_LABEL } from "@/lib/auth-copy";
 import { fetchPublicProfileShareCardBySlug, fetchPublicProfileSuggestionName } from "@/convex/server";
-import { cn } from "@/lib/cn";
 import { authReturnLink, validateSignInReturnTo } from "@/lib/safe-return-to";
 import { validateSlugFormat } from "../../../../../../convex/_globalSlugs";
 
@@ -55,6 +54,7 @@ export default async function SignInPage({
   return (
     <AuthPageShell
       compact={Boolean(journeyLabel)}
+      condensed={configured && Boolean(suggestionName)}
       headingId="sign-in-heading"
       integrated={configured && Boolean(journeyHeading)}
       subtitle={subtitle}
@@ -62,27 +62,7 @@ export default async function SignInPage({
     >
       {configured ? (
         <SignIn
-          appearance={journeyHeading ? {
-            elements: {
-              rootBox: styles.journeyRoot,
-              cardBox: styles.journeyCardBox,
-              card: styles.journeyCard,
-              header: styles.journeyHeader,
-              formFieldInput: cn(styles.input, styles.journeyTarget),
-              socialButtonsBlockButton: cn(styles.socialButton, styles.journeyTarget),
-              formButtonPrimary: styles.journeyTarget,
-            },
-            variables: {
-              borderRadius: "var(--radius-control)",
-              colorBackground: "var(--surface-strong)",
-              colorForeground: "var(--foreground)",
-              colorInput: "var(--background)",
-              colorInputForeground: "var(--foreground)",
-              colorMutedForeground: "var(--muted)",
-              colorPrimary: "var(--accent)",
-              colorPrimaryForeground: "var(--inverse)",
-            },
-          } : undefined}
+          appearance={suggestionName ? suggestionAppearance : journeyHeading ? journeyAppearance : undefined}
           fallbackRedirectUrl={returnTo}
           signUpFallbackRedirectUrl={returnTo}
           signUpUrl={authReturnLink("/sign-up", returnTo)}

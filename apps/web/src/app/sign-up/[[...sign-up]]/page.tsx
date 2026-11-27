@@ -4,6 +4,7 @@ import {
   AuthPageShell,
   AuthUnavailableNotice,
 } from "@/components/auth-page-shell";
+import { suggestionAppearance } from "@/components/clerk-auth-appearance";
 import styles from "@/components/clerk-auth-controls.module.css";
 import { fetchPublicProfileSuggestionName } from "@/convex/server";
 import { contributionLabel, PROFILE_SUGGESTION_LABEL } from "@/lib/auth-copy";
@@ -28,14 +29,16 @@ export default async function SignUpPage({
   return (
     <AuthPageShell
       compact={configured}
+      condensed={configured && Boolean(suggestionName)}
       headingId="sign-up-heading"
+      integrated={configured && Boolean(suggestionName)}
       subtitle={suggestionName ?? (journeyHeading ? undefined : (journeyLabel ?? "Create a VRDex account to claim a profile and publish events."))}
       title={journeyHeading ?? "Create account"}
       visuallyHiddenTitle={configured && !journeyHeading}
     >
       {configured ? (
         <SignUp
-          appearance={{
+          appearance={suggestionName ? suggestionAppearance : {
             elements: {
               formFieldInput: styles.input,
               socialButtonsBlockButton: styles.socialButton,

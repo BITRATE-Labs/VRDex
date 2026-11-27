@@ -14,6 +14,7 @@ import { cn } from "@/lib/cn";
 export function AuthPageShell({
   children,
   compact,
+  condensed,
   headingId,
   integrated,
   subtitle,
@@ -22,6 +23,7 @@ export function AuthPageShell({
 }: {
   children: ReactNode;
   compact?: boolean;
+  condensed?: boolean;
   headingId: string;
   integrated?: boolean;
   subtitle?: string;
@@ -29,7 +31,7 @@ export function AuthPageShell({
   visuallyHiddenTitle?: boolean;
 }) {
   return (
-    <PageShell className="flex py-6 sm:py-8">
+    <PageShell className={cn("flex py-6 sm:py-8", condensed && "max-sm:py-3")}>
       <PageContainer className="gap-0" max="4xl">
 
         <div
@@ -44,7 +46,10 @@ export function AuthPageShell({
               integrated && "max-w-[25rem] rounded-panel border border-border bg-surface-strong",
             )}
           >
-            <header className={integrated ? "border-b border-border px-5 py-4 sm:px-7" : "text-center"}>
+            <header className={cn(
+              integrated ? "border-b border-border px-5 py-4 sm:px-7" : "text-center",
+              condensed && "max-sm:px-4 max-sm:py-2.5",
+            )}>
               <h1
                 id={headingId}
                 className={cn(
@@ -60,6 +65,7 @@ export function AuthPageShell({
                   "text-sm leading-6 text-muted",
                   !visuallyHiddenTitle && "mt-2",
                   integrated && "[overflow-wrap:anywhere]",
+                  condensed && "max-sm:mt-1",
                 )}>
                   {subtitle}
                 </p>
