@@ -318,7 +318,7 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
           </span>
           <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0 text-xs text-muted sm:text-sm">
             <span className="font-medium text-foreground">{entityLabel(result)}</span>
-            {trustLabel ? <span className="border-s border-border ps-2 text-xs">{trustLabel}</span> : null}
+            {trustLabel ? <span className="text-xs sm:border-s sm:border-border sm:ps-2">{trustLabel}</span> : null}
             {subtitle ? <span>{subtitle}</span> : null}
             {result.startsAt === undefined && result.eventDate === undefined ? null : <ViewerLocalEventDateTime className="text-sm text-accent-strong" timestamp={result.startsAt} eventDate={result.eventDate} scheduleKind={result.scheduleKind} />}
           </span>

@@ -12,3 +12,27 @@
     display: none;
   }
 }
+
+@media (width < 40rem) {
+  .linksPanel :global(.lookup-vrcdn-group) {
+    border-width: 1px 0 0;
+    border-radius: 0;
+    padding: 0.5rem 0 0;
+  }
+
+  .linksPanel :global(.lookup-vrcdn-group .lookup-primary-url-card) {
+    grid-template-areas: "label copy" "value value";
+  }
+
+  .linksPanel :global(.lookup-vrcdn-group .lookup-primary-url-label) {
+    grid-area: label;
+  }
+
+  .linksPanel :global(.lookup-vrcdn-group .lookup-primary-url-value) {
+    grid-area: value;
+  }
+
+  .linksPanel :global(.lookup-vrcdn-group .lookup-primary-url-copy) {
+    grid-area: copy;
+  }
+}
