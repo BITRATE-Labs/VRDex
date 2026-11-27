@@ -282,7 +282,8 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
       <TrackedDiscoveryLink
         className={cn(
           "group relative flex min-h-11 items-start gap-3 rounded-panel p-3 transition-colors hover:bg-surface-strong focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-strong sm:p-4",
-          (result.person?.genres.length || result.person?.outboundLinks.length || result.claimEntryPath) && "pb-2 sm:pb-2",
+          (result.person?.genres.length || result.person?.outboundLinks.length) && "pb-1 sm:pb-2",
+          result.claimEntryPath && "pb-2 sm:pb-2",
         )}
         eventName={result.entityType === "event" ? "event_card_clicked" : "search_result_clicked"}
         href={result.routePath}
@@ -608,7 +609,7 @@ export function SearchResultsPage({
                 )}
               </Card>
             ) : (
-              <div className="grid gap-3 sm:gap-4">
+              <div className="grid gap-2.5 sm:gap-4">
                 {results.map((result) => <SearchResultCard key={`${result.entityType}-${result.slug}`} result={result} />)}
               </div>
             )}
