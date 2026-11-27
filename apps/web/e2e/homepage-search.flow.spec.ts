@@ -102,7 +102,7 @@ for (const theme of ["light", "dark"] as const) {
     const query = `VRDexNoMatch${"W".repeat(35)}`;
     await page.setViewportSize({ width: 320, height: 800 });
     await page.addInitScript((value) => localStorage.setItem("vrdex-theme", value), theme);
-    await page.goto(`/search?q=${query}`);
+    await page.goto(`/search?q=${query}&type=community&source=fixture`);
 
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     const main = page.getByRole("main");
@@ -120,6 +120,15 @@ for (const theme of ["light", "dark"] as const) {
     expect(Math.min(submitBounds.width, submitBounds.height)).toBeGreaterThanOrEqual(44);
     await expect(page.getByText("No public results matched that search yet.", { exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+    const edit = main.getByRole("link", { name: "Edit search", exact: true });
+    await expect(edit).toHaveAttribute("href", "#standard-search-query");
+    await waitForPublicSearchHydration(page);
+    const originalUrl = page.url();
+    await edit.focus();
+    await page.keyboard.press("Enter");
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue(query);
+    await expect(page).toHaveURL(originalUrl);
   });
 }
 
@@ -132,6 +141,7 @@ test("Search reports a failed fetch without claiming there were no matches @flow
   const results = page.getByRole("region", { name: "Search results" });
   const outage = results.getByRole("status").filter({ hasText: "Search data is temporarily unavailable." });
   await expect(outage).toBeVisible();
+  await expect(results.getByRole("link", { name: "Edit search", exact: true })).toHaveCount(0);
   await expect(results.getByText("No public results matched that search yet.", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("combobox", { name: /Search/i })).toHaveValue(query);
   const filters = results.getByRole("navigation", { name: "Entity type" });
@@ -240,10 +250,16 @@ test("sparse public results omit empty disclosure controls @flow @fixture", asyn
   await expect(row.locator("summary")).toHaveCount(0);
   await expect(row.getByText("No public links", { exact: true })).toHaveCount(0);
   await waitForVisualReady(page);
+  const results = page.getByRole("region", { name: "Search results" });
+  const form = page.getByRole("main").locator('form[action="/search"]');
+  const resultsBounds = (await results.boundingBox())!;
+  const formBounds = (await form.boundingBox())!;
+  expect(resultsBounds.x).toBe(formBounds.x);
+  expect(resultsBounds.width).toBe(formBounds.width);
+  expect((await claim.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  expect((await claim.locator("..").boundingBox())!.width).toBeLessThan((await row.boundingBox())!.width);
   if (isMobile) {
     expect((await row.boundingBox())!.y).toBeLessThan(410);
-    expect((await claim.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-    expect((await claim.locator("..").boundingBox())!.width).toBeLessThan((await row.boundingBox())!.width);
   }
   await page.screenshot({ path: info.outputPath("public-results-sparse.png"), fullPage: true });
 });

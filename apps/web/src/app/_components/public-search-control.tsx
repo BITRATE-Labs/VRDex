@@ -21,6 +21,7 @@ type PublicSearchControlProps = {
   compact?: boolean;
   defaultQuery?: string;
   filter?: SearchResultFilter;
+  inputId?: string;
   surface?: "home" | "search";
   tone?: "default" | "inverse";
 };
@@ -30,8 +31,26 @@ export function PublicSearchControl(props: PublicSearchControlProps) {
   return <SearchControl key={props.defaultQuery ?? ""} {...props} />;
 }
 
+export function EditPublicSearchLink({ inputId }: { inputId: string }) {
+  return (
+    <a
+      className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "min-h-11 shrink-0")}
+      href={`#${inputId}`}
+      onClick={(event) => {
+        if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        event.preventDefault();
+        input.focus();
+      }}
+    >
+      Edit search
+    </a>
+  );
+}
+
 function SearchControl({
-  action = "/search", className, compact, defaultQuery, filter = "all", surface = "search", tone = "inverse",
+  action = "/search", className, compact, defaultQuery, filter = "all", inputId, surface = "search", tone = "inverse",
 }: PublicSearchControlProps) {
   const posthog = usePostHog();
   const router = useRouter();
@@ -97,6 +116,7 @@ function SearchControl({
               ? "border-white/25 bg-white/16 text-white placeholder:text-white/62 focus:border-white/70 focus-visible:ring-white/25"
               : "border-border bg-surface text-foreground placeholder:text-muted focus:border-accent focus-visible:ring-accent/20",
           )}
+          id={inputId}
           name="q"
           placeholder="Search people, communities, worlds, events..."
           ref={inputRef}
