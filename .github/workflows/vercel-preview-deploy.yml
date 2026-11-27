@@ -72,6 +72,10 @@ on:
         required: false
       VERCEL_SANDBOX_PROJECT_ID:
         required: false
+      VRDEX_SANDBOX_EVENT_OUTPUT_BROKER_TOKEN:
+        required: false
+      VRDEX_SANDBOX_EVENT_MEDIA_BRIDGE_TOKEN:
+        required: false
       CONVEX_DEPLOY_KEY_PREVIEW:
         required: false
       CLERK_JWT_ISSUER_DOMAIN:
@@ -267,13 +271,27 @@ jobs:
       # deployment to exist — so it has to come from the project's preview
       # environment-variable defaults in the Convex dashboard. See
       # docs/deployment/convex-environments.md.
+      - name: Resolve existing shared sandbox backend
+        if: github.event_name == 'push' && steps.pr.outputs.sandbox == 'true'
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PREVIEW }}
+          PREVIEW_NAME: ${{ steps.pr.outputs.preview_name }}
+        run: node scripts/capture-preview-runtime-credential.mjs --existing-sandbox
+
       - name: Deploy Convex preview functions
         if: steps.convex-preview-gate.outputs.enabled == 'true'
         id: convex-preview
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PREVIEW }}
           PREVIEW_NAME: ${{ steps.pr.outputs.preview_name }}
-        run: pnpm exec convex deploy --yes --typecheck=enable --preview-create "$PREVIEW_NAME" --cmd "node scripts/write-convex-preview-output.mjs" --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL
+        run: |
+          set -euo pipefail
+          if [ -n "${VRDEX_PREVIEW_BACKEND_URL:-}" ]; then
+            : "${VRDEX_PREVIEW_ADMIN_TOKEN:?Existing sandbox credential is required.}"
+            pnpm exec convex deploy --url "$VRDEX_PREVIEW_BACKEND_URL" --admin-key "$VRDEX_PREVIEW_ADMIN_TOKEN" --yes --typecheck=enable --cmd "node scripts/write-convex-preview-output.mjs" --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL
+          else
+            pnpm exec convex deploy --yes --typecheck=enable --preview-create "$PREVIEW_NAME" --cmd "node scripts/write-convex-preview-output.mjs" --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL
+          fi
 
       - name: Configure Convex preview runtime and smoke fixture
         if: steps.convex-preview.outputs.convex_url != ''
@@ -317,6 +335,25 @@ jobs:
           echo "VRDEX_PREVIEW_E2E_AUTH_ENABLED=$preview_e2e_auth_enabled" >> "$GITHUB_ENV"
 
           pnpm exec convex run --preview-name "$PREVIEW_NAME" hostedSmokeFixtures:ensurePublicSearchFixture
+
+      - name: Bind optional sandbox broadcast bootstrap credentials
+        if: github.event_name == 'push' && steps.pr.outputs.sandbox == 'true'
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PREVIEW }}
+          PREVIEW_NAME: ${{ steps.pr.outputs.preview_name }}
+          BROKER_TOKEN: ${{ secrets.VRDEX_SANDBOX_EVENT_OUTPUT_BROKER_TOKEN }}
+          BRIDGE_TOKEN: ${{ secrets.VRDEX_SANDBOX_EVENT_MEDIA_BRIDGE_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$PREVIEW_NAME" = sandbox-shared
+          test "$VRDEX_PREVIEW_BACKEND_URL" = https://quick-yak-167.convex.cloud
+          if [ -z "$BROKER_TOKEN" ] && [ -z "$BRIDGE_TOKEN" ]; then exit 0; fi
+          : "${BROKER_TOKEN:?Sandbox broker token is required.}" "${BRIDGE_TOKEN:?Sandbox dispatcher token is required.}"
+          printf '%s' "$BROKER_TOKEN" | pnpm exec convex env set --preview-name "$PREVIEW_NAME" VRDEX_EVENT_OUTPUT_BROKER_TOKEN
+          printf '%s' "$BRIDGE_TOKEN" | pnpm exec convex env set --preview-name "$PREVIEW_NAME" VRDEX_EVENT_MEDIA_BRIDGE_TOKEN
+          printf '%s' vrdex/sandbox/broadcast/ | pnpm exec convex env set --preview-name "$PREVIEW_NAME" VRDEX_EVENT_OUTPUT_SECRET_NAMESPACE
+          printf '%s' arn:aws:secretsmanager:us-east-1:079358094174:secret: | pnpm exec convex env set --preview-name "$PREVIEW_NAME" VRDEX_EVENT_OUTPUT_SECRET_ARN_PREFIX
+          printf '%s' 1 | pnpm exec convex env set --preview-name "$PREVIEW_NAME" VRDEX_EVENT_BROADCAST_MAX_CONCURRENT
 
       - name: Use Convex preview URL for Vercel build
         if: steps.convex-preview.outputs.convex_url != ''

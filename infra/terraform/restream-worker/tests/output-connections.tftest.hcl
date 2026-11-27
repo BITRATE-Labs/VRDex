@@ -95,10 +95,11 @@ run "production_oidc_broker" {
 run "sandbox_broker_and_dispatch_are_isolated" {
   command = plan
   variables {
-    name_prefix                     = "vrdex-restream-sandbox"
-    managed_output_secret_namespace = "vrdex/sandbox/broadcast/"
-    enable_event_media_bridge       = true
-    max_session_seconds             = 900
+    event_media_bridge_schedule_enabled = false
+    name_prefix                         = "vrdex-restream-sandbox"
+    managed_output_secret_namespace     = "vrdex/sandbox/broadcast/"
+    enable_event_media_bridge           = true
+    max_session_seconds                 = 900
     vercel_output_broker = {
       project_name = "vr-dex-sandbox"
       role_name    = "vrdex-vercel-sandbox-broadcast-output"
@@ -126,6 +127,10 @@ run "sandbox_broker_and_dispatch_are_isolated" {
   assert {
     condition     = aws_lambda_function.bridge[0].environment[0].variables.VRDEX_EVENT_MEDIA_ECS_TASK_FAMILY_PREFIX == "vrdex-restream-sandbox-event-media" && aws_lambda_function.bridge[0].environment[0].variables.VRDEX_EVENT_OUTPUT_SECRET_NAMESPACE == "vrdex/sandbox/broadcast/" && aws_ssm_parameter.hosted_worker_enabled.name == "/vrdex/sandbox/restream/hosted-worker/enabled"
     error_message = "Sandbox dispatch must use separate task definitions, credentials and emergency switch."
+  }
+  assert {
+    condition     = aws_cloudwatch_event_rule.bridge[0].state == "DISABLED"
+    error_message = "Sandbox dispatcher can be provisioned with its schedule off."
   }
 }
 

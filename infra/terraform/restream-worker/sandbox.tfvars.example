@@ -15,3 +15,4 @@ vercel_output_broker = {
 # Enable the bridge after the matching worker image and Lambda ZIP are published
 # to this stack's repository and private artifact bucket. Use the sandbox token
 # ARN and a digest in event_media_bridge. Keep credential_refs empty.
+event_media_bridge_schedule_enabled = false

@@ -97,9 +97,13 @@ with a 15-minute maximum.
    `vrdex/sandbox/restream/` and bind it to sandbox Convex. Configure the broker
    using the Terraform role and namespace outputs and an independent broker
    token shared only by sandbox Next and Convex. Set the Convex concurrent-worker
-   cap to one.
+   cap to one. For the first trusted sandbox deploy only, supply the dispatcher
+   and broker tokens as `VRDEX_SANDBOX_EVENT_MEDIA_BRIDGE_TOKEN` and
+   `VRDEX_SANDBOX_EVENT_OUTPUT_BROKER_TOKEN`. Remove the temporary CI secrets
+   after the sandbox deployment reports successful binding.
 4. Plan the sandbox dispatcher with the matching artifact and token references,
-   empty legacy credential map, and intended sandbox networking. Enable it for
+   empty legacy credential map, and intended sandbox networking. Provision it
+   with the timer disabled until runtime credentials are bound. Enable it for
    the first private test event. From VRDex, save a test destination, run
    **Test connection**, independently verify decoded playback, and confirm
    worker cleanup. Keep the production Terraform state and credentials out of

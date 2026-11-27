@@ -5,6 +5,12 @@ variable "enable_event_media_bridge" {
   default     = false
 }
 
+variable "event_media_bridge_schedule_enabled" {
+  description = "Enable minute dispatch after the selected backend and credentials are ready."
+  type        = bool
+  default     = true
+}
+
 variable "event_media_bridge" {
   description = "Owner-reviewed hosted configuration. Secret references only. Publish the Lambda ZIP with index.handler under its SHA256 key before enabling."
   type = object({
@@ -210,7 +216,7 @@ resource "aws_cloudwatch_event_rule" "bridge" {
   name                = "${var.name_prefix}-event-bridge"
   description         = "Reconcile event media workers once per minute."
   schedule_expression = "rate(1 minute)"
-  state               = "ENABLED"
+  state               = var.event_media_bridge_schedule_enabled ? "ENABLED" : "DISABLED"
   tags                = local.tags
 }
 
