@@ -118,9 +118,10 @@ test("Home search, filters, refresh and history keep URL and results aligned @fl
 test("Search recovers from empty Events with the same query and preserves history @flow @fixture", async ({ page }) => {
   await page.goto("/");
   await waitForPublicSearchHydration(page);
-  const input = page.getByRole("combobox", { name: /Search/i });
+  const main = page.getByRole("main");
+  const input = main.getByRole("combobox", { name: "Search VRDex", exact: true });
   await input.fill("DJ");
-  await input.press("Enter");
+  await main.getByRole("button", { name: "Search VRDex", exact: true }).click();
   await expect(page).toHaveURL(/\/search\?q=DJ$/);
   const match = publicResultRow(page, "/basicbit");
   await expect(match).toBeVisible();
@@ -269,6 +270,42 @@ function publicResultRow(page: Page, path: string) {
   return page.getByRole("region", { name: "Search results" }).locator(`a[href="${path}"]`).locator("..");
 }
 
+test("populated Search aligns titles and keeps media and role details available at 320px @flow @fixture", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.addInitScript(() => localStorage.setItem("vrdex-theme", "dark"));
+  await page.goto("/search?q=DJ");
+  const aurora = publicResultRow(page, "/playwright-dj-aurora");
+  const basicbit = publicResultRow(page, "/basicbit");
+  const moth = publicResultRow(page, "/playwright-moth");
+  const titles = await Promise.all([
+    aurora.getByText("DJ Aurora", { exact: true }).boundingBox(),
+    basicbit.getByText("BASICBIT", { exact: true }).boundingBox(),
+    moth.getByText("Moth", { exact: true }).boundingBox(),
+  ]);
+  expect(titles.every((bounds) => bounds && bounds.x === titles[0]?.x)).toBe(true);
+
+  const thumbnail = aurora.locator("img");
+  await expect(thumbnail).toHaveCount(1);
+  await expect(thumbnail).toHaveAttribute("src", /\/api\/e2e\/fixture-assets\/fixture-aurora-profile-image$/);
+  await expect.poll(() => thumbnail.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+  await expect(aurora.getByText("Melodic house sets for late-night VRChat floors.", { exact: true })).toBeVisible();
+  await expect(aurora.getByText("DJ · Producer · Host", { exact: true })).toBeVisible();
+  await expect(basicbit.getByText("Software Dev | 3D Designer | VRDJ", { exact: true })).toBeVisible();
+  await expect(basicbit.getByText("Software Dev · 3D Designer · VRDJ", { exact: true })).toHaveCount(0);
+  await expect(moth.getByText("DJ · VRDJ · Fixture lineup", { exact: true })).toBeVisible();
+
+  const avatarRoute = "**/api/e2e/fixture-assets/fixture-aurora-profile-image";
+  await page.route(avatarRoute, (route) => route.abort());
+  await page.reload();
+  await expect(aurora.getByText("DA", { exact: true })).toBeVisible();
+  await expect(thumbnail).toHaveCount(0);
+  await page.unroute(avatarRoute);
+
+  await aurora.getByRole("link", { name: /DJ Aurora/ }).click();
+  await expect(page).toHaveURL(/\/playwright-dj-aurora$/);
+  await expect(page.getByRole("heading", { name: "Media kit", exact: true })).toBeVisible();
+});
+
 test("public result genres and Links disclose independently per person @flow @fixture", async ({ page }, info) => {
   await prepareVisualPage(page);
   await page.addInitScript(() => localStorage.setItem("vrdex-theme", "dark"));
@@ -335,8 +372,8 @@ test("sparse public results omit empty disclosure controls @flow @fixture", asyn
   if (isMobile) {
     const typeBounds = (await profile.getByText("Person", { exact: true }).boundingBox())!;
     const trustBounds = (await profile.getByText("Unclaimed", { exact: true }).boundingBox())!;
-    expect(trustBounds.x).toBe(typeBounds.x);
-    expect(trustBounds.y).toBeGreaterThanOrEqual(typeBounds.y + typeBounds.height);
+    expect(trustBounds.x).toBeGreaterThan(typeBounds.x + typeBounds.width);
+    expect(trustBounds.y).toBe(typeBounds.y);
     await expect(profile.getByText("·", { exact: true })).toHaveCount(0);
     expect((await row.boundingBox())!.y).toBeLessThan(410);
   }
