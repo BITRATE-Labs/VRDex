@@ -8,6 +8,7 @@ import { EditPublicSearchLink } from "./public-search-control";
 import { searchHref, type SearchResultFilter } from "./search-view-state";
 import { SearchViewShell } from "./search-view-shell";
 import { PublicSearchResultDetails } from "./public-search-result-details";
+import styles from "./discovery-public-page.module.css";
 import type { PublicEventPreview } from "./event-public-page";
 import { ViewerLocalEventDateTime, ViewerLocalEventTime } from "./viewer-local-event-times";
 import { buttonVariants } from "@/components/ui/button";
@@ -695,7 +696,8 @@ export function SearchResultsPage({
                     aria-current={active ? "page" : undefined}
                     className={cn(
                       buttonVariants({ size: "sm", variant: "ghost" }),
-                      "min-h-11 min-w-11 rounded-none border-b-2 border-transparent px-1 ring-inset max-sm:text-xs sm:px-3",
+                      styles.searchFilter,
+                      "min-h-11 min-w-11 rounded-none border-b-2 border-transparent px-1 max-sm:text-xs sm:px-3",
                       active ? "border-accent-strong !text-accent-strong" : "!text-muted hover:!text-foreground",
                     )}
                     href={searchHref({ filter, query })}
