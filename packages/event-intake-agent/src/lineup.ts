@@ -6,6 +6,7 @@ export type LineupLookup = { query: string; phase: "exact" | "prefix"; results: 
 type SearchPeople = (query: string, limit: number) => Promise<PublicPersonMatch[]>;
 const LABEL_LIMIT = 8;
 const LOOKUP_TIMEOUT_MS = 3_000;
+const LOOKUP_BUDGET_MS = 5_000;
 
 // Only one insertion, deletion or substitution. This is a suggestion, never an identity decision.
 function oneEditApart(left: string, right: string): boolean {
@@ -25,12 +26,15 @@ function oneEditApart(left: string, right: string): boolean {
 export async function resolveLineupPeople(candidate: EventIntakeCandidate, search: SearchPeople, observe?: (lookup: LineupLookup) => void): Promise<void> {
   if (candidate.decision.kind === "not_event") return;
   const cache = new Map<string, { matches: PublicPersonMatch[]; reason: string }>();
+  const deadline = Date.now() + LOOKUP_BUDGET_MS;
   const lookup = async (query: string, phase: LineupLookup["phase"]) => {
     const startedAt = Date.now();
+    const timeout = Math.min(LOOKUP_TIMEOUT_MS, deadline - startedAt);
+    if (timeout <= 0) return { results: [], outcome: "unavailable" as const };
     let results: PublicPersonMatch[] = [], outcome: LineupLookup["outcome"] = "ok";
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const rows = await Promise.race([search(query, 5), new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error("lookup_timeout")), LOOKUP_TIMEOUT_MS); })]);
+      const rows = await Promise.race([search(query, 5), new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new Error("lookup_timeout")), timeout); })]);
       results = rows.slice(0, 5).filter(row => typeof row.slug === "string" && row.slug.length > 0 && row.slug.length <= 64 && typeof row.displayName === "string")
         .map(row => ({ slug: row.slug, displayName: row.displayName.slice(0, 120) }));
     } catch { outcome = "unavailable"; }
