@@ -56,6 +56,21 @@ for (const color of ["light", "dark"] as const) test(`series editor evidence ${c
   await capture(page, info.outputPath(`series-page-${color}.png`));
 });
 
+test("an empty public series shows its schedule status without a download action @fixture", async ({ page, request }) => {
+  const route = "/playwright-afterglow-social/series/playwright-afterglow-series-empty";
+  expect((await page.goto(route))?.status()).toBe(200);
+
+  const main = page.getByRole("main");
+  await expect(main.getByRole("heading", { name: "Upcoming nights", exact: true })).toBeVisible();
+  await expect(main.getByText("None scheduled", { exact: true })).toBeVisible();
+  await expect(main.getByRole("link", { name: "Add to calendar", exact: true })).toHaveCount(0);
+
+  const calendar = await request.get(route + "/calendar.ics");
+  expect(calendar.status()).toBe(200);
+  expect(calendar.headers()["content-type"]).toContain("text/calendar");
+  expect(await calendar.text()).not.toContain("BEGIN:VEVENT");
+});
+
 test("an occurrence links its series @fixture", async ({ page }) => {
   await page.goto("/playwright-afterglow-social/events/playwright-afterglow-series-night");
   await page.getByRole("link", { name: "Upcoming nights", exact: true }).click();

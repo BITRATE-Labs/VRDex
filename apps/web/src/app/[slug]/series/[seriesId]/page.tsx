@@ -26,9 +26,11 @@ export default async function EventSeriesPage({ params }: EventSeriesPageProps) 
     notFound();
   }
 
+  const hasUpcomingNights = series.nights.length > 0;
+
   return (
     <PageShell className="py-5 sm:py-6 lg:py-7" tone="event">
-      <PageContainer className="gap-5">
+      <PageContainer className="gap-5" max={hasUpcomingNights ? undefined : "3xl"}>
 
         <header>
           <h1 className="text-5xl leading-none font-semibold tracking-[-0.05em] sm:text-7xl">{series.title}</h1>
@@ -38,17 +40,17 @@ export default async function EventSeriesPage({ params }: EventSeriesPageProps) 
         <Card surface="white">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-semibold tracking-tight">Upcoming nights</h2>
-            <a className={buttonVariants({ size: "sm", variant: "secondary" })} href={`/${slug}/series/${series.id}/calendar.ics`}>
+            {hasUpcomingNights ? <a className={buttonVariants({ size: "sm", variant: "secondary" })} href={`/${slug}/series/${series.id}/calendar.ics`}>
               Add to calendar
-            </a>
+            </a> : null}
           </div>
-          {series.nights.length > 0 ? (
+          {hasUpcomingNights ? (
             <div className="mt-5 grid gap-3 lg:grid-cols-2">
               {series.nights.map((night) => (
                 <EventPreviewCard event={night} key={night.id} />
               ))}
             </div>
-          ) : null}
+          ) : <p className="mt-3 text-sm font-medium text-foreground">None scheduled</p>}
         </Card>
       </PageContainer>
     </PageShell>

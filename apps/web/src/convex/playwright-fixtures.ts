@@ -1632,6 +1632,7 @@ export function getPlaywrightPublicWorldFixture(slug: string): PublicWorld | nul
 }
 
 const seriesId = "playwright-afterglow-series";
+const emptySeriesId = "playwright-afterglow-series-empty";
 const seriesNightSlug = "playwright-afterglow-series-night";
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -1639,7 +1640,7 @@ export function getPlaywrightPublicEventSeriesFixture(id: string) {
   if (
     process.env.NODE_ENV === "production" ||
     process.env.VRDEX_ENABLE_PLAYWRIGHT_FIXTURES !== "true" ||
-    id !== seriesId
+    (id !== seriesId && id !== emptySeriesId)
   ) {
     return null;
   }
@@ -1650,7 +1651,7 @@ export function getPlaywrightPublicEventSeriesFixture(id: string) {
     summary: eventPreview.summary,
     communitySlug,
     communityName: eventPreview.communityName,
-    nights: [0, 1, 2, 3].map(week => ({
+    nights: id === emptySeriesId ? [] : [0, 1, 2, 3].map(week => ({
       ...eventPreview,
       id: `${seriesNightSlug}-${week}`,
       slug: week === 0 ? seriesNightSlug : `${seriesNightSlug}-${week}`,
