@@ -94,6 +94,13 @@ for (const timezoneId of ["UTC", "America/Los_Angeles"]) {
             };
           });
           expect(actionLayout).toEqual({ contained: true, singleRow: true });
+          const [timeBox, actionsBox] = await Promise.all([time.boundingBox(), actions.boundingBox()]);
+          if (!timeBox || !actionsBox) throw new Error("Missing event hero layout");
+          if (width < 640) {
+            expect(timeBox.y + timeBox.height).toBeLessThan(actionsBox.y);
+          } else {
+            expect(actionsBox.y + actionsBox.height).toBeLessThan(timeBox.y);
+          }
           const lines = await renderedTimeLines(time);
           expect(lines).not.toContain("UTC");
           expect(lines).not.toContain("PST");
@@ -106,9 +113,9 @@ for (const timezoneId of ["UTC", "America/Los_Angeles"]) {
         } else {
           const play = main.getByRole("button", { name: /^Play / });
           await expect(play.getByText("Play", { exact: true })).toBeVisible();
-          await page.setViewportSize({ width: 360, height: 720 });
+          await page.setViewportSize({ width: 320, height: 740 });
           const control = await play.locator("[data-watch-play-control]").boundingBox();
-          expect(control && control.y + control.height).toBeLessThanOrEqual(720);
+          expect(control && control.y + control.height).toBeLessThanOrEqual(620);
         }
         await expect(main.locator("video, iframe")).toHaveCount(0);
       }
@@ -146,8 +153,9 @@ test("sparse guest events preserve real content and deny Host routes @flow @fixt
   expect(ics).not.toContain("DTEND");
 
   const report = main.getByRole("button", { name: "Report event" });
+  await page.setViewportSize({ width: 320, height: 740 });
   await report.focus();
-  await expect(main.getByRole("tooltip", { name: "Report event" })).toBeVisible();
+  await expect(main.getByRole("tooltip", { name: "Report event" })).toBeInViewport({ ratio: 1 });
   await report.press("Enter");
   const dialog = page.getByRole("dialog", { name: "Report event" });
   await expect(dialog).toBeVisible();
