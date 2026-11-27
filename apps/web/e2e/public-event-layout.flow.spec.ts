@@ -47,7 +47,8 @@ test("published lineups are directly reachable from the event hero @flow @fixtur
       const main = page.getByRole("main");
       const shortcut = main.getByRole("link", { name: "Lineup", exact: true });
       const heading = main.getByRole("heading", { name: "Lineup", exact: true });
-      const firstPerformer = heading.locator("..").getByRole("link").first();
+      const lineup = heading.locator("..");
+      const firstPerformer = lineup.getByRole("link", { name: "DJ Aurora", exact: true });
 
       await expect(shortcut).toHaveAttribute("href", "#event-lineup");
       await expect(shortcut).toBeInViewport({ ratio: 1 });
@@ -66,6 +67,18 @@ test("published lineups are directly reachable from the event hero @flow @fixtur
 
       await page.keyboard.press("Tab");
       await expect(firstPerformer).toBeFocused();
+      await expect(firstPerformer).toHaveAttribute("href", "/playwright-dj-aurora");
+      await expect(firstPerformer).toHaveAccessibleDescription(/^House .+ - .+$/);
+      await expect(lineup.getByText("DJ Lumen", { exact: true })).toBeVisible();
+      await expect(lineup.getByRole("link", { name: "DJ Lumen" })).toHaveCount(0);
+      if (width === 320) {
+        const row = await firstPerformer.boundingBox();
+        if (!row) throw new Error("Missing lineup profile link");
+        expect(row.width).toBeGreaterThanOrEqual(44);
+        expect(row.height).toBeGreaterThanOrEqual(44);
+        await firstPerformer.click({ position: { x: 14, y: row.height / 2 } });
+        await expect(page).toHaveURL(/\/playwright-dj-aurora$/);
+      }
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
     }
   }
