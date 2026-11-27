@@ -96,6 +96,20 @@
   .page:has(.watch:not(:empty)) .heroActions {
     order: 0;
   }
+
+  .page:has(.media > .poster):has(.watch:not(:empty) + .locationLinks):has(.lineup li:first-child > a time) .heroLead {
+    min-height: 12.5rem;
+    padding-block: 1.25rem;
+  }
+
+  .page:has(.media > .poster):has(.watch:not(:empty) + .locationLinks):has(.lineup li:first-child > a time) .heroContent h1 {
+    margin-top: 0.5rem;
+    font-size: 3.5rem;
+  }
+
+  .page:has(.media > .poster):has(.watch:not(:empty) + .locationLinks):has(.lineup li:first-child > a time) .heroSummary {
+    margin-top: 0.625rem;
+  }
 }
 
 @media (width >= 64rem) {

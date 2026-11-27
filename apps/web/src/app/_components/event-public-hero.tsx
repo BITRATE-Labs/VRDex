@@ -72,7 +72,7 @@ export function EventPublicHero({
             <h1 className="mt-3 text-4xl leading-[1.05] font-semibold tracking-[-0.05em] [overflow-wrap:anywhere] sm:mt-4 sm:text-7xl sm:leading-none">
               {event.title}
             </h1>
-            {event.summary ? <p className={cn("mt-3 max-w-2xl text-base leading-6 [overflow-wrap:anywhere] sm:mt-4 sm:text-lg sm:leading-7", bannerStyle && "text-white/82")}>{event.summary}</p> : null}
+            {event.summary ? <p className={cn(styles.heroSummary, "mt-3 max-w-2xl text-base leading-6 [overflow-wrap:anywhere] sm:mt-4 sm:text-lg sm:leading-7", bannerStyle && "text-white/82")}>{event.summary}</p> : null}
             {event.venueLabel ? <p className={cn("mt-3 text-sm", detailTextClassName)}>{event.venueLabel}</p> : null}
           </div>
         </div>
