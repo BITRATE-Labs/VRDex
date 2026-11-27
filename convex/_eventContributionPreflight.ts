@@ -67,19 +67,19 @@ export async function preflightEventContribution(db: DatabaseReader, actorUserId
   const fingerprint = eventContributionFingerprint(community._id, fields.eventDate!, fields.title!);
   const suppression = await db.query("eventContributionSuppressions").withIndex("by_fingerprint_expiresAt", q => q.eq("fingerprint", fingerprint).gt("expiresAt", now)).first();
   if (suppression) throw new ConvexError({ code: "REPOST_BLOCKED" });
-  const matches = await db.query("events").withIndex("by_contributionFingerprint", q => q.eq("contributionFingerprint", fingerprint)).filter(q => q.eq(q.field("draftDiscardedAt"), undefined)).take(101);
+  const matches = await db.query("events").withIndex("by_contributionFingerprint", q => q.eq("contributionFingerprint", fingerprint)).take(101);
   if (matches.length > 100) throw new ConvexError({ code: "TARGET_QUOTA" });
-  const exact = matches.find(event => event._id !== correctingEventId && event.moderationRemovedAt === undefined);
+  const exact = matches.find(event => event._id !== correctingEventId && event.moderationRemovedAt === undefined && event.draftDiscardedAt === undefined);
   if (exact && (exact.publicationState !== "published" || exact.eventStatus !== "scheduled")) throw new ConvexError({ code: "REPOST_BLOCKED" });
   if (exact) return { ...normalized, community, world: world ?? undefined, fingerprint, existing: exact };
   const dayStart = Date.parse(`${fields.eventDate}T00:00:00Z`);
   const [dated, legacyWindow] = await Promise.all([
-    db.query("events").withIndex("by_communityProfileId_eventDate", q => q.eq("communityProfileId", community._id).eq("eventDate", fields.eventDate!)).filter(q => q.eq(q.field("draftDiscardedAt"), undefined)).take(101),
+    db.query("events").withIndex("by_communityProfileId_eventDate", q => q.eq("communityProfileId", community._id).eq("eventDate", fields.eventDate!)).take(101),
     // Old timed records have no eventDate until the schedule backfill runs.
-    db.query("events").withIndex("by_communityProfileId_startAt", q => q.eq("communityProfileId", community._id).gte("startAt", dayStart - 14 * 3_600_000).lt("startAt", dayStart + 38 * 3_600_000)).filter(q => q.eq(q.field("draftDiscardedAt"), undefined)).take(101),
+    db.query("events").withIndex("by_communityProfileId_startAt", q => q.eq("communityProfileId", community._id).gte("startAt", dayStart - 14 * 3_600_000).lt("startAt", dayStart + 38 * 3_600_000)).take(101),
   ]);
   if (dated.length > 100 || legacyWindow.length > 100) throw new ConvexError({ code: "TARGET_QUOTA" });
-  const sameDay = [...dated, ...legacyWindow.filter(event => !event.eventDate && event.startAt !== undefined && eventDateForInstant(event.startAt, event.timezone) === fields.eventDate)].filter(event => event._id !== correctingEventId && event.moderationRemovedAt === undefined);
+  const sameDay = [...dated, ...legacyWindow.filter(event => !event.eventDate && event.startAt !== undefined && eventDateForInstant(event.startAt, event.timezone) === fields.eventDate)].filter(event => event._id !== correctingEventId && event.moderationRemovedAt === undefined && event.draftDiscardedAt === undefined);
   if (sameDay.length > 100) throw new ConvexError({ code: "TARGET_QUOTA" });
   // Include owner/import events, which predate contribution fingerprints.
   const legacyExact = sameDay.find(event => eventContributionFingerprint(community._id, fields.eventDate!, event.title) === fingerprint);

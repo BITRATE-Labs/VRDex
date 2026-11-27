@@ -2970,23 +2970,40 @@ export const getEventOwnerMode = query({
 export const setEventOwnerMode = mutation({
   args: { communitySlug: v.union(v.string(), v.null()) },
   handler: async (ctx, { communitySlug }) => {
-    const { userId } = await requireActiveBrowserSessionSubject(ctx);
+    const { user, userId, subject } = await requireActiveBrowserSessionSubject(ctx);
     if (!(await getAccountFeatureAccess(ctx.db, userId)).superAdmin) {
       throw new Error("Super-admin access is required.");
     }
-    if (communitySlug === null) {
-      await ctx.db.patch(userId, { eventOwnerMode: undefined });
-      return;
-    }
-    const profile = await ctx.db.query("profiles")
+    const profile = communitySlug === null ? null : await ctx.db.query("profiles")
       .withIndex("by_slug", (q) => q.eq("slug", communitySlug.trim()))
       .unique();
-    if (profile?.profileType !== "community" || !canReadProfile("public", profile)) {
+    if (communitySlug !== null && (profile?.profileType !== "community" || !canReadProfile("public", profile))) {
       throw new Error("Community not found.");
     }
-    await ctx.db.patch(userId, {
-      eventOwnerMode: { communityProfileId: profile._id, expiresAt: Date.now() + 60 * 60_000 },
-    });
+
+    const now = Date.now();
+    const previous = user.eventOwnerMode;
+    if (previous) {
+      await ctx.db.insert("profileAuditEvents", {
+        profileId: previous.communityProfileId,
+        actor: subject,
+        action: "event_admin_access_ended",
+        sourceType: "moderator",
+        createdAt: now,
+      });
+    }
+    const mode = profile ? { communityProfileId: profile._id, expiresAt: now + 60 * 60_000 } : undefined;
+    if (mode) {
+      await ctx.db.insert("profileAuditEvents", {
+        profileId: mode.communityProfileId,
+        actor: subject,
+        action: "event_admin_access_started",
+        sourceType: "moderator",
+        note: `Expires ${new Date(mode.expiresAt).toISOString()}`,
+        createdAt: now,
+      });
+    }
+    await ctx.db.patch(userId, { eventOwnerMode: mode });
   },
 });
 

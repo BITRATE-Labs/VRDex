@@ -77,6 +77,10 @@ it('lets the community owner and a scoped super-admin each manage both event con
   }
   await admin.mutation(api.events.setEventOwnerMode, { communitySlug: null });
   await assert.rejects(admin.query(api.eventBroadcastConnections.getSetup, { currentSlug: testEvent.slug }), /permission/);
+  const audit = await f.t.run(({ db }) => db.query('profileAuditEvents').collect());
+  assert.deepEqual(audit.map(row => row.action), ['event_admin_access_started', 'event_admin_access_ended']);
+  assert.ok(audit.every(row => row.actor?.subject === subject && row.profileId === audit[0]?.profileId));
+  assert.equal(Date.parse(audit[0]!.note!.slice('Expires '.length)), audit[0]!.createdAt + 60 * 60_000);
 });
 it('commits CAS metadata, retains a blank key and rejects changed server or stale revision', async () => {
   const f = await fixture(); const grant = await f.owner.mutation(ref('prepareConnection'), f.input);
