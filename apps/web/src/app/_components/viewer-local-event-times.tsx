@@ -101,6 +101,7 @@ export function ViewerLocalEventDateTime({
   scheduleKind,
   compactRelativeTo,
   groupTime = false,
+  showYear = false,
   timeZone: explicitTimeZone,
   showTimeZone = true,
   hour12,
@@ -111,6 +112,7 @@ export function ViewerLocalEventDateTime({
   scheduleKind?: "timed" | "date_only";
   compactRelativeTo?: number;
   groupTime?: boolean;
+  showYear?: boolean;
   timeZone?: string;
   hour12?: boolean;
   showTimeZone?: boolean;
@@ -137,6 +139,7 @@ export function ViewerLocalEventDateTime({
 
   const formatter = timestampFormatter(timeZone, {
     ...dateTimeOptions,
+    year: showYear ? "numeric" : undefined,
     hour12,
     timeZoneName: showTimeZone ? dateTimeOptions.timeZoneName : undefined,
   });
