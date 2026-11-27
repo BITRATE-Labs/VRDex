@@ -512,6 +512,14 @@
   }
 }
 @media (width <= 420px) {
+  /* Keep the artwork peek at each end. The metadata stays available on focus. */
+  .cards:not(.clubRail, :active)[data-scroll-right]:not([data-scroll-left])
+    > div:not(:first-child, :focus-within) .eventMetadata,
+  .cards:not(.clubRail, :active)[data-scroll-left]:not([data-scroll-right])
+    > div:not(:last-child, :focus-within) .eventMetadata {
+    opacity: 0;
+    pointer-events: none;
+  }
   .clubRail {
     grid-auto-columns: 100%;
     scroll-padding-inline: 3px;
