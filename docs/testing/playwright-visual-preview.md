@@ -36,6 +36,12 @@ focus to Usage & privacy when analytics settings are enabled.
 The World presentation flow checks the VRChat action stays above artwork and
 fits on phones after platform compatibility. It covers duplicate, distinct,
 reference-only, and absent URLs, plus sparse and one-sided event fixtures.
+The sparse World fixture verifies centered placement at 320 px and a text
+status for the unlisted VRChat link.
+
+The Support flow checks the exact required field names, persistent Message
+instructions, conditional profile lookup, and mock submission and retry.
+Public Contact and Privacy request snapshots cover their initial topic states.
 
 PowerShell data-flow run with video:
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Field, Input, Select } from "@/components/ui/field";
+import { Field, FieldText, Input, Select } from "@/components/ui/field";
 import { EventIdentityPicker } from "../events/event-identity-picker";
 import type { EventIdentityOption } from "@/lib/event-editor-identity";
 
@@ -10,7 +10,7 @@ export function SupportProfileField({ required, disabled }: { required: boolean;
   const [selected, setSelected] = useState<EventIdentityOption | null>(null);
   const [manual, setManual] = useState(false);
   return <div className="grid gap-4">
-    <Field>Profile type<Select aria-label="Profile type" name="profileType" value={kind} required={required} disabled={disabled} onChange={event => { setKind(event.target.value as typeof kind); setSelected(null); }}>
+    <Field><span>Profile type{required ? <FieldText aria-hidden="true" className="ml-2 font-normal">Required</FieldText> : null}</span><Select aria-label="Profile type" name="profileType" value={kind} required={required} disabled={disabled} onChange={event => { setKind(event.target.value as typeof kind); setSelected(null); }}>
       <option value="">Choose one</option><option value="person">Person</option><option value="community">Community</option>
     </Select></Field>
     {kind && !manual ? <>
