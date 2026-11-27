@@ -43,6 +43,13 @@ function ScheduleLoadingMessage() {
     </span>
   );
 }
+function ScheduleChartLoading() {
+  return (
+    <div className={styles.chartLoadingStatus} role="status">
+      <ScheduleLoadingMessage />
+    </div>
+  );
+}
 export function HomeSchedule(props: { onSelectionChange?: (selection: TimelineSelection | null) => void } = {}) {
   const browse = useOptionalHomeBrowse();
   return browse ? <HomeScheduleContent {...props} /> : <HomeBrowseProvider><HomeScheduleContent {...props} /></HomeBrowseProvider>;
@@ -85,15 +92,15 @@ function HomeScheduleContent({
         >
           <TimelineToolbar navigation={{ anchor: null, timeZone: null, favoritesOnly: false }}
             date="" timeZone="" hour12 disabled onNavigate={() => {}} onDate={() => {}} onPan={() => {}} onNow={() => {}}>
-            <div className={styles.status} role="status">
-              <ScheduleLoadingMessage />
-            </div>
+            <div className={styles.status} />
           </TimelineToolbar>
-          <div aria-hidden="true" inert className={styles.scroller}>
+          <div tabIndex={-1} className={styles.scroller} data-pending-scroller>
             <div className={styles.canvas} style={{ width: 14400 }}>
-              <div className={styles.dayAxis} />
-              <div className={styles.hourAxis} />
-              <div className={styles.lanes} data-loading-placeholder style={{ height: 376 }} />
+              <div className={styles.dayAxis} data-loading-axis aria-hidden="true" />
+              <div className={styles.hourAxis} data-loading-axis aria-hidden="true" />
+              <div className={styles.lanes} data-loading-placeholder style={{ height: 376 }}>
+                <ScheduleChartLoading />
+              </div>
             </div>
           </div>
         </section>
@@ -325,7 +332,7 @@ function ScheduleContent({
           aria-label="Schedule data state"
           data-state={data.kind}
         >
-          {data.kind === "loading" && !retainedRefresh && (
+          {data.kind === "loading" && !retainedRefresh && !loadingWithoutContent && (
             <ScheduleLoadingMessage />
           )}
           {data.kind === "error" && (
@@ -378,7 +385,7 @@ function ScheduleContent({
         lanes={data.eventLanes}
         saved={data.saved}
         compactEmpty={compactEmpty}
-        loadingPlaceholder={loadingWithoutContent}
+        loadingStatus={loadingWithoutContent ? <ScheduleChartLoading /> : undefined}
         emptyState={showFavoritesEmptyState ? (
           <div className={styles.emptyState}>
             <p role="status">No favorites in this range</p>

@@ -17,7 +17,7 @@ export function TimelineChart({
   lanes,
   saved,
   compactEmpty,
-  loadingPlaceholder,
+  loadingStatus,
   emptyState,
   range,
   now,
@@ -31,7 +31,7 @@ export function TimelineChart({
   lanes: ReadonlyArray<EventLane>;
   saved: SavedResolution[];
   compactEmpty: boolean;
-  loadingPlaceholder: boolean;
+  loadingStatus?: ReactNode;
   emptyState?: ReactNode;
   range: TimelineRange;
   now: number;
@@ -200,10 +200,11 @@ export function TimelineChart({
           )}
           <div
             data-testid="public-timeline-lanes"
-            data-loading-placeholder={loadingPlaceholder || undefined}
+            data-loading-placeholder={loadingStatus ? true : undefined}
             className={styles.lanes}
             style={{ height }}
           >
+            {loadingStatus}
             {publicLanes.map((lane) => {
               const event = records.find((e) => e.id === lane.eventId);
               return event ? (
