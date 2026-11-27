@@ -10,7 +10,7 @@ import Link from "next/link";
 import { usePostHog } from "posthog-js/react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, FieldText, Input, Textarea } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
@@ -266,12 +266,12 @@ function ConnectedTemporalParser() {
 
   if (!isAuthenticated) {
     return (
-      <Notice>
-        <Link className="font-medium text-accent underline underline-offset-4" href="/sign-in">
-          Sign in
-        </Link>{" "}
-        to use VRDex Time.
-      </Notice>
+      <Link
+        className={buttonVariants({ className: "-mt-4 self-start", size: "lg", variant: "primary" })}
+        href="/sign-in?returnTo=%2Ftime"
+      >
+        Sign in
+      </Link>
     );
   }
 

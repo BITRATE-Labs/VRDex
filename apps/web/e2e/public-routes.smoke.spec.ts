@@ -1177,3 +1177,18 @@ test("public OAuth failure groups the status and documented recovery", async ({ 
     expect(statusBox.y + statusBox.height).toBeLessThanOrEqual(linkBox.y);
   }
 });
+
+test("VRDex Time sign-in keeps the visitor's return path", async ({ page }) => {
+  test.skip(isHostedRun, "The signed-out Time surface is tested with the local Convex binding.");
+  expect((await page.goto("/time"))?.status()).toBe(200);
+  const main = page.getByRole("main");
+  await expect(main.getByRole("heading", { level: 1, name: "VRDex Time", exact: true })).toBeVisible();
+  const signIn = main.getByRole("link", { name: "Sign in", exact: true });
+  await expect(signIn).toHaveAttribute("href", "/sign-in?returnTo=%2Ftime");
+  const box = await signIn.boundingBox();
+  if (!box) throw new Error("Expected a visible Time sign-in action");
+  expect(box.height).toBeGreaterThanOrEqual(44);
+  await signIn.click();
+  await expect(page).toHaveURL(/\/sign-in\?returnTo=%2Ftime$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Sign in", exact: true })).toBeVisible();
+});
