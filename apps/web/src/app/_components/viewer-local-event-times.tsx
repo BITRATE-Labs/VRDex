@@ -192,16 +192,22 @@ export function ViewerLocalEventTime({
 
 type ZoneName = "short" | "shortOffset";
 
-function EventTime({ className, timestamp, timeZone, hour12, zoneName }: {
+function EventTime({ className, timestamp, timeZone, hour12, zoneName, separateZone = false }: {
   className?: string;
   timestamp: number;
   timeZone: string;
   hour12?: boolean;
   zoneName?: ZoneName;
+  separateZone?: boolean;
 }) {
+  const qualifier = separateZone && zoneName
+    ? zoneLabel(timestampFormatter(timeZone, { timeZoneName: zoneName }), timestamp)
+        ?.replace(/^GMT(?=[+−-])/, "UTC")
+    : undefined;
   return (
     <time className={className} dateTime={new Date(timestamp).toISOString()}>
-      {formatTimestamp(timestamp, timeZone, { ...timeOptions, hour12, timeZoneName: zoneName })}
+      {formatTimestamp(timestamp, timeZone, { ...timeOptions, hour12, timeZoneName: separateZone ? undefined : zoneName })}
+      {qualifier ? <span className="text-[0.875em]"> ({qualifier})</span> : null}
     </time>
   );
 }
@@ -213,13 +219,14 @@ function zoneLabel(formatter: Intl.DateTimeFormat, timestamp: number): string | 
 function rangeZoneNames(startAt: number, endAt: number | undefined, timeZone: string): {
   start?: ZoneName;
   end?: ZoneName;
+  offsetChanged?: boolean;
 } {
   const offsets = timestampFormatter(timeZone, { timeZoneName: "shortOffset" });
   const zone = offsets.resolvedOptions().timeZone;
   if (endAt !== undefined && zoneLabel(offsets, startAt) !== zoneLabel(offsets, endAt)) {
     const names = timestampFormatter(zone, { timeZoneName: "short" });
     const name = zoneLabel(names, startAt) === zoneLabel(names, endAt) ? "shortOffset" : "short";
-    return { start: name, end: name };
+    return { start: name, end: name, offsetChanged: true };
   }
 
   const alternateStart = getOtherZonedTimeOccurrence(startAt, zone);
@@ -229,7 +236,16 @@ function rangeZoneNames(startAt: number, endAt: number | undefined, timeZone: st
   const genericName = (alternateStart !== undefined && zoneLabel(names, startAt) === zoneLabel(names, alternateStart))
     || (endAt !== undefined && alternateEnd !== undefined && zoneLabel(names, endAt) === zoneLabel(names, alternateEnd));
   const name = genericName ? "shortOffset" : "short";
-  return endAt === undefined ? { start: name } : { end: name };
+  return {
+    start: alternateStart === undefined ? undefined : name,
+    end: alternateEnd === undefined ? undefined : name,
+  };
+}
+
+function elapsedTime(durationMs: number): string {
+  const minutes = Math.floor(durationMs / 60_000);
+  const seconds = (durationMs % 60_000) / 1_000;
+  return [minutes ? `${minutes} min` : "", seconds ? `${seconds} sec` : ""].filter(Boolean).join(" ");
 }
 
 export function ViewerLocalEventTimeRange({
@@ -243,20 +259,35 @@ export function ViewerLocalEventTimeRange({
   hour12,
 }: ViewerLocalEventTimeRangeProps) {
   const timeZone = useViewerTimeZone(explicitTimeZone);
-  const { start, end } = showTimeZone && disambiguateOffset
+  const { start, end, offsetChanged } = showTimeZone && disambiguateOffset
     ? rangeZoneNames(startAt, endAt, timeZone)
     : {};
   const offset = showOffset && showTimeZone ? "shortOffset" : undefined;
-  const qualifiedTimeClass = start || end ? "whitespace-nowrap" : undefined;
+  const separatesZones = Boolean(start || end);
+  const endTime = endAt === undefined ? null : (
+    <EventTime timestamp={endAt} timeZone={timeZone} zoneName={offset ?? end} hour12={hour12} separateZone={separatesZones} />
+  );
   return (
     <span className={cn(className)}>
-      <EventTime className={qualifiedTimeClass} timestamp={startAt} timeZone={timeZone} zoneName={offset ?? start} hour12={hour12} />
-      {endAt === undefined ? null : (
+      <EventTime
+        className={separatesZones ? "inline-block whitespace-nowrap" : undefined}
+        timestamp={startAt}
+        timeZone={timeZone}
+        zoneName={offset ?? start}
+        hour12={hour12}
+        separateZone={separatesZones}
+      />
+      {endTime && (separatesZones ? (
+        <>{" "}<span className="inline-block whitespace-nowrap">to {endTime}</span></>
+      ) : (
         <>
           {" - "}
-          <EventTime className={qualifiedTimeClass} timestamp={endAt} timeZone={timeZone} zoneName={offset ?? end} hour12={hour12} />
+          {endTime}
         </>
-      )}
+      ))}
+      {offsetChanged && endAt !== undefined && endAt > startAt ? (
+        <>{" "}<span className="block font-medium">{elapsedTime(endAt - startAt)}</span></>
+      ) : null}
     </span>
   );
 }
