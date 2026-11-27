@@ -8,6 +8,7 @@ import { usePostHog } from "posthog-js/react";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { api } from "@convex-generated-api";
+import { searchHref } from "@/app/_components/search-view-state";
 import {
   type SearchSuggestion,
   useSearchSuggestions,
@@ -50,7 +51,17 @@ function NavSearchPanel({ id, onClose }: { id: string; onClose: (restoreFocus?: 
   }
 
   return (
-    <div id={id} className={cn(styles.mobilePanel, "sm:order-first sm:min-w-0")}>
+    <form
+      action="/search"
+      className={cn(styles.mobilePanel, "sm:order-first sm:min-w-0")}
+      id={id}
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!query.trim()) return;
+        onClose();
+        router.push(searchHref({ query }));
+      }}
+    >
       <input
         aria-activedescendant={activeIndex >= 0 ? `${listboxId}-${activeIndex}` : undefined}
         aria-autocomplete="list"
@@ -59,6 +70,8 @@ function NavSearchPanel({ id, onClose }: { id: string; onClose: (restoreFocus?: 
         aria-label="Search VRDex"
         autoFocus
         className="h-11 w-full min-w-0 rounded-control border border-border bg-surface px-3 text-sm text-foreground opacity-100 outline-none placeholder:text-muted focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 sm:h-10 sm:w-64 sm:transition-[width,opacity] sm:duration-200 sm:starting:w-0 sm:starting:opacity-0"
+        enterKeyHint="search"
+        name="q"
         placeholder="Search..."
         role="combobox"
         value={query}
@@ -67,7 +80,7 @@ function NavSearchPanel({ id, onClose }: { id: string; onClose: (restoreFocus?: 
           setActiveIndex(-1);
         }}
         onKeyDown={(event) => {
-          if (event.nativeEvent.isComposing) return;
+          if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
           if (event.key === "Escape") {
             event.preventDefault();
             onClose(true);
@@ -117,7 +130,7 @@ function NavSearchPanel({ id, onClose }: { id: string; onClose: (restoreFocus?: 
           ))}
         </div>
       ) : null}
-    </div>
+    </form>
   );
 }
 
