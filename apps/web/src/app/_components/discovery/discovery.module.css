@@ -372,6 +372,9 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 1.5rem;
   }
+  .groups:not([data-empty-group]):has(article .eventMetadata) {
+    gap: 1rem;
+  }
   .groups > div {
     container-type: inline-size;
   }
@@ -409,6 +412,12 @@
   }
   .clubMetadata {
     min-height: 80px;
+  }
+  article .eventMetadata {
+    min-height: 0;
+  }
+  .favoriteSummary:empty {
+    display: none;
   }
   .name {
     font-size: 0.95rem;
