@@ -104,8 +104,10 @@ test("mobile discovery keeps Add event alongside the populated upcoming heading"
   const heading = page.getByRole("heading", { name: "Upcoming events", exact: true });
   const section = heading.locator("xpath=ancestor::section[1]");
   const addEvent = section.getByRole("link", { name: "Add event", exact: true });
+  const event = section.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true });
+  const performer = section.getByRole("link", { name: "DJ Aurora", exact: true });
   await expect(addEvent).toHaveAttribute("href", "/events/new");
-  await expect(section.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true })).toBeVisible();
+  await expect(event).toBeVisible();
 
   const [headingBounds, actionBounds] = await Promise.all([heading.boundingBox(), addEvent.boundingBox()]);
   if (!headingBounds || !actionBounds) throw new Error("Missing Discovery event header bounds");
@@ -113,6 +115,19 @@ test("mobile discovery keeps Add event alongside the populated upcoming heading"
   expect(actionBounds.x).toBeGreaterThanOrEqual(headingBounds.x + headingBounds.width);
   expect(actionBounds.y).toBeLessThan(headingBounds.y + headingBounds.height);
   expect(headingBounds.y).toBeLessThan(actionBounds.y + actionBounds.height);
+
+  const [eventBounds, performerBounds] = await Promise.all([event.boundingBox(), performer.boundingBox()]);
+  if (!eventBounds || !performerBounds) throw new Error("Missing Discovery event link bounds");
+  expect(eventBounds.width).toBeGreaterThanOrEqual(44);
+  expect(eventBounds.height).toBeGreaterThanOrEqual(44);
+  expect(performerBounds.width).toBeGreaterThanOrEqual(44);
+  expect(performerBounds.height).toBeGreaterThanOrEqual(44);
+  expect(eventBounds.y + eventBounds.height).toBeLessThanOrEqual(performerBounds.y);
+  await addEvent.focus();
+  await page.keyboard.press("Tab");
+  await expect(event).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(performer).toBeFocused();
 });
 
 test("mobile discovery jumps to the directory without hiding the heading", async ({ page }) => {

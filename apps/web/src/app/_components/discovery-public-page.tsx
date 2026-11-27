@@ -184,12 +184,12 @@ function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[];
             ].filter(Boolean).join(" · ") || undefined}
             key={event.slug ?? `${event.title}:${event.startAt}`}
             metadata={event.nextSlots && event.nextSlots.length > 0 ? (
-              <ul className="grid gap-1.5 text-sm text-muted">
+              <ul className="grid text-sm text-muted sm:gap-1.5">
                 {event.nextSlots.map((slot) => (
-                  <li className="flex flex-wrap items-baseline gap-x-2" key={`${slot.startAt}:${slot.displayLabel}`}>
+                  <li className="flex flex-wrap items-center gap-x-2 sm:items-baseline" key={`${slot.startAt}:${slot.displayLabel}`}>
                     <ViewerLocalEventTime className="font-mono text-xs text-foreground" timestamp={slot.startAt} />
                     {slot.performer ? (
-                      <Link className="font-medium text-foreground underline decoration-border-strong underline-offset-4 hover:decoration-current" href={`/${slot.performer.slug}`}>
+                      <Link className="rounded-control font-medium text-foreground underline decoration-border-strong underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-accent-strong max-sm:inline-flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center" href={`/${slot.performer.slug}`}>
                         {slot.performer.displayName}
                       </Link>
                     ) : (
@@ -205,12 +205,13 @@ function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[];
             time={<ViewerLocalEventDateTime timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />}
             title={publicEventPath(event) ? (
               <TrackedDiscoveryLink
-                className="rounded-control text-section text-accent-strong underline decoration-accent/55 underline-offset-4 transition hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                className="rounded-control text-section text-accent-strong underline decoration-accent/55 underline-offset-4 transition hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring max-sm:flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center max-sm:gap-2"
                 eventName="event_card_clicked"
                 href={publicEventPath(event)!}
                 properties={{ entity_type: "event", surface: "upcoming_events" }}
               >
-                {event.title}
+                <span>{event.title}</span>
+                <ChevronRight aria-hidden="true" className="size-4 shrink-0 sm:hidden" />
               </TrackedDiscoveryLink>
             ) : event.title}
           />
@@ -505,7 +506,10 @@ export function DiscoveryLandingPage({
         {status === "live" ? <p className="text-sm leading-5 text-muted">No events</p> : null}
       </div>
       <Link
-        className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "min-h-11 underline decoration-border-strong underline-offset-4 hover:decoration-current")}
+        className={cn(
+          buttonVariants({ size: "sm", variant: "ghost" }),
+          "min-h-11 whitespace-nowrap !text-muted underline decoration-border-strong underline-offset-4 hover:decoration-current max-sm:self-start max-sm:items-start max-sm:py-0",
+        )}
         href="/events/new"
       >
         Add event
