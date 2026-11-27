@@ -33,6 +33,10 @@ The site footer flow checks the Developers and GitHub links share a row at
 320, 360, and 412 px, preserves link tab order, and verifies dismissal returns
 focus to Usage & privacy when analytics settings are enabled.
 
+The World presentation flow checks the VRChat action stays above artwork and
+fits on phones after platform compatibility. It covers duplicate, distinct,
+reference-only, and absent URLs, plus sparse and one-sided event fixtures.
+
 PowerShell data-flow run with video:
 
 ```powershell

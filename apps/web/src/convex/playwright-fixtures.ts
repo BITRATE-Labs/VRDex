@@ -24,6 +24,9 @@ const basicBitSlug = "basicbit";
 const longNameSlug = "playwright-princess-starlight-interstellar-bassline";
 const communitySlug = "playwright-afterglow-social";
 const worldSlug = "playwright-neon-harbor";
+const sparseWorldSlug = "playwright-lantern-cove";
+const distinctWorldReferenceSlug = "playwright-neon-harbor-distinct-reference";
+const referenceOnlyWorldSlug = "playwright-neon-harbor-reference-only";
 const eventSlug = "playwright-afterglow-harbor-sessions";
 const eventShortLinkCode = "afh2x67";
 const eventWatchSlug = "playwright-afterglow-watch-room";
@@ -1599,6 +1602,30 @@ export function getPlaywrightPublicWorldFixture(slug: string): PublicWorld | nul
 
   if (slug === worldSlug) {
     return worldProfile;
+  }
+
+  if (slug === sparseWorldSlug) {
+    return {
+      slug,
+      displayName: "Lantern Cove",
+      visibilityStatus: "public",
+      tags: [],
+      platformCompatibility: [],
+      media: [],
+      creatorAttributions: [],
+      outboundLinks: [],
+      eventContext: { upcoming: [], recent: [] },
+    };
+  }
+
+  if (slug === distinctWorldReferenceSlug || slug === referenceOnlyWorldSlug) {
+    return {
+      ...worldProfile,
+      slug,
+      sourceUrl: "https://example.invalid/neon-harbor-notes",
+      eventContext: { upcoming: worldProfile.eventContext.upcoming, recent: [] },
+      ...(slug === referenceOnlyWorldSlug ? { canonicalVrchatWorldUrl: undefined, vrchatWorldId: undefined } : {}),
+    };
   }
 
   return null;

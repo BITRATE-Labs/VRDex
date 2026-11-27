@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test";
 
+const neonHarborWorldUrl = "https://vrchat.com/home/world/wrld_00000000-0000-4000-8000-000000000001";
+const neonHarborReferenceUrl = "https://example.invalid/neon-harbor-notes";
+
 test("world shows artwork and linked creator pictures without placeholder copy", async ({ page }) => {
   await page.goto("/playwright-neon-harbor");
   await expect(page.getByText("Place, vibe, context", { exact: true })).toHaveCount(0);
@@ -21,4 +24,60 @@ test("world references have thumbnails and world page has no duplicate add actio
  }
  await page.goto('/playwright-neon-harbor');
  await expect(page.getByRole('link',{name:'Add a missing profile',exact:true})).toHaveCount(0);
+});
+
+test("world puts the single VRChat destination before hero artwork on phones", async ({ page }) => {
+  await page.setViewportSize({ width: 412, height: 720 });
+  const response = await page.goto("/playwright-neon-harbor");
+  expect(response?.status()).toBe(200);
+
+  const main = page.getByRole("main");
+  const openWorld = main.getByRole("link", { name: "Open VRChat world", exact: true });
+  const artwork = main.getByRole("img", { name: "Neon Harbor", exact: true });
+  await expect(openWorld).toHaveAttribute("href", neonHarborWorldUrl);
+  await expect(openWorld).toHaveAttribute("target", "_blank");
+  await expect(openWorld).toHaveAttribute("rel", "noreferrer");
+  await expect(main.locator(`a[href="${neonHarborWorldUrl}"]`)).toHaveCount(1);
+  await expect(main.getByRole("link", { name: "Reference link", exact: true })).toHaveCount(0);
+
+  for (const width of [320, 412]) {
+    await page.setViewportSize({ width, height: 720 });
+    await expect(openWorld).toBeInViewport({ ratio: 1 });
+    const [action, image] = await Promise.all([openWorld.boundingBox(), artwork.boundingBox()]);
+    expect(action && image && action.y + action.height < image.y).toBe(true);
+    const platform = await main.getByText("Android / Quest", { exact: true }).boundingBox();
+    expect(platform && action && platform.y + platform.height <= action.y).toBe(true);
+  }
+});
+
+test("world retains a reference destination when it differs or stands alone", async ({ page }) => {
+  const main = page.getByRole("main");
+  const openWorld = main.getByRole("link", { name: "Open VRChat world", exact: true });
+  const reference = main.getByRole("link", { name: "Reference link", exact: true });
+
+  await page.goto("/playwright-neon-harbor-distinct-reference");
+  await expect(openWorld).toHaveAttribute("href", neonHarborWorldUrl);
+  await expect(reference).toHaveAttribute("href", neonHarborReferenceUrl);
+
+  await expect(main.getByRole("heading", { name: "Upcoming and active", exact: true })).toBeVisible();
+  await expect(main.getByRole("heading", { name: "Recent", exact: true })).toHaveCount(0);
+
+  await page.goto("/playwright-neon-harbor-reference-only");
+  await expect(openWorld).toHaveCount(0);
+  await expect(reference).toHaveAttribute("href", neonHarborReferenceUrl);
+});
+
+test("sparse world renders real identity without fabricating a destination", async ({ page }) => {
+  const response = await page.goto("/playwright-lantern-cove");
+  expect(response?.status()).toBe(200);
+  const main = page.getByRole("main");
+  await expect(main.getByRole("heading", { name: "Lantern Cove", exact: true })).toBeVisible();
+  await expect(main.getByText("Visibility", { exact: true })).toBeVisible();
+  await expect(main.getByText("Public", { exact: true })).toBeVisible();
+  await expect(main.getByRole("img", { name: "Lantern Cove", exact: true })).toHaveCount(0);
+  await expect(main.getByRole("heading", { name: "About this world", exact: true })).toHaveCount(0);
+  await expect(main.getByRole("heading", { name: "Events at this world", exact: true })).toHaveCount(0);
+  await expect(main.getByText(/No public|No confirmed/)).toHaveCount(0);
+  await expect(main.getByRole("link", { name: "Open VRChat world", exact: true })).toHaveCount(0);
+  await expect(main.getByRole("link", { name: "Reference link", exact: true })).toHaveCount(0);
 });
