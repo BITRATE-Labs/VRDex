@@ -436,14 +436,23 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
   const useCompactCommunity = !isPerson && hasSparseIdentity && !profile.telemetry && !profile.groupMembership
     && (visibleLinks.length === 0 || (visibleLinks.length === 1 && groupDestination?.kind === "vrchat_group"));
   const useCompactIdentity = useCompactCommunity || (isPerson && hasSparseIdentity && visibleLinks.length === 0);
+  const compactContributionStyle = useCompactCommunity
+    && "!text-muted underline decoration-border-strong underline-offset-4 hover:decoration-current";
   const secondarySections: Partial<Record<ProfilePublicSectionKey, ReactNode>> = {
     events: eventPreviews.length > 0 || !isPerson ? (
-      <section className={cn("border-t border-border", useCompactCommunity ? "pb-4 pt-5" : "py-8")}>
+      <section className={cn("border-t border-border", useCompactCommunity ? "pb-4 pt-5 lg:pt-3" : "py-8")}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           {useCompactCommunity
             ? <SectionTitle className="text-xl">Hosted events</SectionTitle>
             : <SectionHeading>{isPerson ? "Upcoming events" : "Hosted events"}</SectionHeading>}
-          {!isPerson ? <Link className={buttonVariants({ variant: "secondary", size: "sm" })} href={`/events/new?community=${encodeURIComponent(profile.slug)}`}>Add event</Link> : null}
+          {!isPerson ? (
+            <Link
+              className={cn(buttonVariants({ variant: useCompactCommunity ? "ghost" : "secondary", size: "sm" }), compactContributionStyle)}
+              href={`/events/new?community=${encodeURIComponent(profile.slug)}`}
+            >
+              Add event
+            </Link>
+          ) : null}
         </div>
         {eventPreviews.length > 0 ? (
           <div className="mt-5 grid gap-3 lg:grid-cols-2">
@@ -451,7 +460,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
               <EventPreviewCard event={event} key={`${event.slug ?? event.title}-${event.startAt}`} />
             ))}
           </div>
-        ) : useCompactCommunity ? <p className="mt-2 text-sm text-muted">No events</p> : null}
+        ) : useCompactCommunity ? <p className="mt-2 text-sm font-medium text-foreground">No events</p> : null}
       </section>
     ) : null,
     media_kit: hasMediaKit ? (
@@ -558,9 +567,9 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
   const Shell = embedded ? Fragment : PageShell;
   return (
     <Shell>
-      <PageContainer className={useCompactCommunity ? "max-w-2xl" : undefined}>
+      <PageContainer className={useCompactCommunity ? "max-w-2xl lg:gap-4" : undefined}>
 
-        <div className={useCompactIdentity ? "mx-auto w-full max-w-2xl rounded-panel border border-border-strong bg-surface-strong shadow-panel" : "contents"}>
+        <div className={useCompactIdentity ? cn("mx-auto w-full max-w-2xl rounded-panel border border-border-strong bg-surface-strong", !useCompactCommunity && "shadow-panel") : "contents"}>
           <section
             aria-labelledby={`profile-title-${profile.slug}`}
             className={useCompactIdentity ? undefined : "overflow-hidden rounded-card border border-border bg-media shadow-panel"}
@@ -604,7 +613,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                     >
                       {profile.displayName}
                     </h1>
-                    {useCompactCommunity ? <p className="mt-1 text-sm font-medium text-muted">Unclaimed</p> : null}
+                    {useCompactCommunity ? <p className="mt-1 text-sm font-semibold text-foreground">Unclaimed</p> : null}
                     {aliases.length > 0 ? (
                       <div className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-white/75">
                         <span>AKA {aliases.join(", ")}</span>
@@ -635,7 +644,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
             <aside
               aria-label="Profile ownership"
               className={useCompactIdentity
-                ? "grid gap-2 border-t border-border px-4 py-4 sm:px-6"
+                ? cn("grid gap-2 border-t border-border px-4 py-4 sm:px-6", useCompactCommunity && "lg:py-2")
                 : "flex flex-wrap items-center justify-between gap-x-6 gap-y-3 py-2"}
             >
               {!useCompactCommunity
@@ -648,7 +657,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                     {profile.profileType === "person" ? "Is this your profile?" : "Manage this community?"}
                   </p>
                   <Link
-                    className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "shrink-0 whitespace-nowrap")}
+                    className={cn(buttonVariants({ size: "sm", variant: useCompactCommunity ? "ghost" : "secondary" }), "shrink-0 whitespace-nowrap", compactContributionStyle)}
                     href={profileClaimPath(profile.slug, "profile")}
                   >
                     Claim profile
@@ -657,7 +666,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                       only to those who could act on it: this page is server
                       rendered with no viewer, and the editor handles sign-in. */}
                   <Link
-                    className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "shrink-0 whitespace-nowrap")}
+                    className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "shrink-0 whitespace-nowrap", compactContributionStyle)}
                     href={`${profileBasePath}/edit`}
                   >
                     Suggest an edit
