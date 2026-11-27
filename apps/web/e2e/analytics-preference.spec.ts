@@ -70,6 +70,9 @@ test("the mobile first offer leaves Home controls tappable and can become focuse
   await search.tap({ trial: true });
   await now.tap({ trial: true });
   await expect(panel).toHaveCount(1);
+  await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+  expect(await panel.evaluate((element) => element.scrollWidth)).toBe(await panel.evaluate((element) => element.clientWidth));
+  await page.evaluate(() => { document.documentElement.style.removeProperty("font-size"); });
 
   const opener = page.getByRole("button", { name: "Usage & privacy", exact: true });
   await opener.tap();
