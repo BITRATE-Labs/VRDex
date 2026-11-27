@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { Fragment, type CSSProperties } from "react";
 import { Globe2 } from "lucide-react";
 
 import { LookupCopyButton } from "./lookup-copy-button";
@@ -137,7 +137,7 @@ function IconCircleLink({ link, className }: { link: PublicProfileLink; classNam
   const display = profileLinkPresentation(link);
   if (display.kind) {
     return (
-      <a className={cn(buttonVariants({ variant: "secondary" }), "h-auto max-w-full gap-3 whitespace-normal py-2 text-left", className)}
+      <a className={cn(buttonVariants({ variant: "secondary" }), "lookup-destination-action h-auto max-w-full gap-3 whitespace-normal py-2 text-left", className)}
         href={link.url} rel="noreferrer" target="_blank">
         <ProfileDestinationArtwork kind={display.kind} src={display.artworkUrl} />
         <span className="min-w-0 [overflow-wrap:anywhere]">
@@ -148,6 +148,21 @@ function IconCircleLink({ link, className }: { link: PublicProfileLink; classNam
       </a>
     );
   }
+  if (link.type === "commissions") {
+    const label = display.label.trim() || hostLabel(link.url);
+    return (
+      <a
+        className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "lookup-commission-action min-h-[2.65rem] max-w-full gap-1.5 px-2.5 text-left", className)}
+        href={link.url}
+        rel="noreferrer"
+        target="_blank"
+      >
+        <LinkTypeIcon type="commissions" />
+        <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>
+      </a>
+    );
+  }
+
   return (
     <a
       aria-label={link.handle ? `${link.label}: ${link.handle}` : `${link.label}: ${hostLabel(link.url)}`}
@@ -198,7 +213,14 @@ function CopyableUrlBar({
     >
       <span className="lookup-primary-url-label">{label}</span>
       {wrap ? (
-        <code className="lookup-primary-url-value lookup-primary-url-value--wrapped">{value}</code>
+        <code className="lookup-primary-url-value lookup-primary-url-value--wrapped">
+          {value.split(/(?<=[^:/]\/)(?=[^/])/).map((part, index) => (
+            <Fragment key={index}>
+              {index > 0 && <wbr />}
+              {part}
+            </Fragment>
+          ))}
+        </code>
       ) : (
         <input
           aria-label={`${label} URL`}
