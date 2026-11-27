@@ -1,7 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 
-import { SectionHeading } from "@/components/ui/card";
+import { SectionTitle } from "@/components/ui/card";
 import { EntityImage } from "@/components/ui/entity-image";
 import { Notice } from "@/components/ui/notice";
 import { cn } from "@/lib/cn";
@@ -61,12 +61,12 @@ function ActiveWorldCard({ world, compactNextEvent }: { world: PublicActiveWorld
         </>
       ) : null}
 
-      <div className="relative col-start-1 row-start-1 p-5 [overflow-wrap:anywhere]">
+      <div className="relative col-start-1 row-start-1 p-4 [overflow-wrap:anywhere] sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <h3
             id={titleId}
             className={cn(
-              "min-w-0 text-3xl font-semibold underline underline-offset-4 group-hover:decoration-current",
+              "min-w-0 text-2xl font-semibold underline underline-offset-4 group-hover:decoration-current sm:text-3xl",
               imageUrl ? "decoration-white/55" : "decoration-border-strong",
             )}
           >
@@ -74,7 +74,7 @@ function ActiveWorldCard({ world, compactNextEvent }: { world: PublicActiveWorld
           </h3>
           <ChevronRight aria-hidden="true" className={cn("mt-2 size-4 shrink-0", imageUrl ? "text-white/75 group-hover:text-white" : "text-muted group-hover:text-foreground")} />
         </div>
-        <p className={cn("mt-3 line-clamp-2 text-sm leading-6", imageUrl ? "text-white/76" : "text-muted")}>
+        <p className={cn("mt-2 line-clamp-2 text-sm leading-6 sm:mt-3", imageUrl ? "text-white/76" : "text-muted")}>
           {world.summary ?? "Upcoming public events are linked here."}
         </p>
         <div className={cn("mt-4 border-t pt-3", imageUrl ? "border-white/20" : "border-border")}>
@@ -102,11 +102,11 @@ export function HomeActiveWorldsSection({
   worlds: PublicActiveWorld[];
 }) {
   return (
-    <section className="min-w-0 border-t border-border pt-4 sm:pt-6">
-      <SectionHeading>Featured worlds</SectionHeading>
+    <section className="min-w-0 border-t border-border pt-3 sm:pt-6">
+      <SectionTitle className="max-sm:text-xl">Featured worlds</SectionTitle>
 
       {worlds.length > 0 ? (
-        <div className={cn("mt-4 grid grid-cols-1 gap-4 sm:mt-6 lg:grid-cols-3", paired && "xl:grid-cols-1")}>
+        <div className={cn("mt-3 grid grid-cols-1 gap-4 sm:mt-6 lg:grid-cols-3", paired && "xl:grid-cols-1")}>
           {worlds.map((world) => (
             <ActiveWorldCard
               compactNextEvent={singleUpcomingEventPath !== undefined && publicEventPath(world.nextEvent) === singleUpcomingEventPath}
