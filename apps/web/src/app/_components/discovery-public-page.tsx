@@ -493,10 +493,29 @@ function DiscoverySection({
   );
 }
 
-export function DiscoveryBackendNotice({ kind }: { kind: "missing-url" | "error" }) {
+function DiscoveryRetryLink() {
   return (
-    <div className="rounded-panel border border-border bg-surface px-4 py-3 text-sm leading-6 text-foreground">
-      {kind === "missing-url" ? "Discovery data is not available in this environment yet." : "Discovery data is temporarily unavailable."}
+    // eslint-disable-next-line @next/next/no-html-link-for-pages -- Retry needs a fresh document request for the same URL.
+    <a className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "min-h-11 shrink-0")} href="/discovery">
+      Retry
+    </a>
+  );
+}
+
+export function DiscoveryBackendNotice({
+  hasFeaturedWorlds,
+  kind,
+}: {
+  hasFeaturedWorlds: boolean;
+  kind: "missing-url" | "error";
+}) {
+  const message = kind === "missing-url"
+    ? "Discovery data is not available in this environment yet."
+    : hasFeaturedWorlds ? "Directory unavailable" : "Discovery data is temporarily unavailable.";
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-panel border border-border bg-surface px-4 py-3 text-sm leading-6 text-foreground">
+      <span>{message}</span>
+      {kind === "error" ? <DiscoveryRetryLink /> : null}
     </div>
   );
 }
@@ -599,7 +618,9 @@ export function DiscoveryLandingPage({
           </nav>
         ) : null}
 
-        {status !== "live" && activeWorlds.length === 0 ? <DiscoveryBackendNotice kind={status} /> : null}
+        {status === "error" || (status === "missing-url" && activeWorlds.length === 0) ? (
+          <DiscoveryBackendNotice hasFeaturedWorlds={activeWorlds.length > 0} kind={status} />
+        ) : null}
 
         {pairUpcomingAndWorld ? (
           <div className="contents xl:grid xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] xl:items-start xl:gap-6">
@@ -636,7 +657,7 @@ export function DiscoveryLandingPage({
               title={title}
             />
           ))}
-        </section> : activeWorlds.length > 0 ? (
+        </section> : status === "missing-url" && activeWorlds.length > 0 ? (
           <section className="min-w-0 border-t border-border pt-3 sm:pt-6">
             <SectionTitle className="max-sm:text-xl">Directory</SectionTitle>
             <Notice className="mt-3 sm:mt-6" variant="dashed">Unavailable</Notice>
