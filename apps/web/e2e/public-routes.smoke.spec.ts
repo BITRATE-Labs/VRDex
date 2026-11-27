@@ -3,6 +3,7 @@ import { writeFile } from "node:fs/promises";
 import sharp from "sharp";
 
 import type { PublicEventShareCard } from "../../../convex/_eventShareCard";
+import { AUTH_UNAVAILABLE_COPY } from "../src/lib/auth-copy";
 import { eventShareRevision } from "../src/lib/event-share-card";
 import {
   capturedRoutes,
@@ -80,9 +81,15 @@ test("sign-in offers a route to create an account", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
 
   await page.goto("/sign-up");
-  await expect(
-    page.getByRole("heading", { name: "Create account", exact: true }),
-  ).toBeVisible();
+  const shell = page.getByRole("region", { name: "Create account", exact: true });
+  const title = shell.getByRole("heading", { name: "Create account", exact: true, level: 1 });
+  await expect(shell).toBeVisible();
+  if (await shell.getByText(AUTH_UNAVAILABLE_COPY, { exact: true }).count()) {
+    await expect(title).toBeVisible();
+    await expect(title).not.toHaveClass(/\bsr-only\b/);
+  } else {
+    await expect(title).toHaveClass(/\bsr-only\b/);
+  }
 });
 
 test("legacy discovery query redirects to search", async ({ page }) => {

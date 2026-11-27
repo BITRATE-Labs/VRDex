@@ -1,0 +1,22 @@
+/* Clerk draws these boundaries with a shadow. Use the provider's own
+   foreground color to keep them visible in both themes. */
+.input[data-variant="default"]:not(:focus, :disabled, [aria-disabled="true"], [aria-invalid="true"], [data-feedback="error"]) {
+  box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 50%, transparent);
+}
+
+.socialButton[data-variant="outline"]:not(:focus, :disabled, [aria-disabled="true"]) {
+  box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 78%, transparent);
+}
+
+.input:focus-visible,
+.socialButton:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  .input:not(:focus),
+  .socialButton:not(:focus) {
+    outline: 1px solid ButtonText;
+  }
+}

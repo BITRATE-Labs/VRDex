@@ -16,12 +16,14 @@ export function AuthPageShell({
   headingId,
   subtitle,
   title,
+  visuallyHiddenTitle,
 }: {
   children: ReactNode;
   compact?: boolean;
   headingId: string;
   subtitle?: string;
   title: string;
+  visuallyHiddenTitle?: boolean;
 }) {
   return (
     <PageShell className="flex py-6 sm:py-8">
@@ -34,10 +36,14 @@ export function AuthPageShell({
         >
           <section aria-labelledby={headingId} className="w-full max-w-md">
             <header className="text-center">
-              <h1 id={headingId} className="text-3xl font-semibold sm:text-4xl">
+              <h1 id={headingId} className={visuallyHiddenTitle ? "sr-only" : "text-3xl font-semibold sm:text-4xl"}>
                 {title}
               </h1>
-              {subtitle && <p className="mt-2 text-sm leading-6 text-muted">{subtitle}</p>}
+              {subtitle && (
+                <p className={visuallyHiddenTitle ? "text-sm leading-6 text-muted" : "mt-2 text-sm leading-6 text-muted"}>
+                  {subtitle}
+                </p>
+              )}
             </header>
 
             <div className="mt-6 flex justify-center">{children}</div>

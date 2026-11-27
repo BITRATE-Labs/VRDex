@@ -399,7 +399,7 @@ function ConnectedSupportRequestForm() {
             aria-describedby={messageError ? `${messageId}-hint ${messageId}-error` : `${messageId}-hint`}
             aria-invalid={messageError ? true : undefined}
             aria-labelledby={messageId}
-            className="min-h-32 aria-invalid:border-danger"
+            className="min-h-32 aria-invalid:border-danger aria-invalid:focus-visible:ring-danger"
             maxLength={selectedTopic?.noteLimit ?? 4_000}
             minLength={10}
             name="message"
