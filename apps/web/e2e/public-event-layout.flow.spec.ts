@@ -268,7 +268,11 @@ test("desktop watch shares the media row with event details @flow @fixture", asy
   const host = main.getByRole("link", { name: /Afterglow Social.*Host/ });
   const lineup = main.getByRole("heading", { name: "Lineup", exact: true });
   await expect(stage).toBeVisible();
-  await expect(stage.locator("[data-watch-play-poster]")).not.toHaveCSS("background-image", /url\(/);
+  const idlePreview = stage.locator("[data-watch-play-poster]");
+  await expect(idlePreview).toHaveCSS("background-image", /fixture-afterglow-event-banner/);
+  await expect(idlePreview).not.toHaveCSS("background-image", /fixture-afterglow-event-poster/);
+  await expect(idlePreview).toHaveCSS("box-shadow", /inset/);
+  await expect(main.locator("video, iframe")).toHaveCount(0);
   await expect(host).toBeVisible();
   await poster.evaluate((image: HTMLImageElement) => image.decode());
   const [posterBox, stageBox, hostBox, lineupBox] = await Promise.all([
