@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowRight } from "lucide-react";
+import { ArrowDown, ArrowRight, ChevronRight, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
 import { EntityImage } from "@/components/ui/entity-image";
@@ -207,7 +207,15 @@ function WorldEventBucket({ heading, events }: { heading: string; events: Public
             style={artworkStyle}
           >
             <h4 className="break-words text-lg font-semibold leading-snug tracking-[-0.03em]">
-              {eventPath ? <Link href={eventPath}>{event.title}</Link> : event.title}
+              {eventPath ? (
+                <Link
+                  className="inline-flex max-w-full items-center gap-2 rounded-control text-accent-strong underline decoration-accent/45 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent max-sm:flex max-sm:min-h-11 max-sm:justify-between"
+                  href={eventPath}
+                >
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{event.title}</span>
+                  <ChevronRight aria-hidden="true" className="size-4 shrink-0" />
+                </Link>
+              ) : event.title}
             </h4>
             <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted">
               <ViewerLocalEventDateTime
@@ -219,15 +227,16 @@ function WorldEventBucket({ heading, events }: { heading: string; events: Public
               <span>Confirmed venue</span>
             </div>
             {event.communityName ? <p className="mt-1 text-muted">Hosted by {event.communityName}</p> : null}
-            <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 break-words text-xs text-muted">
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 break-words text-xs text-muted">
               {sourceUrl ? (
                 <a
-                  className="min-w-0 text-sm font-medium text-accent-strong underline decoration-accent/35 underline-offset-4"
+                  className="inline-flex min-w-0 items-center gap-1.5 rounded-control text-sm font-medium text-muted underline decoration-border-strong underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent max-sm:min-h-11 max-sm:min-w-11"
                   href={sourceUrl}
                   rel="noreferrer"
                   target="_blank"
                 >
-                  {event.source.label}
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{event.source.label}</span>
+                  <ExternalLink aria-hidden="true" className="size-3.5 shrink-0" />
                 </a>
               ) : (
                 <span>{event.source.label}</span>
@@ -299,7 +308,7 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
   const platformDetails = (
     <div>
       <dt className={cn(
-        isSparse ? "font-medium" : heroMetaClassName,
+        heroMetaClassName,
         hasLaunchDetails && "max-sm:font-medium max-sm:text-inherit",
       )}>Platforms</dt>
       <dd className={cn("mt-1", isSparse ? "font-semibold" : "font-medium")}>
@@ -308,9 +317,9 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
     </div>
   );
   const visibilityDetails = (
-    <div className={cn(isSparse && "flex flex-wrap items-baseline gap-x-3 gap-y-1 sm:block")}>
+    <div className={cn(isSparse && "max-sm:col-span-2 max-sm:border-t max-sm:border-border max-sm:pt-3")}>
       <dt className={heroMetaClassName}>{isSparse ? "World visibility" : "Visibility"}</dt>
-      <dd className={cn("font-medium", isSparse ? "sm:mt-1" : "mt-1")}>{visibilityLabel(world.visibilityStatus)}</dd>
+      <dd className={cn("mt-1", isSparse ? "font-semibold" : "font-medium")}>{visibilityLabel(world.visibilityStatus)}</dd>
     </div>
   );
   const launchAction = canonicalWorldUrl ? (
@@ -381,18 +390,14 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
                 heroImageUrl ? "text-white/82" : "text-muted",
               )}>{world.summary}</p> : null}
               {isSparse ? (
-                <div className="mt-5 text-sm sm:mt-7 sm:grid sm:grid-cols-[2fr_1fr] sm:items-center sm:gap-6">
-                  <dl className="grid grid-cols-2 gap-3 rounded-card border border-border bg-surface px-3 py-3 sm:px-4">
-                    {platformDetails}
-                    <div>
-                      <dt className="font-medium">VRChat link</dt>
-                      <dd className="mt-1 font-semibold">Not listed</dd>
-                    </div>
-                  </dl>
-                  <dl className="mt-3 border-t border-border pt-3 sm:mt-0 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-4">
-                    {visibilityDetails}
-                  </dl>
-                </div>
+                <dl className="mt-5 grid grid-cols-2 gap-3 rounded-card border border-border bg-surface p-3 text-sm sm:mt-7 sm:grid-cols-3 sm:px-4">
+                  {platformDetails}
+                  <div>
+                    <dt className={heroMetaClassName}>VRChat link</dt>
+                    <dd className="mt-1 font-semibold">Not listed</dd>
+                  </div>
+                  {visibilityDetails}
+                </dl>
               ) : (
                 <dl className={cn(
                   "flex flex-wrap items-start gap-x-6 gap-y-3 text-sm",

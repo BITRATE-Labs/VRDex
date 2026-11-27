@@ -855,6 +855,7 @@ const worldProfile: PublicWorld = {
     upcoming: [
       {
         slug: eventSlug,
+        communitySlug,
         title: "Afterglow Harbor Sessions",
         startAt: eventStartAt,
         doorsOpenAt: eventDoorsOpenAt,
