@@ -172,12 +172,31 @@ test("sign-in describes recognized contribution return paths without echoing the
     ["/playwright-sparse-import/edit?section=media#media-contributions", "Edit profile"],
     ["/account", "Manage your VRDex profile and events."],
     ["https://example.invalid/submit", "Manage your VRDex profile and events."],
+    ["https://example.invalid/events/new", "Manage your VRDex profile and events."],
+    ["/events/newer", "Manage your VRDex profile and events."],
     ["/claim/", "Manage your VRDex profile and events."],
   ];
   for (const [returnTo, label] of cases) {
     expect((await page.goto("/sign-in?" + new URLSearchParams({ returnTo })))?.status()).toBe(200);
     const signIn = page.getByRole("region", { name: "Sign in", exact: true });
     await expect(signIn.getByText(label, { exact: true })).toBeVisible();
+  }
+});
+
+test("add event sign-in keeps the contribution context and full return target", async ({ page }) => {
+  for (const returnTo of [
+    "/events/new",
+    "/events/new?community=playwright-afterglow-social",
+    "/events/new?draft=fixture-draft",
+    "/events/new?community=playwright-afterglow-social&draft=fixture-draft",
+  ]) {
+    expect((await page.goto(returnTo))?.status()).toBe(200);
+    await expect(page).toHaveURL(
+      (url) => url.pathname === "/sign-in" && url.searchParams.get("returnTo") === returnTo,
+    );
+    const signIn = page.getByRole("region", { name: "Sign in", exact: true });
+    await expect(signIn.getByText("Add event", { exact: true })).toBeVisible();
+    await expect(signIn).not.toContainText(returnTo);
   }
 });
 

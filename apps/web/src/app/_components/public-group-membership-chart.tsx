@@ -73,7 +73,7 @@ export function PublicGroupMembershipChart({ membership }: { membership: GroupMe
       <ResponsiveContainer width="100%" height="100%" minWidth={0}>
         <LineChart data={axisPoints} accessibilityLayer margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
           <CartesianGrid stroke="var(--border)" vertical={false} />
-          <XAxis dataKey="observedAt" type="number" domain={["dataMin", "dataMax"]} padding={{ left: 8 }} tickFormatter={date} tickCount={3} tickLine={false} axisLine={false} height={35} tickMargin={6} minTickGap={28} tick={{ fill: "var(--muted)", fontSize: 12 }} />
+          <XAxis dataKey="observedAt" type="number" domain={["dataMin", "dataMax"]} padding={{ left: 16 }} tickFormatter={date} tickCount={3} tickLine={false} axisLine={false} height={35} tickMargin={6} minTickGap={28} tick={{ fill: "var(--muted)", fontSize: 12 }} />
           <YAxis width={52} allowDecimals={false} domain={[0, "auto"]} tickLine={false} axisLine={false} tick={{ fill: "var(--muted)", fontSize: 12 }} />
           <Tooltip cursor={false} content={({ active, label }) => {
             if (!active || typeof label !== "number") return null;

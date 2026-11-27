@@ -10,6 +10,7 @@ function contributionLabel(returnTo: string) {
   const pathname = returnTo.split(/[?#]/, 1)[0] ?? "";
 
   if (pathname === "/submit") return "Add profile";
+  if (pathname === "/events/new") return "Add event";
   if (/^\/claim\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(pathname)) return "Claim profile";
   if (/^\/[a-z0-9]+(?:-[a-z0-9]+)*\/edit$/.test(pathname)) return "Edit profile";
 }
