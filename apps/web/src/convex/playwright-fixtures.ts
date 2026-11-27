@@ -1419,6 +1419,29 @@ export function getPlaywrightPublicProfileFixture(
   if (profileType === "community" && slug === communitySlug) {
     return communityProfile;
   }
+  if (slug === "playwright-sparse-community" || slug === "playwright-sparse-community-custom") {
+    const customLabel = slug.endsWith("-custom");
+    return {
+      profileType: "community",
+      displayName: "Sparse Community",
+      slug,
+      trustLabel: "unclaimed",
+      aliases: [],
+      tags: [],
+      genres: [],
+      community: { categoryTags: [] },
+      outboundLinks: [{
+        type: "vrchat_profile",
+        label: customLabel ? "Official meetup group" : "VRChat group",
+        labelMode: customLabel ? "custom" : "automatic",
+        url: "https://vrchat.com/home/group/grp_12345678-1234-1234-1234-123456789abc",
+        source: "community_submitted",
+      }],
+      worldCredits: [],
+      upcomingEvents: [],
+      hostedEvents: [],
+    };
+  }
   if (profileType === "community" && /^playwright-group-population(?:-empty|-stale|-managed-disabled|-managed|-dense|-membership)?$/.test(slug)) {
     const now = Date.now();
     const stale = slug.endsWith("-stale");
