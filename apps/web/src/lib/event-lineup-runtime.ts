@@ -69,13 +69,16 @@ export class EventLineupSession {
   private selected?: LineupSlot;
   private disposed = false;
   private playRequest = 0;
+  private currentPlayAttempt = 0;
+  private audioResume?: Promise<void>;
+  private visibilityGeneration = 0;
   private lastSnapshot?: LineupSnapshot;
   private timer: ReturnType<typeof setInterval>;
   constructor(private event: LineupEvent, private mount: HTMLElement, private notify: (state: LineupSnapshot) => void,
     private createSource = createObservedVrcdnSource, private native?: NativeLineupOptions) {
     this.event = { ...event, slots: inferLineupEnds(event.slots, event.endAt) };
     this.timer = setInterval(() => this.tick(), 100);
-    document.addEventListener("visibilitychange", this.resetEvidence);
+    document.addEventListener("visibilitychange", this.visibilityChanged);
   }
   private emit() {
     if (this.disposed) return;
@@ -89,6 +92,37 @@ export class EventLineupSession {
   }
   private resetEvidence = () => {
     for (const connection of [this.current, this.next]) if (connection) connection.evidence = clearPlaybackEvidence(performance.now());
+  };
+  private visibilityChanged = () => {
+    const visibility = ++this.visibilityGeneration;
+    this.resetEvidence();
+    const context = this.context;
+    if (this.disposed || this.state.paused || document.visibilityState !== "visible" || !context || context.state === "closed" || (context.state === "running" && !this.current?.source.media.paused) || this.audioResume) return;
+    const request = this.playRequest;
+    const valid = () => !this.disposed && request === this.playRequest && !this.state.paused && document.visibilityState === "visible" && visibility === this.visibilityGeneration;
+    let resumeTimer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_, reject) => { resumeTimer = setTimeout(() => reject(Error("Audio resume timed out")), 10_000); });
+    const restore = context.resume().then(async () => {
+      if (!valid()) return;
+      if (context.state !== "running") throw Error("Audio resume requires interaction");
+      const active = this.current;
+      if (active?.source.media.paused) {
+        const attempt = ++this.currentPlayAttempt;
+        const accepted = await active.source.play().catch(() => false);
+        if (!valid() || active !== this.current || attempt !== this.currentPlayAttempt) return;
+        if (!accepted) throw Error("Media resume requires interaction");
+      }
+      this.setGain();
+    });
+    this.audioResume = Promise.race([restore, deadline]).catch(() => {
+      if (!valid()) return;
+      this.pause(); this.state.playbackBlocked = true; this.emit();
+    }).finally(() => {
+      if (resumeTimer !== undefined) clearTimeout(resumeTimer);
+      this.audioResume = undefined;
+      this.resetEvidence();
+      if (!this.disposed && !this.state.paused && visibility !== this.visibilityGeneration && document.visibilityState === "visible") this.visibilityChanged();
+    });
   };
   private releaseNext() {
     const released = !!this.next;
@@ -178,8 +212,9 @@ export class EventLineupSession {
     }
     this.resetEvidence();
     const active = this.current;
+    const attempt = ++this.currentPlayAttempt;
     if (active) void (this.native && this.state.unavailable && active.source.recover ? active.source.recover(true) : active.source.play()).catch(() => false).then(accepted => {
-      if (this.disposed || request !== this.playRequest || active !== this.current) return;
+      if (this.disposed || request !== this.playRequest || active !== this.current || attempt !== this.currentPlayAttempt) return;
       if (!accepted) { this.state.paused = true; this.state.playbackBlocked = true; this.releaseNext(); this.emit(); }
     });
     this.tick(); this.emit();
@@ -350,8 +385,9 @@ export class EventLineupSession {
       else { this.current = connection; source.media.hidden = this.mode === "audio"; source.setMuted(this.native ? this.state.muted : false); this.native?.onCurrent(source, acceptedSlot); }
       source.setVolume(this.state.volume);
       if (!this.native) this.mount.append(source.media);
+      const attempt = prepared ? undefined : ++this.currentPlayAttempt;
       void source.play().catch(() => false).then(accepted => {
-        if (this.disposed || request !== this.playRequest || token !== (prepared ? this.nextGeneration : this.currentGeneration)) return;
+        if (this.disposed || request !== this.playRequest || token !== (prepared ? this.nextGeneration : this.currentGeneration) || (!prepared && attempt !== this.currentPlayAttempt)) return;
         if (prepared) this.state.nextPlaybackBlocked = !accepted;
         if (!accepted && !prepared) { this.state.playbackBlocked = true; this.state.paused = true; this.state.unavailable = false; this.releaseNext(); }
         this.emit();
@@ -373,6 +409,7 @@ export class EventLineupSession {
     if (this.disposed || !this.state.started || this.state.paused) return;
     const at = performance.now();
     const visible = document.visibilityState === "visible";
+    if (this.audioResume) this.resetEvidence();
     if (!this.selected && this.state.following) this.select(this.scheduleSlot());
     const scheduleNow = Date.now();
     if (visible && this.state.following && this.current) {
@@ -433,7 +470,7 @@ export class EventLineupSession {
     this.emit();
   }
   dispose() {
-    this.disposed = true; clearInterval(this.timer); document.removeEventListener("visibilitychange", this.resetEvidence);
+    this.disposed = true; clearInterval(this.timer); document.removeEventListener("visibilitychange", this.visibilityChanged);
     this.releaseNext(); this.releaseCurrent(); this.releaseContinuation(); this.context?.removeEventListener("statechange", this.resetEvidence);
     void this.context?.close().catch(() => {});
   }

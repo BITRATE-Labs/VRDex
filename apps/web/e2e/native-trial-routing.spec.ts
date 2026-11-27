@@ -83,6 +83,11 @@ for(const [eligibilityFails,savedAudio] of [[false,false],[true,false],[true,tru
   await expect.poll(()=>page.locator("video").evaluate(node=>(node as HTMLVideoElement).currentTime),{timeout:15000}).toBeGreaterThan(0.5);
   expect(opens).toBe(0);expect(legacy).toBe(1);
   await expect(page.getByRole("button",{name:"Audio only",exact:true})).toHaveCount(0);
+  if(!eligibilityFails){
+    await expect.poll(()=>page.locator("video").evaluate(node=>Number.isFinite((node as HTMLVideoElement).duration))).toBe(true);
+    await page.locator("video").evaluate(node=>{ const video=node as HTMLVideoElement; video.currentTime=Math.max(0,video.duration-0.1); });
+    await expect(page.getByRole("status")).toHaveText("Playback stopped");
+  }
   if(eligibilityFails && !savedAudio){
     const previous=await page.locator("video").elementHandle();
     await page.locator("video").dispatchEvent("error");

@@ -65,7 +65,7 @@ export type PlaybackStatus =
 export type PlaybackSnapshot = {
   request?: PlaybackRequest;
   status: PlaybackStatus;
-  unavailableReason?: "unsupported" | "ended";
+  unavailableReason?: "unsupported" | "ended" | "failed";
   mode: PlaybackMode;
   volume: number;
   muted: boolean;
@@ -137,6 +137,7 @@ export class EventPlaybackOwner {
   private listeners = new Set<() => void>();
   private adapter?: PlaybackAdapter;
   private attempt = 0;
+  private modeAttempt?: number;
   private started = false;
   private unavailable = false;
   generation = 0;
@@ -158,6 +159,11 @@ export class EventPlaybackOwner {
     };
   };
   private emit(patch: Partial<PlaybackSnapshot>) {
+    if (patch.status === "unavailable" && patch.unavailableReason !== undefined) {
+      this.attempt++;
+      this.adapter?.pause();
+    }
+    if (patch.status === "blocked" || (patch.status === "unavailable" && patch.unavailableReason !== undefined)) foregroundPlayback.release(this);
     this.state = { ...this.state, ...patch };
     this.listeners.forEach((listener) => listener());
   }
@@ -204,11 +210,19 @@ export class EventPlaybackOwner {
         metadata: undefined,
         unavailableReason: undefined,
       });
+      let configuring = true;
       try {
         this.adapter = this.create(
           request,
           (patch) => {
             if (generation !== this.generation) return;
+            if (patch.status === "paused" && this.modeAttempt === this.attempt) {
+              const details = { ...patch };
+              delete details.status;
+              this.emit(details);
+              return;
+            }
+            if (patch.status === "paused" && !configuring) foregroundPlayback.release(this);
             if (patch.status === "unavailable") this.unavailable = true;
             if (patch.status === "playing") {
               this.unavailable = false;
@@ -216,13 +230,16 @@ export class EventPlaybackOwner {
               foregroundPlayback.acquire(this, () => this.pause());
               this.started = true;
             }
-            this.emit(patch);
+            this.emit(patch.status === "playing" ? { ...patch, unavailableReason: undefined } : patch);
           },
           this.state.mode,
         );
         this.adapter.setVolume(this.state.volume);
         this.adapter.setMuted(this.state.muted);
+        configuring = false;
       } catch {
+        configuring = false;
+        foregroundPlayback.release(this);
         this.unavailable = true;
         this.emit({ status: "unavailable" });
         return;
@@ -243,6 +260,7 @@ export class EventPlaybackOwner {
       }
     } catch {
       if (attempt === this.attempt && this.state.status === "loading") {
+        foregroundPlayback.release(this);
         this.unavailable = true;
         this.emit({ status: "unavailable" });
       }
@@ -270,12 +288,22 @@ export class EventPlaybackOwner {
     }
     const playing =
       this.state.status === "playing" || this.state.status === "loading";
+    this.modeAttempt = attempt;
+    let modeTimer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const accepted = await this.adapter.setMode(mode);
-      if (attempt === this.attempt && playing)
-        this.emit({ status: accepted ? "playing" : "blocked" });
+      const deadline = new Promise<never>((_, reject) => { modeTimer = setTimeout(() => reject(Error("Playback mode switch timed out")), 10_000); });
+      const accepted = await Promise.race([this.adapter.setMode(mode), deadline]);
+      if (attempt === this.attempt && playing) {
+        const paused = this.state.lineup?.paused ?? this.adapter.media?.paused;
+        if (accepted && paused !== true) foregroundPlayback.acquire(this, () => this.pause());
+        else foregroundPlayback.release(this);
+        this.emit({ status: accepted ? (paused ? "paused" : "playing") : "blocked" });
+      }
     } catch {
-      if (attempt === this.attempt) this.emit({ status: "blocked" });
+      if (attempt === this.attempt) { this.pause(); this.emit({ status: "blocked" }); }
+    } finally {
+      if (modeTimer !== undefined) clearTimeout(modeTimer);
+      if (this.modeAttempt === attempt) this.modeAttempt = undefined;
     }
   }
   setVolume(value: number) {
@@ -312,6 +340,7 @@ export class EventPlaybackOwner {
     )
       return;
     if (playbackSourceKey(request) !== playbackSourceKey(this.state.request)) {
+      foregroundPlayback.release(this);
       this.release();
       this.emit({ request, status: "paused", lineup: undefined, metadata: undefined });
       return;
@@ -327,6 +356,7 @@ export class EventPlaybackOwner {
       !this.state.request ||
       playbackContextKey(request) !== playbackContextKey(this.state.request)
     ) {
+      foregroundPlayback.release(this);
       this.release();
       this.emit({
         status: "unavailable",
