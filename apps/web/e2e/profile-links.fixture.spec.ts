@@ -189,6 +189,15 @@ test("a sparse community highlights its group and confirms empty hosted events @
   await expect(page.getByText("Unclaimed", { exact: true })).toHaveCount(1);
   await expect(claim).toHaveAttribute("href", "/claim/playwright-afterglow-social?source=profile");
   await expect(ownership.getByRole("link", { name: "Suggest an edit", exact: true })).toHaveAttribute("href", "/playwright-afterglow-social/edit");
+  const richEventsHeading = page.getByRole("heading", { name: "Hosted events", exact: true });
+  const richAddEvent = page.getByRole("link", { name: "Add event", exact: true });
+  await expect(richAddEvent).toHaveAttribute("href", "/events/new?community=playwright-afterglow-social");
+  const [headingBounds, addEventBounds] = await Promise.all([richEventsHeading.boundingBox(), richAddEvent.boundingBox()]);
+  if (!headingBounds || !addEventBounds) throw new Error("Missing hosted events heading or action bounds");
+  expect(addEventBounds.height).toBeGreaterThanOrEqual(44);
+  expect(addEventBounds.x).toBeGreaterThan(headingBounds.x + headingBounds.width);
+  expect(addEventBounds.y).toBeLessThan(headingBounds.y + headingBounds.height);
+  expect(addEventBounds.y + addEventBounds.height).toBeGreaterThan(headingBounds.y);
   const visitorContent = [
     page.getByText("Afterglow event archive", { exact: true }),
     page.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true }),
