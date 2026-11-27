@@ -107,6 +107,9 @@ for (const state of [
       expect(posterBounds.width).toBeCloseTo(firstClub.width);
       expect(posterBounds.width).toBeCloseTo(secondClub.width);
       expect(firstClub.x - posterBounds.x - posterBounds.width).toBe(24);
+      const browse = page.getByRole("link", { name: "Browse", exact: true });
+      const browseBounds = (await browse.boundingBox())!;
+      expect(browseBounds.x + browseBounds.width).toBeCloseTo(secondClub.x + secondClub.width);
       await event.focus();
       await expect(event).toBeFocused();
       await event.blur();

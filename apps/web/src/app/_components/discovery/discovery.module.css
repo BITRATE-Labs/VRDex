@@ -1,4 +1,6 @@
 .discovery {
+  --group-gap: 1.5rem;
+  --card-gap: 1rem;
   position: relative;
   border-top: 1px solid var(--border);
   margin-top: 1.25rem;
@@ -32,8 +34,6 @@
   background: var(--surface-elevated);
 }
 .groups {
-  --group-gap: 1.5rem;
-  --card-gap: 1rem;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--group-gap);
@@ -45,9 +45,15 @@
   .groups[data-empty-group="clubs"] {
     grid-template-columns: minmax(0, 40rem) clamp(7rem, 16%, 12rem);
   }
-  .groups[data-single-event-with-clubs] {
+  .discovery:has(> .groups[data-single-event-with-clubs]) {
     --rail-width: calc((100% - var(--group-gap)) / 2);
-    grid-template-columns: calc((var(--rail-width) - var(--card-gap)) / 2) var(--rail-width);
+    --single-event-width: calc((var(--rail-width) - var(--card-gap)) / 2);
+  }
+  .discovery:has(> .groups[data-single-event-with-clubs]) > .heading {
+    width: calc(var(--single-event-width) + var(--group-gap) + var(--rail-width));
+  }
+  .groups[data-single-event-with-clubs] {
+    grid-template-columns: var(--single-event-width) var(--rail-width);
   }
   .groups[data-single-event-with-clubs] .cards:not(.clubRail) {
     grid-template-columns: minmax(0, 1fr);
