@@ -80,6 +80,7 @@ test("missing or failed club artwork shows one linked name in the art tile", asy
     const title = card.getByRole("heading").getByRole("link", { name: "Prism Collective", exact: true });
     const artwork = card.locator('[class*="clubArtwork_"]').first();
     await expect(title).toBeVisible();
+    await expect(title.getByText("View club", { exact: true })).toBeVisible();
     await expect(artwork.locator("img")).toHaveCount(0);
     await expect(card.getByText("Prism Collective", { exact: true })).toHaveCount(1);
     await expect(card.getByRole("link")).toHaveCount(1);
