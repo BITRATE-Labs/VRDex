@@ -438,12 +438,12 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
       {event.communityName}
     </div>
   ) : (
-    <p className="leading-6 text-muted">No host listed.</p>
+    <Card surface="white"><p className="leading-6 text-muted">No host listed.</p></Card>
   );
 
   return (
-    <PageShell className="py-5 sm:py-6 lg:py-7" tone="event">
-      <PageContainer className="gap-5">
+    <PageShell className="py-3 sm:py-6 lg:py-7" tone="event">
+      <PageContainer className="gap-3 sm:gap-5">
         <EventPublicHero
           bannerStyle={bannerStyle}
           canHost={canHost === true}
@@ -498,9 +498,9 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
             ) : null}
 
             {standaloneHost ? hostDetails : (
-              <Card className={cn(styles.details, "text-sm", hasCompactHost && "max-sm:hidden")} surface="white">
+              <div className={cn(styles.details, "text-sm", hasCompactHost && "max-sm:hidden")}>
                 {hostDetails}
-              </Card>
+              </div>
             )}
           </section>
 
