@@ -2,6 +2,7 @@ import { expect, test, type Locator } from "@playwright/test";
 
 const path = "/playwright-afterglow-social/events/";
 const listedSlug = "playwright-afterglow-harbor-sessions";
+const guestListedSlug = `${listedSlug}-guest`;
 const watchSlug = "playwright-afterglow-watch-room";
 const guestWatchSlug = `${watchSlug}-guest`;
 const sparseSlug = "playwright-date-only-sparse-guest";
@@ -131,8 +132,15 @@ test.describe("public event across the viewer's midnight", () => {
   test.use({ timezoneId: "America/Indianapolis" });
 
   test("schedule only shortens secondary times on the same local date @flow @fixture", async ({ page }) => {
-    await page.goto(path + listedSlug);
-    const schedule = page.getByRole("main").locator("section").first();
+    await page.goto(path + guestListedSlug);
+    const main = page.getByRole("main");
+    const actions = main.getByRole("navigation", { name: "Event actions" });
+    await expect(actions.getByRole("link", { name: "Add to calendar" })).toBeVisible();
+    await expect(actions.getByRole("button", { name: "Report event" })).toBeVisible();
+    await expect(actions.getByRole("link", { name: "Host view" })).toHaveCount(0);
+    await expect(main.getByRole("button", { name: /^Play / })).toHaveCount(0);
+
+    const schedule = main.locator("section").first();
     const doors = schedule.locator('time[datetime="2026-06-15T01:30:00.000Z"]');
     const end = schedule.locator('time[datetime="2026-06-15T05:00:00.000Z"]');
 
