@@ -2,7 +2,7 @@
 
 import type { PlaybackStatus } from "@/lib/event-playback-owner";
 import { ExternalLink } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePostHog } from "posthog-js/react";
 
 import { PlaybackInlinePlaceholder } from "./playback-inline-placeholder";
@@ -63,6 +63,7 @@ type ProfileDiscordHandle = {
 type ProfileVrcdnStreamsProps = {
   compactLinks?: boolean;
   compactMobileSpacing?: boolean;
+  linksColumnContent?: ReactNode;
   linksHeadingId?: string;
   streamsSectionId?: string;
   discordHandles: ProfileDiscordHandle[];
@@ -85,6 +86,7 @@ function responseStates(value: unknown): VrcdnLiveStates | null {
 export function ProfileVrcdnStreams({
   compactLinks = false,
   compactMobileSpacing = false,
+  linksColumnContent,
   linksHeadingId,
   streamsSectionId,
   discordHandles,
@@ -211,7 +213,11 @@ export function ProfileVrcdnStreams({
   const hasWatchSurface = streams.length > 0;
 
   return (
-    <div className={cn("grid min-w-0 grid-cols-1 gap-x-10", hasWatchSurface ? "lg:grid-cols-[minmax(0,1fr)_24rem]" : undefined)}>
+    <div className={cn(
+      "grid min-w-0 grid-cols-1 gap-x-10",
+      hasWatchSurface && "lg:grid-cols-[minmax(0,1fr)_24rem]",
+      linksColumnContent && "lg:grid-rows-[min-content_1fr]",
+    )}>
       <div>
         {hasLinks ? (
           <section
@@ -272,7 +278,11 @@ export function ProfileVrcdnStreams({
       {hasWatchSurface ? (
         <aside
           aria-label={streamsSectionId ? "VRCDN" : undefined}
-          className={cn("min-w-0 space-y-3 py-8", streamsSectionId && "scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent")}
+          className={cn(
+            "min-w-0 space-y-3 py-8",
+            streamsSectionId && "scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent",
+            linksColumnContent && "lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start",
+          )}
           id={streamsSectionId}
           tabIndex={streamsSectionId ? -1 : undefined}
         >
@@ -311,6 +321,7 @@ export function ProfileVrcdnStreams({
           })}
         </aside>
       ) : null}
+      {linksColumnContent ? <div className="min-w-0 max-lg:mt-6 lg:col-start-1 lg:row-start-2">{linksColumnContent}</div> : null}
     </div>
   );
 }

@@ -448,6 +448,9 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
     media_kit: { id: "profile-media-kit", label: "Media kit", available: hasMediaKit },
     worlds: { id: "profile-worlds", label: "Worlds", available: profile.worldCredits.length > 0 },
   };
+  const linksColumnSection = isRichPublicPerson && visitorDestinations.links.available && visitorDestinations.streams.available
+    ? secondaryOrder.find((section) => visitorDestinations[section].available)
+    : undefined;
   const visitorLinks = isRichPublicPerson
     ? (["links", "streams", ...secondaryOrder] as const)
       .map((section) => visitorDestinations[section])
@@ -488,7 +491,8 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
           <div className={cn(
             "mt-5 grid gap-3",
             isRichPublicCommunity && "max-sm:mt-3",
-            hasSingleCommunityEvent ? "lg:col-start-1" : "lg:grid-cols-2",
+            hasSingleCommunityEvent && "lg:col-start-1",
+            !hasSingleCommunityEvent && linksColumnSection !== "events" && "lg:grid-cols-2",
           )}>
             {eventPreviews.map((event) => (
               <EventPreviewCard event={event} key={`${event.slug ?? event.title}-${event.startAt}`} />
@@ -512,7 +516,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
             <PublicMediaAssetCard asset={mediaKit.featuredAsset} featured label="Featured media" />
           </div>
         ) : null}
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className={cn("mt-5 grid gap-3 sm:grid-cols-2", linksColumnSection !== "media_kit" && "lg:grid-cols-3")}>
           {mediaKitGalleryEnabled ? (
             galleryAssets
               .filter((asset) => asset.assetId !== mediaKit.featuredAsset?.assetId)
@@ -538,7 +542,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
     worlds: profile.worldCredits.length > 0 ? (
       <section className="border-t border-border py-8">
         {visitorHeading("worlds")}
-        <div className="mt-5 grid gap-3 lg:grid-cols-2">
+        <div className={cn("mt-5 grid gap-3", linksColumnSection !== "worlds" && "lg:grid-cols-2")}>
           {profile.worldCredits.map((world) => (
             <Link
               className="flex min-w-0 items-start gap-4 rounded-card border border-border bg-surface-strong p-4 text-sm transition hover:border-border-strong"
@@ -564,6 +568,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
       compactMobileSpacing={isRichPublicCommunity}
       linksHeadingId={isRichPublicPerson ? visitorDestinations.links.id : undefined}
       streamsSectionId={isRichPublicPerson ? visitorDestinations.streams.id : undefined}
+      linksColumnContent={linksColumnSection ? secondarySections[linksColumnSection] : undefined}
       discordHandles={discordHandles.map(({ handle, item }) => ({
         handle,
         key: item.link.url,
@@ -754,7 +759,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
         {!isPerson ? <CommunityActivity profile={profile} /> : null}
 
         {secondaryOrder.map((section) => {
-          const content = secondarySections[section];
+          const content = section === linksColumnSection ? null : secondarySections[section];
           return content ? <Fragment key={section}>{content}</Fragment> : null;
         })}
 
