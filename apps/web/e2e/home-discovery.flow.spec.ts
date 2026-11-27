@@ -46,6 +46,48 @@ test.describe("Home discovery @flow @fixture", () => {
     await expect(page).toHaveURL(new RegExp(`/${timelineFixture.runId}-community$`));
   });
 
+  test("Back restores the opened club's rail position", async ({ page, isMobile }) => {
+    const width = isMobile ? 320 : 390;
+    await page.setViewportSize({ width, height: 740 });
+    const discover = await usableDiscovery(page);
+    const clubs = discover.getByRole("group", { name: "Clubs", exact: true });
+    const rail = clubs.locator("#discovery-clubs-rail");
+    const next = clubs.getByRole("button", { name: "Next clubs", exact: true });
+    const previous = clubs.getByRole("button", { name: "Previous clubs", exact: true });
+    const link = rail.getByRole("link").last();
+    const href = await link.getAttribute("href");
+    const offset = () => rail.evaluate((element) => element.scrollLeft);
+
+    await expect(next).toHaveAttribute("aria-disabled", "false");
+    if (isMobile) await next.tap();
+    else await next.click();
+    await expect(next).toHaveAttribute("aria-disabled", "true");
+    const openedPosition = await offset();
+    expect(openedPosition).toBeGreaterThan(0);
+    await expect(link).toBeInViewport({ ratio: 1 });
+
+    if (isMobile) await link.tap();
+    else await link.press("Enter");
+    await expect(page).toHaveURL(new URL(href!, page.url()).href);
+    const profileURL = page.url();
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await page.goBack();
+      await usableDiscovery(page);
+      await expect.poll(offset).toBe(openedPosition);
+      await expect(rail.locator(`a[href="${href}"]`)).toBeInViewport({ ratio: 1 });
+      await expect(previous).toHaveAttribute("aria-disabled", "false");
+      await page.goForward();
+      await expect(page).toHaveURL(profileURL);
+    }
+
+    await page.getByRole("navigation", { name: "Primary navigation" })
+      .getByRole("link", { name: "VRDex", exact: true }).click();
+    await usableDiscovery(page);
+    await expect.poll(offset).toBeLessThanOrEqual(4);
+    await expect(next).toHaveAttribute("aria-disabled", "false");
+  });
+
   test("favoriteChangeKeepsCandidatesAndCards", async ({ page }, info) => {
     const queries = observeDiscoveryQueries(page);
     await page.reload();

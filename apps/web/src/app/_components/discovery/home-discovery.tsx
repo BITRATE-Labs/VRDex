@@ -5,6 +5,7 @@ import { ArrowDown, ArrowRight, ChevronLeft, ChevronRight, LoaderCircle } from "
 import {
   Children,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type FocusEventHandler,
@@ -39,6 +40,7 @@ export type HomeDiscoveryViewProps = Pick<
     sectionRef?: Ref<HTMLElement>;
     favoriteLineup?: FavoriteLineupSnapshot;
     liveFavoriteLineup?: boolean;
+    restoreClubPosition?: boolean;
     onFocusedEventChange?(eventId: string | null): void;
     onFocusedClubChange?(profileId: string | null): void;
   };
@@ -63,13 +65,16 @@ function CardRail({
   children,
   title,
   placeholder = false,
+  restoreClubPosition = false,
 }: {
   children: ReactNode;
   title: "Events" | "Clubs";
   placeholder?: boolean;
+  restoreClubPosition?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const controlsRef = useRef<HTMLDivElement>(null);
+  const restoredClubPosition = useRef(false);
   const count = Children.count(children);
   const [edges, setEdges] = useState<{ left: boolean; right: boolean }>();
   const group = title.toLowerCase();
@@ -104,6 +109,23 @@ function CardRail({
     observer.observe(rail);
     return () => observer.disconnect();
   }, [count]);
+
+  useLayoutEffect(() => {
+    const rail = ref.current;
+    const saved = window.history.state?.vrdexHomeClubPosition;
+    if (!restoreClubPosition || !rail || !saved || restoredClubPosition.current) return;
+
+    const cards = Array.from(rail.children);
+    const index = cards.findIndex((card) => card.getAttribute("data-rail-club") === saved.clubId);
+    const card = cards[index];
+    if (!card) return;
+
+    restoredClubPosition.current = true;
+    const left = index === saved.index && rail.clientWidth === saved.width
+      ? saved.left
+      : card.getBoundingClientRect().left - cards[0].getBoundingClientRect().left;
+    rail.scrollTo({ left, behavior: "instant" });
+  }, [count, restoreClubPosition]);
 
   function move(direction: -1 | 1) {
     const rail = ref.current;
@@ -175,6 +197,24 @@ function CardRail({
         data-scroll-left={edges?.left ? "" : undefined}
         data-scroll-right={(edges?.right ?? count > 1) ? "" : undefined}
         ref={ref}
+        onClickCapture={restoreClubPosition ? (event) => {
+          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
+          const club = link?.closest("[data-rail-club]");
+          if (!club || window.location.pathname !== "/") return;
+
+          // Save on the Home history entry before the native link leaves it.
+          const rail = event.currentTarget;
+          window.history.replaceState({
+            ...window.history.state,
+            vrdexHomeClubPosition: {
+              clubId: club.getAttribute("data-rail-club"),
+              index: Array.from(rail.children).indexOf(club),
+              left: rail.scrollLeft,
+              width: rail.clientWidth,
+            },
+          }, "");
+        } : undefined}
         onScroll={(event) => updateEdges(event.currentTarget)}
         onScrollEnd={(event) => settleClubRail(event.currentTarget)}
         onTouchEnd={(event) => {
@@ -334,11 +374,12 @@ function AvailableDiscovery({
           ))}
       </div>
       <div role="group" aria-labelledby="discovery-clubs-heading">
-        <CardRail title="Clubs">
+        <CardRail title="Clubs" restoreClubPosition={props.restoreClubPosition}>
           {clubs.map((club, index) =>
             club.profileType === "community" ? (
               <div
                 key={club.id}
+                data-rail-club={club.id}
                 onFocusCapture={() => {
                   setFocused({ kind: "club", item: club, index });
                   onFocusedEventChange?.(null);
@@ -464,6 +505,7 @@ export function HomeDiscovery() {
       sectionRef={discovery.sectionRef}
       retry={discovery.retry}
       liveFavoriteLineup
+      restoreClubPosition
       onFocusedEventChange={discovery.setFocusedEvent}
       onFocusedClubChange={discovery.setFocusedClub}
       timeZone={browse.timeZone ?? "UTC"}
