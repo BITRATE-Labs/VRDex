@@ -29,7 +29,7 @@ export function CommunityActivitySummary({ currentPopulation, memberCount, membe
   const cardCount = Number(Boolean(currentPopulation)) + Number(Boolean(memberCount)) + Number(Boolean(memberGrowth));
   if (cardCount === 0) return null;
   const singleMetric = cardCount === 1;
-  const cardLayout = singleMetric ? "sm:flex sm:items-baseline sm:gap-x-4 sm:py-3" : undefined;
+  const cardLayout = singleMetric ? "sm:flex sm:w-fit sm:max-w-full sm:items-baseline sm:gap-x-4 sm:py-3" : undefined;
   const valueClass = cn("mt-2 text-3xl font-semibold", singleMetric && "sm:mt-0 sm:text-2xl");
   const dateClass = cn("mt-1 text-xs text-muted", singleMetric && "sm:mt-0");
   return <div className={cn("mt-5 grid gap-3", cardCount === 2 && "sm:grid-cols-2", cardCount === 3 && "sm:grid-cols-3")}>
