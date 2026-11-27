@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { convexTest } from "convex-test";
 
-import { api } from "../../convex/_generated/api";
+import { api, internal } from "../../convex/_generated/api";
 import schemaModule from "../../convex/schema";
 import { newClerkUserId } from "./_clerkTestIdentity";
 
@@ -36,16 +36,21 @@ async function fixture() {
     });
     return { operatorId, userId, profileId, grantId };
   });
-  const args = { ...lookup, expectedProfileId: ids.profileId, expectedUserId: ids.userId, reason: "Requested by the organizer" };
-  return { t, actor: t.withIdentity(identity), ids, args };
+  const actor = t.withIdentity(identity);
+  const prepared = await actor.query(api.conciergeOwnership.prepareAssignment, lookup);
+  const args = {
+    ...lookup, expectedProfileId: ids.profileId, expectedUserId: ids.userId, reason: "Requested by the organizer",
+    operatorId: prepared.operatorId, actor: prepared.actor, verifiedClerkId: prepared.recipientClerkId,
+  };
+  return { t, actor, ids, args };
 }
 
 test("concierge assignment records one owner and audits the actual operator and recipient", async () => {
   const { t, actor, ids, args } = await fixture();
   const preview = await actor.query(api.conciergeOwnership.previewAssignment, lookup);
   assert.equal(preview.userId, ids.userId);
-  await actor.mutation(api.conciergeOwnership.assignProfile, args);
-  await assert.rejects(actor.mutation(api.conciergeOwnership.assignProfile, args), /Profile already claimed/);
+  await t.mutation(internal.conciergeOwnership.assignProfile, args);
+  await assert.rejects(t.mutation(internal.conciergeOwnership.assignProfile, args), /Profile already claimed/);
   await t.run(async ({ db }) => {
     assert.equal((await db.get(ids.profileId))?.claimState, "claimed_unverified");
     const owners = await db.query("profileOwners").collect();
@@ -61,12 +66,19 @@ test("concierge assignment records one owner and audits the actual operator and 
 test("concierge assignment rechecks privilege, exact account and verification after preview", async () => {
   const { t, actor, ids, args } = await fixture();
   await assert.rejects(t.query(api.conciergeOwnership.previewAssignment, lookup), /SIGN_IN_REQUIRED/);
-  await assert.rejects(actor.mutation(api.conciergeOwnership.assignProfile, {
+  await assert.rejects(t.query(api.conciergeOwnership.prepareAssignment, lookup), /SIGN_IN_REQUIRED/);
+  await assert.rejects(t.mutation(internal.conciergeOwnership.assignProfile, {
+    ...args, actor: { ...args.actor, subject: newClerkUserId() },
+  }), /Super admin access required/);
+  await assert.rejects(t.mutation(internal.conciergeOwnership.assignProfile, {
     ...args, expectedUserId: ids.operatorId,
   }), /account changed/);
+  await assert.rejects(t.mutation(internal.conciergeOwnership.assignProfile, {
+    ...args, verifiedClerkId: newClerkUserId(),
+  }), /account changed/);
   await t.run(({ db }) => db.patch(ids.userId, { emailVerificationTime: undefined }));
-  await assert.rejects(actor.mutation(api.conciergeOwnership.assignProfile, args), /No unique verified account/);
+  await assert.rejects(t.mutation(internal.conciergeOwnership.assignProfile, args), /No unique verified account/);
   await t.run(({ db }) => db.patch(ids.grantId, { state: "revoked" }));
   await assert.rejects(actor.query(api.conciergeOwnership.previewAssignment, lookup), /Super admin access required/);
-  await assert.rejects(actor.mutation(api.conciergeOwnership.assignProfile, args), /Super admin access required/);
+  await assert.rejects(t.mutation(internal.conciergeOwnership.assignProfile, args), /Super admin access required/);
 });

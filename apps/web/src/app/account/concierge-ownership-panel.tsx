@@ -1,6 +1,6 @@
 "use client";
 
-import { useConvex, useMutation } from "convex/react";
+import { useConvex } from "convex/react";
 import { ConvexError } from "convex/values";
 import type { FunctionReturnType } from "convex/server";
 import { useState, type FormEvent } from "react";
@@ -16,7 +16,6 @@ type Assignment = FunctionReturnType<typeof api.conciergeOwnership.previewAssign
 
 export function ConciergeOwnershipPanel() {
   const convex = useConvex();
-  const assign = useMutation(api.conciergeOwnership.assignProfile);
   const [preview, setPreview] = useState<Assignment | null>(null);
   const [profileKind, setProfileKind] = useState<"community" | "person">("community");
   const [profile, setProfile] = useState<EventIdentityOption | null>(null);
@@ -39,13 +38,21 @@ export function ConciergeOwnershipPanel() {
           email: String(values.get("email") ?? ""),
         }));
       } else {
-        const result = await assign({
-          slug: preview.slug,
-          email: preview.email,
-          expectedProfileId: preview.profileId,
-          expectedUserId: preview.userId,
-          reason: String(values.get("reason") ?? ""),
+        const response = await fetch("/api/account/concierge-ownership", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            slug: preview.slug,
+            email: preview.email,
+            expectedProfileId: preview.profileId,
+            expectedUserId: preview.userId,
+            reason: String(values.get("reason") ?? ""),
+          }),
         });
+        const result = await response.json() as { slug?: unknown; error?: unknown };
+        if (!response.ok || typeof result.slug !== "string") {
+          throw new ConvexError({ message: typeof result.error === "string" ? result.error : "Could not complete the assignment." });
+        }
         setAssigned(result.slug);
         setPreview(null);
         setProfile(null);

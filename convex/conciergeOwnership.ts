@@ -3,7 +3,7 @@ import { ConvexError, v } from "convex/values";
 import { getAccountFeatureAccess } from "./_accountFeatures";
 import { requireVerifiedActiveBrowserSession } from "./_claimSession";
 import type { DatabaseReader } from "./_generated/server";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, query } from "./_generated/server";
 import { getActiveProfileOwner, grantProfileOwner } from "./_profileOwnership";
 import { canReadProfile } from "./_profilePermissions";
 import { getProfileBySlug } from "./_profileSlugs";
@@ -18,7 +18,7 @@ async function requireAssignmentAuthority(ctx: Parameters<typeof requireVerified
   if (!(await getAccountFeatureAccess(ctx.db, session.user._id)).superAdmin) {
     throw assignmentError("Super admin access required.");
   }
-  return session.subject;
+  return session;
 }
 
 async function resolveAssignment(db: DatabaseReader, slug: string, email: string) {
@@ -59,21 +59,42 @@ export const previewAssignment = query({
   },
 });
 
-export const assignProfile = mutation({
+export const prepareAssignment = query({
+  args: assignmentLookup,
+  handler: async (ctx, args) => {
+    const { userId, subject } = await requireAssignmentAuthority(ctx);
+    const { profile, recipient, exactEmail } = await resolveAssignment(ctx.db, args.slug, args.email);
+    return {
+      operatorId: userId, actor: subject, profileId: profile._id,
+      recipientId: recipient._id, recipientClerkId: recipient.clerkUserId, email: exactEmail,
+    };
+  },
+});
+
+export const assignProfile = internalMutation({
   args: {
     ...assignmentLookup,
     expectedProfileId: v.id("profiles"),
     expectedUserId: v.id("users"),
+    verifiedClerkId: v.string(),
+    operatorId: v.id("users"),
+    actor: v.object({
+      issuer: v.string(), subject: v.string(), tokenIdentifier: v.string(), displayName: v.optional(v.string()),
+    }),
     reason: v.string(),
   },
   handler: async (ctx, args) => {
-    const actor = await requireAssignmentAuthority(ctx);
+    const operator = await ctx.db.get(args.operatorId);
+    if (operator?.clerkUserId !== args.actor.subject ||
+        !(await getAccountFeatureAccess(ctx.db, args.operatorId)).superAdmin) {
+      throw assignmentError("Super admin access required.");
+    }
     const reason = args.reason.trim();
     if (reason.length < 10 || reason.length > 500) {
       throw assignmentError("Enter a reason between 10 and 500 characters.");
     }
     const { profile, recipient } = await resolveAssignment(ctx.db, args.slug, args.email);
-    if (profile._id !== args.expectedProfileId || recipient._id !== args.expectedUserId) {
+    if (profile._id !== args.expectedProfileId || recipient._id !== args.expectedUserId || recipient.clerkUserId !== args.verifiedClerkId) {
       throw assignmentError("Profile or account changed. Review the assignment again.");
     }
 
@@ -85,7 +106,7 @@ export const assignProfile = mutation({
     }));
     await ctx.db.insert("profileAuditEvents", {
       profileId: profile._id,
-      actor,
+      actor: args.actor,
       targetUserId: recipient._id,
       action: "profile_owner_assigned_by_super_admin",
       sourceType: "moderator",

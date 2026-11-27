@@ -190,8 +190,9 @@ Locked decision: ownership is attached to a profile record, not inferred from pr
 A verified super-admin can use **Assign profile ownership** in Account. Search for
 the published, unclaimed profile and enter the recipient's verified VRDex account email.
 Review the resolved profile and account, enter a reason, then assign ownership.
-The server rechecks the grant, matched IDs and eligibility in the same transaction
-that records ownership. The profile becomes claimed and unverified, and the
+Before assignment, the server checks the recipient's current verified primary
+email in Clerk. The write then rechecks the grant, matched IDs and eligibility
+in the same transaction that records ownership. The profile becomes claimed and unverified, and the
 audit entry records the operator, recipient and reason. Existing owners must use
 a separate transfer or recovery flow.
 

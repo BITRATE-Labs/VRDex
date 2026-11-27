@@ -562,7 +562,8 @@ with `sandbox=true` and the exact PR head. That mode recreates its
    from an authorized checkout. The create command replaces an existing preview.
 2. Set the repository variable `VRDEX_SANDBOX_CONVEX_URL` to the verified cloud
    URL and `VERCEL_SANDBOX_PROJECT_ID` to the dedicated Vercel project. Configure
-   sandbox Clerk and Convex as described in the [sandbox broadcast runbook](../../infra/terraform/restream-worker/README.md#persistent-sandbox-broadcasting).
+   sandbox Clerk and Convex. For the worker and broker, see [broadcast output credentials](../engineering/broadcast-output-credentials.md)
+   and the sandbox procedure in `infra/terraform/restream-worker/README.md`.
 3. Issue a deploy key for this preview scoped to running internal queries,
    mutations, and actions. Store it as the sensitive preview variable
    `CONVEX_ADMIN_TOKEN` in that Vercel project. OAuth consent, token exchange
