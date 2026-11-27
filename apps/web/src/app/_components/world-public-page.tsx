@@ -7,7 +7,7 @@ import { Card, Eyebrow, SectionHeading, SectionTitle } from "@/components/ui/car
 import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { cn } from "@/lib/cn";
 import { publicEventPath } from "@/lib/event-path";
-import { safeImageBackground } from "@/lib/safe-image";
+import { safeImageBackground, safeImageUrl } from "@/lib/safe-image";
 import { ViewerLocalEventDateTime } from "./viewer-local-event-times";
 
 type WorldVisibilityStatus = "unknown" | "private" | "community_labs" | "public";
@@ -111,7 +111,8 @@ export type PublicWorld = {
   };
 };
 
-const worldHeroOverlay = "linear-gradient(135deg, color-mix(in srgb, var(--media) 72%, transparent), color-mix(in srgb, var(--accent) 12%, transparent))";
+// The lightest stop keeps muted white text legible over bright artwork in either theme.
+const worldEventArtworkOverlay = "linear-gradient(135deg, rgb(5 12 24 / 80%), rgb(5 12 24 / 70%))";
 
 function safeHttpsUrl(url: string): string | null {
   try {
@@ -176,15 +177,11 @@ function linkSourceLabel(source: WorldLinkSource): string {
   return "Reviewed";
 }
 
-function PillList({ items }: { items: string[] }) {
-  if (items.length === 0) {
-    return <p className="text-sm leading-6 text-muted">No public entries yet.</p>;
-  }
-
+function PillList({ items, onArtwork }: { items: string[]; onArtwork?: boolean }) {
   return (
     <div className="flex flex-wrap gap-2">
       {items.map((item) => (
-        <Badge className="border-border text-sm" variant="accent" key={item}>
+        <Badge className="text-sm" variant={onArtwork ? "inverse" : "accent"} key={item}>
           {item}
         </Badge>
       ))}
@@ -192,23 +189,13 @@ function PillList({ items }: { items: string[] }) {
   );
 }
 
-function EventList({
-  emptyLabel,
-  events,
-}: {
-  emptyLabel: string;
-  events: PublicWorldEventPreview[];
-}) {
-  if (events.length === 0) {
-    return <p className="text-sm leading-6 text-muted">{emptyLabel}</p>;
-  }
-
+function EventList({ events }: { events: PublicWorldEventPreview[] }) {
   return (
     <div className="grid gap-3">
       {events.map((event) => {
         const sourceUrl = event.source.url ? safeHttpsUrl(event.source.url) : null;
         const eventPath = publicEventPath(event);
-        const posterStyle = safeImageBackground(event.thumbnailImageUrl, worldHeroOverlay);
+        const posterStyle = safeImageBackground(event.thumbnailImageUrl, worldEventArtworkOverlay);
         const posterTextClass = posterStyle ? "text-white/76" : "text-muted";
 
         return (
@@ -290,131 +277,57 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
     ? safeHttpsUrl(world.canonicalVrchatWorldUrl)
     : null;
   const sourceUrl = world.sourceUrl ? safeHttpsUrl(world.sourceUrl) : null;
+  const referenceUrl = sourceUrl === canonicalWorldUrl ? null : sourceUrl;
+  const heroImageUrl = safeImageUrl(world.heroImageUrl);
+  const { upcoming, recent } = world.eventContext;
+  const hasTags = world.tags.length > 0;
+  const hasCredits = world.creatorAttributions.length > 0;
+  const description = world.description?.trim();
+  const outboundLinks = world.outboundLinks.flatMap((link) => {
+    const href = safeHttpsUrl(link.url);
+    return href ? [{ ...link, href }] : [];
+  });
+  const hasLinks = referenceUrl || outboundLinks.length > 0;
+  const hasDetails = description || upcoming.length > 0 || recent.length > 0 || hasTags || hasCredits || hasLinks;
+  const heroMetaClassName = heroImageUrl ? "text-white/76" : "text-muted";
 
   return (
     <PageShell tone="world">
-      <PageContainer>
-        <section className="overflow-hidden rounded-hero border border-border bg-media shadow-hero">
-          <div className="grid items-center gap-6 p-6 text-white sm:p-8 lg:grid-cols-[1.1fr_1fr] lg:p-10">
-            <div>
-              <h1 className="text-5xl leading-none font-semibold tracking-[-0.05em] sm:text-7xl">{world.displayName}</h1>
-              {world.summary ? <p className="mt-4 max-w-2xl text-base leading-7 text-white/82 sm:text-lg">{world.summary}</p> : null}
-            </div>
-            <EntityImage label={world.displayName} src={world.heroImageUrl} className="aspect-video w-full rounded-card border border-white/20 text-4xl" sizes="(min-width: 1024px) 45vw, 100vw" priority />
-          </div>
-        </section>
-
-        <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-          <Card surface="white">
-            <SectionTitle>About this world</SectionTitle>
-            <div className="mt-4 space-y-4 text-sm leading-7 text-muted sm:text-base">
-              {world.description ? (
-                <p>{world.description}</p>
-              ) : (
-                <p>No public description yet.</p>
-              )}
-            </div>
-          </Card>
-
-          <Card surface="white">
-            <dl className="space-y-4 text-sm">
-              <div className="border-b border-border pb-4">
-                <dt className="text-muted">Visibility</dt>
-                <dd className="mt-1 font-medium">{visibilityLabel(world.visibilityStatus)}</dd>
-              </div>
-              <div>
-                <dt className="text-muted">Platform hints</dt>
-                <dd className="mt-2">
-                  <PillList items={world.platformCompatibility.map(platformLabel)} />
-                </dd>
-              </div>
-            </dl>
-          </Card>
-        </section>
-
-        <Card surface="white">
-          <SectionHeading>Events at this world</SectionHeading>
-          <div className="mt-6 grid gap-4 lg:grid-cols-2">
-            <article>
-              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">
-                Upcoming and active
-              </h3>
-              <div className="mt-4">
-                <EventList
-                  emptyLabel="No confirmed upcoming events are linked to this world yet."
-                  events={world.eventContext.upcoming}
-                />
-              </div>
-            </article>
-            <article>
-              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">Recent</h3>
-              <div className="mt-4">
-                <EventList
-                  emptyLabel="No confirmed recent events are linked to this world yet."
-                  events={world.eventContext.recent}
-                />
-              </div>
-            </article>
-          </div>
-        </Card>
-
-        <section className="grid gap-4 lg:grid-cols-3">
-          <Card surface="white">
-            <Eyebrow>Tags</Eyebrow>
-            <div className="mt-4">
-              <PillList items={world.tags} />
-            </div>
-          </Card>
-
-          <Card className="lg:col-span-2" surface="white">
-            <Eyebrow>Creator attribution</Eyebrow>
-            <div className="mt-4 space-y-3">
-              {world.creatorAttributions.length === 0 ? (
-                <p className="text-sm leading-6 text-muted">No public creator credits yet.</p>
-              ) : (
-                world.creatorAttributions.map((attribution) => {
-                  const href = attribution.profileSlug && attribution.profileType
-                    ? `/${attribution.profileSlug}`
-                    : null;
-                  const content = (
-                    <>
-                      <EntityImage label={attribution.displayName} src={attribution.imageUrl} className="size-12 rounded-control" sizes="48px" />
-                      <span className="min-w-0">
-                        <span className="block break-words font-medium">{attribution.displayName}</span>
-                        <span className="block text-muted">{roleLabel(attribution.role)}</span>
-                      </span>
-                    </>
-                  );
-
-                  return href ? (
-                    <Link
-                      className="flex items-center gap-3 rounded-card border border-border bg-surface px-4 py-3 text-sm"
-                      href={href}
-                      key={`${attribution.role}-${attribution.displayName}`}
-                    >
-                      {content}
-                    </Link>
-                  ) : (
-                    <div
-                      className="flex items-center gap-3 rounded-card border border-border bg-surface px-4 py-3 text-sm"
-                      key={`${attribution.role}-${attribution.displayName}`}
-                    >
-                      {content}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </Card>
-        </section>
-
-        <section className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-          <Card surface="white">
-            <Eyebrow>Primary links</Eyebrow>
-            <div className="mt-4 flex flex-wrap gap-3">
+      <PageContainer max={!heroImageUrl && !hasDetails ? "3xl" : undefined}>
+        <section className={cn(
+          "overflow-hidden rounded-hero border border-border",
+          heroImageUrl ? "bg-media text-white shadow-hero" : "bg-surface-strong text-foreground shadow-sm",
+        )}>
+          <div className={cn("p-6 sm:p-8", heroImageUrl && "grid items-center gap-6 lg:grid-cols-[1.1fr_1fr] lg:p-10")}>
+            <div className="min-w-0">
+              <h1 className={cn(
+                "font-semibold leading-none tracking-[-0.05em] [overflow-wrap:anywhere]",
+                heroImageUrl ? "text-5xl sm:text-7xl" : "text-4xl sm:text-5xl",
+              )}>{world.displayName}</h1>
+              {world.summary ? <p className={cn("mt-4 max-w-2xl text-base leading-7 sm:text-lg", heroImageUrl ? "text-white/82" : "text-muted")}>{world.summary}</p> : null}
+              <dl className="mt-5 flex flex-wrap items-start gap-x-6 gap-y-3 text-sm">
+                <div>
+                  <dt className={heroMetaClassName}>Visibility</dt>
+                  <dd className="mt-1 font-medium">{visibilityLabel(world.visibilityStatus)}</dd>
+                </div>
+                {world.platformCompatibility.length > 0 ? (
+                  <div>
+                    <dt className={heroMetaClassName}>Platform hints</dt>
+                    <dd className="mt-1">
+                      <PillList items={world.platformCompatibility.map(platformLabel)} onArtwork={Boolean(heroImageUrl)} />
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
               {canonicalWorldUrl ? (
                 <a
-                  className={buttonVariants({ variant: "primary" })}
+                  className={cn(
+                    buttonVariants({ variant: "primary" }),
+                    "mt-5",
+                    heroImageUrl
+                      ? "focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-media"
+                      : "focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-strong",
+                  )}
                   href={canonicalWorldUrl}
                   rel="noreferrer"
                   target="_blank"
@@ -422,38 +335,118 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
                   Open VRChat world
                 </a>
               ) : null}
-              {sourceUrl ? (
+            </div>
+            {heroImageUrl ? (
+              <EntityImage label={world.displayName} src={heroImageUrl} className="aspect-video w-full rounded-card border border-white/20 text-4xl" sizes="(min-width: 1024px) 45vw, 100vw" priority />
+            ) : null}
+          </div>
+        </section>
+
+        {description ? (
+          <Card surface="white">
+            <SectionTitle>About this world</SectionTitle>
+            <p className="mt-4 max-w-3xl text-sm leading-7 text-muted sm:text-base">{world.description}</p>
+          </Card>
+        ) : null}
+
+        {upcoming.length > 0 || recent.length > 0 ? (
+          <Card surface="white">
+            <SectionHeading>Events at this world</SectionHeading>
+            <div className={cn("mt-6 grid gap-4", upcoming.length > 0 && recent.length > 0 && "lg:grid-cols-2")}>
+              {upcoming.length > 0 ? (
+                <article>
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">
+                    Upcoming and active
+                  </h3>
+                  <div className="mt-4"><EventList events={upcoming} /></div>
+                </article>
+              ) : null}
+              {recent.length > 0 ? (
+                <article>
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">Recent</h3>
+                  <div className="mt-4"><EventList events={recent} /></div>
+                </article>
+              ) : null}
+            </div>
+          </Card>
+        ) : null}
+
+        {hasTags || hasCredits ? (
+          <section className={cn("grid gap-4", hasTags && hasCredits && "lg:grid-cols-[1fr_2fr]")}>
+            {hasTags ? (
+              <Card surface="white">
+                <Eyebrow>Tags</Eyebrow>
+                <div className="mt-4">
+                  <PillList items={world.tags} />
+                </div>
+              </Card>
+            ) : null}
+
+            {hasCredits ? (
+              <Card surface="white">
+                <Eyebrow>Creator attribution</Eyebrow>
+                <div className="mt-4 space-y-3">
+                  {world.creatorAttributions.map((attribution) => {
+                    const href = attribution.profileSlug && attribution.profileType
+                      ? `/${attribution.profileSlug}`
+                      : null;
+                    const content = (
+                      <>
+                        <EntityImage label={attribution.displayName} src={attribution.imageUrl} className="size-12 rounded-control" sizes="48px" />
+                        <span className="min-w-0">
+                          <span className="block break-words font-medium">{attribution.displayName}</span>
+                          <span className="block text-muted">{roleLabel(attribution.role)}</span>
+                        </span>
+                      </>
+                    );
+
+                    return href ? (
+                      <Link
+                        className="flex items-center gap-3 rounded-card border border-border bg-surface px-4 py-3 text-sm"
+                        href={href}
+                        key={`${attribution.role}-${attribution.displayName}`}
+                      >
+                        {content}
+                      </Link>
+                    ) : (
+                      <div
+                        className="flex items-center gap-3 rounded-card border border-border bg-surface px-4 py-3 text-sm"
+                        key={`${attribution.role}-${attribution.displayName}`}
+                      >
+                        {content}
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            ) : null}
+          </section>
+        ) : null}
+
+        {hasLinks ? (
+          <section className={cn("grid gap-4", referenceUrl && outboundLinks.length > 0 && "lg:grid-cols-[0.9fr_1.1fr]")}>
+            {referenceUrl ? (
+              <Card surface="white">
+                <Eyebrow>Primary links</Eyebrow>
                 <a
-                  className={buttonVariants({ variant: "secondary" })}
-                  href={sourceUrl}
+                  className={cn(buttonVariants({ variant: "secondary" }), "mt-4")}
+                  href={referenceUrl}
                   rel="noreferrer"
                   target="_blank"
                 >
                   Reference link
                 </a>
-              ) : null}
-              {!canonicalWorldUrl && !sourceUrl ? (
-                <p className="text-sm leading-6 text-muted">No public world links yet.</p>
-              ) : null}
-            </div>
-          </Card>
+              </Card>
+            ) : null}
 
-          <Card surface="white">
-            <Eyebrow>Creator links</Eyebrow>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {world.outboundLinks.length === 0 ? (
-                <p className="text-sm leading-6 text-muted">No public creator/store links yet.</p>
-              ) : (
-                world.outboundLinks.map((link) => {
-                  const href = safeHttpsUrl(link.url);
-                  if (!href) {
-                    return null;
-                  }
-
-                  return (
+            {outboundLinks.length > 0 ? (
+              <Card surface="white">
+                <Eyebrow>Creator links</Eyebrow>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {outboundLinks.map((link) => (
                     <a
                       className="rounded-card border border-border bg-surface px-4 py-3 text-sm"
-                      href={href}
+                      href={link.href}
                       key={`${link.type}-${link.url}`}
                       rel="noreferrer"
                       target="_blank"
@@ -461,12 +454,12 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
                       <span className="block font-medium">{link.label}</span>
                       <span className="mt-1 block text-xs text-muted">{linkSourceLabel(link.source)}</span>
                     </a>
-                  );
-                })
-              )}
-            </div>
-          </Card>
-        </section>
+                  ))}
+                </div>
+              </Card>
+            ) : null}
+          </section>
+        ) : null}
       </PageContainer>
     </PageShell>
   );
