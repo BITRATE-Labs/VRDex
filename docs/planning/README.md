@@ -1,49 +1,14 @@
-# Planning Docs
+# Planning
 
-Planning docs capture product, architecture, roadmap, and backlog decisions before they are promoted into stable public, developer, or engineering docs.
+## Product
 
-## Core planning set
+- [Product direction](./product-direction.md) covers who VRDex is for and what we are building.
+- [Jobs to be done](./jobs-to-be-done.md) describes the tasks people use VRDex for.
 
-- `docs/planning/research.md` - ecosystem scan and adjacent-code notes
-- `docs/planning/product-spec.md` - MVP scope, user flows, and product rules
-- `docs/planning/product-direction.md` - durable product compass, current niche, homepage posture, privacy stance, and development pattern
-- `docs/planning/architecture.md` - suggested system design, data model, and integrations
-- `docs/planning/prd.md` - product requirements draft for v1 and near-term expansion
-- `docs/planning/agent-integration-surface.md` - external agent-consumable VRDex skill, API, website navigation, and MCP direction
-- `docs/planning/public-api-and-mcp-platform.md` - executable plan for public API, API tokens, OAuth apps, rate limiting, Swagger/OpenAPI docs, and hosted/private MCP
-- `docs/planning/homepage-discovery-direction.md` - homepage, search/discovery, event-calendar, privacy, personalization, and persona direction
-- `docs/planning/event-profile-media-slice.md` - one-slice implementation plan for event programming and DJ slots, reviewed unclaimed-profile media contributions, and public-profile visibility
-- `docs/planning/event-routing-and-authoring.md` - community-scoped event routes, opaque public event codes, and the event-editor workflow
-- [Event editor visual reference](./event-editor-visual-reference-2026-09-29.md) - current visual direction for the future editor, with locked multi-source intake and artwork behavior
-- `docs/planning/unified-search-views.md` - unified search architecture, typed purpose-specific views, and DJ Lookup compatibility direction
-- `docs/planning/personas.md` - internal behavioral personas, VR Johnny taste lens, evidence limits, and public-copy review contract
-- `docs/planning/jobs-to-be-done.md` - prioritized user goals, journey matrix, product-concept boundaries, and filter/preset decision rules
-- `docs/planning/ui-quality-direction.md` - cross-app UI quality, public profile, auth/account, submission, streaming, and status-surface direction
-- `docs/planning/calendar-integration.md` - Google Calendar import/export/sync direction for event workflows
-- `docs/planning/restreaming-media-control.md` - restreaming, VRCDN-first media control, worker architecture, CDN economics, and Discord operator-control direction
-- `docs/planning/genre-graph.md` - genre ontology, alias normalization, and recommendation graph direction
-- `docs/planning/seed-import-model.md` - reviewed partner/list seed-import model and fake fixture shape
-- [Trusted contributors and bulk contributions](./trusted-contributors-and-bulk-contributions.md) - proposed contribution capacity, attainable trust, local-upload bridge, ordinary MCP collections, and website/MCP media review
-- [Contributor upload and review implementation plan](../superpowers/plans/2026-09-12-contributor-upload-and-review.md) - one PR with three internal phases covering shared review, local uploads and collections, bounded trusted publication, and measured capacity
-- `docs/planning/mock-profile-fixtures.md` - mock profile fixture strategy, consented showcase allowlists, and group representation direction
-- `docs/planning/onboarding-seed-access.md` - minimum viable seed-import, private lookup, beta access, and handoff onboarding path
-- `docs/planning/world-discovery.md` - world pages, creator attribution, active-world discovery, and creator-commerce boundaries
-- `docs/planning/marketplace-api-research.md` - marketplace sync gate, provider posture, and disallowed storefront data
-- `docs/planning/engineering-strategy.md` - stack, testing, verification, and agentic factory plan
-- `docs/planning/docs-strategy.md` - Docusaurus and source-of-truth documentation plan
-- `docs/planning/epics.md` - phased epic breakdown for v0.5, v1, and v1.5
-- `docs/planning/issue-seeding.md` - how to split epics into GitHub issues and milestones
-- `docs/planning/dependency-map.md` - hard/soft dependency map across the seeded backlog
-- `docs/planning/issue-drafts.md` - drafted GitHub issue bodies captured from planning work
-- `docs/planning/group-instance-analytics/CONTEXT.md` - shared vocabulary for the group and instance analytics discussion
-- `docs/planning/group-instance-analytics-discovery-2026-09-08.md` - discovery interview for group and instance analytics, extending the existing telemetry work
-- `docs/planning/group-instance-analytics-provider-research-2026-09-08.md` - provider research on which group and instance signals VRChat exposes
-- `docs/planning/club-management-provider-permissions-research-2026-09-09.md` - VRChat group-management endpoints, permission mapping, and bot-action boundaries
-- `docs/planning/group-analytics-chart-library-research-2026-09-08.md` - chart library comparison and current recommendation for the analytics workspace
-- `docs/planning/group-analytics-chart-alternatives-2026-09-08.md` - independent review challenging the chart library recommendation
-- `docs/planning/group-analytics-custom-chart-assessment-2026-09-08.md` - assessment of building custom charts instead of adopting a library
+## Engineering
 
-## Working rule
+- [Architecture](./architecture.md) covers the stack, data model, and integrations.
+- [Engineering strategy](./engineering-strategy.md) covers development and verification.
+- [Documentation strategy](./docs-strategy.md) defines what belongs in each part of the docs.
 
-- keep planning decisions here instead of leaving them only in chat
-- when backlog structure changes, update `docs/planning/epics.md`, `docs/planning/issue-seeding.md`, and `docs/planning/dependency-map.md` together where practical
+For open work, see [GitHub issues](https://github.com/BASIC-BIT/VRDex/issues). For setup and runbooks, start with the [engineering docs](../engineering/README.md).
