@@ -250,7 +250,7 @@ export function EventPreviewCard({
           "px-4",
           !compactWithoutArtwork && "bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] bg-cover bg-center",
           isSeries ? "py-3" : compactWithoutArtwork ? "pt-4" : "min-h-28 py-4",
-          useThemeColors ? "text-foreground" : "text-white",
+          useThemeColors ? "text-foreground" : "bg-media text-white",
         )}
         style={thumbnailStyle}
       >
