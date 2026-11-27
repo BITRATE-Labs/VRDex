@@ -11,6 +11,8 @@
  * have to load a React component tree to read one string.
  */
 export const AUTH_UNAVAILABLE_COPY = "Accounts are temporarily unavailable.";
+export const PROFILE_SUGGESTION_LABEL = "Suggest an edit";
+export const PROFILE_SUGGESTION_QUERY = "?intent=suggest";
 
 export function contributionLabel(returnTo: string) {
   const pathname = returnTo.split(/[?#]/, 1)[0] ?? "";

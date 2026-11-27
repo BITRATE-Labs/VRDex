@@ -202,7 +202,7 @@ test("populated person profiles give visitors keyboard shortcuts before ownershi
     expect(y + height).toBeLessThanOrEqual(760);
   }
   await expect(ownership.getByRole("link", { name: "Claim profile", exact: true })).toHaveAttribute("href", "/claim/playwright-dj-aurora?source=profile");
-  await expect(ownership.getByRole("link", { name: "Suggest an edit", exact: true })).toHaveAttribute("href", "/playwright-dj-aurora/edit");
+  await expect(ownership.getByRole("link", { name: "Suggest an edit", exact: true })).toHaveAttribute("href", "/playwright-dj-aurora/edit?intent=suggest");
 
   for (const [label, id] of [["Links", "profile-links"], ["VRCDN", "profile-streams"], ["Upcoming events", "profile-events"], ["Media kit", "profile-media-kit"], ["Worlds", "profile-worlds"]]) {
     const shortcut = nav.getByRole("link", { name: label, exact: true });
@@ -257,7 +257,7 @@ test("a sparse person profile puts its identity and ownership together @fixture"
   await expect(identity.getByRole("img", { name: "Sparse Import display image", exact: true })).toBeVisible();
   await expect(ownership.getByText("Unclaimed", { exact: true })).toBeVisible();
   await expect(ownership.getByRole("link", { name: "Claim profile", exact: true })).toHaveAttribute("href", "/claim/playwright-sparse-import?source=profile");
-  await expect(ownership.getByRole("link", { name: "Suggest an edit", exact: true })).toHaveAttribute("href", "/playwright-sparse-import/edit");
+  await expect(ownership.getByRole("link", { name: "Suggest an edit", exact: true })).toHaveAttribute("href", "/playwright-sparse-import/edit?intent=suggest");
   for (const width of [320, 1280]) {
     await page.setViewportSize({ width, height: 720 });
     await expect(identity).toBeInViewport({ ratio: 1 });
@@ -309,7 +309,7 @@ test("a sparse community highlights its group and confirms empty hosted events @
   const claim = ownership.getByRole("link", { name: "Claim profile", exact: true });
   await expect(claim).toHaveAttribute("href", `/claim/${slug}?source=profile`);
   const suggestion = ownership.getByRole("link", { name: "Suggest an edit", exact: true });
-  await expect(suggestion).toHaveAttribute("href", `/${slug}/edit`);
+  await expect(suggestion).toHaveAttribute("href", `/${slug}/edit?intent=suggest`);
   const [groupBounds, claimBounds] = await Promise.all([group.boundingBox(), claim.boundingBox()]);
   if (!groupBounds || !claimBounds) throw new Error("Missing community group link or claim action bounds");
   expect(claimBounds.height).toBeGreaterThanOrEqual(44);
@@ -344,7 +344,7 @@ test("a sparse community highlights its group and confirms empty hosted events @
   await expect(richIdentity.getByText("Unclaimed", { exact: true })).toBeVisible();
   await expect(page.getByText("Unclaimed", { exact: true })).toHaveCount(1);
   await expect(claim).toHaveAttribute("href", "/claim/playwright-afterglow-social?source=profile");
-  await expect(ownership.getByRole("link", { name: "Suggest an edit", exact: true })).toHaveAttribute("href", "/playwright-afterglow-social/edit");
+  await expect(ownership.getByRole("link", { name: "Suggest an edit", exact: true })).toHaveAttribute("href", "/playwright-afterglow-social/edit?intent=suggest");
   const richEventsHeading = page.getByRole("heading", { name: "Hosted events", exact: true });
   const richAddEvent = page.getByRole("link", { name: "Add event", exact: true });
   await expect(richAddEvent).toHaveAttribute("href", "/events/new?community=playwright-afterglow-social");

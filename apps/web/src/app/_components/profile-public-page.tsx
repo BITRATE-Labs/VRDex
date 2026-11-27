@@ -26,6 +26,7 @@ import { VerifiedTrustMark } from "@/components/ui/verified-trust-mark";
 import { avatarFrameStyle, defaultAvatarAppearance, type AvatarAppearance } from "@/lib/avatar-appearance";
 import { cn } from "@/lib/cn";
 import { uniqueProfileIdentityItems } from "@/lib/profile-identity-items";
+import { PROFILE_SUGGESTION_LABEL, PROFILE_SUGGESTION_QUERY } from "@/lib/auth-copy";
 import { profileClaimPath } from "@/lib/profile-claim";
 import { hasRenderableProfileMediaKit } from "@/lib/profile-media-kit";
 import { safeImageBackground, safeImageUrl } from "@/lib/safe-image";
@@ -677,9 +678,9 @@ export function ProfilePublicPage({
             rendered with no viewer, and the editor handles sign-in. */}
         <Link
           className={cn(buttonVariants({ size: "sm", variant: "ghost" }), ownershipActionClassName)}
-          href={`${profileBasePath}/edit`}
+          href={`${profileBasePath}/edit${PROFILE_SUGGESTION_QUERY}`}
         >
-          Suggest an edit
+          {PROFILE_SUGGESTION_LABEL}
         </Link>
       </div>
     </aside>

@@ -5,8 +5,8 @@ import {
   AuthUnavailableNotice,
 } from "@/components/auth-page-shell";
 import styles from "@/components/clerk-auth-controls.module.css";
-import { contributionLabel } from "@/lib/auth-copy";
-import { fetchPublicProfileShareCardBySlug } from "@/convex/server";
+import { contributionLabel, PROFILE_SUGGESTION_LABEL } from "@/lib/auth-copy";
+import { fetchPublicProfileShareCardBySlug, fetchPublicProfileSuggestionName } from "@/convex/server";
 import { cn } from "@/lib/cn";
 import { authReturnLink, validateSignInReturnTo } from "@/lib/safe-return-to";
 import { validateSlugFormat } from "../../../../../../convex/_globalSlugs";
@@ -45,17 +45,18 @@ export default async function SignInPage({
   // attacker-supplied `returnTo` cannot bounce a signed-in user off-site.
   const returnTo = validateSignInReturnTo(params.returnTo ?? params.redirectTo ?? params.return_to);
   const configured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
-  const journeyLabel = contributionLabel(returnTo);
-  const journeyHeading = configured ? journeyLabel : undefined;
-  const subtitle = journeyHeading
+  const suggestionName = await fetchPublicProfileSuggestionName(returnTo);
+  const journeyLabel = suggestionName ? PROFILE_SUGGESTION_LABEL : contributionLabel(returnTo);
+  const journeyHeading = configured || suggestionName ? journeyLabel : undefined;
+  const subtitle = suggestionName ?? (journeyHeading
     ? await contributionIdentity(returnTo)
-    : (journeyLabel ?? "Manage your VRDex profile and events.");
+    : (journeyLabel ?? "Manage your VRDex profile and events."));
 
   return (
     <AuthPageShell
       compact={Boolean(journeyLabel)}
       headingId="sign-in-heading"
-      integrated={Boolean(journeyHeading)}
+      integrated={configured && Boolean(journeyHeading)}
       subtitle={subtitle}
       title={journeyHeading ?? "Sign in"}
     >

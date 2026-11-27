@@ -349,6 +349,49 @@ test("sign-in describes recognized contribution return paths without echoing the
   }
 });
 
+test("the public suggestion keeps the profile and task through account entry", async ({ page }) => {
+  const path = "/playwright-sparse-community";
+  const returnTo = `${path}/edit?intent=suggest`;
+  const main = page.getByRole("main");
+  await page.goto(path);
+  await main.getByRole("link", { name: "Suggest an edit", exact: true }).click();
+
+  if (new URL(page.url()).pathname === `${path}/edit`) {
+    await expect(main.getByRole("heading", { name: "Suggest an edit", exact: true })).toBeVisible();
+    await expect(main.getByText("Sparse Community", { exact: true })).toBeVisible();
+    await main.getByRole("link", { name: "Sign in", exact: true }).click();
+  }
+  await expect(page).toHaveURL((url) => url.pathname === "/sign-in" && url.searchParams.get("returnTo") === returnTo);
+  await expect(main.getByRole("heading", { name: "Suggest an edit", exact: true })).toBeVisible();
+  await expect(main.getByText("Sparse Community", { exact: true })).toBeVisible();
+
+  await page.goto("/sign-up?" + new URLSearchParams({ returnTo }));
+  await expect(main.getByRole("heading", { name: "Suggest an edit", exact: true })).toBeVisible();
+  await expect(main.getByText("Sparse Community", { exact: true })).toBeVisible();
+});
+
+test("direct and ineligible profile edits keep the ordinary editor entry", async ({ page }) => {
+  const paths = [
+    "/playwright-sparse-community/edit",
+    "/playwright-sparse-community/edit?intent=suggest&intent=suggest",
+    "/basicbit/edit?intent=suggest",
+    "/playwright-missing-contribution/edit?intent=suggest",
+  ];
+  for (const path of paths) {
+    await page.goto(path);
+    const main = page.getByRole("main");
+    await expect(main.getByRole("heading", { name: "Edit profile", exact: true })).toBeVisible();
+    await expect(main.getByRole("heading", { name: "Suggest an edit", exact: true })).toHaveCount(0);
+    await expect(main.getByText("Sparse Community", { exact: true })).toHaveCount(0);
+  }
+
+  for (const returnTo of paths.slice(1)) {
+    await page.goto("/sign-in?" + new URLSearchParams({ returnTo }));
+    await expectSignInPage(page, "Edit profile");
+    await expect(page.getByRole("main").getByText("Sparse Community", { exact: true })).toHaveCount(0);
+  }
+});
+
 test("Clerk account switches retain the contribution return target", async ({ page }) => {
   const returnTo = "/submit";
   await page.goto("/sign-in?" + new URLSearchParams({ returnTo }));

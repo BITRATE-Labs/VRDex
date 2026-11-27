@@ -1,6 +1,12 @@
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+
 import { ProfileEditForm } from "../../_components/profile-edit-form";
 import { ProfilePrivateRecord } from "../../_components/profile-private-record";
 import { PageContainer, PageShell } from "@/components/ui/page-shell";
+import { fetchPublicProfileSuggestionName } from "@/convex/server";
+import { PROFILE_SUGGESTION_LABEL, PROFILE_SUGGESTION_QUERY } from "@/lib/auth-copy";
+import { protectedRouteSignInPath } from "@/lib/protected-route-redirect";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +15,7 @@ type ProfileEditPageProps = {
     slug: string;
   }>;
   searchParams: Promise<{
+    intent?: string | string[];
     section?: string | string[];
   }>;
 };
@@ -23,7 +30,21 @@ type ProfileEditPageProps = {
 export default async function ProfileEditPage({ params, searchParams }: ProfileEditPageProps) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
   const profilePath = `/${slug}`;
+  const editPath = `${profilePath}/edit`;
   const mediaContributionFocus = query.section === "media";
+  const suggestionPath = `${editPath}${PROFILE_SUGGESTION_QUERY}`;
+  const suggestionName = query.intent === "suggest" && query.section === undefined
+    ? await fetchPublicProfileSuggestionName(suggestionPath)
+    : undefined;
+  const returnTo = suggestionName
+    ? suggestionPath
+    : `${editPath}${mediaContributionFocus ? "?section=media#media-contributions" : ""}`;
+
+  // Match middleware's Clerk setup so fixture and unconfigured builds retain the editor gate.
+  if (suggestionName && process.env.NEXT_PUBLIC_CONVEX_URL && process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) {
+    const { isAuthenticated } = await auth();
+    if (!isAuthenticated) redirect(protectedRouteSignInPath(returnTo));
+  }
   const mediaContributionsEnabled =
     process.env.VRDEX_PROFILE_MEDIA_SUBMISSIONS_ENABLED === "true" ||
     process.env.VRDEX_ENABLE_PLAYWRIGHT_FIXTURES === "true";
@@ -33,7 +54,10 @@ export default async function ProfileEditPage({ params, searchParams }: ProfileE
       <PageContainer max="3xl">
 
         <section className="border-t border-border pt-8 sm:pt-10">
-          <h1 className="text-3xl leading-tight font-semibold sm:text-4xl">Edit profile</h1>
+          <h1 className="text-3xl leading-tight font-semibold sm:text-4xl">
+            {suggestionName ? PROFILE_SUGGESTION_LABEL : "Edit profile"}
+          </h1>
+          {suggestionName ? <p className="mt-2 text-sm text-muted [overflow-wrap:anywhere]">{suggestionName}</p> : null}
 
           <div className="mt-8">
             <ProfileEditForm
@@ -41,6 +65,7 @@ export default async function ProfileEditPage({ params, searchParams }: ProfileE
               mediaContributionFocus={mediaContributionFocus}
               mediaContributionsEnabled={mediaContributionsEnabled}
               profilePath={profilePath}
+              returnTo={returnTo}
               slug={slug}
             />
           </div>
