@@ -12,6 +12,7 @@ import type {
 } from "@/app/_components/discovery-public-page";
 import type { PublicEvent } from "@/app/_components/event-public-page";
 import type { PublicWorld } from "@/app/_components/world-public-page";
+import { createDiscordTimestampSet } from "../../../../convex/_discordTimestamps";
 import { buildGroupPopulationSeries } from "../../../../convex/_groupPopulationSeries";
 import type { PublicProfileMediaDetails } from "@vrdex/api-contracts";
 import { PublicCommunityTelemetrySchema } from "@vrdex/api-contracts";
@@ -1635,6 +1636,15 @@ const seriesId = "playwright-afterglow-series";
 const emptySeriesId = "playwright-afterglow-series-empty";
 const seriesNightSlug = "playwright-afterglow-series-night";
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const seriesNights = [0, 1, 2, 3].map((week) => ({
+  ...eventPreview,
+  id: `${seriesNightSlug}-${week}`,
+  slug: week === 0 ? seriesNightSlug : `${seriesNightSlug}-${week}`,
+  startAt: eventStartAt + week * WEEK_MS,
+  doorsOpenAt: eventDoorsOpenAt + week * WEEK_MS,
+  endAt: eventEndAt + week * WEEK_MS,
+  ...(week === 3 ? { summary: "Extended guest set with DJ Aurora." } : {}),
+}));
 
 export function getPlaywrightPublicEventSeriesFixture(id: string) {
   if (
@@ -1651,13 +1661,7 @@ export function getPlaywrightPublicEventSeriesFixture(id: string) {
     summary: eventPreview.summary,
     communitySlug,
     communityName: eventPreview.communityName,
-    nights: id === emptySeriesId ? [] : [0, 1, 2, 3].map(week => ({
-      ...eventPreview,
-      id: `${seriesNightSlug}-${week}`,
-      slug: week === 0 ? seriesNightSlug : `${seriesNightSlug}-${week}`,
-      startAt: eventStartAt + week * WEEK_MS,
-      doorsOpenAt: eventDoorsOpenAt + week * WEEK_MS,
-    })),
+    nights: id === emptySeriesId ? [] : seriesNights,
   };
 }
 
@@ -1684,6 +1688,28 @@ export function getPlaywrightPublicEventFixture(slug: string): PublicEvent | nul
 
   if (slug === seriesNightSlug) {
     return { ...publicEvent, slug, seriesId };
+  }
+
+  const seriesNight = seriesNights.find((night) => night.slug === slug);
+  if (seriesNight) {
+    const { id, startAt, doorsOpenAt, endAt, summary } = seriesNight;
+    const offset = startAt - eventStartAt;
+    return {
+      ...publicEvent,
+      id,
+      slug,
+      seriesId,
+      startAt,
+      doorsOpenAt,
+      endAt,
+      summary,
+      slots: publicEvent.slots.map((slot) => ({
+        ...slot,
+        startAt: slot.startAt + offset,
+        endAt: slot.endAt === undefined ? undefined : slot.endAt + offset,
+        discord: createDiscordTimestampSet(slot.startAt + offset),
+      })),
+    };
   }
 
   if (slug === "playwright-date-only-event") {

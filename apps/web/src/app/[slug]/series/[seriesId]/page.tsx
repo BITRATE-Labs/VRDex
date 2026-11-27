@@ -45,9 +45,9 @@ export default async function EventSeriesPage({ params }: EventSeriesPageProps) 
             </a> : null}
           </div>
           {hasUpcomingNights ? (
-            <div className="mt-5 grid gap-3 lg:grid-cols-2">
+            <div className="mt-5 grid items-start gap-3 lg:grid-cols-2">
               {series.nights.map((night) => (
-                <EventPreviewCard event={night} key={night.id} />
+                <EventPreviewCard event={night} key={night.id} seriesSummary={series.summary} variant="series" />
               ))}
             </div>
           ) : <p className="mt-3 text-sm font-medium text-foreground">None scheduled</p>}

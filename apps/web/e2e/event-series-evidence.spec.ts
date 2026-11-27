@@ -71,6 +71,46 @@ test("an empty public series shows its schedule status without a download action
   expect(await calendar.text()).not.toContain("BEGIN:VEVENT");
 });
 
+test("public series occurrences have distinct destinations and dates @fixture", async ({ page, request }) => {
+  const route = "/playwright-afterglow-social/series/playwright-afterglow-series";
+  await page.setViewportSize({ width: 320, height: 720 });
+  expect((await page.goto(route))?.status()).toBe(200);
+  const main = page.getByRole("main");
+  const cards = main.getByRole("article");
+  await expect(cards).toHaveCount(4);
+  await expect(main.getByText("Late-night harbor club session with house, trance, and warm social energy.", { exact: true })).toHaveCount(1);
+  await expect(cards.last().getByText("Extended guest set with DJ Aurora.", { exact: true })).toBeVisible();
+  const destinations = new Set<string>();
+  const days = new Set<string>();
+  for (const card of await cards.all()) {
+    const link = card.getByRole("heading", { level: 3 }).getByRole("link");
+    const date = await card.locator("time").first().innerText();
+    const title = await link.innerText();
+    await expect(link).toHaveAccessibleName(title.trim() + " " + date.trim());
+    const href = await link.getAttribute("href");
+    expect(href).toMatch(/^\/playwright-afterglow-social\/events\//);
+    destinations.add(href!);
+    days.add(date);
+  }
+  expect(destinations.size).toBe(4);
+  expect(days.size).toBe(4);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+
+  const calendar = await request.get(route + "/calendar.ics");
+  expect(calendar.ok()).toBe(true);
+  const entries = (await calendar.text()).split("BEGIN:VEVENT").slice(1);
+  expect(entries).toHaveLength(4);
+  for (const entry of entries) {
+    const date = entry.match(/^DTSTART:(\d{8})T020000Z\r?$/m)?.[1];
+    expect(date).toBeTruthy();
+    expect(entry).toContain("DTEND:" + date + "T050000Z");
+  }
+  for (const href of destinations) {
+    expect((await page.goto(href))?.status()).toBe(200);
+    await expect(main.getByRole("link", { name: "Upcoming nights", exact: true })).toHaveAttribute("href", route);
+  }
+});
+
 test("an occurrence links its series @fixture", async ({ page }) => {
   await page.goto("/playwright-afterglow-social/events/playwright-afterglow-series-night");
   await page.getByRole("link", { name: "Upcoming nights", exact: true }).click();
