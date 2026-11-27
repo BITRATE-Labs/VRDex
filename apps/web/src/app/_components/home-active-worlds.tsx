@@ -66,7 +66,7 @@ function ActiveWorldCard({ world, compactNextEvent }: { world: PublicActiveWorld
           <h3
             id={titleId}
             className={cn(
-              "min-w-0 text-2xl font-semibold underline underline-offset-4 group-hover:decoration-current sm:text-3xl",
+              "min-w-0 text-xl font-semibold underline underline-offset-4 group-hover:decoration-current sm:text-3xl",
               imageUrl ? "decoration-white/55" : "decoration-border-strong",
             )}
           >

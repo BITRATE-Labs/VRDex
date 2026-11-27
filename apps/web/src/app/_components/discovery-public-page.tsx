@@ -190,25 +190,31 @@ function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[];
               </div>
             ) : undefined}
             key={event.slug ?? `${event.title}:${event.startAt}`}
-            metadata={event.nextSlots && event.nextSlots.length > 0 ? (
-              <ul className="grid text-sm text-muted sm:gap-1.5">
-                {event.nextSlots.map((slot) => (
-                  <li className="flex flex-wrap items-center gap-x-2 sm:items-baseline" key={`${slot.startAt}:${slot.displayLabel}`}>
-                    <ViewerLocalEventTime className="font-mono text-xs text-foreground" timestamp={slot.startAt} />
-                    {slot.performer ? (
-                      <Link className="rounded-control font-medium text-accent-strong underline decoration-accent/65 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-accent-strong max-sm:inline-flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center" href={`/${slot.performer.slug}`}>
-                        {slot.performer.displayName}
-                      </Link>
-                    ) : (
-                      <span className="font-medium text-foreground">{slot.displayLabel}</span>
-                    )}
-                    <span>{slot.roleLabel}</span>
-                  </li>
-                ))}
-              </ul>
+            metadata={event.nextSlots?.length || event.summary ? (
+              <div className="grid gap-1 sm:gap-3">
+                {event.nextSlots?.length ? (
+                  <ul className="grid text-sm text-muted sm:gap-1.5">
+                    {event.nextSlots.map((slot) => (
+                      <li className="flex flex-wrap items-center gap-x-2 sm:items-baseline" key={`${slot.startAt}:${slot.displayLabel}`}>
+                        <ViewerLocalEventTime className="font-mono text-xs text-foreground" timestamp={slot.startAt} />
+                        {slot.performer ? (
+                          <Link className="rounded-control font-medium text-accent-strong underline decoration-accent/65 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-accent-strong max-sm:inline-flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center" href={`/${slot.performer.slug}`}>
+                            {slot.performer.displayName}
+                          </Link>
+                        ) : (
+                          <span className="font-medium text-foreground">{slot.displayLabel}</span>
+                        )}
+                        <span>{slot.roleLabel}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {event.summary ? (
+                  <p className="line-clamp-3 text-body-sm text-muted sm:line-clamp-2">{event.summary}</p>
+                ) : null}
+              </div>
             ) : undefined}
             status={publicScheduleStatus(event, now)}
-            summary={event.summary}
             time={<ViewerLocalEventDateTime className="text-xs font-medium text-foreground" groupTime timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />}
             title={publicEventPath(event) ? (
               <TrackedDiscoveryLink
@@ -235,12 +241,22 @@ function DiscoveryCard({
   surface: DiscoveryAnalyticsSurface;
 }) {
   const subtitle = resultSubtitle(result);
+  const spreadSummary = result.profileType === "community" && Boolean(result.summary);
+  const summary = result.summary ? (
+    <span className={cn(
+      "line-clamp-2 text-sm leading-6 text-muted",
+      spreadSummary && "col-start-2 row-start-2 max-[360px]:col-span-full max-[360px]:line-clamp-3",
+    )}>
+      {result.summary}
+    </span>
+  ) : null;
 
   return (
     <TrackedDiscoveryLink
       className={cn(
         "group flex items-center gap-3 rounded-panel border border-border bg-surface p-3 transition-colors hover:border-border-strong hover:bg-surface-strong focus-visible:outline-2 focus-visible:outline-accent-strong sm:p-4",
         result.profileType === "community" && "max-sm:items-start",
+        spreadSummary && "grid grid-cols-[auto_minmax(0,1fr)_auto] gap-y-1 max-[360px]:gap-y-2 [&>*:first-child]:row-span-2 max-[360px]:[&>*:first-child]:row-span-1",
       )}
       eventName={result.entityType === "event" ? "event_card_clicked" : "search_result_clicked"}
       href={result.routePath}
@@ -251,23 +267,24 @@ function DiscoveryCard({
       }}
     >
       <ResultImage result={result} quietFallback />
-      <span className={cn("flex min-w-0 flex-1 flex-col gap-1", result.profileType === "community" && "max-sm:min-h-10 max-sm:justify-center")}>
+      <span className={cn(
+        "flex min-w-0 flex-1 flex-col gap-1",
+        result.profileType === "community" && "max-sm:min-h-10 max-sm:justify-center",
+        spreadSummary && "col-start-2 row-start-1 self-end max-[360px]:self-center",
+      )}>
         {result.startsAt === undefined && result.eventDate === undefined ? null : <ViewerLocalEventDateTime className="text-sm font-medium text-accent-strong" timestamp={result.startsAt} eventDate={result.eventDate} scheduleKind={result.scheduleKind} />}
         <span className="text-lg font-semibold group-hover:text-accent-strong [overflow-wrap:anywhere]">
           {result.title}
         </span>
         {subtitle ? <span className="text-sm text-muted">{subtitle}</span> : null}
-        {result.summary ? (
-          <span className={cn(
-            "line-clamp-2 text-sm leading-6 text-muted",
-            result.profileType === "community" && "max-[360px]:line-clamp-3",
-          )}>{result.summary}</span>
-        ) : null}
+        {!spreadSummary ? summary : null}
       </span>
       <ChevronRight aria-hidden="true" className={cn(
         "size-4 shrink-0 self-center text-muted group-hover:text-accent-strong",
         result.profileType === "community" && (subtitle || result.summary) && "max-sm:mt-1.5 max-sm:self-start",
+        spreadSummary && "col-start-3 row-span-2 row-start-1 max-[360px]:row-span-1",
       )} />
+      {spreadSummary ? summary : null}
     </TrackedDiscoveryLink>
   );
 }
