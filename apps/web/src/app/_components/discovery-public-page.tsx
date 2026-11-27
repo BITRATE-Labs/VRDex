@@ -65,7 +65,8 @@ function resultSubtitle(result: PublicSearchResult): string | undefined {
 }
 
 function ResultImage({ result, quietFallback = false }: { result: PublicSearchResult; quietFallback?: boolean }) {
-  const size = "size-14";
+  const size = "size-10 sm:size-14";
+  const sizes = "(min-width: 640px) 56px, 40px";
   const primaryImageUrl = result.entityType === "profile"
     ? result.profileImageUrl ?? result.imageUrl
     : result.imageUrl;
@@ -79,7 +80,7 @@ function ResultImage({ result, quietFallback = false }: { result: PublicSearchRe
       <EntityImage
         className={cn(size, "rounded-card bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] text-lg text-foreground")}
         label={result.title}
-        sizes="56px"
+        sizes={sizes}
         src={primaryImageUrl}
       />
     );
@@ -100,13 +101,13 @@ function ResultImage({ result, quietFallback = false }: { result: PublicSearchRe
             fallback="Logo"
             imageClassName="!object-contain p-1"
             label={`${result.title} logo`}
-            sizes="56px"
+            sizes={sizes}
             src={primaryImageUrl}
           />
         ) : useQuietFallback ? (
           <EntityImage
             alt=""
-            className="size-10 rounded-card border border-border bg-surface-strong font-semibold text-foreground sm:size-14"
+            className={cn(size, "rounded-card border border-border bg-surface-strong font-semibold text-foreground")}
             label={result.title}
           />
         ) : (
@@ -114,7 +115,7 @@ function ResultImage({ result, quietFallback = false }: { result: PublicSearchRe
             appearance={result.avatarAppearance}
             className={cn(size, "rounded-card bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] text-lg text-foreground")}
             label={result.title}
-            sizes="56px"
+            sizes={sizes}
             src={primaryImageUrl}
           />
         )}
@@ -126,13 +127,13 @@ function ResultImage({ result, quietFallback = false }: { result: PublicSearchRe
   }
 
   return (
-    <span className="grid shrink-0 grid-cols-2 gap-1">
+    <span className="relative grid shrink-0 grid-cols-1 sm:grid-cols-2 sm:gap-1">
       <span className="relative">
         <ProfileAvatarImage
           appearance={result.avatarAppearance}
           className={cn(size, "rounded-card bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] text-lg text-foreground")}
           label={result.title}
-          sizes="56px"
+          sizes={sizes}
           src={result.profileImageUrl}
         />
         {result.trustLabel === "claimed_verified" ? (
@@ -140,11 +141,11 @@ function ResultImage({ result, quietFallback = false }: { result: PublicSearchRe
         ) : null}
       </span>
       <EntityImage
-        className={cn(size, "rounded-card border border-border bg-surface-strong text-xs")}
+        className="size-5 rounded-control border border-border bg-surface-strong text-xs max-sm:absolute max-sm:-bottom-1 max-sm:-left-1 max-sm:text-[0.45rem] sm:size-14 sm:rounded-card"
         fallback="Logo"
-        imageClassName="!object-contain p-1"
+        imageClassName="!object-contain p-0.5 sm:p-1"
         label={`${result.title} logo`}
-        sizes="56px"
+        sizes="(min-width: 640px) 56px, 20px"
         src={result.logoImageUrl}
         title="Logo"
       />

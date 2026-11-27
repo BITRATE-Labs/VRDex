@@ -136,6 +136,24 @@ test("mobile discovery jumps to the directory without hiding the heading", async
   await expect(shortcuts).toBeHidden();
 });
 
+test("mobile discovery aligns directory titles while showing both artwork assets", async ({ page }) => {
+  test.skip(isHostedRun, "The populated discovery directory uses a local fixture.");
+
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.goto("/discovery");
+
+  const people = page.getByRole("heading", { name: "People", exact: true }).locator("xpath=ancestor::section[1]");
+  const aurora = people.getByText("DJ Aurora", { exact: true });
+  const card = aurora.locator("xpath=ancestor::a[1]");
+  await expect(card).toHaveAttribute("href", "/playwright-dj-aurora");
+  await expect(card.getByRole("img", { name: "DJ Aurora", exact: true })).toBeVisible();
+  await expect(card.getByRole("img", { name: "DJ Aurora logo", exact: true })).toBeVisible();
+
+  const titles = [aurora, ...["BASICBIT", "Moth"].map((name) => people.getByText(name, { exact: true }))];
+  const leftEdges = await Promise.all(titles.map((title) => title.evaluate((node) => node.getBoundingClientRect().left)));
+  expect(new Set(leftEdges).size).toBe(1);
+});
+
 test("discovery puts a single event and featured world beside each other at xl", async ({ page }) => {
   test.skip(isHostedRun, "The single event and featured world use a local fixture.");
 
