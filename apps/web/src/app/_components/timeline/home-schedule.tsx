@@ -323,7 +323,12 @@ function ScheduleContent({
             navigate({ anchor: Date.now() - HOUR });
           }
         }}
-        onPan={(hours) => navigate({ anchor: anchor + hours * HOUR })}
+        onPan={(hours) => {
+          const visibleHours = (range.endAt - range.startAt) / HOUR;
+          const overlappingHours = Math.max(1, Math.ceil(visibleHours) - 1);
+          const step = Math.min(Math.abs(hours), overlappingHours);
+          navigate({ anchor: anchor + Math.sign(hours) * step * HOUR });
+        }}
         onNow={() => navigate({ anchor: Date.now() - HOUR })}
       >
         <div
