@@ -232,7 +232,11 @@ test('API and MCP verification installs FFmpeg before full script coverage', asy
  assert.match(steps[install].run, /sudo apt-get update/);
  assert.match(steps[install].run, /sudo apt-get install --no-install-recommends --yes ffmpeg/);
  assert.match(steps[install].run, /ffmpeg -version/);
- assert.equal(steps[verify].run, 'pnpm verify:vrdex-mcp');
+ assert.equal(steps[verify].run, 'pnpm typecheck:vrdex-mcp && pnpm test:vrdex-mcp && pnpm smoke:mcp-compat && pnpm check:mcp-client-matrix');
+ const scripts = steps.findIndex(step => step.name === 'Verify affected script contracts');
+ assert.ok(scripts > verify);
+ assert.equal(steps[scripts].run, 'pnpm test:scripts');
+ assert.equal(steps[scripts].if, "needs.visual-selection.outputs.scripts == 'true'");
 });
 test('media CI configures HTTPS mirrors without weakening package verification', async () => {
  const { parse } = await import('yaml');

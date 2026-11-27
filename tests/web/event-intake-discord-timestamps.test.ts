@@ -94,7 +94,8 @@ it("does not assign one source token to other performers or ignore relative mean
 it("corrects model arithmetic through the shared extraction path before date validation", async () => {
   const result = await extractEventIntake({ draftId: "fixture", sourceText: source }, {
     authorize: async () => ({ actorUserId: "fixture", version: 1 }),
-    search_people: async () => [], search_communities: async () => [], enabled: true, apiKey: "fixture",
+    search_people: async query => query === "DJ 0" ? [{ slug: "dj-0", displayName: "DJ 0" }] : [],
+    search_communities: async () => [], enabled: true, apiKey: "fixture",
     fetchImplementation: async (_url, options) => {
       const request = JSON.parse(String(options?.body));
       assert.match(JSON.stringify(request.input), /2026-11-20T23:30:00.000Z/);
@@ -104,7 +105,10 @@ it("corrects model arithmetic through the shared extraction path before date val
   assert.equal(result.event.timezone, "UTC");
   assert.equal(result.event.eventDate, "2026-11-20");
   assert.equal(result.lineup[0].start, "23:30");
-  assert.deepEqual(result.questions, []);
+  assert.equal(result.lineup[0].personSlug, "dj-0");
+  assert.deepEqual(result.questions, [1, 2, 3].map(index => ({
+    fieldPath: `lineup.${index}.personSlug`, reason: "unresolved_identity", alternatives: [],
+  })));
 });
 
 it("retains explicit formatted-token and temporal context evidence through connector update selection", () => {

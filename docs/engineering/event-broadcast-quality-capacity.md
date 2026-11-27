@@ -88,6 +88,15 @@ absence. Uncertain creation, deadline or cleanup outcomes fail. The summary
 records source revision, fresh image ID, runtime versions, counts, actual native
 exit, receipt verdict and cleanup; raw media artifacts are not uploaded.
 
+Failed receipts can also retain a diagnostic `type`. The owner summary reads
+the Node test failure's cause and retains only the reviewed constants
+`marker_visual_unmatched_eof`, `ERR_ASSERTION`, and `AssertionError`. The gate
+applies the same exact allowlist before projecting a failed outcome into
+`negativeDiagnostic`. Missing, unknown, oversized, and free-form values are
+omitted. Messages, stacks, and paths are never projected. These types are
+diagnostic claims only; native exit, byte limits, cleanup, and the strict
+positive receipt verifier still decide acceptance.
+
 The full host `pnpm verify:vrdex-mcp` → `pnpm test:scripts` chain and all other
 script coverage remain required. The timing file leaves the host glob through
 its directory move. Other native owner cases intentionally overlap host/backend
@@ -101,6 +110,16 @@ digest or FFmpeg version. This ownership change does not establish the cause of
 the historical host pacing failure, resolve other host failures, or grant
 production capacity acceptance. Actual CI duration and native success still
 need fresh execution evidence.
+
+The 60-to-30 startup marker proof retains six seconds of selected PCM and its
+original four-second submitted selection watermark. It then holds and waits up
+to five seconds for output progress to acknowledge a rendered slate before
+stopping. The slate closes any lit marker at EOF without changing selection
+observations or A/V thresholds. Its 16-second decode byte cap covers the existing
+eight-second recording setup and bounded slate wait. The offline regression in
+`tests/scripts/event-startup-marker-stop.test.mjs` exercises lit EOF rejection,
+slate closure, unchanged watermarks, renderer errors and the deadline. Native
+media acceptance still comes from the required owner suite.
 
 ## Synthetic unit fixtures
 

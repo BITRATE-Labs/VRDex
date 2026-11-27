@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { discordTimestampFacts, hasAuthoredEventDate, normalizeDiscordTimestampTimes } from "./discord-timestamps";
 import { createIntakeTimeTools, intakeTimeTools, type IntakeTimeSource } from "./time-tools";
+import { resolveLineupPeople, type LineupLookup } from "./lineup";
 import { EventIntakeCandidateSchema, EventIntakeCandidateJsonSchema, resolveEventLocalTime, type EventIntakeCandidate, type EventIntakeDecision, type EventIntakeFields } from "../../api-contracts/src/event-intake";
 
 type PublicMatch = { slug: string; displayName: string };
@@ -28,7 +29,7 @@ export type EventIntakeAgentDependencies = {
 export type EventIntakeRunMeta = { trigger: EventIntakeTrigger; actorUserId: string; draftId: string; connectorId?: string; communitySlug?: string; mode?: "hold" | "autopublish" };
 export type EventIntakeGeneration = { turn: number; model: string; request: unknown; response: unknown; inputTokens: number; outputTokens: number; latencyMs: number };
 export type EventIntakeRunResult = { reason: string; decision?: EventIntakeDecision; turns: number; toolCalls: number; durationMs: number; inputTokens: number; outputTokens: number; costUsd: number | null };
-export type EventIntakeRunHandle = { generation(turn: EventIntakeGeneration): void; end(result: EventIntakeRunResult): Promise<void> };
+export type EventIntakeRunHandle = { generation(turn: EventIntakeGeneration): void; lookup?(lookup: LineupLookup): void; end(result: EventIntakeRunResult): Promise<void> };
 export type EventIntakeSink = { start(meta: EventIntakeRunMeta): EventIntakeRunHandle };
 export { composeSinks, createLangfuseSink, createPostHogSink } from "./sinks";
 // One cap for every sink: a stalled sink end must not hold the extraction response.
@@ -228,6 +229,7 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
         timed.questions.push({ fieldPath: "event.timezone", reason: "time_context_required", alternatives: [] });
       }
       const result = revalidate(timed, people, communities, events, Boolean(input.context));
+      await resolveLineupPeople(result, deps.search_people, lookup => handle?.lookup?.(lookup));
       decision = result.decision;
       return EventIntakeCandidateSchema.parse(result);
     }

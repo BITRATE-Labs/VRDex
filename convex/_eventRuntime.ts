@@ -1,5 +1,11 @@
 // A runtime window does not create an authored end or a displayed schedule time.
 export const UNKNOWN_EVENT_END_WINDOW_MS = 6 * 60 * 60 * 1000;
+export const DATE_ONLY_END_GRACE_MS = 36 * 60 * 60 * 1000;
+
+export function dateOnlyRuntimeEndAt(eventDate: string): number {
+  // An authored date remains current through the last timezone, UTC-12.
+  return Date.parse(`${eventDate}T00:00:00.000Z`) + DATE_ONLY_END_GRACE_MS - 1;
+}
 
 export function timedEventRuntimeEndAt(event: { startAt: number; endAt?: number | null }): number {
   return event.endAt ?? event.startAt + UNKNOWN_EVENT_END_WINDOW_MS;
