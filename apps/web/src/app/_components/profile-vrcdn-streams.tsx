@@ -63,6 +63,7 @@ type ProfileVrcdnStreamsProps = {
   compactLinks?: boolean;
   compactMobileSpacing?: boolean;
   linksHeadingId?: string;
+  streamsSectionId?: string;
   discordHandles: ProfileDiscordHandle[];
   initialLiveStates?: VrcdnLiveStates;
   links: ProfileVrcdnLink[];
@@ -84,6 +85,7 @@ export function ProfileVrcdnStreams({
   compactLinks = false,
   compactMobileSpacing = false,
   linksHeadingId,
+  streamsSectionId,
   discordHandles,
   initialLiveStates,
   links,
@@ -267,7 +269,12 @@ export function ProfileVrcdnStreams({
       </div>
 
       {hasWatchSurface ? (
-        <aside className="min-w-0 space-y-3 py-8">
+        <aside
+          aria-label={streamsSectionId ? "VRCDN" : undefined}
+          className={cn("min-w-0 space-y-3 py-8", streamsSectionId && "scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent")}
+          id={streamsSectionId}
+          tabIndex={streamsSectionId ? -1 : undefined}
+        >
           {streams.map(({ claimable, key, label, pcUrl, questUrl, directVideoUrl, streamId }) => {
             const lifecycle = lifecycles[streamId];
             const live = claimable && lifecycle?.presentation === "live";

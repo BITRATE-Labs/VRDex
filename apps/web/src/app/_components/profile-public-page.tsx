@@ -439,15 +439,17 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
   const isRichPublicCommunity = !isPerson && !embedded && !useCompactIdentity;
   const hasSingleCommunityEvent = isRichPublicCommunity && eventPreviews.length === 1;
   const isRichPublicPerson = isPerson && !embedded && !useCompactIdentity;
+  const useSideBySideMobileIdentity = isRichPublicCommunity || isRichPublicPerson;
   const moveOwnershipBelowContent = !embedded && (!isPerson || isRichPublicPerson);
   const visitorDestinations = {
     links: { id: "profile-links", label: "Links", available: creatorLinks.length > 0 || discordHandles.length > 0 },
+    streams: { id: "profile-streams", label: "VRCDN", available: vrcdnStreams.length > 0 },
     events: { id: "profile-events", label: "Upcoming events", available: eventPreviews.length > 0 },
     media_kit: { id: "profile-media-kit", label: "Media kit", available: hasMediaKit },
     worlds: { id: "profile-worlds", label: "Worlds", available: profile.worldCredits.length > 0 },
   };
   const visitorLinks = isRichPublicPerson
-    ? (["links", ...secondaryOrder] as const)
+    ? (["links", "streams", ...secondaryOrder] as const)
       .map((section) => visitorDestinations[section])
       .filter(({ available }) => available)
     : [];
@@ -561,6 +563,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
       compactLinks={useCompactCommunity}
       compactMobileSpacing={isRichPublicCommunity}
       linksHeadingId={isRichPublicPerson ? visitorDestinations.links.id : undefined}
+      streamsSectionId={isRichPublicPerson ? visitorDestinations.streams.id : undefined}
       discordHandles={discordHandles.map(({ handle, item }) => ({
         handle,
         key: item.link.url,
@@ -658,7 +661,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                 <div className={cn(
                   "flex min-w-0",
                   useCompactIdentity ? "items-center gap-3 sm:gap-4" : "flex-col gap-6 sm:flex-row sm:items-center",
-                  isRichPublicCommunity && "max-sm:grid max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:items-center max-sm:gap-x-3 max-sm:gap-y-0",
+                  useSideBySideMobileIdentity && "max-sm:grid max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:items-center max-sm:gap-x-3 max-sm:gap-y-0",
                 )}>
                   <div className="relative w-fit shrink-0">
                     <div
@@ -667,7 +670,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                         useCompactIdentity
                           ? "size-14 rounded-control border border-border-strong bg-surface-elevated text-xl text-foreground sm:size-16"
                           : "size-24 bg-white/20 text-3xl shadow-panel",
-                        isRichPublicCommunity && "max-sm:size-14 max-sm:text-xl",
+                        useSideBySideMobileIdentity && "max-sm:size-14 max-sm:text-xl",
                       )}
                       style={useCompactIdentity ? undefined : avatarStyle}
                     >
@@ -681,13 +684,13 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                       <VerifiedTrustMark className="verified-trust-mark--avatar" />
                     ) : null}
                   </div>
-                  <div className={cn("min-w-0", isRichPublicCommunity && "max-sm:contents")}>
+                  <div className={cn("min-w-0", useSideBySideMobileIdentity && "max-sm:contents")}>
                     <div className="min-w-0">
                       <h1
                         className={cn(
                           "break-words font-semibold",
                           useCompactIdentity ? "text-3xl leading-tight sm:text-4xl" : "text-4xl leading-none sm:text-5xl",
-                          isRichPublicCommunity && "max-sm:text-2xl max-sm:leading-tight",
+                          useSideBySideMobileIdentity && "max-sm:text-2xl max-sm:leading-tight",
                         )}
                         id={`profile-title-${profile.slug}`}
                       >
@@ -697,7 +700,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                         <p className={cn("mt-1 text-sm font-semibold", useCompactCommunity ? "text-foreground" : "text-white/75")}>Unclaimed</p>
                       ) : null}
                     </div>
-                    <div className={isRichPublicCommunity ? "max-sm:col-span-2" : undefined}>
+                    <div className={useSideBySideMobileIdentity ? "max-sm:col-span-2" : undefined}>
                       {aliases.length > 0 ? (
                         <div className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-white/75">
                           <span>AKA {aliases.join(", ")}</span>
@@ -721,7 +724,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                   >
                     {visitorLinks.map(({ id, label }) => (
                       <a
-                        className="inline-flex min-h-11 items-center rounded-control px-2 text-sm font-medium text-white underline decoration-white/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-white"
+                        className="inline-flex min-h-11 items-center rounded-control px-2 text-sm font-medium text-white underline decoration-white/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-white max-sm:min-w-11 max-sm:px-1.5"
                         href={"#" + id}
                         key={id}
                       >

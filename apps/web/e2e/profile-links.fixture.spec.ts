@@ -69,6 +69,7 @@ test("multiple profile streams expose distinct copy actions and keep exact desti
 test("an artless occurrence on a sparse profile uses its theme colors @fixture", async ({ page }, testInfo) => {
   await page.addInitScript(() => localStorage.setItem("vrdex-theme", "light"));
   expect((await page.goto("/playwright-event-only-profile"))?.status()).toBe(200);
+  await expect(page.getByRole("navigation", { name: "Profile sections" }).getByRole("link", { name: "VRCDN", exact: true })).toHaveCount(0);
 
   const title = page.getByRole("link", { name: "July Fourth Sessions", exact: true });
   await expect(title).toHaveAttribute("href", "/playwright-afterglow-social/events/playwright-date-only-sparse-guest");
@@ -141,25 +142,43 @@ test("populated person profiles give visitors keyboard shortcuts before ownershi
   const ownership = page.getByRole("complementary", { name: "Profile ownership" });
   await expect(identity.getByText("Unclaimed", { exact: true })).toBeVisible();
   await expect(page.getByText("Unclaimed", { exact: true })).toHaveCount(1);
-  await expect(nav.getByRole("link")).toHaveText(["Links", "Upcoming events", "Media kit", "Worlds"]);
+  await expect(nav.getByRole("link")).toHaveText(["Links", "VRCDN", "Upcoming events", "Media kit", "Worlds"]);
   await expect(nav.getByRole("link", { name: "Upcoming events", exact: true })).toBeInViewport();
+  await expect(nav.getByRole("link", { name: "VRCDN", exact: true })).toBeInViewport();
+  const shortcutBounds = await nav.getByRole("link").evaluateAll(links => links.map(link => {
+    const { y, width, height } = link.getBoundingClientRect();
+    return { y, width, height };
+  }));
+  expect(new Set(shortcutBounds.map(({ y }) => y)).size).toBe(2);
+  expect(shortcutBounds.every(({ width, height }) => width >= 44 && height >= 44)).toBe(true);
+  const [avatar, name] = await Promise.all([
+    identity.getByRole("img", { name: "DJ Aurora display image", exact: true }).boundingBox(),
+    identity.getByRole("heading", { name: "DJ Aurora", exact: true }).boundingBox(),
+  ]);
+  if (!avatar || !name) throw new Error("Missing profile avatar or name bounds");
+  expect(avatar.x + avatar.width).toBeLessThan(name.x);
+  expect(avatar.y).toBeLessThan(name.y + name.height);
+  expect(name.y).toBeLessThan(avatar.y + avatar.height);
   await expect(ownership.getByRole("link", { name: "Claim profile", exact: true })).toHaveAttribute("href", "/claim/playwright-dj-aurora?source=profile");
   await expect(ownership.getByRole("link", { name: "Suggest an edit", exact: true })).toHaveAttribute("href", "/playwright-dj-aurora/edit");
 
-  for (const [label, id] of [["Links", "profile-links"], ["Upcoming events", "profile-events"], ["Media kit", "profile-media-kit"], ["Worlds", "profile-worlds"]]) {
+  for (const [label, id] of [["Links", "profile-links"], ["VRCDN", "profile-streams"], ["Upcoming events", "profile-events"], ["Media kit", "profile-media-kit"], ["Worlds", "profile-worlds"]]) {
     const shortcut = nav.getByRole("link", { name: label, exact: true });
-    const heading = page.getByRole("heading", { name: label, exact: true });
-    const section = heading.locator("xpath=ancestor::section[1]");
+    const isStream = id === "profile-streams";
+    const targetSection = isStream
+      ? page.getByRole("complementary", { name: label, exact: true })
+      : page.getByRole("heading", { name: label, exact: true });
+    const section = isStream ? targetSection : targetSection.locator("xpath=ancestor::section[1]");
     const firstAction = section.locator("a[href]:visible, button:not([disabled]):visible").first();
     await expect(shortcut).toHaveAttribute("href", "#" + id);
-    await expect(heading).toHaveAttribute("id", id);
+    await expect(targetSection).toHaveAttribute("id", id);
     await shortcut.focus();
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(url => url.hash === "#" + id);
-    await expect(heading).toBeFocused();
-    await expect(heading).toBeInViewport();
-    const [target, header] = await Promise.all([heading.boundingBox(), page.getByRole("banner").boundingBox()]);
-    if (!target || !header) throw new Error("Missing profile section heading or header bounds");
+    await expect(targetSection).toBeFocused();
+    await expect(targetSection).toBeInViewport();
+    const [target, header] = await Promise.all([targetSection.boundingBox(), page.getByRole("banner").boundingBox()]);
+    if (!target || !header) throw new Error("Missing profile section target or header bounds");
     expect(target.y).toBeGreaterThanOrEqual(header.y + header.height);
     await page.keyboard.press("Tab");
     await expect(firstAction).toBeFocused();
