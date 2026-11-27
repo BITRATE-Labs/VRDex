@@ -337,6 +337,41 @@ test.describe("continuous schedule @flow @fixture", () => {
     await expect(chart).toHaveAccessibleDescription(/Oct 27, 2:45 AM GMT\+5:30 to Oct 27,/);
     await expect.poll(boundaryLabels).toEqual(expectedLabels);
   });
+  test("Timeline keeps hour labels separate from the current time", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 760 });
+    const now = Date.UTC(2026, 9, 26, 21, 5);
+    await page.clock.setFixedTime(now);
+    await page.goto(`/?at=${now - 3600000}&tz=Asia%2FKolkata`);
+    await loadCompleteSchedule(page);
+    const chart = page.getByRole("region", { name: "Timeline chart", exact: true });
+    const badge = chart.locator('[aria-label="Current time"] > span');
+    await expect(badge).toBeVisible();
+    const badgeTop = (await badge.boundingBox())!.y;
+    const ticks = chart.locator('[aria-hidden="true"] > [data-axis-label-visible]');
+    await expect.poll(() => ticks.count()).toBeGreaterThan(1);
+    for (const tick of await ticks.all()) {
+      const bottom = await tick.evaluate((label) => {
+        const range = document.createRange();
+        range.selectNodeContents(label);
+        return range.getBoundingClientRect().bottom;
+      });
+      expect(bottom).toBeLessThan(badgeTop);
+    }
+    const markerOffset = () => chart.evaluate((viewport) => {
+      const marker = viewport.querySelector('[aria-label="Current time"]')!;
+      return marker.getBoundingClientRect().left - viewport.getBoundingClientRect().left;
+    });
+    const width = await chart.evaluate((viewport) => viewport.clientWidth);
+    for (const offset of [8, width - 8, width + 8, width / 2]) {
+      await chart.evaluate((viewport, delta) => { viewport.scrollLeft += delta; }, await markerOffset() - offset);
+      await expect.poll(async () => Math.abs(await markerOffset() - offset)).toBeLessThan(2);
+      if (offset === width / 2) {
+        await expect(badge).toBeVisible();
+      } else {
+        await expect(badge).toBeHidden();
+      }
+    }
+  });
   test("settled quiet date shows a single public row", async ({ page }, info) => {
     await page.getByLabel("Schedule date", { exact: true }).fill("2026-11-05");
     await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready");

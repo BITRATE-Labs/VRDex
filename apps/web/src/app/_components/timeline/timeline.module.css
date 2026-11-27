@@ -128,18 +128,20 @@
 }
 .canvas {
   --timeline-placeholder-fill: color-mix(in srgb, var(--canvas-muted) 89%, var(--foreground));
+  --timeline-day-axis-height: 24px;
+  --timeline-hour-axis-height: 2.5rem;
   position: relative;
   user-select: none;
 }
 .dayAxis {
-  height: 24px;
+  height: var(--timeline-day-axis-height);
   position: relative;
   background: var(--surface-elevated);
   border-bottom: 1px solid var(--border);
 }
 .dayAxis > div {
   position: absolute;
-  height: 24px;
+  height: var(--timeline-day-axis-height);
   border-left: 1px solid var(--border-strong);
   padding: 4px 12px;
   color: var(--muted);
@@ -151,17 +153,19 @@
 }
 .hourAxis {
   position: relative;
-  height: 32px;
+  height: var(--timeline-hour-axis-height);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
 .hourAxis > span {
   position: absolute;
-  padding: 8px;
+  top: 0.1875rem;
+  padding-inline: 8px;
   font-size: 0.65rem;
+  line-height: 0.75rem;
   color: var(--muted);
 }
-.canvas [data-axis-label]:not([data-axis-label-visible]) {
+.canvas :is([data-axis-label], [data-current-time-label]):not([data-axis-label-visible]) {
   visibility: hidden;
 }
 .dayAxis[data-loading-axis]::after,
@@ -356,7 +360,7 @@
 }
 .now {
   position: absolute;
-  top: 56px;
+  top: calc(var(--timeline-day-axis-height) + var(--timeline-hour-axis-height));
   bottom: 0;
   width: 1px;
   background: var(--accent);
@@ -375,10 +379,12 @@
 }
 .now > span {
   position: absolute;
-  bottom: calc(100% + 8px);
-  left: -26px;
+  bottom: calc(100% + 5px);
+  left: 0;
+  translate: -50%;
   font-size: 0.6rem;
   font-weight: 600;
+  line-height: 0.75rem;
   padding: 2px 5px;
   border: 1px solid var(--accent);
   border-radius: 3px;
