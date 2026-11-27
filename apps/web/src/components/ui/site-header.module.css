@@ -1,3 +1,4 @@
 .light { display: none; }
 :global(html[data-theme="light"]) .dark { display: none; }
 :global(html[data-theme="light"]) .light { display: block; }
+:global(body:has(#standard-search-query)) .quickSearch { display: none; }

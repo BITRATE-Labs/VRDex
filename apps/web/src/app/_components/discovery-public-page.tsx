@@ -237,6 +237,9 @@ function DiscoveryCard({
 
 function SearchResultCard({ result }: { result: PublicSearchResult }) {
   const subtitle = resultSubtitle(result);
+  const trustLabel = result.trustLabel === "community_submitted"
+    ? "Community submitted"
+    : result.trustLabel === "unclaimed" ? "Unclaimed" : undefined;
   const roleLabels = result.person
     ? [...new Set([...result.person.roleTags, ...result.person.tags])].slice(0, 3)
     : [];
@@ -245,8 +248,8 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
     <div className="rounded-panel border border-border bg-surface transition-colors hover:border-border-strong">
       <TrackedDiscoveryLink
         className={cn(
-          "group flex items-start gap-3 rounded-panel p-4 transition-colors hover:bg-surface-strong focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-strong",
-          result.claimEntryPath && "pb-1",
+          "group flex min-h-11 items-start gap-3 rounded-panel p-4 transition-colors hover:bg-surface-strong focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-strong",
+          result.claimEntryPath && "pb-2",
         )}
         eventName={result.entityType === "event" ? "event_card_clicked" : "search_result_clicked"}
         href={result.routePath}
@@ -259,23 +262,31 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
         <ResultImage result={result} quietFallback />
         <span className="flex min-w-0 flex-1 flex-col gap-2">
           <span className="flex flex-col gap-1">
-            <span className="text-xl font-semibold text-foreground underline-offset-4 group-hover:text-accent-strong group-hover:underline [overflow-wrap:anywhere]">
+            <span className="text-xl font-semibold text-accent-strong underline decoration-accent/55 underline-offset-4 group-hover:decoration-current [overflow-wrap:anywhere]">
               {result.title}
             </span>
-            <span className="text-sm text-muted">{entityLabel(result)}</span>
+            <span className="flex flex-wrap items-baseline gap-x-2 text-sm text-muted">
+              <span>{entityLabel(result)}</span>
+              {trustLabel ? (
+                <span className="inline-flex items-baseline gap-2">
+                  <span aria-hidden="true">·</span>
+                  <span>{trustLabel}</span>
+                </span>
+              ) : null}
+            </span>
           </span>
           {subtitle ? <span className="text-sm text-muted">{subtitle}</span> : null}
           {result.startsAt === undefined && result.eventDate === undefined ? null : <ViewerLocalEventDateTime className="text-sm text-accent-strong" timestamp={result.startsAt} eventDate={result.eventDate} scheduleKind={result.scheduleKind} />}
           {result.summary ? <span className="line-clamp-2 text-sm leading-6 text-muted">{result.summary}</span> : null}
           {roleLabels.length > 0 ? <span className="text-xs text-muted">{roleLabels.join(" · ")}</span> : null}
         </span>
-        <ChevronRight aria-hidden="true" className="mt-1 size-4 shrink-0 text-muted group-hover:text-accent-strong" />
+        <ChevronRight aria-hidden="true" className="mt-1 size-4 shrink-0 text-accent-strong" />
       </TrackedDiscoveryLink>
       {result.person ? <PublicSearchResultDetails person={result.person} /> : null}
       {result.claimEntryPath ? (
         <div className="ml-[5.25rem] w-fit pr-4">
           <Link
-            className="inline-flex min-h-11 items-center rounded-control text-sm font-medium text-muted underline decoration-border-strong underline-offset-4 hover:text-accent-strong hover:decoration-current focus-visible:outline-2 focus-visible:outline-accent-strong"
+            className="inline-flex min-h-11 items-center rounded-control text-sm font-medium text-muted underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-accent-strong"
             href={result.claimEntryPath}
           >
             Claim this profile
@@ -513,11 +524,11 @@ export function SearchResultsPage({
     <SearchViewShell
       activeView="standard"
       className="max-sm:py-5"
-      searchControl={<DiscoverySearchForm className="max-w-3xl" compact defaultQuery={query} filter={activeFilter} inputId={inputId} surface="search" tone="default" />}
+      searchControl={<DiscoverySearchForm compact defaultQuery={query} filter={activeFilter} inputId={inputId} surface="search" tone="default" />}
     >
         {activeFilter === "event" ? <Link className={buttonVariants({ variant: "primary" })} href="/events/new">Add event</Link> : null}
         {hasQuery ? (
-          <section aria-describedby="search-results-query" aria-label="Search results" className="w-full max-w-3xl space-y-3 sm:space-y-5">
+          <section aria-describedby="search-results-query" aria-label="Search results" className="space-y-3 sm:space-y-5">
             <p className="sr-only" id="search-results-query">Results for {query}</p>
             <nav aria-label="Entity type" className="flex flex-wrap gap-x-0.5 border-b border-border sm:gap-x-2">
               {filters.map((filter) => {
@@ -550,14 +561,12 @@ export function SearchResultsPage({
                 ) : null}
               </Card>
             ) : results.length === 0 ? (
-              <Card className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1" surface="strong">
-                <div className="min-w-0 flex-[1_1_16rem]">
-                  <p className="text-pretty font-semibold">No public results matched that search yet.</p>
-                  <p className="mt-2 text-pretty text-sm leading-6 text-muted">
-                    Try a community name, DJ alias, world name, event title, genre, or scene term.
-                  </p>
-                </div>
+              <Card className="grid items-center justify-items-start gap-x-5 gap-y-2 sm:grid-cols-[minmax(0,1fr)_auto]" surface="strong">
+                <p className="text-pretty font-semibold">No public results matched that search yet.</p>
                 <EditPublicSearchLink inputId={inputId} />
+                <p className="text-pretty text-sm leading-6 text-muted">
+                  Try a community name, DJ alias, world name, event title, genre, or scene term.
+                </p>
               </Card>
             ) : (
               <div className="grid gap-4">

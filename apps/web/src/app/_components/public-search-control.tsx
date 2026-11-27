@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { usePostHog } from "posthog-js/react";
-import { ArrowUpLeft, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { type FormEvent, useId, useRef, useState } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
@@ -34,17 +34,17 @@ export function PublicSearchControl(props: PublicSearchControlProps) {
 export function EditPublicSearchLink({ inputId }: { inputId: string }) {
   return (
     <a
-      className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "-ml-2 min-h-11 shrink-0 gap-1.5 px-2 underline-offset-4 hover:underline sm:ml-0")}
+      className={cn(buttonVariants({ size: "sm", variant: "surface" }), "min-h-11 sm:row-span-2")}
       href={`#${inputId}`}
       onClick={(event) => {
         if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
         const input = document.getElementById(inputId);
-        if (!input) return;
+        if (!(input instanceof HTMLInputElement)) return;
         event.preventDefault();
         input.focus();
+        input.select();
       }}
     >
-      <ArrowUpLeft aria-hidden="true" className="size-4 text-muted" />
       Edit search
     </a>
   );
