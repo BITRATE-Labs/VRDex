@@ -76,17 +76,13 @@
   box-shadow: 0 16px 36px rgba(46, 71, 141, 0.22);
 }
 
-.hero--primary .button-group {
+.docs-hero-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.9rem;
+  gap: 0.75rem;
 }
 
-.hero--primary .button-group .button {
-  margin: 0;
-}
-
-.hero--primary .button-group .button.button--outline.button--secondary {
+.hero--primary .docs-hero-actions .button.button--outline.button--secondary {
   --ifm-button-background-color: rgba(255, 255, 255, 0.04);
   --ifm-button-border-color: rgba(225, 232, 255, 0.78);
   -webkit-backdrop-filter: blur(12px);
@@ -94,15 +90,36 @@
   color: #edf2ff;
 }
 
-.hero--primary .button-group .button.button--outline.button--secondary:hover {
+.hero--primary .docs-hero-actions .button.button--outline.button--secondary:hover {
   --ifm-button-background-color: rgba(185, 195, 255, 0.15);
   --ifm-button-border-color: #c9b8ff;
   color: #ffffff;
 }
 
-.hero--primary .button-group .button:focus-visible {
+.docs-hero-actions .button:focus-visible {
   outline: 2px solid #edf2ff;
   outline-offset: 3px;
+}
+
+@media (max-width: 480px) {
+  .hero--primary:has(.docs-hero-actions) {
+    padding-block: 2.5rem;
+  }
+
+  .hero--primary:has(.docs-hero-actions) .hero__title {
+    font-size: 2.5rem;
+    line-height: 1.15;
+  }
+
+  .hero--primary:has(.docs-hero-actions) .hero__subtitle {
+    font-size: 1.25rem;
+    line-height: 1.5;
+  }
+
+  .docs-hero-actions {
+    display: grid;
+    max-width: 16rem;
+  }
 }
 
 .markdown h2 {
@@ -112,7 +129,19 @@
 @media (max-width: 996px) {
   .docs-doc-id-developers\/public-api .theme-doc-markdown table th,
   .docs-doc-id-developers\/public-api .theme-doc-markdown table td {
+    line-height: 1.45;
     overflow-wrap: anywhere;
+    padding: 0.65rem 0.625rem;
+    text-align: start;
+    vertical-align: top;
+  }
+
+  .docs-doc-id-developers\/public-api .theme-doc-markdown table td:first-child > code:only-child {
+    background: none;
+    border: 0;
+    display: block;
+    padding: 0;
+    white-space: normal;
   }
 }
 
@@ -201,7 +230,13 @@ html[data-theme="dark"] #__docusaurus,
 }
 
 .docs-lane {
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-color-emphasis-300);
   border-radius: 1.15rem;
+  box-shadow: var(--ifm-global-shadow-lw);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   padding: 1.35rem;
 }
 
@@ -211,9 +246,25 @@ html[data-theme="dark"] #__docusaurus,
 
 .docs-lane p {
   color: var(--ifm-color-content-secondary);
+  margin-block-end: 0.5rem;
+}
+
+.docs-lane a {
+  align-items: center;
+  color: var(--ifm-color-primary-darkest);
+  display: inline-flex;
+  font-weight: 700;
+  margin-block-start: auto;
+  min-height: 44px;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.docs-lane a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
 }
 
 [data-theme="dark"] .docs-lane a {
   color: #c9b8ff;
-  font-weight: 700;
 }

@@ -11,7 +11,7 @@ export default function Home() {
             <p className="hero__subtitle">
               Docs for VRDex: a self-hostable identity, profiles, and events platform for the VRChat scene.
             </p>
-            <div className="button-group">
+            <div className="docs-hero-actions">
               <Link className="button button--secondary button--lg" to="/docs/">
                 Browse docs
               </Link>
