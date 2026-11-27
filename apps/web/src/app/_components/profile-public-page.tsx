@@ -436,6 +436,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
   const useCompactCommunity = !isPerson && hasSparseIdentity && !profile.telemetry && !profile.groupMembership
     && (visibleLinks.length === 0 || (visibleLinks.length === 1 && groupDestination?.kind === "vrchat_group"));
   const useCompactIdentity = useCompactCommunity || (isPerson && hasSparseIdentity && visibleLinks.length === 0);
+  const useMobileCommunityIdentity = !isPerson && !embedded && !useCompactIdentity;
   const quietContributionStyle = "!text-muted underline decoration-border-strong underline-offset-4 hover:decoration-current";
   const compactContributionStyle = useCompactCommunity && quietContributionStyle;
   const secondarySections: Partial<Record<ProfilePublicSectionKey, ReactNode>> = {
@@ -618,7 +619,11 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                   aboutCopy ? "lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)] lg:items-center" : undefined,
                 )}
               >
-                <div className={cn("flex min-w-0", useCompactIdentity ? "items-center gap-3 sm:gap-4" : "flex-col gap-6 sm:flex-row sm:items-center")}>
+                <div className={cn(
+                  "flex min-w-0",
+                  useCompactIdentity ? "items-center gap-3 sm:gap-4" : "flex-col gap-6 sm:flex-row sm:items-center",
+                  useMobileCommunityIdentity && "max-sm:grid max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:items-center max-sm:gap-x-3 max-sm:gap-y-0",
+                )}>
                   <div className="relative w-fit shrink-0">
                     <div
                       className={cn(
@@ -626,6 +631,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                         useCompactIdentity
                           ? "size-14 rounded-control border border-border-strong bg-surface-elevated text-xl text-foreground sm:size-16"
                           : "size-24 bg-white/20 text-3xl shadow-panel",
+                        useMobileCommunityIdentity && "max-sm:size-14 max-sm:text-xl",
                       )}
                       style={useCompactIdentity ? undefined : avatarStyle}
                     >
@@ -639,29 +645,37 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                       <VerifiedTrustMark className="verified-trust-mark--avatar" />
                     ) : null}
                   </div>
-                  <div className="min-w-0">
-                    <h1
-                      className={cn("break-words font-semibold", useCompactIdentity ? "text-3xl leading-tight sm:text-4xl" : "text-4xl leading-none sm:text-5xl")}
-                      id={`profile-title-${profile.slug}`}
-                    >
-                      {profile.displayName}
-                    </h1>
-                    {canClaim && useCommunityOwnershipFooter ? (
-                      <p className={cn("mt-1 text-sm font-semibold", useCompactCommunity ? "text-foreground" : "text-white/75")}>Unclaimed</p>
-                    ) : null}
-                    {aliases.length > 0 ? (
-                      <div className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-white/75">
-                        <span>AKA {aliases.join(", ")}</span>
-                        {remainingAliases.length > 0 ? (
-                          <details>
-                            <summary className="cursor-pointer">+{remainingAliases.length} more</summary>
-                            <span className="mt-1 block">{remainingAliases.join(", ")}</span>
-                          </details>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    {profile.headline ? <p className="mt-3 max-w-2xl text-base leading-7 text-white/85">{profile.headline}</p> : null}
-                    {metadata.length > 0 ? <p className="mt-2 text-sm text-white/70">{metadata.join(" / ")}</p> : null}
+                  <div className={cn("min-w-0", useMobileCommunityIdentity && "max-sm:contents")}>
+                    <div className="min-w-0">
+                      <h1
+                        className={cn(
+                          "break-words font-semibold",
+                          useCompactIdentity ? "text-3xl leading-tight sm:text-4xl" : "text-4xl leading-none sm:text-5xl",
+                          useMobileCommunityIdentity && "max-sm:text-2xl max-sm:leading-tight",
+                        )}
+                        id={`profile-title-${profile.slug}`}
+                      >
+                        {profile.displayName}
+                      </h1>
+                      {canClaim && useCommunityOwnershipFooter ? (
+                        <p className={cn("mt-1 text-sm font-semibold", useCompactCommunity ? "text-foreground" : "text-white/75")}>Unclaimed</p>
+                      ) : null}
+                    </div>
+                    <div className={useMobileCommunityIdentity ? "max-sm:col-span-2" : undefined}>
+                      {aliases.length > 0 ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-white/75">
+                          <span>AKA {aliases.join(", ")}</span>
+                          {remainingAliases.length > 0 ? (
+                            <details>
+                              <summary className="cursor-pointer">+{remainingAliases.length} more</summary>
+                              <span className="mt-1 block">{remainingAliases.join(", ")}</span>
+                            </details>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      {profile.headline ? <p className="mt-3 max-w-2xl text-base leading-7 text-white/85">{profile.headline}</p> : null}
+                      {metadata.length > 0 ? <p className="mt-2 text-sm text-white/70">{metadata.join(" / ")}</p> : null}
+                    </div>
                   </div>
                 </div>
                 {aboutCopy ? (
