@@ -169,6 +169,8 @@ test("populated person profiles give visitors keyboard shortcuts before ownershi
   await expect(nav.getByRole("link")).toHaveText(["Links", "VRCDN", "Upcoming events", "Media kit", "Worlds"]);
   await expect(nav.getByRole("link", { name: "Upcoming events", exact: true })).toBeInViewport();
   await expect(nav.getByRole("link", { name: "VRCDN", exact: true })).toBeInViewport();
+  await expect(nav.getByText("Live now", { exact: true })).toBeInViewport();
+  await page.evaluate(() => document.fonts.ready);
   const shortcutBounds = await nav.getByRole("link").evaluateAll(links => links.map(link => {
     const { y, width, height } = link.getBoundingClientRect();
     return { y, width, height };
@@ -186,7 +188,6 @@ test("populated person profiles give visitors keyboard shortcuts before ownershi
   const linksSection = page.locator("#profile-links").locator("xpath=ancestor::section[1]");
   const soundCloud = linksSection.getByRole("link", { name: /^DJ Aurora SoundCloud/ });
   await expect(soundCloud).toHaveAttribute("href", "https://soundcloud.com/dj-aurora-example");
-  await page.evaluate(() => document.fonts.ready);
   const [vrchatLink, soundCloudLink, soundCloudTitle, soundCloudDomain, soundCloudIcon] = await Promise.all([
     linksSection.getByRole("link", { name: /^VRChat/ }).boundingBox(),
     soundCloud.boundingBox(),
@@ -281,12 +282,16 @@ test("a sparse community highlights its group and confirms empty hosted events @
   const group = identity.getByRole("link", { name: "VRChat group", exact: true });
   await expect(group).toHaveAttribute("href", groupUrl);
   await expect(group).toBeInViewport({ ratio: 1 });
+  await expect(identity.getByRole("link", { name: "Hosted events", exact: true, includeHidden: true })).toHaveCount(0);
   const ownership = page.getByRole("complementary", { name: "Profile ownership" });
   const claim = ownership.getByRole("link", { name: "Claim profile", exact: true });
   await expect(claim).toHaveAttribute("href", `/claim/${slug}?source=profile`);
-  await expect(ownership.getByRole("link", { name: "Suggest an edit", exact: true })).toHaveAttribute("href", `/${slug}/edit`);
+  const suggestion = ownership.getByRole("link", { name: "Suggest an edit", exact: true });
+  await expect(suggestion).toHaveAttribute("href", `/${slug}/edit`);
   const [groupBounds, claimBounds] = await Promise.all([group.boundingBox(), claim.boundingBox()]);
   if (!groupBounds || !claimBounds) throw new Error("Missing community group link or claim action bounds");
+  expect(claimBounds.height).toBeGreaterThanOrEqual(44);
+  expect((await suggestion.boundingBox())?.height).toBeGreaterThanOrEqual(44);
   expect(groupBounds.y + groupBounds.height).toBeLessThan(claimBounds.y);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
 
@@ -299,6 +304,18 @@ test("a sparse community highlights its group and confirms empty hosted events @
 
   expect((await page.goto(`/${slug}-custom`))?.status()).toBe(200);
   await expect(page.getByRole("link", { name: "VRChat group Official meetup group", exact: true })).toHaveAttribute("href", groupUrl);
+
+  expect((await page.goto("/playwright-afterglow-social-group"))?.status()).toBe(200);
+  const richGroup = page.getByRole("link", { name: /^VRChat group(?:\s|$)/ });
+  const groupedShortcut = page.getByRole("link", { name: "Hosted events", exact: true });
+  await expect(richGroup).toHaveAttribute("href", groupUrl);
+  await expect(groupedShortcut).toHaveAttribute("href", "#profile-events");
+  const [richGroupBox, groupedShortcutBox] = await Promise.all([richGroup.boundingBox(), groupedShortcut.boundingBox()]);
+  if (!richGroupBox || !groupedShortcutBox) throw new Error("Missing group or event shortcut bounds");
+  expect(groupedShortcutBox.y).toBeGreaterThanOrEqual(richGroupBox.y + richGroupBox.height);
+  await richGroup.focus();
+  await page.keyboard.press("Tab");
+  await expect(groupedShortcut).toBeFocused();
 
   expect((await page.goto("/playwright-afterglow-social"))?.status()).toBe(200);
   const richIdentity = page.getByRole("region", { name: "Afterglow Social", exact: true });
@@ -329,6 +346,46 @@ test("a sparse community highlights its group and confirms empty hosted events @
     expect(bounds.y + bounds.height).toBeLessThan(richClaims.y);
   }
   await expect(page.getByText("No events", { exact: true })).toHaveCount(0);
+
+  const shortcut = richIdentity.getByRole("link", { name: "Hosted events", exact: true, includeHidden: true });
+  const event = page.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true });
+  const eventPath = "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions";
+  const source = event.locator("xpath=ancestor::article[1]").getByRole("link", { name: "Afterglow event listing", exact: true });
+  await expect(source).toHaveAttribute("href", "https://example.invalid/events/afterglow-harbor-sessions");
+  await expect(source).toHaveAttribute("target", "_blank");
+  await expect(shortcut).toHaveAttribute("href", "#profile-events");
+  await expect(shortcut).toBeInViewport({ ratio: 1 });
+  await expect(event).toHaveAttribute("href", eventPath);
+  for (const action of [shortcut, event, source]) {
+    const bounds = await action.boundingBox();
+    expect(bounds?.height).toBeGreaterThanOrEqual(44);
+    expect(bounds?.width).toBeGreaterThanOrEqual(44);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(shortcut).toBeHidden();
+  await page.setViewportSize({ width: 320, height: 720 });
+  await shortcut.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#profile-events$/);
+  await expect(richEventsHeading).toBeFocused();
+  const heading = await richEventsHeading.boundingBox();
+  const header = await page.getByRole("banner").boundingBox();
+  if (!heading || !header) throw new Error("Missing anchored heading or header bounds");
+  expect(heading.y).toBeGreaterThanOrEqual(header.y + header.height);
+  await expect(event).toBeInViewport({ ratio: 1 });
+  await page.keyboard.press("Tab");
+  await expect(richAddEvent).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(event).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(source).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(event).toBeFocused();
+  await Promise.all([
+    page.waitForURL(url => url.pathname === eventPath, { waitUntil: "domcontentloaded" }),
+    page.keyboard.press("Enter"),
+  ]);
+  await expect(page.getByRole("heading", { level: 1, name: "Afterglow Harbor Sessions", exact: true })).toBeVisible();
 });
 
 test.describe("artless card variants", () => {

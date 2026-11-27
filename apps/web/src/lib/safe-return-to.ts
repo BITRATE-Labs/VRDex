@@ -1,5 +1,11 @@
 export const DEFAULT_SIGN_IN_RETURN_TO = "/account";
 
+export function authReturnLink(pathname: "/sign-in" | "/sign-up", returnTo: string): string {
+  return returnTo === DEFAULT_SIGN_IN_RETURN_TO
+    ? pathname
+    : `${pathname}?${new URLSearchParams({ returnTo })}`;
+}
+
 function hasUnsafePathCharacters(value: string): boolean {
   let decoded = value;
 

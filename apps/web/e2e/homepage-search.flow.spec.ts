@@ -117,13 +117,16 @@ test("Home search, filters, refresh and history keep URL and results aligned @fl
 });
 
 test("Search recovers from empty Events with the same query and preserves history @flow @fixture", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/search");
   await waitForPublicSearchHydration(page);
   const main = page.getByRole("main");
   const input = main.getByRole("combobox", { name: "Search VRDex", exact: true });
+  await expect(main.getByRole("heading", { level: 1, name: "Search", exact: true })).toBeVisible();
+  await expect(input).toHaveAttribute("placeholder", "Search VRDex");
   await input.fill("DJ");
   await main.getByRole("button", { name: "Search VRDex", exact: true }).click();
   await expect(page).toHaveURL(/\/search\?q=DJ$/);
+  await expect(main.getByRole("heading", { level: 1, name: "Search results", exact: true })).toBeVisible();
   const match = publicResultRow(page, "/basicbit");
   await expect(match).toBeVisible();
 
@@ -300,7 +303,8 @@ test("populated Search aligns titles and keeps media and role details available 
   await expect(moth.getByText("Community submitted", { exact: true })).toHaveCSS("border-inline-start-width", "0px");
 
   const genrePreview = basicbit.getByText("DnB · House · Techno", { exact: true });
-  const moreGenres = basicbit.getByText("+8", { exact: true });
+  const moreGenres = basicbit.getByLabel("8 more genres", { exact: true });
+  await expect.poll(() => moreGenres.innerText()).toBe("+8 genres");
   const links = basicbit.getByText("Links", { exact: true });
   const [previewBounds, moreBounds, linksBounds] = await Promise.all([
     genrePreview.boundingBox(),
@@ -331,11 +335,20 @@ test("populated Search aligns titles and keeps media and role details available 
   expect(await links.boundingBox()).toEqual(linksBounds);
 
   const expandedLinks = links.locator("..").locator(":scope > div");
-  await expect(expandedLinks.getByRole("link", { name: "Website: basicbit.net", exact: true })).toHaveAttribute("href", "https://basicbit.net/");
+  const website = expandedLinks.getByRole("link", { name: "Website: basicbit.net", exact: true });
+  const twitch = expandedLinks.getByRole("link", { name: /^Twitch:/ });
+  await expect(website).toHaveAttribute("href", "https://basicbit.net/");
+  await expect(website.getByText("basicbit.net", { exact: true })).toBeVisible();
+  await expect(twitch.getByText("Twitch", { exact: true })).toBeVisible();
+  for (const destination of [website, twitch]) {
+    const bounds = await destination.boundingBox();
+    expect(bounds!.width).toBeGreaterThanOrEqual(44);
+    expect(bounds!.height).toBeGreaterThanOrEqual(44);
+  }
   const [genresPanel, linksPanel] = await Promise.all([expandedGenres.boundingBox(), expandedLinks.boundingBox()]);
-  expect(genresPanel!.x).toBeLessThan(previewBounds!.x);
-  expect(linksPanel!.x).toBe(genresPanel!.x);
-  expect(linksPanel!.width).toBe(genresPanel!.width);
+  expect(genresPanel!.x).toBe(previewBounds!.x);
+  expect(linksPanel!.x).toBeLessThan(genresPanel!.x);
+  expect(linksPanel!.x + linksPanel!.width).toBe(genresPanel!.x + genresPanel!.width);
   expect(linksPanel!.y).toBeGreaterThanOrEqual(genresPanel!.y + genresPanel!.height);
   await links.press("Space");
   await expect(links).toBeFocused();
@@ -376,9 +389,14 @@ test("public result genres and Links disclose independently per person @flow @fi
   await expect(second.getByRole("button", { name: "Copy", exact: true })).toHaveCount(0);
   await expect(first.getByText("Bass · 140 · Trap · Space Bass · Midtempo · UKG · Dancefloor · Neurofunk", { exact: true })).toBeHidden();
   await page.screenshot({ path: info.outputPath("public-results-collapsed.png"), fullPage: true });
-  const overflow = first.getByText("+8", { exact: true });
+  const overflow = first.getByLabel("8 more genres", { exact: true });
+  await expect(overflow.getByText("+8 genres", { exact: true })).toBeVisible();
+  const genreChevron = overflow.locator("svg");
+  await expect(genreChevron).toBeVisible();
+  await expect(genreChevron).toHaveCSS("rotate", "none");
   await overflow.focus();
   await overflow.press("Enter");
+  await expect(genreChevron).toHaveCSS("rotate", "180deg");
   await expect(first.getByText("Bass · 140 · Trap · Space Bass · Midtempo · UKG · Dancefloor · Neurofunk", { exact: true })).toBeVisible();
   await expect(first.getByRole("button", { name: "Copy", exact: true })).toHaveCount(0);
   await first.getByText("Links", { exact: true }).click();
@@ -573,6 +591,7 @@ test("expanded public links agree with legacy provider formatting @flow @fixture
   for (const view of ["standard", "dj"]) {
     await page.goto(`/search?q=DJ+Aurora${view === "dj" ? "&view=dj" : ""}`);
     if (view === "standard") {
+      await waitForPublicSearchHydration(page);
       await publicResultRow(page, "/playwright-dj-aurora").getByText("Links", { exact: true }).click();
     }
 
@@ -581,6 +600,7 @@ test("expanded public links agree with legacy provider formatting @flow @fixture
     for (const [name, id] of [["VRCDN", "dj-aurora"], ["Suggested VRCDN", "suggested-aurora"]]) {
       const group = page.getByRole("group", { name, exact: true });
       await expect(group.getByText(name, { exact: true })).toBeVisible();
+      await expect(group.getByText("Community-submitted", { exact: true })).toHaveCount(id === "suggested-aurora" ? 1 : 0);
       await expect(group.getByRole("link", { name: `${name} preview`, exact: true })).toHaveAttribute(
         "href", `https://panel.vrcdn.live/preview/${id}`,
       );

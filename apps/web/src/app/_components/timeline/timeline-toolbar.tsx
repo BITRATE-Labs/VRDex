@@ -17,6 +17,8 @@ export function TimelineToolbar({
   children?: ReactNode;
   disabled?: boolean;
 }) {
+  const zoneLabel = timeZone.replaceAll("_", " ");
+  const regionEnd = zoneLabel.lastIndexOf("/") + 1;
   return (
     <div className={styles.toolbar}>
       <h2 id="schedule-heading" tabIndex={-1}>Schedule</h2>
@@ -38,7 +40,11 @@ export function TimelineToolbar({
       </Button>
       {children}
       <div className={styles.metadata} aria-hidden={!timeZone}>
-        <span><Globe2 aria-hidden="true" size={13} /><span className="sr-only">Timezone</span>{timeZone.replaceAll("_", " ")}</span>
+        <span>
+          <Globe2 aria-hidden="true" size={13} />
+          <span className="sr-only">Timezone</span>
+          <span>{zoneLabel.slice(0, regionEnd)}<wbr />{zoneLabel.slice(regionEnd)}</span>
+        </span>
         <span><Clock3 aria-hidden="true" size={13} /><span className="sr-only">Hour format</span>{hour12 ? "12h" : "24h"}</span>
       </div>
     </div>

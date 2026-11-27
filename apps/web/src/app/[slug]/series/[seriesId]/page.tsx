@@ -20,7 +20,7 @@ export default async function EventSeriesPage({ params }: EventSeriesPageProps) 
     return <EventBackendNotice kind={result.kind} />;
   }
 
-  const { series } = result;
+  const { series, yearReferenceAt } = result;
 
   if (series === null || series.communitySlug !== slug) {
     notFound();
@@ -47,7 +47,7 @@ export default async function EventSeriesPage({ params }: EventSeriesPageProps) 
           {hasUpcomingNights ? (
             <div className="mt-5 grid items-start gap-3 lg:grid-cols-2">
               {series.nights.map((night) => (
-                <EventPreviewCard event={night} key={night.id} seriesSummary={series.summary} variant="series" />
+                <EventPreviewCard event={night} key={night.id} seriesSummary={series.summary} variant="series" yearReferenceAt={yearReferenceAt} />
               ))}
             </div>
           ) : <p className="mt-3 text-sm font-medium text-foreground">None scheduled</p>}

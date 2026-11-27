@@ -47,7 +47,12 @@ test("published lineups are directly reachable from the event hero @flow @fixtur
       const main = page.getByRole("main");
       const shortcut = main.getByRole("link", { name: "Lineup", exact: true });
       const heading = main.getByRole("heading", { name: "Lineup", exact: true });
-      const firstPerformer = heading.locator("..").getByRole("link").first();
+      const lineup = heading.locator("xpath=ancestor::section[1]");
+      const firstPerformer = lineup.getByRole("link", { name: "DJ Aurora", exact: true });
+      const watch = lineup.getByRole("link", { name: "Watch", exact: true });
+
+      if (slug === guestWatchSlug) await expect(watch).toBeVisible();
+      else await expect(watch).toHaveCount(0);
 
       await expect(shortcut).toHaveAttribute("href", "#event-lineup");
       await expect(shortcut).toBeInViewport({ ratio: 1 });
@@ -65,7 +70,46 @@ test("published lineups are directly reachable from the event hero @flow @fixtur
       expect(headingBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height);
 
       await page.keyboard.press("Tab");
+      if (slug === guestWatchSlug) {
+        await expect(watch).toHaveAttribute("href", "#event-watch");
+        await expect(watch).toBeFocused();
+        await expect(watch).toBeInViewport({ ratio: 1 });
+        if (width === 320) {
+          const target = await watch.boundingBox();
+          expect(target?.width).toBeGreaterThanOrEqual(44);
+          expect(target?.height).toBeGreaterThanOrEqual(44);
+        }
+        await page.keyboard.press("Enter");
+        await expect(page).toHaveURL(/#event-watch$/);
+        await expect(main.getByRole("region", { name: "Watch", exact: true })).toBeFocused();
+        const play = main.getByRole("button", { name: /^Play / });
+        const playControl = play.locator("[data-watch-play-control]");
+        await expect(playControl).toBeInViewport({ ratio: 1 });
+        expect((await playControl.boundingBox())?.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height);
+        await page.keyboard.press("Tab");
+        await expect(play).toBeFocused();
+        await expect(main.locator("video, iframe")).toHaveCount(0);
+
+        await shortcut.focus();
+        await page.keyboard.press("Enter");
+        await expect(heading).toBeFocused();
+        await page.keyboard.press("Tab");
+        await expect(watch).toBeFocused();
+        await page.keyboard.press("Tab");
+      }
       await expect(firstPerformer).toBeFocused();
+      await expect(firstPerformer).toHaveAttribute("href", "/playwright-dj-aurora");
+      await expect(firstPerformer).toHaveAccessibleDescription(/^House .+ - .+$/);
+      await expect(lineup.getByText("DJ Lumen", { exact: true })).toBeVisible();
+      await expect(lineup.getByRole("link", { name: "DJ Lumen" })).toHaveCount(0);
+      if (width === 320) {
+        const row = await firstPerformer.boundingBox();
+        if (!row) throw new Error("Missing lineup profile link");
+        expect(row.width).toBeGreaterThanOrEqual(44);
+        expect(row.height).toBeGreaterThanOrEqual(44);
+        await firstPerformer.click({ position: { x: 14, y: row.height / 2 } });
+        await expect(page).toHaveURL(/\/playwright-dj-aurora$/);
+      }
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
     }
   }
@@ -130,7 +174,7 @@ test("listed events order visitor links on mobile and group context beside the p
   await page.keyboard.press("Tab");
   await expect(host).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(lineup.locator("..").getByRole("link").first()).toBeFocused();
+  await expect(lineup.locator("xpath=ancestor::section[1]").getByRole("link").first()).toBeFocused();
 });
 
 test.describe("public event across the viewer's midnight", () => {
@@ -146,6 +190,7 @@ test.describe("public event across the viewer's midnight", () => {
     await expect(main.getByRole("button", { name: /^Play / })).toHaveCount(0);
 
     const schedule = main.locator("section").first();
+    await expect(schedule.locator('time[datetime="2026-06-15T02:00:00.000Z"]')).toHaveText("Jun 14, 2026, 10:00 PM EDT");
     const doors = schedule.locator('time[datetime="2026-06-15T01:30:00.000Z"]');
     const end = schedule.locator('time[datetime="2026-06-15T05:00:00.000Z"]');
 
@@ -167,7 +212,7 @@ for (const timezoneId of ["UTC", "America/Los_Angeles"]) {
         expect(result?.status()).toBe(200);
         const main = page.getByRole("main");
         const time = main.locator("section").first().locator("time").first();
-        await expect(time).toContainText(slug === sparseSlug ? "Jul 4, 2026 · Time TBA" : expectedZone);
+        await expect(time).toHaveText(slug === sparseSlug ? "Jul 4, 2026 · Time TBA" : timezoneId === "UTC" ? "Jan 1, 2025, 12:00 PM UTC" : "Jan 1, 2025, 4:00 AM PST");
         if (slug !== sparseSlug) {
           const schedule = main.locator("section").first();
           const doors = schedule.locator('time[datetime="2025-01-01T11:30:00.000Z"]');
@@ -343,6 +388,7 @@ test("desktop watch shares the media row with event details @flow @fixture", asy
   await page.clock.setFixedTime(new Date("2025-01-01T11:00:00Z"));
   await page.reload();
   await expect(stage).toHaveCount(0);
+  await expect(main.getByRole("link", { name: "Watch", exact: true })).toHaveCount(0);
   const [idlePoster, idleHost] = await Promise.all([poster.boundingBox(), host.boundingBox()]);
   if (!idlePoster || !idleHost) throw new Error("Missing pre-doors event layout");
   expect(idleHost.x).toBeGreaterThan(idlePoster.x + idlePoster.width);

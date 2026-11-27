@@ -251,7 +251,7 @@ export function ProfileVrcdnStreams({
                   <a
                     className={cn(
                       buttonVariants({ variant: compactLinks ? "primary" : "secondary" }),
-                      linkCardClassName,
+                      linkCardClassName, "focus-visible:ring-accent-strong",
                       compactLinks && "min-h-12 rounded-control border border-transparent px-3 py-2",
                     )}
                     href={link.href}
@@ -298,7 +298,7 @@ export function ProfileVrcdnStreams({
           id={streamsSectionId}
           tabIndex={streamsSectionId ? -1 : undefined}
         >
-          {streams.map(({ claimable, communitySubmitted, key, label, pcUrl, questUrl, directVideoUrl, streamId }) => {
+          {streams.map(({ claimable, communitySubmitted, key, label, pcUrl, questUrl, directVideoUrl, streamId }, index) => {
             const lifecycle = lifecycles[streamId];
             const live = claimable && lifecycle?.presentation === "live";
             const playbackActive = activePlaybackStreamIds.has(streamId);
@@ -309,7 +309,14 @@ export function ProfileVrcdnStreams({
             const copyContext = streams.length > 1 ? title : undefined;
 
             return (
-              <Card className="min-w-0 max-sm:px-3" surface={communitySubmitted ? "dashed" : undefined} padding="sm" aria-label={title} key={key}>
+              <Card
+                className="min-w-0 max-sm:px-3"
+                surface={communitySubmitted ? "dashed" : undefined}
+                padding="sm"
+                aria-label={title}
+                data-primary-vrcdn-live={index === 0 && !communitySubmitted && live ? "" : undefined}
+                key={key}
+              >
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pb-2">
                   <p className="font-medium">{label}</p>
                   {communitySubmitted ? <span className="text-xs text-muted">Community-submitted</span> : null}

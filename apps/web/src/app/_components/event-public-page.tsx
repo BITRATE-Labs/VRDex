@@ -1,7 +1,7 @@
 "use client";
 import { inferLineupEnds } from "@vrdex/api-contracts";
 import { useQuery } from "convex/react";
-import { ExternalLink } from "lucide-react";
+import { ArrowUp, ChevronRight, ExternalLink, MapPin } from "lucide-react";
 import Link from "next/link";
 import { type CSSProperties, useId, useState } from "react";
 import type { FunctionReturnType } from "convex/server";
@@ -22,7 +22,7 @@ import { EventWatchForEvent } from "./event-live-watch";
 import { EventPublicHero } from "./event-public-hero";
 import styles from "./event-public-page.module.css";
 import { parseVrcdnStreamLinks } from "../../../../../convex/_vrcdnLinks";
-import { ViewerLocalEventDateTime, ViewerLocalEventTime, ViewerLocalEventTimeRange } from "./viewer-local-event-times";
+import { ViewerLocalEventDateTime, ViewerLocalEventTimeRange } from "./viewer-local-event-times";
 
 type EventSourceType = "manual" | "community" | "partner" | "import" | "ai_suggested" | "contributor";
 type EventMediaLinkType =
@@ -167,7 +167,8 @@ export type PublicEvent = Omit<PublicEventPreview, "worlds"> & {
   }>;
 };
 
-const eventPosterOverlay = "linear-gradient(135deg, color-mix(in srgb, var(--media) 72%, transparent), color-mix(in srgb, var(--accent) 12%, transparent))";
+const eventPosterOverlay = "linear-gradient(135deg, color-mix(in srgb, var(--media) 72%, transparent), color-mix(in srgb, var(--media) 72%, transparent))";
+const eventPreviewOverlay = "linear-gradient(135deg, color-mix(in srgb, var(--media) 72%, transparent), color-mix(in srgb, var(--media) 69%, transparent))";
 const watchArtScrim = "linear-gradient(180deg, rgb(0 0 0 / 36%), rgb(0 0 0 / 68%))";
 
 function safeHttpsUrl(url: string | undefined): string | null {
@@ -220,15 +221,17 @@ export function EventPreviewCard({
   event,
   variant = "default",
   seriesSummary,
+  yearReferenceAt,
 }: {
   event: PublicEventPreview;
-  variant?: "default" | "series";
+  variant?: "default" | "series" | "community";
   seriesSummary?: string;
+  yearReferenceAt?: number;
 }) {
   const titleId = useId();
   const dateId = titleId + "-date";
   const sourceUrl = safeHttpsUrl(event.source.url);
-  const thumbnailStyle = safeImageBackground(event.thumbnailImageUrl, eventPosterOverlay);
+  const thumbnailStyle = safeImageBackground(event.thumbnailImageUrl, eventPreviewOverlay);
   const details = event.worlds.map((world) => world.displayName);
   const eventPath = publicEventPath(event);
   const isSeries = variant === "series";
@@ -236,7 +239,14 @@ export function EventPreviewCard({
   const hasSeriesDate = isSeries && hasDate;
   const hasDatedTitle = hasSeriesDate && Boolean(eventPath);
   const summary = isSeries && event.summary === seriesSummary ? undefined : event.summary;
-  const dateTime = <ViewerLocalEventDateTime timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />;
+  const dateTime = (
+    <ViewerLocalEventDateTime
+      timestamp={event.startAt}
+      eventDate={event.eventDate}
+      scheduleKind={event.scheduleKind}
+      yearReferenceAt={yearReferenceAt}
+    />
+  );
   const useThemeColors = !thumbnailStyle;
   const compactWithoutArtwork = !isSeries && useThemeColors;
 
@@ -250,7 +260,7 @@ export function EventPreviewCard({
           "px-4",
           !compactWithoutArtwork && "bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] bg-cover bg-center",
           isSeries ? "py-3" : compactWithoutArtwork ? "pt-4" : "min-h-28 py-4",
-          useThemeColors ? "text-foreground" : "text-white",
+          useThemeColors ? "text-foreground" : "bg-media text-white",
         )}
         style={thumbnailStyle}
       >
@@ -267,7 +277,7 @@ export function EventPreviewCard({
             ) : dateTime}
             {event.startAt !== undefined && event.doorsOpenAt !== undefined && event.doorsOpenAt < event.startAt ? (
               <span className={compactWithoutArtwork ? "sm:border-s sm:border-border-strong sm:ps-3" : undefined}>
-                Doors <ViewerLocalEventTime timestamp={event.doorsOpenAt} />
+                Doors <ViewerLocalEventDateTime timestamp={event.doorsOpenAt} compactRelativeTo={event.startAt} />
               </span>
             ) : null}
             {!compactWithoutArtwork && event.communityName ? (
@@ -289,6 +299,7 @@ export function EventPreviewCard({
               className={cn(
                 "rounded-sm underline decoration-1 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current",
                 compactWithoutArtwork ? "underline-offset-[6px]" : "underline-offset-4",
+                variant === "community" && "max-sm:flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center",
               )}
               href={eventPath}
               id={hasDatedTitle ? titleId : undefined}
@@ -305,7 +316,7 @@ export function EventPreviewCard({
         isSeries ? "gap-2 py-2.5" : compactWithoutArtwork ? "gap-2 pb-4 pt-3" : "gap-3 py-4",
       )}>
         {summary ? <p className="leading-6 text-muted">{summary}</p> : null}
-        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+        <div className={cn("flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted", variant === "community" && "max-sm:items-center")}>
           {details.map((detail) => (
             <span key={detail}>{detail}</span>
           ))}
@@ -314,6 +325,7 @@ export function EventPreviewCard({
               className={cn(
                 "inline-flex min-w-0 items-center gap-1 font-medium text-accent-strong underline decoration-accent/35 underline-offset-4 [overflow-wrap:anywhere]",
                 compactWithoutArtwork && "min-h-6 text-sm",
+                variant === "community" && "max-sm:min-h-11 max-sm:min-w-11",
               )}
               href={sourceUrl}
               rel="noreferrer"
@@ -389,6 +401,7 @@ export function EventPublicPage({ event: initialEvent }: { event: PublicEvent })
 
 function EventPublicPageContent({ event }: { event: PublicEvent }) {
   const [reportOpen, setReportOpen] = useState(false);
+  const lineupMetadataId = useId();
   const canHost = useQuery(api.events.getHostAccess, event.communitySlug ? { slug: event.slug, communitySlug: event.communitySlug } : "skip");
   const lineup = eventLineupForDisplay(event);
   const bannerStyle = safeImageBackground(event.bannerImageUrl, eventPosterOverlay);
@@ -402,7 +415,8 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
   const seriesPath = event.seriesId && event.communitySlug ? `/${event.communitySlug}/series/${event.seriesId}` : null;
   const publicLinks = event.mediaLinks.filter((link) => parseVrcdnStreamLinks(link.url) === null);
   const eventPath = publicEventPath(event);
-  const hasLocationLinks = event.worlds.length > 0 || Boolean(sourceUrl);
+  const hasWorlds = event.worlds.length > 0;
+  const hasLocationLinks = hasWorlds || Boolean(sourceUrl);
   const hasCompactHost = hasLocationLinks && Boolean(event.communitySlug || event.communityName);
   const standaloneHost = Boolean(event.communitySlug || event.communityName)
     && !bannerStyle && !event.posterImageUrl && !event.watchSurfaceEnabled
@@ -442,8 +456,8 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
   );
 
   return (
-    <PageShell className={cn(styles.page, "pt-[var(--event-watch-mobile-space,0.75rem)] pb-3 sm:py-6 lg:py-7")} tone="event">
-      <PageContainer className="gap-[var(--event-watch-mobile-space,0.75rem)] sm:gap-5">
+    <PageShell className={cn(styles.page, "pt-[var(--event-mobile-space,0.75rem)] pb-3 sm:py-6 lg:py-7")} tone="event">
+      <PageContainer className="gap-[var(--event-mobile-space,0.75rem)] sm:gap-5">
         <EventPublicHero
           bannerStyle={bannerStyle}
           canHost={canHost === true}
@@ -459,7 +473,11 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
           <section className={cn(styles.media, "grid grid-cols-[minmax(0,1fr)] items-start gap-4")}>
             <div className={styles.lead}>
               <div
-                className={styles.watch}
+                aria-label="Watch"
+                className={cn(styles.watch, "scroll-mt-24 focus-visible:rounded-card focus-visible:outline-2 focus-visible:outline-accent max-sm:scroll-mt-[4.5rem]")}
+                id="event-watch"
+                role="region"
+                tabIndex={-1}
                 style={watchArt ? {
                   "--event-watch-art": watchArt.backgroundImage,
                   "--event-watch-desktop-art": desktopWatchArt?.backgroundImage,
@@ -470,16 +488,19 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
               {hasLocationLinks ? (
                 <div className={cn(styles.locationLinks, "flex flex-wrap gap-2")}>
                   {event.worlds.map((world) => (
-                    <Link className={cn(locationLinkClassName, "max-sm:border-accent/30 max-sm:bg-accent/10")} href={`/${world.slug}`} key={world.slug}>
-                      <span className={actionLabelClassName}>{world.displayName}</span>
-                      <span className={cn(actionMetaClassName, "max-sm:mt-0.5")}>World</span>
+                    <Link className={cn(locationLinkClassName, styles.worldLink, "border-accent/50 bg-accent/10 hover:bg-accent/15")} href={`/${world.slug}`} key={world.slug}>
+                      <span className={cn(actionLabelClassName, "font-semibold")}>{world.displayName}</span>
+                      <span className={cn(actionMetaClassName, "flex items-center gap-1 max-sm:mt-0.5")}>
+                        <MapPin aria-hidden="true" className="size-3 shrink-0 text-accent-strong" />
+                        World
+                      </span>
                     </Link>
                   ))}
                   {sourceUrl ? (
                     <a className={locationLinkClassName} href={sourceUrl} rel="noreferrer" target="_blank">
                       <span className="flex items-start gap-2">
-                        <span className={actionLabelClassName}>{event.source.label}</span>
-                        <ExternalLink aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-accent-strong" />
+                        <span className={cn(actionLabelClassName, hasWorlds && "text-foreground decoration-border-strong")}>{event.source.label}</span>
+                        <ExternalLink aria-hidden="true" className={cn("mt-0.5 size-3.5 shrink-0", hasWorlds ? "text-muted" : "text-accent-strong")} />
                       </span>
                       <span className={cn(actionMetaClassName, "max-sm:mt-0.5")}>Reference link</span>
                     </a>
@@ -506,26 +527,62 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
 
           {lineup.length > 0 ? (
             <Card className={styles.lineup} surface="white">
-              <h2
-                className="scroll-mt-24 text-xl font-semibold tracking-tight focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent"
-                id="event-lineup"
-                tabIndex={-1}
-              >
-                Lineup
-              </h2>
+              <div className="flex items-center justify-between gap-2 sm:justify-start sm:gap-4">
+                <h2
+                  className={cn(styles.lineupTitle, "scroll-mt-24 text-xl font-semibold tracking-tight")}
+                  id="event-lineup"
+                  tabIndex={-1}
+                >
+                  Lineup
+                </h2>
+                <a
+                  className={cn(styles.watchReturn, buttonVariants({ variant: "secondary", size: "sm" }), "min-h-11 min-w-11 shrink-0 gap-1.5 border-border-strong py-0 sm:min-h-7")}
+                  href="#event-watch"
+                >
+                  <ArrowUp aria-hidden="true" className="size-3.5" />
+                  Watch
+                </a>
+              </div>
               <ol className="mt-5 divide-y divide-border">
-                {lineup.map((row) => (
-                  <li className="flex min-w-0 items-center gap-4 py-4 first:pt-0 last:pb-0" key={row.key}>
-                    <EventAvatar appearance={row.performer?.avatarAppearance} imageUrl={row.performer?.imageUrl} label={row.displayLabel} />
-                    <div className="min-w-0">
+                {lineup.map((row, index) => {
+                  const hasMetadata = Boolean(row.roleLabel) || row.startAt !== undefined;
+                  const metadataId = row.performer && hasMetadata ? `${lineupMetadataId}-${index}` : undefined;
+                  const content = (
+                    <>
+                      <EventAvatar appearance={row.performer?.avatarAppearance} imageUrl={row.performer?.imageUrl} label={row.displayLabel} />
+                      <div className="min-w-0">
+                        <span className={cn(
+                          "font-semibold [overflow-wrap:anywhere]",
+                          row.performer && inlineActionClassName,
+                          row.performer && "group-hover:decoration-accent",
+                        )}>{row.displayLabel}</span>
+                        {hasMetadata ? (
+                          <div className="flow-root" id={metadataId}>
+                            {row.roleLabel ? <div className="mt-1 text-sm text-muted">{row.roleLabel}</div> : null}
+                            {row.startAt !== undefined ? <ViewerLocalEventTimeRange className="mt-1 block text-sm text-muted" disambiguateOffset endAt={row.endAt} startAt={row.startAt} /> : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    </>
+                  );
+                  const rowClassName = "flex min-w-0 items-center gap-4";
+
+                  return (
+                    <li className="min-w-0 py-4 first:pt-0 last:pb-0" key={row.key}>
                       {row.performer ? (
-                        <Link className={cn(inlineActionClassName, "[overflow-wrap:anywhere]")} href={`/${row.performer.slug}`}>{row.displayLabel}</Link>
-                      ) : <span className="font-semibold [overflow-wrap:anywhere]">{row.displayLabel}</span>}
-                      {row.roleLabel ? <div className="mt-1 text-sm text-muted">{row.roleLabel}</div> : null}
-                      {row.startAt !== undefined ? <ViewerLocalEventTimeRange className="mt-1 block text-sm text-muted" endAt={row.endAt} startAt={row.startAt} /> : null}
-                    </div>
-                  </li>
-                ))}
+                        <Link
+                          aria-label={row.displayLabel}
+                          aria-describedby={metadataId}
+                          className={cn(rowClassName, "group rounded-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent max-sm:min-h-11 sm:w-fit")}
+                          href={`/${row.performer.slug}`}
+                        >
+                          {content}
+                          <ChevronRight aria-hidden="true" className="ml-auto size-4 shrink-0 text-muted group-hover:text-accent-strong sm:hidden" />
+                        </Link>
+                      ) : <div className={rowClassName}>{content}</div>}
+                    </li>
+                  );
+                })}
               </ol>
             </Card>
           ) : null}
@@ -541,13 +598,20 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
               {publicLinks.map((link) => link.presentation === "copy" ? (
                 <CopyValueRow compact key={`${link.type}-${link.url}`} label={link.label} value={link.url} />
               ) : (
-                <a className={actionCardVariants({ variant: "accent" })} href={link.url} key={`${link.type}-${link.url}`} rel="noreferrer" target="_blank">
+                <a
+                  className={cn(actionCardVariants({ variant: "accent" }), (link.type === "watch" || link.type === "stream") && styles.externalStreamLink)}
+                  href={link.url}
+                  key={`${link.type}-${link.url}`}
+                  rel="noreferrer"
+                  target="_blank"
+                >
                   <span className={actionLabelClassName}>
                     {link.label}
                   </span>
-                  <span className="mt-1 block text-xs text-muted">
+                  <span className={cn(actionMetaClassName, styles.openLinkLabel)}>
                     Open link
                   </span>
+                  <ExternalLink aria-hidden="true" className={cn(styles.outboundIcon, "size-3.5 shrink-0 text-muted")} />
                 </a>
               ))}
             </div>

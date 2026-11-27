@@ -63,6 +63,12 @@
   margin-top: 0;
   padding-top: 8px;
 }
+@media (width > 760px) {
+  .home > [aria-labelledby="discover-heading"] {
+    margin-top: 10px;
+    padding-top: 12px;
+  }
+}
 @media (width < 640px) {
   .home > [aria-labelledby="discover-heading"] {
     margin-top: 16px;

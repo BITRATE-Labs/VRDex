@@ -371,7 +371,7 @@ function StandaloneEventWatchSurface({
   }
 
   return (
-    <Card className="overflow-hidden" padding="none" surface="white">
+    <Card className="overflow-hidden" data-event-watch-external-only={embed ? undefined : ""} padding="none" surface="white">
       <div className="bg-media">
         {embed ? <WatchEmbedFrame embed={embed} /> : <WatchFallback />}
       </div>

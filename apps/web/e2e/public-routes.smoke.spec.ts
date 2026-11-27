@@ -118,6 +118,9 @@ test("mobile discovery keeps Add event alongside the populated upcoming heading"
   const performer = section.getByRole("link", { name: "DJ Aurora", exact: true });
   await expect(addEvent).toHaveAttribute("href", "/events/new");
   await expect(event).toBeVisible();
+  const localStart = event.locator("xpath=ancestor::article[1]").locator("time").first();
+  await expect(localStart).toHaveAttribute("datetime", "2026-06-15T02:00:00.000Z");
+  await expect(localStart.locator("span").last()).toHaveCSS("white-space", "nowrap");
 
   const [headingBounds, actionBounds] = await Promise.all([heading.boundingBox(), addEvent.boundingBox()]);
   if (!headingBounds || !actionBounds) throw new Error("Missing Discovery event header bounds");
@@ -164,6 +167,9 @@ test("mobile discovery jumps to the directory without hiding the heading", async
 
   await page.keyboard.press("Tab");
   await expect(firstProfile).toBeFocused();
+
+  await page.setViewportSize({ width: 1279, height: 900 });
+  await expect(shortcuts).toBeVisible();
 
   await page.setViewportSize({ width: 1280, height: 900 });
   await expect(shortcuts).toBeHidden();
@@ -341,6 +347,46 @@ test("sign-in describes recognized contribution return paths without echoing the
       await expect(page.getByText("Manage your VRDex profile and events.", { exact: true })).toBeVisible();
     }
   }
+});
+
+test("Clerk account switches retain the contribution return target", async ({ page }) => {
+  const returnTo = "/submit";
+  await page.goto("/sign-in?" + new URLSearchParams({ returnTo }));
+  await expectSignInPage(page, "Add profile");
+  const providerUnavailable = await page.getByText(AUTH_UNAVAILABLE_COPY, { exact: true }).count() > 0;
+
+  async function switchTo(label: string, pathname: string) {
+    const link = page.getByRole("main").getByRole("link", { name: label, exact: true });
+    await expect(link).toBeVisible();
+    const url = new URL((await link.getAttribute("href"))!, page.url());
+    expect(url.pathname).toBe(pathname);
+    expect(url.searchParams.get("returnTo")).toBe(returnTo);
+    await link.focus();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL((next) => next.pathname === pathname);
+  }
+
+  if (providerUnavailable) {
+    await page.goto("/sign-up?" + new URLSearchParams({ return_to: returnTo }));
+  } else {
+    await switchTo("Sign up", "/sign-up");
+  }
+  const signUpShell = page.locator('section[aria-labelledby="sign-up-heading"]');
+  await expect(signUpShell.getByText("Add profile", { exact: true })).toBeVisible();
+
+  if (!providerUnavailable) {
+    await switchTo("Sign in", "/sign-in");
+    await expectSignInPage(page, "Add profile");
+  }
+
+  await page.goto("/sign-in?" + new URLSearchParams({ return_to: returnTo }));
+  await expectSignInPage(page, "Add profile");
+  await page.goto("/sign-in?" + new URLSearchParams({ returnTo: "/events/new", return_to: returnTo }));
+  await expectSignInPage(page, "Add event");
+
+  await page.goto("/sign-up?" + new URLSearchParams({ return_to: "https://example.invalid/submit" }));
+  await expect(page.locator("h1#sign-up-heading")).toHaveText("Create account");
+  await expect(page.getByRole("main").getByText("Add profile", { exact: true })).toHaveCount(0);
 });
 
 test("add event sign-in keeps the contribution context and full return target", async ({ page }) => {
@@ -693,7 +739,7 @@ test.describe("fixture lookup smoke", () => {
     await expect(page.getByRole("heading", { name: "Watch", exact: true })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Open preview" })).toHaveCount(0);
     await expectProfilePlaybackLinks(page, 1);
-    await expect(page.getByText("Live now", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Live now", { exact: true }).and(page.locator(":not(nav *)"))).toHaveCount(0);
 
     await page.clock.install();
     const firstResponse = page.waitForResponse((response) =>
@@ -704,7 +750,7 @@ test.describe("fixture lookup smoke", () => {
     await page.clock.fastForward(17_000);
 
     await expect(page.getByText("VRCDN stream", { exact: true })).toBeVisible();
-    await expect(page.getByText("Live now", { exact: true })).toBeVisible();
+    await expect(page.getByText("Live now", { exact: true }).and(page.locator(":not(nav *)"))).toBeVisible();
     await expect(page.getByRole("button", { name: "Play VRCDN stream" })).toBeVisible();
     await expect(page.locator("video")).toHaveCount(0);
     expect(attempts).toBe(2);
@@ -746,10 +792,11 @@ test.describe("fixture lookup smoke", () => {
       await expect.poll(() => copiedPlayback).toBe(value);
     }
     await expect(page.getByRole("link", { exact: true, name: "VRCDN stream" })).toHaveCount(0);
-    await expect(page.getByText("Live now", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Live now", { exact: true }).and(page.locator(":not(nav *)"))).toHaveCount(0);
   });
 
   test("confirmed live VRCDN waits for two offline observations", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 760 });
     let attempts = 0;
     let releaseFirstResponse: () => void = () => {};
     const firstResponseHold = new Promise<void>((resolve) => {
@@ -768,6 +815,7 @@ test.describe("fixture lookup smoke", () => {
 
     await page.goto("/playwright-dj-aurora");
     const vrcdnBlock = page.getByRole("region", { name: "VRCDN dj-aurora", exact: true });
+    const shortcutStatus = page.getByRole("navigation", { name: "Profile sections" }).getByText("Live now", { exact: true });
     const player = page.getByRole("button", { name: "Play VRCDN" });
     const preview = page.getByRole("link", { name: "Open preview" });
     await expect(player).toBeVisible();
@@ -796,12 +844,14 @@ test.describe("fixture lookup smoke", () => {
     await expect(player).toHaveAttribute("data-lifecycle-marker", "original");
     await expect(player).toBeVisible();
     await expect(vrcdnBlock.getByText("Live now", { exact: true })).toBeVisible();
+    await expect(shortcutStatus).toBeVisible();
 
     await page.clock.fastForward(10_000);
 
     await expect.poll(() => attempts).toBe(2);
     await expect(player).toHaveCount(0);
     await expect(vrcdnBlock.getByText("Live now", { exact: true })).toHaveCount(0);
+    await expect(shortcutStatus).toBeHidden();
     await expect(vrcdnBlock.getByRole("button", { name: "Copy Quest for VRCDN dj-aurora", exact: true })).toBeVisible();
     expect(await copyPosition()).toEqual(copyBefore);
   });

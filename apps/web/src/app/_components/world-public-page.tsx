@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowRight } from "lucide-react";
+import { ArrowDown, ArrowRight, ChevronRight, ExternalLink, MapPin } from "lucide-react";
 import Link from "next/link";
 
 import { EntityImage } from "@/components/ui/entity-image";
@@ -194,7 +194,7 @@ function PillList({ items, onArtwork }: { items: string[]; onArtwork?: boolean }
 function WorldEventBucket({ heading, events }: { heading: string; events: PublicWorldEventPreview[] }) {
   return (
     <section className="grid min-w-0 content-start gap-3">
-      <h3 className="text-sm font-semibold text-muted">{heading}</h3>
+      <h3 className="text-base font-semibold text-foreground">{heading}</h3>
       {events.map((event) => {
         const sourceUrl = event.source.url ? safeHttpsUrl(event.source.url) : null;
         const eventPath = publicEventPath(event);
@@ -206,37 +206,53 @@ function WorldEventBucket({ heading, events }: { heading: string; events: Public
             key={`${event.slug ?? event.title}-${event.eventDate ?? event.startAt}`}
             style={artworkStyle}
           >
-            <h4 className="break-words text-lg font-semibold leading-snug tracking-[-0.03em]">
-              {eventPath ? <Link href={eventPath}>{event.title}</Link> : event.title}
+            <h4 className="break-words font-semibold leading-snug tracking-[-0.03em]">
+              {eventPath ? (
+                <Link
+                  className="inline-flex min-h-11 min-w-11 max-w-full items-center gap-2 rounded-control text-lg text-accent-strong underline decoration-accent/45 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent max-sm:flex max-sm:justify-between"
+                  href={eventPath}
+                >
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{event.title}</span>
+                  <ChevronRight aria-hidden="true" className="size-4 shrink-0" />
+                </Link>
+              ) : (
+                <span className="flex min-h-11 items-center text-base">{event.title}</span>
+              )}
             </h4>
-            <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted">
+            <div className="mt-1.5 grid gap-1">
               <ViewerLocalEventDateTime
                 className="min-w-0 break-words text-sm font-semibold text-foreground"
                 timestamp={event.startAt}
                 eventDate={event.eventDate}
                 scheduleKind={event.scheduleKind}
               />
-              <span>Confirmed venue</span>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                <span className="inline-flex items-center gap-1">
+                  <MapPin aria-hidden="true" className="size-3.5 shrink-0" />
+                  Confirmed venue
+                </span>
+                {event.mediaLinks.length > 0 ? (
+                  <span className="border-s border-border-strong ps-3">
+                    {event.mediaLinks.length} media link{event.mediaLinks.length === 1 ? "" : "s"}
+                  </span>
+                ) : null}
+              </div>
             </div>
             {event.communityName ? <p className="mt-1 text-muted">Hosted by {event.communityName}</p> : null}
-            <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 break-words text-xs text-muted">
+            <div className="mt-2 break-words text-xs text-muted">
               {sourceUrl ? (
                 <a
-                  className="min-w-0 text-sm font-medium text-accent-strong underline decoration-accent/35 underline-offset-4"
+                  className="inline-flex min-h-11 min-w-11 max-w-full items-center gap-1.5 rounded-control text-sm font-medium text-muted underline decoration-border-strong underline-offset-4 hover:text-accent-strong hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                   href={sourceUrl}
                   rel="noreferrer"
                   target="_blank"
                 >
-                  {event.source.label}
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{event.source.label}</span>
+                  <ExternalLink aria-hidden="true" className="size-3.5 shrink-0" />
                 </a>
               ) : (
                 <span>{event.source.label}</span>
               )}
-              {event.mediaLinks.length > 0 ? (
-                <span>
-                  {event.mediaLinks.length} media link{event.mediaLinks.length === 1 ? "" : "s"}
-                </span>
-              ) : null}
             </div>
             {event.summary ? <p className="mt-2 break-words leading-6 text-muted">{event.summary}</p> : null}
           </article>
@@ -297,20 +313,20 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
   const hasLaunchDetails = hasPlatforms && Boolean(canonicalWorldUrl);
   const heroMetaClassName = heroImageUrl ? "text-white/76" : "text-muted";
   const platformDetails = (
-    <div>
+    <div className={cn(isSparse && "sm:ps-4")}>
       <dt className={cn(
-        isSparse ? "font-medium" : heroMetaClassName,
+        heroMetaClassName,
         hasLaunchDetails && "max-sm:font-medium max-sm:text-inherit",
       )}>Platforms</dt>
-      <dd className={cn("mt-1", isSparse ? "font-semibold" : "font-medium")}>
+      <dd className={cn("mt-1", isSparse ? "text-base font-semibold" : "font-medium")}>
         {hasPlatforms ? <PillList items={world.platformCompatibility.map(platformLabel)} onArtwork={Boolean(heroImageUrl)} /> : "Unknown"}
       </dd>
     </div>
   );
   const visibilityDetails = (
-    <div className={cn(isSparse && "flex flex-wrap items-baseline gap-x-3 gap-y-1 sm:block")}>
+    <div className={cn(isSparse && "border-s border-border ps-4")}>
       <dt className={heroMetaClassName}>{isSparse ? "World visibility" : "Visibility"}</dt>
-      <dd className={cn("font-medium", isSparse ? "sm:mt-1" : "mt-1")}>{visibilityLabel(world.visibilityStatus)}</dd>
+      <dd className={cn("mt-1", isSparse ? "text-base font-semibold" : "font-medium")}>{visibilityLabel(world.visibilityStatus)}</dd>
     </div>
   );
   const launchAction = canonicalWorldUrl ? (
@@ -332,14 +348,14 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
   const navigationLinkClassName = "inline-flex min-h-11 items-center gap-1.5 rounded-control text-sm font-medium underline decoration-current/40 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2";
   const actions = launchAction || hasEvents ? (
     <div className={cn(
-      "flex flex-wrap items-center gap-x-3 gap-y-1 lg:block",
+      "flex flex-wrap items-center gap-x-3 gap-y-1 lg:[@media(min-height:864px)]:block",
       hasLaunchDetails ? "mt-3 sm:col-span-2 sm:row-start-4 sm:mt-5 sm:justify-self-start" : "mt-5",
-      !launchAction && "lg:hidden",
+      !launchAction && "lg:[@media(min-height:864px)]:hidden",
     )}>
       {launchAction}
       {hasEvents ? (
         <a
-          className={cn(navigationLinkClassName, "lg:hidden", heroImageUrl ? "text-white/90 focus-visible:outline-white" : "text-accent-strong focus-visible:outline-accent")}
+          className={cn(navigationLinkClassName, "lg:[@media(min-height:864px)]:hidden", heroImageUrl ? "text-white/90 focus-visible:outline-white" : "text-accent-strong focus-visible:outline-accent")}
           href="#world-events"
         >
           Events
@@ -350,11 +366,12 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
   ) : null;
 
   return (
-    <PageShell tone="world">
+    <PageShell tone="world" className={cn(isSparse && "sm:pt-[clamp(3rem,16vh,9rem)]")}>
       <PageContainer max={!heroImageUrl && !hasDetails ? "3xl" : undefined}>
         <section className={cn(
           "overflow-hidden rounded-hero border border-border",
           heroImageUrl ? "bg-media text-white shadow-hero" : "bg-surface-strong text-foreground shadow-sm",
+          isSparse && "border-border-strong sm:[html:not([data-theme=light])_&]:border-muted/55",
         )}>
           <div className={cn(
             "p-6 sm:p-8",
@@ -366,6 +383,7 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
               <h1 className={cn(
                 "font-semibold leading-none tracking-[-0.05em] [overflow-wrap:anywhere]",
                 heroImageUrl ? "text-5xl sm:text-7xl" : "text-4xl sm:text-5xl",
+                isSparse && "sm:text-[2.625rem]",
                 hasLaunchDetails && "sm:col-span-2 sm:row-start-1",
                 hasLaunchDetails && heroImageUrl && "max-sm:text-[2.625rem]",
               )}>{world.displayName}</h1>
@@ -381,18 +399,14 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
                 heroImageUrl ? "text-white/82" : "text-muted",
               )}>{world.summary}</p> : null}
               {isSparse ? (
-                <div className="mt-5 text-sm sm:mt-7 sm:grid sm:grid-cols-[2fr_1fr] sm:items-center sm:gap-6">
-                  <dl className="grid grid-cols-2 gap-3 rounded-card border border-border bg-surface px-3 py-3 sm:px-4">
-                    {platformDetails}
-                    <div>
-                      <dt className="font-medium">VRChat link</dt>
-                      <dd className="mt-1 font-semibold">Not listed</dd>
-                    </div>
-                  </dl>
-                  <dl className="mt-3 border-t border-border pt-3 sm:mt-0 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-4">
-                    {visibilityDetails}
-                  </dl>
-                </div>
+                <dl className="mt-5 grid grid-cols-2 items-center gap-y-4 border-t border-border-strong pt-5 text-sm sm:mt-7 sm:grid-cols-[1.2fr_1fr_1fr] sm:pt-6">
+                  <div className="max-sm:col-span-2 max-sm:border-b max-sm:border-border max-sm:pb-4 sm:border-e sm:border-border sm:pe-4">
+                    <dt className="font-medium text-muted">VRChat link</dt>
+                    <dd className="mt-1 text-xl font-semibold max-sm:leading-7 sm:text-base">Not listed</dd>
+                  </div>
+                  {platformDetails}
+                  {visibilityDetails}
+                </dl>
               ) : (
                 <dl className={cn(
                   "flex flex-wrap items-start gap-x-6 gap-y-3 text-sm",
@@ -432,7 +446,11 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
             >
               Events at this world
             </SectionTitle>
-            <div className={cn("mt-4 grid gap-4 sm:mt-6", upcoming.length > 0 && recent.length > 0 && "lg:grid-cols-2")}>
+            <div className={cn(
+              "mt-4 grid gap-4 sm:mt-6",
+              upcoming.length > 0 && recent.length > 0
+                && "lg:grid-cols-2 max-lg:[&>section+section]:border-t max-lg:[&>section+section]:border-border max-lg:[&>section+section]:pt-4",
+            )}>
               {upcoming.length > 0 ? (
                 <WorldEventBucket heading="Upcoming and active" events={upcoming} />
               ) : null}

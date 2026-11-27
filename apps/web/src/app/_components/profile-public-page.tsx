@@ -1,6 +1,7 @@
 import type { PublicVerifiedConnection } from "@vrdex/api-contracts";
 import { mergeVerifiedVrchatLinks, isVerifiedVrchatLink } from "@/lib/profile-link-verification";
 import Link from "next/link";
+import { ArrowDown } from "lucide-react";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { profileLinkHasCustomLabel,profileLinkPresentation,type ProfileLinkDestinationMetadata } from "../../../../../convex/_profileLinkPresentation";
 import { parseProfileLinkDestination } from "../../../../../convex/_profileLinkDestination";
@@ -12,6 +13,7 @@ import { EntityImage } from "@/components/ui/entity-image";
 import { ProfileAvatarImage } from "./profile-avatar-image";
 import { HomeLiveNow } from "./home-live-now";
 import { ProfileVrcdnStreams } from "./profile-vrcdn-streams";
+import streamStyles from "./profile-vrcdn-streams.module.css";
 import { ProfilePrivateRecord } from "./profile-private-record";
 import { PublicGroupMembershipChart, type GroupMembership } from "./public-group-membership-chart";
 import { CommunityPopulationHistory } from "./public-group-population-chart";
@@ -330,7 +332,17 @@ export function ProfileBackendNotice({ kind }: { kind: "missing-url" | "error" }
   );
 }
 
-export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = false }: { profile: PublicProfile; mediaKitGalleryEnabled: boolean; embedded?: boolean }) {
+export function ProfilePublicPage({
+  profile,
+  mediaKitGalleryEnabled,
+  embedded = false,
+  yearReferenceAt,
+}: {
+  profile: PublicProfile;
+  mediaKitGalleryEnabled: boolean;
+  embedded?: boolean;
+  yearReferenceAt?: number;
+}) {
   const isPerson = profile.profileType === "person";
   const bannerStyle = safeImageBackground(profile.bannerImageUrl);
   const avatarImageUrl = safeImageUrl(profile.avatarImageUrl);
@@ -433,11 +445,13 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
     && !hasMediaKit && !mediaKit.featuredAsset && mediaKit.assets.length === 0 && galleryAssets.length === 0
     && eventPreviews.length === 0 && profile.worldCredits.length === 0;
   const groupDestination = creatorLinks.length === 1 ? parseProfileLinkDestination(creatorLinks[0].link) : null;
+  const hasPrimaryGroupLink = groupDestination?.kind === "vrchat_group";
   const useCompactCommunity = !isPerson && hasSparseIdentity && !profile.telemetry && !profile.groupMembership
-    && (visibleLinks.length === 0 || (visibleLinks.length === 1 && groupDestination?.kind === "vrchat_group"));
+    && (visibleLinks.length === 0 || (visibleLinks.length === 1 && hasPrimaryGroupLink));
   const useCompactIdentity = useCompactCommunity || (isPerson && hasSparseIdentity && visibleLinks.length === 0);
   const isRichPublicCommunity = !isPerson && !embedded && !useCompactIdentity;
   const hasSingleCommunityEvent = isRichPublicCommunity && eventPreviews.length === 1;
+  const hasCommunityEventShortcut = isRichPublicCommunity && eventPreviews.length > 0;
   const isRichPublicPerson = isPerson && !embedded && !useCompactIdentity;
   const useSideBySideMobileIdentity = isRichPublicCommunity || isRichPublicPerson;
   const moveOwnershipBelowContent = !embedded && (!isPerson || isRichPublicPerson);
@@ -465,7 +479,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
     ) : <SectionHeading>{label}</SectionHeading>;
   }
   const quietContributionStyle = "!text-muted underline decoration-border-strong underline-offset-4 hover:decoration-current";
-  const compactContributionStyle = useCompactCommunity && quietContributionStyle;
+  const ownershipActionClassName = cn("shrink-0 whitespace-nowrap max-sm:min-h-11", useCompactCommunity && quietContributionStyle);
   const secondarySections: Partial<Record<ProfilePublicSectionKey, ReactNode>> = {
     events: eventPreviews.length > 0 || !isPerson ? (
       <section className={cn(
@@ -477,7 +491,18 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
         <div className="flex flex-wrap items-center justify-between gap-3">
           {isPerson
             ? visitorHeading("events")
-            : <SectionTitle className={useCompactCommunity ? "text-xl" : "max-sm:text-xl"}>Hosted events</SectionTitle>}
+            : (
+              <SectionTitle
+                className={cn(
+                  useCompactCommunity ? "text-xl" : "max-sm:text-xl",
+                  hasCommunityEventShortcut && "scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent [@media(scripting:none)]:scroll-mt-32",
+                )}
+                id={hasCommunityEventShortcut ? "profile-events" : undefined}
+                tabIndex={hasCommunityEventShortcut ? -1 : undefined}
+              >
+                Hosted events
+              </SectionTitle>
+            )}
           {!isPerson ? (
             <Link
               className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "min-h-11 shrink-0 whitespace-nowrap", quietContributionStyle)}
@@ -495,7 +520,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
             !hasSingleCommunityEvent && linksColumnSection !== "events" && "lg:grid-cols-2",
           )}>
             {eventPreviews.map((event) => (
-              <EventPreviewCard event={event} key={`${event.slug ?? event.title}-${event.startAt}`} />
+              <EventPreviewCard event={event} key={`${event.slug ?? event.title}-${event.startAt}`} variant={isRichPublicCommunity ? "community" : undefined} yearReferenceAt={yearReferenceAt} />
             ))}
           </div>
         ) : useCompactCommunity ? <p className="mt-2 text-sm font-medium text-foreground">No events</p> : null}
@@ -506,7 +531,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
         <div className="flex flex-wrap items-center justify-between gap-3">
           {visitorHeading("media_kit")}
           {mediaKit.logoZipUrl ? (
-            <a className={buttonVariants({ size: "sm", variant: "secondary" })} download href={mediaKit.logoZipUrl}>
+            <a className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "max-sm:min-h-11")} download href={mediaKit.logoZipUrl}>
               Download logos
             </a>
           ) : null}
@@ -606,6 +631,18 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
       }))}
     />
   );
+  const communityEventShortcut = hasCommunityEventShortcut ? (
+    <a
+      className={cn(
+        "-mt-2 inline-flex min-h-11 w-fit items-center gap-1.5 rounded-control text-sm font-medium underline decoration-current/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 sm:hidden",
+        hasPrimaryGroupLink ? "text-accent-strong focus-visible:outline-accent" : "text-white focus-visible:outline-white",
+      )}
+      href="#profile-events"
+    >
+      Hosted events
+      <ArrowDown aria-hidden="true" className="size-3.5" />
+    </a>
+  ) : null;
   const stackOwnershipPrompt = !embedded && isPerson && !useCompactIdentity;
   const profileOwnership = canClaim ? (
     <aside
@@ -622,7 +659,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
           {isPerson ? "Is this your profile?" : "Manage this community?"}
         </p>
         <Link
-          className={cn(buttonVariants({ size: "sm", variant: useCompactCommunity ? "ghost" : "secondary" }), "shrink-0 whitespace-nowrap", compactContributionStyle)}
+          className={cn(buttonVariants({ size: "sm", variant: useCompactCommunity ? "ghost" : "secondary" }), ownershipActionClassName)}
           href={profileClaimPath(profile.slug, "profile")}
         >
           Claim profile
@@ -631,7 +668,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
             only to those who could act on it: this page is server
             rendered with no viewer, and the editor handles sign-in. */}
         <Link
-          className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "shrink-0 whitespace-nowrap", compactContributionStyle)}
+          className={cn(buttonVariants({ size: "sm", variant: "ghost" }), ownershipActionClassName)}
           href={`${profileBasePath}/edit`}
         >
           Suggest an edit
@@ -645,12 +682,16 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
       <PageContainer className={cn(
         useCompactCommunity && "max-w-2xl lg:gap-4",
         isRichPublicCommunity && "max-sm:gap-3",
+        isRichPublicPerson && streamStyles.profile,
       )}>
 
         <div className={useCompactIdentity ? cn("mx-auto w-full max-w-2xl rounded-panel border border-border-strong bg-surface-strong", !useCompactCommunity && "shadow-panel") : "contents"}>
           <section
             aria-labelledby={`profile-title-${profile.slug}`}
-            className={useCompactIdentity ? undefined : "overflow-hidden rounded-card border border-border bg-media shadow-panel"}
+            className={useCompactIdentity ? undefined : cn(
+              "overflow-hidden rounded-card border border-border bg-media shadow-panel",
+              isRichPublicPerson && "max-sm:[html[data-theme=light]_&]:shadow-sm",
+            )}
           >
             <div
               className={useCompactIdentity ? "p-4 sm:p-6" : "relative bg-media bg-cover bg-center p-5 text-white sm:p-6"}
@@ -727,19 +768,32 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                   <nav
                     aria-label="Profile sections"
                     className={cn(
-                      "flex flex-wrap gap-x-1 max-sm:rounded-control max-sm:ring-1 max-sm:ring-white/20 max-sm:ring-inset",
+                      "flex flex-wrap gap-x-1 max-sm:justify-center max-sm:rounded-control max-sm:px-1 max-sm:ring-1 max-sm:ring-white/20 max-sm:ring-inset",
                       aboutCopy && "lg:col-span-2 lg:row-start-2",
                     )}
                   >
-                    {visitorLinks.map(({ id, label }) => (
-                      <a
-                        className="inline-flex min-h-11 items-center rounded-control px-2 text-sm font-medium text-white underline decoration-white/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-white max-sm:min-w-11 max-sm:px-1.5"
-                        href={"#" + id}
-                        key={id}
-                      >
-                        {label}
-                      </a>
-                    ))}
+                    {visitorLinks.map(({ id, label }) => {
+                      const streamShortcut = id === visitorDestinations.streams.id && vrcdnStreams[0]?.item.link.source !== "community_submitted";
+                      const link = (
+                        <a
+                          className={cn(
+                            "inline-flex min-h-11 items-center rounded-control px-2 text-sm font-medium text-white underline decoration-white/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-white max-sm:min-w-11 max-sm:justify-center max-sm:px-1",
+                            streamShortcut && streamStyles.streamShortcut,
+                          )}
+                          href={"#" + id}
+                          key={id}
+                        >
+                          {label}
+                        </a>
+                      );
+
+                      return streamShortcut ? (
+                        <span className="relative flex" key={id}>
+                          {link}
+                          <span className={streamStyles.shortcutStatus}>Live now</span>
+                        </span>
+                      ) : link;
+                    })}
                   </nav>
                 ) : null}
                 {aboutCopy ? (
@@ -748,6 +802,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                     <p className="mt-2 max-w-xl text-base leading-7 text-white/88">{aboutCopy}</p>
                   </div>
                 ) : null}
+                {!hasPrimaryGroupLink ? communityEventShortcut : null}
               </div>
             </div>
             {useCompactCommunity && creatorLinks.length > 0 ? profileLinks : null}
@@ -758,6 +813,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
 
         {profile.profileType === "person" && <HomeLiveNow key={profile.slug} performerSlug={profile.slug} />}
         {!useCompactCommunity ? profileLinks : null}
+        {hasPrimaryGroupLink ? communityEventShortcut : null}
 
         {!isPerson ? <CommunityActivity profile={profile} /> : null}
 

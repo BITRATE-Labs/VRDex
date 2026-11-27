@@ -66,7 +66,7 @@ function ActiveWorldCard({ world, compactNextEvent }: { world: PublicActiveWorld
           <h3
             id={titleId}
             className={cn(
-              "min-w-0 text-2xl font-semibold underline underline-offset-4 group-hover:decoration-current sm:text-3xl",
+              "min-w-0 text-xl font-semibold underline underline-offset-4 group-hover:decoration-current sm:text-3xl",
               imageUrl ? "decoration-white/55" : "decoration-border-strong",
             )}
           >
@@ -93,20 +93,18 @@ function ActiveWorldCard({ world, compactNextEvent }: { world: PublicActiveWorld
 export function HomeActiveWorldsSection({
   paired = false,
   singleUpcomingEventPath,
-  status,
   worlds,
 }: {
   paired?: boolean;
   singleUpcomingEventPath?: string;
-  status: "live" | "missing-url" | "error";
   worlds: PublicActiveWorld[];
 }) {
   return (
     <section className="min-w-0 border-t border-border pt-3 sm:pt-6">
-      <SectionTitle className="max-sm:text-xl">Featured worlds</SectionTitle>
+      <SectionTitle className={cn("max-sm:text-xl", paired && "xl:flex xl:min-h-11 xl:items-center")}>Featured worlds</SectionTitle>
 
       {worlds.length > 0 ? (
-        <div className={cn("mt-3 grid grid-cols-1 gap-4 sm:mt-6 lg:grid-cols-3", paired && "xl:grid-cols-1")}>
+        <div className={cn("mt-3 grid grid-cols-1 gap-4 sm:mt-6 lg:grid-cols-3", paired && "xl:mt-5 xl:grid-cols-1")}>
           {worlds.map((world) => (
             <ActiveWorldCard
               compactNextEvent={singleUpcomingEventPath !== undefined && publicEventPath(world.nextEvent) === singleUpcomingEventPath}
@@ -116,13 +114,8 @@ export function HomeActiveWorldsSection({
           ))}
         </div>
       ) : (
-        <Notice className="mt-6 px-5 py-6" variant="dashed">
-          <p className="font-medium">No confirmed upcoming venues yet.</p>
-          <p className="mt-2 text-sm leading-6 text-muted">
-            {status === "live"
-              ? "Published events will appear here after they are explicitly linked to world profiles."
-              : "Start the local backend to read active world data, or use fixture mode during visual review."}
-          </p>
+        <Notice className="mt-3 sm:mt-6">
+          Unavailable
         </Notice>
       )}
     </section>

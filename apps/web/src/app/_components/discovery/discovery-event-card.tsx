@@ -36,23 +36,32 @@ export function DiscoveryEventCard({
     (reference) => reference.kind === "event" && reference.eventId === event.id,
   );
   const schedule = event.schedule;
-  let date: string | undefined;
+  let date: { label: string; dateTime: string } | undefined;
   if (schedule.kind === "date_only") {
     try {
-      date = formatCalendarDate(schedule.eventDate);
+      date = {
+        label: formatCalendarDate(schedule.eventDate),
+        dateTime: schedule.eventDate,
+      };
     } catch {
       // Keep the host visible if a stored date is invalid.
     }
   } else {
-    date = new Intl.DateTimeFormat(undefined, {
-      timeZone,
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12,
-    }).format(schedule.startAt);
+    const start = new Date(schedule.startAt);
+    if (Number.isFinite(schedule.startAt) && Number.isFinite(start.getTime())) {
+      date = {
+        label: new Intl.DateTimeFormat(undefined, {
+          timeZone,
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          hour12,
+        }).format(start),
+        dateTime: start.toISOString(),
+      };
+    }
   }
   const open = (activation: MouseEvent<HTMLAnchorElement>) => {
     if (
@@ -68,29 +77,7 @@ export function DiscoveryEventCard({
     onSelect({ eventId: event.id, slug: event.slug }, activation.currentTarget);
   };
   return (
-    <article className={styles.card} data-testid="discovery-event-card">
-      <div className={styles.artwork}>
-        <a
-          className={styles.artworkLink}
-          href={event.href}
-          aria-label={`Open ${event.title}`}
-          onClick={open}
-        >
-          <EntityImage
-            className={styles.poster}
-            label={event.title}
-            alt=""
-            src={event.posterImageUrl}
-            sizes="(max-width: 760px) 78vw, 23vw"
-          />
-        </a>
-        <InterestButton
-          label={event.title}
-          state={saved ? "saved" : "unsaved"}
-          className={styles.save}
-          onToggle={() => onSave({ kind: "event", eventId: event.id })}
-        />
-      </div>
+    <article className={`${styles.card} ${styles.eventCard}`} data-testid="discovery-event-card">
       <div className={styles.eventMetadata}>
         <h4 className={styles.name}>
           <a href={event.href} onClick={open}>
@@ -98,11 +85,26 @@ export function DiscoveryEventCard({
           </a>
         </h4>
         <p className={styles.date}>
-          {date && `${date} · `}
-          <a className={styles.host} href={`/${event.host.slug}`}>
-            {event.host.displayName}
-          </a>
+          {date && (
+            <>
+              <time className={styles.eventTime} dateTime={date.dateTime}>{date.label}</time>
+              {" "}
+            </>
+          )}
+          <span className={styles.hostDetails}>
+            {date && <span aria-hidden="true">{"· "}</span>}
+            <a className={styles.host} href={`/${event.host.slug}`}>
+              {event.host.displayName}
+            </a>
+          </span>
         </p>
+        <InterestButton
+          label={event.title}
+          state={saved ? "saved" : "unsaved"}
+          className={styles.save}
+          visibleLabelClassName={styles.preferenceLabel}
+          onToggle={() => onSave({ kind: "event", eventId: event.id })}
+        />
         <div className={styles.favoriteSummary}>
           {matchingPeople && matchingPeople.length > 0 && (
             <ul className={styles.performers} aria-label="Favorite people">
@@ -117,6 +119,23 @@ export function DiscoveryEventCard({
             </ul>
           )}
         </div>
+      </div>
+      <div className={styles.artwork}>
+        <a
+          className={styles.artworkLink}
+          href={event.href}
+          aria-label={`Open ${event.title}`}
+          tabIndex={-1}
+          onClick={open}
+        >
+          <EntityImage
+            className={styles.poster}
+            label={event.title}
+            alt=""
+            src={event.posterImageUrl}
+            sizes="(max-width: 760px) 78vw, (max-width: 880px) 256px, 23vw"
+          />
+        </a>
       </div>
     </article>
   );

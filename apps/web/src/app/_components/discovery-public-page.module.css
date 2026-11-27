@@ -1,0 +1,19 @@
+.searchFilter:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
+@media (forced-colors: active) {
+  .searchFilter {
+    border-bottom-color: Canvas;
+  }
+
+  .searchFilter[aria-current="page"] {
+    border-bottom-color: LinkText;
+  }
+
+  .searchFilter:focus-visible {
+    outline-color: Highlight;
+  }
+}

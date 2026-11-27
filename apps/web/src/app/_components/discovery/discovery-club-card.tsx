@@ -8,7 +8,8 @@ import type { TimelinePreferences } from "@/lib/timeline/preferences";
 import type { TimelineActions } from "../timeline/timeline-event-bar";
 import styles from "./discovery.module.css";
 
-const clubImageSizes = "(max-width: 420px) 100vw, (max-width: 760px) 78vw, 23vw";
+const clubImageSizes =
+  "(max-width: 420px) 100vw, (max-width: 760px) 78vw, (max-width: 880px) 256px, 23vw";
 
 type Available = Extract<DiscoverySnapshot, { kind: "available" }>;
 export type DiscoveryClubCardProps = {
@@ -69,6 +70,7 @@ export function DiscoveryClubCard({
             pressed={favorite}
             onToggle={() => onFavorite(club.id)}
             className={styles.favorite}
+            visibleLabelClassName={styles.preferenceLabel}
           />
         </div>
         <div className={styles.clubFooter}>

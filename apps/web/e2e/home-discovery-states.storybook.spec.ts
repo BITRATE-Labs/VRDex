@@ -16,7 +16,7 @@ test("club rail controls follow overflow and keep keyboard focus at the ends @st
 
   await expect(next).toBeEnabled();
   await expect(previous).toBeDisabled();
-  await expect(previous).toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
+  await expect(previous).not.toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
   await expect(next).not.toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
   await expect(rail).toHaveAttribute("data-scroll-right", "");
   await expect(rail).toHaveCSS("mask-image", /linear-gradient/);
@@ -30,7 +30,7 @@ test("club rail controls follow overflow and keep keyboard focus at the ends @st
     await expect(cards.last()).not.toBeInViewport();
     await next.press("Enter");
     await expect(next).toBeDisabled();
-    await expect(next).toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
+    await expect(next).not.toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
     await expect(next).toBeFocused();
     await expect(previous).toBeEnabled();
     await expect(cards.first()).not.toBeInViewport();
@@ -107,16 +107,35 @@ for (const state of [
       expect(posterBounds.width).toBeCloseTo(firstClub.width);
       expect(posterBounds.width).toBeCloseTo(secondClub.width);
       expect(firstClub.x - posterBounds.x - posterBounds.width).toBe(24);
+      const browse = page.getByRole("link", { name: "Browse", exact: true });
+      const browseBounds = (await browse.boundingBox())!;
+      expect(browseBounds.x + browseBounds.width).toBeCloseTo(secondClub.x + secondClub.width);
       await event.focus();
       await expect(event).toBeFocused();
       await event.blur();
     }
-    if (isMobile && state === "mixed") {
-      const interest = page.getByRole("button", { name: /^Interested:/ }).first();
-      await expect(interest).toBeVisible();
-      const bounds = (await interest.boundingBox())!;
-      expect(bounds.width).toBeGreaterThanOrEqual(44);
-      expect(bounds.height).toBeGreaterThanOrEqual(44);
+    if (state === "mixed") {
+      const event = page.getByTestId("discovery-event-card").first();
+      const interest = event.getByRole("button", { name: /^Interested:/ });
+      const favorite = page.getByTestId("discovery-club-card").getByRole("button", { name: /^Favorite:/ }).first();
+      for (const [action, label] of [[interest, "Interested"], [favorite, "Favorite"]] as const) {
+        const visualLabel = action.getByText(label, { exact: true });
+        await expect(visualLabel).toHaveAttribute("aria-hidden", "true");
+        await expect(visualLabel).toBeVisible();
+        await expect(action).not.toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
+        const bounds = (await action.boundingBox())!;
+        expect(bounds.width).toBeGreaterThanOrEqual(44);
+        expect(bounds.height).toBeGreaterThanOrEqual(44);
+      }
+      await expect(interest).toHaveCSS("opacity", "1");
+      const artwork = (await event.getByRole("link", { name: /^Open / }).boundingBox())!;
+      const action = (await interest.boundingBox())!;
+      const caption = (await event.locator("p").first().boundingBox())!;
+      expect(caption.y + caption.height).toBeLessThanOrEqual(artwork.y);
+      expect(action.y + action.height).toBeLessThanOrEqual(artwork.y);
+      const nextArtwork = (await page.getByTestId("discovery-event-card").nth(1).getByRole("link", { name: /^Open / }).boundingBox())!;
+      expect(artwork.y).toBeCloseTo(nextArtwork.y);
+      expect(caption.width).toBeCloseTo(artwork.width + 2);
     }
     if (state.includes("-no-")) {
       const emptyName = state.endsWith("-no-events") ? "Events" : "Clubs";
@@ -159,5 +178,18 @@ for (const state of [
       threshold: 0.2,
       scale: "css",
     });
+    if (state === "mixed") {
+      const events = page.getByTestId("discovery-event-card");
+      const event = events.first();
+      await event.getByRole("link", { name: "ORBIT", exact: true }).focus();
+      await page.keyboard.press("Tab");
+      await expect(event.getByRole("link", { name: "Prism Collective" })).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(event.getByRole("button", { name: "Interested: ORBIT" })).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(event.getByRole("link", { name: "Aurora" })).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(events.nth(1).getByRole("link", { name: "Low Tide", exact: true })).toBeFocused();
+    }
   });
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, MapPin } from "lucide-react";
 import { publicScheduleStatus } from "../../../../../convex/_eventRuntime";
 
 import { DiscoveryFeatureGate, DiscoverySearchForm, TrackedDiscoveryLink } from "./discovery-analytics";
@@ -8,11 +8,13 @@ import { EditPublicSearchLink } from "./public-search-control";
 import { searchHref, type SearchResultFilter } from "./search-view-state";
 import { SearchViewShell } from "./search-view-shell";
 import { PublicSearchResultDetails } from "./public-search-result-details";
+import styles from "./discovery-public-page.module.css";
 import type { PublicEventPreview } from "./event-public-page";
 import { ViewerLocalEventDateTime, ViewerLocalEventTime } from "./viewer-local-event-times";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, SectionTitle } from "@/components/ui/card";
 import { EntityImage } from "@/components/ui/entity-image";
+import { Notice } from "@/components/ui/notice";
 import { EventSchedule, EventScheduleRow } from "@/components/ui/event-schedule";
 import { ProfileAvatarImage } from "@/components/ui/profile-avatar-image";
 import type { PublicSearchResult } from "@/lib/public-search";
@@ -177,41 +179,53 @@ function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[];
       <EventSchedule className="mt-2 sm:mt-5" empty="No events">
         {events.map((event) => (
           <EventScheduleRow
-            className="[overflow-wrap:anywhere] max-sm:gap-1 max-sm:p-3"
-            details={[
-              event.communityName,
-              event.worlds[0]?.displayName,
-            ].filter(Boolean).join(" · ") || undefined}
+            className="[overflow-wrap:anywhere] max-sm:gap-1 max-sm:p-3 sm:grid-cols-[minmax(var(--spacing-schedule-gutter),max-content)_minmax(0,1fr)]"
+            details={event.communityName || event.worlds[0] ? (
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                {event.communityName ? <span>{event.communityName}</span> : null}
+                {event.worlds[0] ? (
+                  <span className="inline-flex min-w-0 items-baseline gap-1">
+                    <MapPin aria-hidden="true" className="size-3.5 shrink-0 self-center" />
+                    <span><span className="sr-only">World: </span>{event.worlds[0].displayName}</span>
+                  </span>
+                ) : null}
+              </div>
+            ) : undefined}
             key={event.slug ?? `${event.title}:${event.startAt}`}
-            metadata={event.nextSlots && event.nextSlots.length > 0 ? (
-              <ul className="grid text-sm text-muted sm:gap-1.5">
-                {event.nextSlots.map((slot) => (
-                  <li className="flex flex-wrap items-center gap-x-2 sm:items-baseline" key={`${slot.startAt}:${slot.displayLabel}`}>
-                    <ViewerLocalEventTime className="font-mono text-xs text-foreground" timestamp={slot.startAt} />
-                    {slot.performer ? (
-                      <Link className="rounded-control font-medium text-foreground underline decoration-border-strong underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-accent-strong max-sm:inline-flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center" href={`/${slot.performer.slug}`}>
-                        {slot.performer.displayName}
-                      </Link>
-                    ) : (
-                      <span className="font-medium text-foreground">{slot.displayLabel}</span>
-                    )}
-                    <span>{slot.roleLabel}</span>
-                  </li>
-                ))}
-              </ul>
+            metadata={event.nextSlots?.length || event.summary ? (
+              <div className="grid gap-1 sm:gap-3">
+                {event.nextSlots?.length ? (
+                  <ul className="grid text-sm text-muted sm:gap-1.5">
+                    {event.nextSlots.map((slot) => (
+                      <li className="flex flex-wrap items-center gap-x-2 sm:items-baseline" key={`${slot.startAt}:${slot.displayLabel}`}>
+                        <ViewerLocalEventTime className="font-mono text-xs text-foreground" timestamp={slot.startAt} />
+                        {slot.performer ? (
+                          <Link className="rounded-control font-medium text-accent-strong underline decoration-accent/65 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-accent-strong max-sm:inline-flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center" href={`/${slot.performer.slug}`}>
+                            {slot.performer.displayName}
+                          </Link>
+                        ) : (
+                          <span className="font-medium text-foreground">{slot.displayLabel}</span>
+                        )}
+                        <span>{slot.roleLabel}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {event.summary ? (
+                  <p className="line-clamp-3 text-body-sm text-muted sm:line-clamp-2">{event.summary}</p>
+                ) : null}
+              </div>
             ) : undefined}
             status={publicScheduleStatus(event, now)}
-            summary={event.summary}
-            time={<ViewerLocalEventDateTime className="text-xs font-medium text-foreground" timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />}
+            time={<ViewerLocalEventDateTime className="text-xs font-medium text-foreground" groupTime timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />}
             title={publicEventPath(event) ? (
               <TrackedDiscoveryLink
-                className="rounded-control text-section text-accent-strong underline decoration-accent/55 underline-offset-4 transition hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring max-sm:flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center max-sm:gap-2 sm:text-xl"
+                className="rounded-control text-section font-semibold text-accent-strong underline decoration-accent/55 underline-offset-4 transition hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring max-sm:flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center sm:text-xl"
                 eventName="event_card_clicked"
                 href={publicEventPath(event)!}
                 properties={{ entity_type: "event", surface: "upcoming_events" }}
               >
                 <span>{event.title}</span>
-                <ChevronRight aria-hidden="true" className="size-4 shrink-0 sm:hidden" />
               </TrackedDiscoveryLink>
             ) : event.title}
           />
@@ -229,12 +243,22 @@ function DiscoveryCard({
   surface: DiscoveryAnalyticsSurface;
 }) {
   const subtitle = resultSubtitle(result);
+  const spreadSummary = result.profileType === "community" && Boolean(result.summary);
+  const summary = result.summary ? (
+    <span className={cn(
+      "line-clamp-2 text-sm leading-6 text-muted",
+      spreadSummary && "col-start-2 row-start-2 max-[360px]:col-span-full max-[360px]:line-clamp-3",
+    )}>
+      {result.summary}
+    </span>
+  ) : null;
 
   return (
     <TrackedDiscoveryLink
       className={cn(
         "group flex items-center gap-3 rounded-panel border border-border bg-surface p-3 transition-colors hover:border-border-strong hover:bg-surface-strong focus-visible:outline-2 focus-visible:outline-accent-strong sm:p-4",
         result.profileType === "community" && "max-sm:items-start",
+        spreadSummary && "grid grid-cols-[auto_minmax(0,1fr)_auto] gap-y-1 max-[360px]:gap-y-2 [&>*:first-child]:row-span-2 max-[360px]:[&>*:first-child]:row-span-1",
       )}
       eventName={result.entityType === "event" ? "event_card_clicked" : "search_result_clicked"}
       href={result.routePath}
@@ -245,15 +269,24 @@ function DiscoveryCard({
       }}
     >
       <ResultImage result={result} quietFallback />
-      <span className={cn("flex min-w-0 flex-1 flex-col gap-1", result.profileType === "community" && "max-sm:min-h-10 max-sm:justify-center")}>
+      <span className={cn(
+        "flex min-w-0 flex-1 flex-col gap-1",
+        result.profileType === "community" && "max-sm:min-h-10 max-sm:justify-center",
+        spreadSummary && "col-start-2 row-start-1 self-end max-[360px]:self-center",
+      )}>
         {result.startsAt === undefined && result.eventDate === undefined ? null : <ViewerLocalEventDateTime className="text-sm font-medium text-accent-strong" timestamp={result.startsAt} eventDate={result.eventDate} scheduleKind={result.scheduleKind} />}
         <span className="text-lg font-semibold group-hover:text-accent-strong [overflow-wrap:anywhere]">
           {result.title}
         </span>
         {subtitle ? <span className="text-sm text-muted">{subtitle}</span> : null}
-        {result.summary ? <span className="line-clamp-2 text-sm leading-6 text-muted">{result.summary}</span> : null}
+        {!spreadSummary ? summary : null}
       </span>
-      <ChevronRight aria-hidden="true" className="size-4 shrink-0 self-center text-muted group-hover:text-accent-strong" />
+      <ChevronRight aria-hidden="true" className={cn(
+        "size-4 shrink-0 self-center text-muted group-hover:text-accent-strong",
+        result.profileType === "community" && (subtitle || result.summary) && "max-sm:mt-1.5 max-sm:self-start",
+        spreadSummary && "col-start-3 row-span-2 row-start-1 max-[360px]:row-span-1",
+      )} />
+      {spreadSummary ? summary : null}
     </TrackedDiscoveryLink>
   );
 }
@@ -460,10 +493,29 @@ function DiscoverySection({
   );
 }
 
-export function DiscoveryBackendNotice({ kind }: { kind: "missing-url" | "error" }) {
+function DiscoveryRetryLink() {
   return (
-    <div className="rounded-panel border border-border bg-surface px-4 py-3 text-sm leading-6 text-foreground">
-      {kind === "missing-url" ? "Discovery data is not available in this environment yet." : "Discovery data is temporarily unavailable."}
+    // eslint-disable-next-line @next/next/no-html-link-for-pages -- Retry needs a fresh document request for the same URL.
+    <a className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "min-h-11 shrink-0")} href="/discovery">
+      Retry
+    </a>
+  );
+}
+
+export function DiscoveryBackendNotice({
+  hasFeaturedWorlds,
+  kind,
+}: {
+  hasFeaturedWorlds: boolean;
+  kind: "missing-url" | "error";
+}) {
+  const message = kind === "missing-url"
+    ? "Discovery data is not available in this environment yet."
+    : hasFeaturedWorlds ? "Directory unavailable" : "Discovery data is temporarily unavailable.";
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-panel border border-border bg-surface px-4 py-3 text-sm leading-6 text-foreground">
+      <span>{message}</span>
+      {kind === "error" ? <DiscoveryRetryLink /> : null}
     </div>
   );
 }
@@ -505,16 +557,17 @@ export function DiscoveryLandingPage({
   ) : upcomingCount === 0 ? (
     <section className={cn(
       "flex flex-wrap items-center justify-between gap-x-3 sm:justify-start sm:gap-x-5",
-      singleDirectory && "lg:justify-between lg:rounded-panel lg:border lg:border-border lg:bg-surface lg:px-4 lg:py-1.5",
+      singleDirectory && "max-sm:rounded-panel max-sm:border max-sm:border-border-strong max-sm:bg-surface max-sm:px-3 max-sm:py-0.5 lg:justify-between lg:rounded-panel lg:border lg:border-border-strong lg:bg-surface lg:px-4 lg:py-1.5",
     )}>
       <div className={singleDirectory ? "sm:flex sm:items-baseline sm:gap-3 lg:block" : "sm:flex sm:items-baseline sm:gap-3"}>
-        <SectionTitle className="text-base tracking-tight">Upcoming events</SectionTitle>
-        {status === "live" ? <p className="text-sm leading-5 text-muted">No events</p> : null}
+        <SectionTitle className="text-lg leading-6 tracking-tight">Upcoming events</SectionTitle>
+        <p className="text-sm font-medium leading-5 text-foreground">No events</p>
       </div>
       <Link
         className={cn(
           buttonVariants({ size: "sm", variant: "ghost" }),
           "min-h-11 whitespace-nowrap !text-muted underline decoration-border-strong underline-offset-4 hover:decoration-current max-sm:self-start max-sm:items-start max-sm:py-0",
+          singleDirectory && "max-sm:self-center max-sm:items-center",
         )}
         href="/events/new"
       >
@@ -530,11 +583,10 @@ export function DiscoveryLandingPage({
       title="Upcoming events"
     />
   );
-  const featuredWorlds = activeWorlds.length > 0 || activeWorldStatus !== "live" ? (
+  const featuredWorlds = activeWorlds.length > 0 || (status === "live" && activeWorldStatus !== "live") ? (
     <HomeActiveWorldsSection
       paired={pairUpcomingAndWorld}
       singleUpcomingEventPath={singleUpcomingEventPath}
-      status={activeWorldStatus}
       worlds={activeWorlds}
     />
   ) : null;
@@ -553,7 +605,7 @@ export function DiscoveryLandingPage({
         </section>
 
         {showDirectoryShortcuts ? (
-          <nav aria-label="Discovery categories" className="-mt-3 flex flex-wrap gap-x-1 sm:hidden">
+          <nav aria-label="Discovery categories" className="-mt-3 -mb-2 flex flex-wrap gap-x-1 xl:hidden">
             {populatedDirectory.map(({ headingId, title }) => (
               <a
                 className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "min-h-11 underline decoration-border-strong underline-offset-4 hover:decoration-current")}
@@ -566,7 +618,9 @@ export function DiscoveryLandingPage({
           </nav>
         ) : null}
 
-        {status === "live" ? null : <DiscoveryBackendNotice kind={status} />}
+        {status === "error" || (status === "missing-url" && activeWorlds.length === 0) ? (
+          <DiscoveryBackendNotice hasFeaturedWorlds={activeWorlds.length > 0} kind={status} />
+        ) : null}
 
         {pairUpcomingAndWorld ? (
           <div className="contents xl:grid xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] xl:items-start xl:gap-6">
@@ -575,7 +629,7 @@ export function DiscoveryLandingPage({
           </div>
         ) : (
           <>
-            {upcoming}
+            {status === "live" ? upcoming : null}
             {featuredWorlds}
           </>
         )}
@@ -591,7 +645,7 @@ export function DiscoveryLandingPage({
           </DiscoveryFeatureGate>
         ) : null}
 
-        <section className={cn("grid gap-4 sm:gap-5", directorySections.length === 3 ? "xl:grid-cols-3" : directorySections.length === 2 ? "xl:grid-cols-2" : undefined)}>
+        {status === "live" ? <section className={cn("grid gap-4 sm:gap-5", directorySections.length === 3 ? "xl:grid-cols-3" : directorySections.length === 2 ? "xl:grid-cols-2" : undefined)}>
           {directorySections.map(({ headingId, title, results, empty }) => (
             <DiscoverySection
               key={headingId}
@@ -603,7 +657,12 @@ export function DiscoveryLandingPage({
               title={title}
             />
           ))}
-        </section>
+        </section> : status === "missing-url" && activeWorlds.length > 0 ? (
+          <section className="min-w-0 border-t border-border pt-3 sm:pt-6">
+            <SectionTitle className="max-sm:text-xl">Directory</SectionTitle>
+            <Notice className="mt-3 sm:mt-6" variant="dashed">Unavailable</Notice>
+          </section>
+        ) : null}
       </PageContainer>
     </PageShell>
   );
@@ -643,7 +702,8 @@ export function SearchResultsPage({
     <SearchViewShell
       activeView="standard"
       className="max-sm:py-5"
-      searchControl={<DiscoverySearchForm compact defaultQuery={query} filter={activeFilter} inputId={inputId} surface="search" tone="default" />}
+      hasQuery={hasQuery}
+      searchControl={<DiscoverySearchForm compact defaultQuery={query} filter={activeFilter} inputId={inputId} placeholder="Search VRDex" surface="search" tone="default" />}
     >
         {hasQuery ? (
           <section aria-describedby="search-results-query" aria-label="Search results" className="space-y-3 sm:space-y-5">
@@ -657,7 +717,8 @@ export function SearchResultsPage({
                     aria-current={active ? "page" : undefined}
                     className={cn(
                       buttonVariants({ size: "sm", variant: "ghost" }),
-                      "min-h-11 min-w-11 rounded-none border-b-2 border-transparent px-1 ring-inset max-sm:text-xs sm:px-3",
+                      styles.searchFilter,
+                      "min-h-11 min-w-11 rounded-none border-b-2 border-transparent px-1 max-sm:text-xs sm:px-3",
                       active ? "border-accent-strong !text-accent-strong" : "!text-muted hover:!text-foreground",
                     )}
                     href={searchHref({ filter, query })}

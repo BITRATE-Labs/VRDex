@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { PublicProfileMediaDetailsSchema, type PublicProfileMediaDetails, type PublicMediaActor } from "@vrdex/api-contracts";
 import { MediaPreviewImage } from "./media-preview-image";
 import { buttonVariants } from "@/components/ui/button";
@@ -69,8 +70,11 @@ export function PublicMediaAssetCardView({ asset, label, featured = false, compa
   const title = asset.label?.trim() || label;
   const creditUrl = safeCreditUrl(asset.creditUrl);
   const mimeType = asset.downloadMimeType ?? asset.mimeType;
+  const format = mimeType?.replace(/^image\//, "").replace("svg+xml", "svg").toUpperCase();
   const byteSize = asset.downloadByteSize ?? asset.byteSize;
   const size = byteSize === undefined ? null : byteSize >= 1024 * 1024 ? `${(byteSize / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(byteSize / 1024))} KB`;
+  const fileInfo = [format, size].filter(Boolean).join(" / ");
+  const fileInfoId = useId();
   const hasHistory = publicDetailsSlug(asset) !== null;
   const tiled = !featured;
   const compact = compactOnMobile && tiled;
@@ -97,16 +101,24 @@ export function PublicMediaAssetCardView({ asset, label, featured = false, compa
           <h3 className={cn("break-words font-medium", featured && "text-xl")}>{title}</h3>
           {asset.caption ? <p className="break-words leading-6 text-muted">{asset.caption}</p> : null}
         </div>
-        <a aria-label={`Download ${title}`} className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "mt-2 w-fit", tiled && "sm:row-start-3 sm:mx-4 sm:mt-4 sm:self-start")} download href={asset.downloadUrl}>Download</a>
+        <div className={cn("mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5", tiled && "sm:row-start-3 sm:mx-4 sm:mt-4 sm:self-start")}>
+          <a aria-describedby={fileInfo ? fileInfoId : undefined} aria-label={`Download ${title}`} className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "shrink-0 max-sm:min-h-11")} download href={asset.downloadUrl}>Download</a>
+          {fileInfo ? <p id={fileInfoId} className="min-w-0 text-xs leading-4 font-medium text-muted [overflow-wrap:anywhere]">{fileInfo}</p> : null}
+        </div>
       </div>
-      {hasHistory || mimeType || size || creditUrl ? <details className={cn(
-        "mt-5 min-w-0 border-t border-border pt-3",
+      {hasHistory || creditUrl ? <details className={cn(
+        "group/details mt-5 min-w-0 border-t border-border sm:pt-3",
         tiled && "sm:row-start-4 sm:mx-4 sm:self-start",
-        compact && "max-sm:col-span-full max-sm:mx-3 max-sm:mt-0 max-sm:mb-3 max-sm:pt-2",
+        compact && "max-sm:col-span-full max-sm:mx-3 max-sm:mt-0 max-sm:mb-3",
       )} open={open}>
-        <summary onClick={onOpenChange ? event => { event.preventDefault(); onOpenChange(!open); } : undefined} className="cursor-pointer rounded-sm py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent">Details &amp; history</summary>
+        <summary
+          onClick={onOpenChange ? event => { event.preventDefault(); onOpenChange(!open); } : undefined}
+          className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-sm py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent max-sm:min-h-11 max-sm:text-sm [&::-webkit-details-marker]:hidden"
+        >
+          Details &amp; history
+          <ChevronDown aria-hidden="true" className="size-4 shrink-0 text-muted group-open/details:rotate-180" />
+        </summary>
         {open ? <div className="grid gap-3 pt-4">
-        <p className="text-xs text-muted">{[mimeType?.replace(/^image\//, "").replace("svg+xml", "svg").toUpperCase(), size].filter(Boolean).join(" / ")}</p>
         {creditUrl ? <a className="w-fit text-xs text-muted underline underline-offset-4" href={creditUrl}>View source</a> : null}
         {hasHistory ? <MediaDetails state={state} /> : null}
         </div> : null}

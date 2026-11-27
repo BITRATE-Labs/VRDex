@@ -80,6 +80,7 @@ test.describe("continuous schedule @flow @fixture", () => {
     await marker.getByRole("button", { name: "Open Day Gathering, Time TBA", exact: true }).click();
     const panel = page.getByLabel("Event details", { exact: true });
     await expect(panel.getByRole("heading", { name: "Day Gathering", exact: true })).toBeVisible();
+    await expect(panel.locator("time").first()).toHaveText("Oct 26, 2026 · Time TBA");
     await panel.getByRole("button", { name: "Close", exact: true }).click();
     await page.getByRole("button", { name: "Later", exact: true }).click();
     const query = new URL(page.url()).searchParams;
@@ -134,7 +135,7 @@ test.describe("continuous schedule @flow @fixture", () => {
     const quietAnchor = Date.UTC(2026, 9, 26) - (4 + width / 100) * 3600000;
     await page.goto(`/?at=${quietAnchor}&tz=America%2FNew_York&favorites=1&tag=keep`);
     await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready");
-    await expect(page.getByText("No favorites in this range", { exact: true })).toBeVisible();
+    await expect(page.getByText("No events from favorite communities or performers", { exact: true })).toBeVisible();
     await expect(page.getByTestId("public-timeline-lanes")).toHaveCount(0);
     await page.getByRole("button", { name: "Next event", exact: true }).click();
     const params = new URL(page.url()).searchParams;
@@ -154,7 +155,7 @@ test.describe("continuous schedule @flow @fixture", () => {
     const later = schedule.getByRole("button", { name: "Later", exact: true });
     const favorites = schedule.getByRole("button", { name: "Favorites only", exact: true });
     const star = favorites.locator("svg");
-    const empty = schedule.getByText("No favorites in this range", { exact: true });
+    const empty = schedule.getByText("No events from favorite communities or performers", { exact: true });
     const clear = schedule.getByRole("button", { name: "Clear filter", exact: true });
     const chart = schedule.getByRole("region", { name: "Timeline chart", exact: true });
     await expect(empty).toBeVisible();
@@ -170,17 +171,18 @@ test.describe("continuous schedule @flow @fixture", () => {
     await expect(later.getByText("Later", { exact: true })).toBeVisible();
 
     const dateBounds = (await date.boundingBox())!;
+    const earlierBounds = (await earlier.boundingBox())!;
     const laterBounds = (await later.boundingBox())!;
     const favoriteBounds = (await favorites.boundingBox())!;
-    expect(Math.abs(dateBounds.y - laterBounds.y)).toBeLessThanOrEqual(2);
-    expect(dateBounds.x + dateBounds.width).toBeLessThan((await earlier.boundingBox())!.x);
+    expect(dateBounds.y + dateBounds.height).toBeLessThan(earlierBounds.y);
+    expect(earlierBounds.y).toBe(laterBounds.y);
+    expect(laterBounds.y).toBe(favoriteBounds.y);
+    expect(laterBounds.x + laterBounds.width).toBeLessThan(favoriteBounds.x);
     for (const control of [date, earlier, now, later, favorites, clear]) {
       const bounds = (await control.boundingBox())!;
       expect(bounds.width).toBeGreaterThanOrEqual(44);
       expect(bounds.height).toBeGreaterThanOrEqual(44);
     }
-    expect(laterBounds.y).toBeLessThan(favoriteBounds.y);
-
     await heading.focus();
     await page.keyboard.press("Tab");
     await expect(date).toBeFocused();
@@ -237,6 +239,52 @@ test.describe("continuous schedule @flow @fixture", () => {
     await expect(favorites).toHaveAttribute("aria-pressed", "false");
     await expect(chart).toBeVisible();
   });
+  test("empty Favorites can be cleared while keeping a saved event in My night", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/?at=${TIMELINE_NOW - 3600000}&tz=America%2FNew_York&tag=keep`);
+    const title = "Low Tide";
+    await saveInInspector(page, title);
+    await page.goto(`/?at=${TIMELINE_NOW + 60000}&tz=America%2FNew_York&tag=keep`);
+    await loadCompleteSchedule(page);
+    const schedule = page.locator("[data-home-schedule]");
+    const favorites = schedule.getByRole("button", { name: "Favorites only", exact: true });
+    const clear = schedule.getByRole("button", { name: "Clear filter", exact: true });
+    const chart = schedule.getByRole("region", { name: "Timeline chart", exact: true });
+    const lanes = chart.getByTestId("public-timeline-lanes");
+    const night = chart.getByTestId("night-lanes");
+    const saved = night.getByRole("button", { name: `Open ${title}`, exact: true });
+
+    await expect(saved).toBeVisible();
+    await expect(saved.locator("time")).toHaveText("5:30 PM");
+    await expect(saved).toHaveAccessibleDescription(/5:30 PM/);
+    const originalLanesHeight = await lanes.evaluate((el) => el.clientHeight);
+    await favorites.press("Space");
+    await expect(favorites).toHaveAttribute("aria-pressed", "true");
+    await expect(schedule.getByText("No events from favorite communities or performers", { exact: true })).toBeVisible();
+    await expect(clear).toHaveCount(1);
+    await expect(clear).toBeVisible();
+    const clearedParams = new URL(page.url()).searchParams;
+    clearedParams.delete("favorites");
+    await expect(saved).toBeVisible();
+    expect(await lanes.evaluate((el) => el.clientHeight)).toBeLessThan(originalLanesHeight);
+    await favorites.press("Tab");
+    await expect(clear).toBeFocused();
+    await clear.press("Enter");
+    await expect(favorites).toBeFocused();
+    await expect(favorites).toHaveAttribute("aria-pressed", "false");
+    await expect(clear).toHaveCount(0);
+    await expect(saved).toBeVisible();
+    await expect.poll(() => lanes.evaluate((el) => el.clientHeight)).toBe(originalLanesHeight);
+    expect(new URL(page.url()).searchParams.toString()).toBe(clearedParams.toString());
+
+    await page.goBack();
+    await expect(clear).toBeVisible();
+    await clear.focus();
+    await page.goForward();
+    await expect(clear).toHaveCount(0);
+    await expect(favorites).toBeFocused();
+    await expect(saved).toBeVisible();
+  });
   test("empty Favorites keeps its focused recovery action through refresh", async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     let hold = false;
@@ -268,7 +316,7 @@ test.describe("continuous schedule @flow @fixture", () => {
       await expect(page.locator("[data-home-schedule] [data-loading-placeholder]")).toHaveCount(0);
       expect(await discoverTop()).toBe(initialDiscoverTop);
       await expect(clear).toBeFocused();
-      await expect(page.getByText("No favorites in this range", { exact: true })).toBeVisible();
+      await expect(page.getByText("No events from favorite communities or performers", { exact: true })).toBeVisible();
     } finally {
       hold = false;
       buffered.splice(0).forEach((send) => send());
@@ -697,7 +745,7 @@ test.describe("continuous schedule @flow @fixture", () => {
     await panel.getByRole("button", { name: "Close", exact: true }).click();
     await expect(trigger).toBeFocused();
   });
-  test("fullEventLinksPreserveNativeActivation", async ({
+  test("fullEventLinkPreservesNativeActivation", async ({
     page,
     context,
     timelineFixture,
@@ -711,22 +759,16 @@ test.describe("continuous schedule @flow @fixture", () => {
       .click();
     const panel = page.getByLabel("Event details", { exact: true });
     const href = `/${timelineFixture.runId}-community/events/${timelineFixture.runId}-3`;
-    const links = [
-      panel.getByRole("link", {
-        name: "ORBIT: Interstellar Bassline Orchestra",
-        exact: true,
-      }),
-      panel.getByRole("link", { name: "Open full event page", exact: true }),
-    ];
-    for (const link of links) {
-      await expect(link).toHaveAttribute("href", href);
-      const opened = context.waitForEvent("page");
-      await link.click({ modifiers: ["ControlOrMeta"] });
-      const tab = await opened;
-      await expect(tab).toHaveURL(new RegExp(href + "$"));
-      await tab.close();
-      await expect(panel).toBeVisible();
-    }
+    const link = panel.getByRole("link", { name: "Open full event page", exact: true });
+    await expect(link).toHaveAttribute("href", href);
+    await expect(link).toHaveText("Event page");
+    await expect(panel.locator(`a[href="${href}"]`)).toHaveCount(1);
+    const opened = context.waitForEvent("page");
+    await link.click({ modifiers: ["ControlOrMeta"] });
+    const tab = await opened;
+    await expect(tab).toHaveURL(new RegExp(href + "$"));
+    await tab.close();
+    await expect(panel).toBeVisible();
     await expect(
       panel.getByRole("link", { name: "Open event", exact: true }),
     ).toHaveCount(0);
@@ -795,6 +837,7 @@ test.describe("continuous schedule @flow @fixture", () => {
         exact: true,
       }),
     ).toBeVisible();
+    await expect(panel.getByRole("list", { name: "Lineup", exact: true }).getByRole("listitem")).toHaveCount(2);
     const poster = panel.getByRole("img", {
       name: "ORBIT: Interstellar Bassline Orchestra poster",
     });
@@ -837,22 +880,29 @@ test.describe("continuous schedule @flow @fixture", () => {
     ).toHaveCount(0);
     await expect(panel.getByText("DJ", { exact: true })).toHaveCount(0);
     await expect(
-        panel.getByText(/ (12|24)h$/, { exact: true }),
-    ).toHaveText("UTC · 12h");
+      panel.getByText(/ (12|24)h$/, { exact: true }),
+    ).toHaveCount(0);
+    await expect(panel.locator("time").first()).toHaveText(/\b2026,.*\s(?:AM|PM)\sUTC$/);
+    await expect(panel.getByRole("heading", { name: "Lineup", exact: true })).toBeVisible();
+    await expect(panel.getByRole("list", { name: "Lineup", exact: true })).toBeVisible();
     if (isMobile) {
       expect((await panel.boundingBox())?.height).toBeCloseTo(page.viewportSize()?.height ?? 0, 0);
     }
-    await panel
-      .getByRole("button", {
-        name: "Interested: ORBIT: Interstellar Bassline Orchestra",
-        exact: true,
-      })
-      .click();
+    const eventInterest = panel.getByRole("button", {
+      name: "Interested: ORBIT: Interstellar Bassline Orchestra",
+      exact: true,
+    });
+    await expect(eventInterest).toHaveAttribute("aria-pressed", "false");
+    await eventInterest.click();
+    await expect(eventInterest).toHaveText("Interested");
+    await expect(eventInterest).toHaveAttribute("aria-pressed", "true");
+    await expect(eventInterest).toHaveAttribute("title", "Remove interest");
     const included = panel.getByRole("button", {
       name: "Included with event: Aurora",
       exact: true,
     });
     await expect(included).toBeDisabled();
+    await expect(included).toHaveText("Included with event");
     await panel
       .getByRole("button", { name: "Favorite: Aurora", exact: true })
       .first()
@@ -862,21 +912,19 @@ test.describe("continuous schedule @flow @fixture", () => {
         .getByRole("button", { name: "Remove favorite: Aurora", exact: true })
         .first(),
     ).toBeVisible();
-    await panel
-      .getByRole("button", {
-        name: "Remove interest: ORBIT: Interstellar Bassline Orchestra",
-        exact: true,
-      })
-      .click();
+    await eventInterest.click();
+    await expect(eventInterest).toHaveAttribute("aria-pressed", "false");
     await expect(
       panel.getByRole("button", {
         name: "Interested: Aurora",
         exact: true,
       }),
     ).toBeEnabled();
-    await panel
-      .getByRole("button", { name: "Interested: Aurora", exact: true })
-      .click();
+    const setInterest = panel.getByRole("button", { name: "Interested: Aurora", exact: true });
+    await setInterest.click();
+    await expect(setInterest).toHaveText("Interested");
+    await expect(setInterest).toHaveAttribute("aria-pressed", "true");
+    await expect(setInterest).toHaveAttribute("title", "Remove interest");
     expect(
       await page.evaluate(
         () =>
@@ -902,12 +950,13 @@ test.describe("continuous schedule @flow @fixture", () => {
       path: info.outputPath("detail-compact-lineup.png"),
     });
     const scroll = panel.getByTestId("event-detail-scroll");
+    const maxScroll = await scroll.evaluate((el) => el.scrollHeight - el.clientHeight);
     await scroll.evaluate((el) => {
       el.scrollTop = el.scrollHeight;
     });
     await expect
       .poll(() => scroll.evaluate((el) => el.scrollTop))
-      .toBeGreaterThan(0);
+      .toBe(maxScroll);
     await scroll.evaluate((el) => {
       el.scrollTop = 0;
     });
@@ -1179,8 +1228,10 @@ test.describe("continuous schedule @flow @fixture", () => {
     await included.dispatchEvent("click");
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("vrdex.timeline.preferences.v1") ?? "null").plan)).toEqual([{ kind: "event", eventId: timelineFixture.eventIds[3] }]);
     await page.screenshot({ path: info.outputPath("schedule-included.png"), fullPage: true });
-    const remove = panel.getByRole("button", { name: `Remove interest: ${title}`, exact: true });
-    if (isMobile) await remove.tap(); else await remove.click();
+    const eventInterest = panel.getByRole("button", { name: `Interested: ${title}`, exact: true });
+    await expect(eventInterest).toHaveAttribute("aria-pressed", "true");
+    if (isMobile) await eventInterest.tap(); else await eventInterest.click();
+    await expect(eventInterest).toHaveAttribute("aria-pressed", "false");
     await expect(panel.getByRole("button", { name: "Interested: Aurora", exact: true })).toBeEnabled();
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("vrdex.timeline.preferences.v1") ?? "null").plan)).toEqual([]);
     await panel.getByRole("button", { name: "Close", exact: true }).click();

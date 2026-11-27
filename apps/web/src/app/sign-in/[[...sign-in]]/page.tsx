@@ -5,16 +5,30 @@ import {
   AuthUnavailableNotice,
 } from "@/components/auth-page-shell";
 import styles from "@/components/clerk-auth-controls.module.css";
+import { contributionLabel } from "@/lib/auth-copy";
+import { fetchPublicProfileShareCardBySlug } from "@/convex/server";
 import { cn } from "@/lib/cn";
-import { validateSignInReturnTo } from "@/lib/safe-return-to";
+import { authReturnLink, validateSignInReturnTo } from "@/lib/safe-return-to";
+import { validateSlugFormat } from "../../../../../../convex/_globalSlugs";
 
-function contributionLabel(returnTo: string) {
-  const pathname = returnTo.split(/[?#]/, 1)[0] ?? "";
+async function contributionIdentity(returnTo: string) {
+  const { pathname, searchParams } = new URL(returnTo, "https://return-to.vrdex.invalid");
+  const claimSlug = /^\/claim\/([a-z0-9]+(?:-[a-z0-9]+)*)$/.exec(pathname)?.[1];
+  const communities = searchParams.getAll("community");
+  const communitySlug = pathname === "/events/new" && !searchParams.has("draft") && communities.length === 1
+    ? communities[0]
+    : undefined;
+  const slug = claimSlug ?? communitySlug;
+  if (!slug || !validateSlugFormat(slug).ok) return undefined;
 
-  if (pathname === "/submit") return "Add profile";
-  if (pathname === "/events/new") return "Add event";
-  if (/^\/claim\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(pathname)) return "Claim profile";
-  if (/^\/[a-z0-9]+(?:-[a-z0-9]+)*\/edit$/.test(pathname)) return "Edit profile";
+  const { profile } = await fetchPublicProfileShareCardBySlug(slug);
+  if (!profile) return undefined;
+  if (claimSlug) {
+    return profile.trustLabel === "unclaimed" || profile.trustLabel === "community_submitted"
+      ? profile.displayName
+      : undefined;
+  }
+  return profile.profileType === "community" ? profile.displayName : undefined;
 }
 
 export default async function SignInPage({
@@ -23,22 +37,26 @@ export default async function SignInPage({
   searchParams: Promise<{
     redirectTo?: string | string[];
     returnTo?: string | string[];
+    return_to?: string | string[];
   }>;
 }) {
   const params = await searchParams;
   // Still validated locally rather than handed to Clerk unchecked, so an
   // attacker-supplied `returnTo` cannot bounce a signed-in user off-site.
-  const returnTo = validateSignInReturnTo(params.returnTo ?? params.redirectTo);
+  const returnTo = validateSignInReturnTo(params.returnTo ?? params.redirectTo ?? params.return_to);
   const configured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
   const journeyLabel = contributionLabel(returnTo);
   const journeyHeading = configured ? journeyLabel : undefined;
+  const subtitle = journeyHeading
+    ? await contributionIdentity(returnTo)
+    : (journeyLabel ?? "Manage your VRDex profile and events.");
 
   return (
     <AuthPageShell
       compact={Boolean(journeyLabel)}
       headingId="sign-in-heading"
       integrated={Boolean(journeyHeading)}
-      subtitle={journeyHeading ? undefined : (journeyLabel ?? "Manage your VRDex profile and events.")}
+      subtitle={subtitle}
       title={journeyHeading ?? "Sign in"}
     >
       {configured ? (
@@ -66,7 +84,7 @@ export default async function SignInPage({
           } : undefined}
           fallbackRedirectUrl={returnTo}
           signUpFallbackRedirectUrl={returnTo}
-          signUpUrl="/sign-up"
+          signUpUrl={authReturnLink("/sign-up", returnTo)}
         />
       ) : (
         <AuthUnavailableNotice />

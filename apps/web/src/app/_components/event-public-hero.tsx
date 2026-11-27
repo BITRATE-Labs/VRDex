@@ -5,6 +5,7 @@ import { CalendarDays, Flag, ListMusic } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import type { PublicEvent } from "./event-public-page";
+import styles from "./event-public-page.module.css";
 import { ViewerLocalEventDateTime } from "./viewer-local-event-times";
 
 export function EventPublicHero({
@@ -34,26 +35,28 @@ export function EventPublicHero({
   const startTime = (
     <ViewerLocalEventDateTime className={cn(
       "block text-base leading-snug font-semibold tabular-nums sm:text-lg",
+      event.scheduleKind !== "date_only" && "max-[360px]:text-sm",
       bannerStyle ? "text-white" : "text-foreground",
-    )} timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />
+    )} timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} showYear />
   );
 
   return (
     <section className={cn("overflow-hidden rounded-hero border border-border shadow-sm", bannerStyle ? "bg-media" : "bg-surface-strong")}>
       <div
         className={cn(
-          "flex flex-col bg-cover bg-center px-4 py-[var(--event-watch-mobile-space,1rem)] sm:min-h-56 sm:p-6 lg:min-h-60 lg:p-8",
+          styles.heroLead,
+          "flex flex-col bg-cover bg-center px-4 py-[var(--event-mobile-space,1rem)] sm:min-h-56 sm:p-6 lg:min-h-60 lg:p-8",
           bannerStyle ? "text-white" : "bg-[linear-gradient(135deg,var(--surface-strong),var(--surface-raised))] text-foreground",
         )}
         style={bannerStyle}
       >
-        <div className="flex flex-1 flex-col justify-end sm:mt-3 lg:mt-2">
+        <div className={cn(styles.heroContent, "flex flex-1 flex-col justify-end sm:mt-3 lg:mt-2")}>
           <div className="max-w-4xl">
             {event.status === "cancelled" ? (
               <p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em]">Cancelled</p>
             ) : null}
             {hasLineup ? (
-              <div className="flex flex-wrap items-center gap-x-4">
+              <div className={cn("flex flex-wrap items-center gap-x-4", event.scheduleKind !== "date_only" && "max-[360px]:gap-x-2")}>
                 {startTime}
                 <a
                   className="inline-flex min-h-11 min-w-11 items-center rounded-control text-sm font-medium underline decoration-current/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-current sm:min-h-8"
@@ -70,11 +73,11 @@ export function EventPublicHero({
             <h1 className="mt-3 text-4xl leading-[1.05] font-semibold tracking-[-0.05em] [overflow-wrap:anywhere] sm:mt-4 sm:text-7xl sm:leading-none">
               {event.title}
             </h1>
-            {event.summary ? <p className={cn("mt-3 max-w-2xl text-base leading-6 [overflow-wrap:anywhere] sm:mt-4 sm:text-lg sm:leading-7", bannerStyle && "text-white/82")}>{event.summary}</p> : null}
+            {event.summary ? <p className={cn(styles.heroSummary, "mt-3 max-w-2xl text-base leading-6 [overflow-wrap:anywhere] sm:mt-4 sm:text-lg sm:leading-7", bannerStyle && "text-white/82")}>{event.summary}</p> : null}
             {event.venueLabel ? <p className={cn("mt-3 text-sm", detailTextClassName)}>{event.venueLabel}</p> : null}
           </div>
         </div>
-        <nav aria-label="Event actions" className="mt-3 flex shrink-0 flex-wrap gap-1.5 sm:order-first sm:mt-0 sm:justify-end">
+        <nav aria-label="Event actions" className={cn(styles.heroActions, "mt-3 flex shrink-0 flex-wrap gap-1.5 sm:order-first sm:mt-0 sm:justify-end")}>
           {eventPath && canHost ? <span className="group relative inline-flex">
             <Link aria-label="Host view" className={actionClassName} href={`${eventPath}/host`}>
               <ListMusic aria-hidden="true" />

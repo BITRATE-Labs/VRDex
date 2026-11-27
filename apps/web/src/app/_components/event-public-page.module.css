@@ -11,6 +11,80 @@
   margin-top: 1rem;
 }
 
+.watchReturn {
+  display: none;
+}
+
+.eventBody:has(.watch > :not([data-event-watch-external-only])) .watchReturn {
+  display: inline-flex;
+}
+
+@media (forced-colors: active) {
+  .watchReturn:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}
+
+.lineupTitle:focus-visible {
+  position: relative;
+  outline: none;
+}
+
+.lineupTitle:focus-visible::before {
+  content: "";
+  position: absolute;
+  inset-block: -0.25rem;
+  inset-inline-start: -0.625rem;
+  border-inline-start: 0.25rem solid currentColor;
+}
+
+.outboundIcon {
+  display: none;
+}
+
+.page:has(.watch > :not([data-event-watch-external-only])) .externalStreamLink {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-color: var(--border);
+  background: transparent;
+
+  &:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-elevated);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  & > :first-child {
+    color: var(--foreground);
+    overflow-wrap: anywhere;
+    text-decoration-color: currentColor;
+  }
+
+  & .openLinkLabel {
+    display: none;
+  }
+
+  & .outboundIcon {
+    display: block;
+  }
+}
+
+@media (width >= 64rem) and (height >= 46rem) {
+  /* Preserve the Play control above Lineup when the sticky header would clip it. */
+  .eventBody:has(> .media > .poster):has(.watch button [data-watch-play-poster]) > .lineup :global(#event-lineup) {
+    scroll-margin-top: 24rem;
+  }
+}
+
 .watch > :has([data-watch-play-poster]) {
   border-color: var(--border-strong);
 }
@@ -51,12 +125,16 @@
 }
 
 @media (width < 40rem) {
-  .page:has(.watch:not(:empty)) {
-    --event-watch-mobile-space: 0.5rem;
+  .page:has(.watch:not(:empty), .worldLink) {
+    --event-mobile-space: 0.5rem;
   }
 
   .watch:not(:empty) + .locationLinks {
     margin-top: 0.5rem;
+  }
+
+  .watch:has(> :not([data-event-watch-external-only])) + .locationLinks:has(> .worldLink:first-child + a:last-child:not(.worldLink)) > a {
+    flex-basis: max-content;
   }
 
   .mobileHost > :first-child {
@@ -81,7 +159,43 @@
   }
 }
 
+@media (width >= 75rem) {
+  .page:has(.watch:not(:empty)) .heroLead {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: 1rem;
+  }
+
+  .page:has(.watch:not(:empty)) .heroContent {
+    margin-top: 0;
+  }
+
+  .page:has(.watch:not(:empty)) .heroActions {
+    order: 0;
+  }
+
+  .page:has(.media > .poster):has(.watch:not(:empty) + .locationLinks):has(.lineup li:first-child > a time) .heroLead {
+    min-height: 12.5rem;
+    padding-block: 1.25rem;
+  }
+
+  .page:has(.media > .poster):has(.watch:not(:empty) + .locationLinks):has(.lineup li:first-child > a time) .heroContent h1 {
+    margin-top: 0.5rem;
+    font-size: 3.5rem;
+  }
+
+  .page:has(.media > .poster):has(.watch:not(:empty) + .locationLinks):has(.lineup li:first-child > a time) .heroSummary {
+    margin-top: 0.625rem;
+  }
+}
+
 @media (width >= 64rem) {
+  :global(html[data-theme="dark"]) .watch button [data-watch-play-poster] {
+    border-radius: calc(var(--radius-card) - 1px);
+    box-shadow: inset 0 0 0 2px rgb(255 255 255 / 30%);
+  }
+
   .watch button [data-watch-play-poster] {
     background-image: var(--event-watch-desktop-art, var(--event-watch-fallback));
     background-position: center;

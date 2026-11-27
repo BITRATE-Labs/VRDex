@@ -855,6 +855,7 @@ const worldProfile: PublicWorld = {
     upcoming: [
       {
         slug: eventSlug,
+        communitySlug,
         title: "Afterglow Harbor Sessions",
         startAt: eventStartAt,
         doorsOpenAt: eventDoorsOpenAt,
@@ -1418,6 +1419,18 @@ export function getPlaywrightPublicProfileFixture(
 
   if (profileType === "community" && slug === communitySlug) {
     return communityProfile;
+  }
+  if (profileType === "community" && slug === "playwright-afterglow-social-group") {
+    return {
+      ...communityProfile,
+      outboundLinks: [{
+        type: "vrchat_profile",
+        label: "VRChat group",
+        labelMode: "automatic",
+        url: "https://vrchat.com/home/group/grp_12345678-1234-1234-1234-123456789abc",
+        source: "owner_authored",
+      }],
+    };
   }
   if (slug === "playwright-sparse-community" || slug === "playwright-sparse-community-custom") {
     const customLabel = slug.endsWith("-custom");

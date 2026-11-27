@@ -5,7 +5,8 @@ import {
   AuthUnavailableNotice,
 } from "@/components/auth-page-shell";
 import styles from "@/components/clerk-auth-controls.module.css";
-import { validateSignInReturnTo } from "@/lib/safe-return-to";
+import { contributionLabel } from "@/lib/auth-copy";
+import { authReturnLink, validateSignInReturnTo } from "@/lib/safe-return-to";
 
 export default async function SignUpPage({
   searchParams,
@@ -13,19 +14,22 @@ export default async function SignUpPage({
   searchParams: Promise<{
     redirectTo?: string | string[];
     returnTo?: string | string[];
+    return_to?: string | string[];
   }>;
 }) {
   const params = await searchParams;
-  const returnTo = validateSignInReturnTo(params.returnTo ?? params.redirectTo);
+  const returnTo = validateSignInReturnTo(params.returnTo ?? params.redirectTo ?? params.return_to);
   const configured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+  const journeyLabel = contributionLabel(returnTo);
+  const journeyHeading = configured ? journeyLabel : undefined;
 
   return (
     <AuthPageShell
       compact={configured}
       headingId="sign-up-heading"
-      subtitle="Create a VRDex account to claim a profile and publish events."
-      title="Create account"
-      visuallyHiddenTitle={configured}
+      subtitle={journeyHeading ? undefined : (journeyLabel ?? "Create a VRDex account to claim a profile and publish events.")}
+      title={journeyHeading ?? "Create account"}
+      visuallyHiddenTitle={configured && !journeyHeading}
     >
       {configured ? (
         <SignUp
@@ -37,7 +41,7 @@ export default async function SignUpPage({
           }}
           fallbackRedirectUrl={returnTo}
           signInFallbackRedirectUrl={returnTo}
-          signInUrl="/sign-in"
+          signInUrl={authReturnLink("/sign-in", returnTo)}
         />
       ) : (
         <AuthUnavailableNotice />
