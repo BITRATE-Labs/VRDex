@@ -58,6 +58,13 @@
   }
 }
 
+@media (width >= 64rem) and (height >= 46rem) {
+  /* Preserve the Play control above Lineup when the sticky header would clip it. */
+  .eventBody:has(> .media > .poster):has(.watch button [data-watch-play-poster]) > .lineup :global(#event-lineup) {
+    scroll-margin-top: 24rem;
+  }
+}
+
 .watch > :has([data-watch-play-poster]) {
   border-color: var(--border-strong);
 }
