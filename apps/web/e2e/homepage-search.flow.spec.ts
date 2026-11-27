@@ -573,6 +573,7 @@ test("expanded public links agree with legacy provider formatting @flow @fixture
   for (const view of ["standard", "dj"]) {
     await page.goto(`/search?q=DJ+Aurora${view === "dj" ? "&view=dj" : ""}`);
     if (view === "standard") {
+      await waitForPublicSearchHydration(page);
       await publicResultRow(page, "/playwright-dj-aurora").getByText("Links", { exact: true }).click();
     }
 
@@ -581,6 +582,7 @@ test("expanded public links agree with legacy provider formatting @flow @fixture
     for (const [name, id] of [["VRCDN", "dj-aurora"], ["Suggested VRCDN", "suggested-aurora"]]) {
       const group = page.getByRole("group", { name, exact: true });
       await expect(group.getByText(name, { exact: true })).toBeVisible();
+      await expect(group.getByText("Community-submitted", { exact: true })).toHaveCount(id === "suggested-aurora" ? 1 : 0);
       await expect(group.getByRole("link", { name: `${name} preview`, exact: true })).toHaveAttribute(
         "href", `https://panel.vrcdn.live/preview/${id}`,
       );

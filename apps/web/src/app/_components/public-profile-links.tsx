@@ -359,7 +359,12 @@ export function PublicProfileLinks({ links }: { links: PublicSearchPerson["outbo
             role="group"
           >
             <div className="lookup-vrcdn-group__heading">
-              <span>{name}</span>
+              <span className="text-foreground">
+                <span>{name}</span>
+                {link.source === "community_submitted" ? (
+                  <span className="block text-xs font-normal text-muted">Community-submitted</span>
+                ) : null}
+              </span>
               {previews?.map((preview) => <VrcdnPreviewLink key={preview.url} link={preview} />)}
               {stream && !previewsByUrl.has(stream.previewUrl) ? (
                 <VrcdnPreviewLink
