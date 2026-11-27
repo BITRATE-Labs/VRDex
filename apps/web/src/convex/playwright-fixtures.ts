@@ -1415,7 +1415,14 @@ export function searchPlaywrightDiscoveryFixture(query: string): PlaywrightDisco
   );
 
   if (matches.length > 0) {
-    return { kind: "handled", results: matches };
+    return {
+      kind: "handled",
+      results: matches.map((result) =>
+        result.slug === personSlug
+          ? { ...result, person: toProfileLookupFixture(personProfile)! }
+          : result,
+      ),
+    };
   }
 
   if (process.env.VRDEX_ALLOW_PLAYWRIGHT_FIXTURE_SEARCH_FALLTHROUGH === "true") {

@@ -30,35 +30,6 @@ function isVrcdnStreamLink(link: PublicProfileLink) {
   return link.type === "vrcdn" && !isVrcdnPreviewLink(link);
 }
 
-/**
- * Both derived through the shared stream parser rather than by pulling the URL
- * apart here.
- *
- * These used to read the last path segment and rebuild `rtspt://` from the
- * hostname, which happens to work for one spelling and fails for the rest. The
- * stored form is now `vrcdn:<streamId>`, which has no hostname at all -- that
- * produced `rtspt:///live/<id>` and offered the identifier itself as the Quest
- * value, so everything copied off this page was unusable.
- */
-function deriveVrcdnPreviewLink(url: string): { label: string; url: string } | null {
-  const stream = parseVrcdnStreamLinks(url);
-
-  return stream ? { label: "VRCDN preview", url: stream.previewUrl } : null;
-}
-
-function deriveVrcdnCopyLinks(url: string): Array<{ label: string; value: string }> {
-  const stream = parseVrcdnStreamLinks(url);
-
-  if (stream === null) {
-    return [{ label: "VRCDN stream", value: url }];
-  }
-
-  return [
-    { label: "Quest MPEG-TS", value: stream.questUrl },
-    { label: "PC RTSPT", value: stream.pcUrl },
-  ];
-}
-
 function ExternalIcon({ className }: { className?: string }) {
   return (
     <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 20 20">
@@ -191,9 +162,9 @@ function IconCircleLink({ link, className }: { link: PublicProfileLink; classNam
   );
 }
 
-function VrcdnPreviewLink({ link }: { link: { label: string; url: string } }) {
+function VrcdnPreviewLink({ link, accessibleName }: { link: { label: string; url: string }; accessibleName?: string }) {
   return (
-    <a aria-label={link.label} className="lookup-feature-link" href={link.url} rel="noreferrer" target="_blank">
+    <a aria-label={accessibleName ?? link.label} className="lookup-feature-link" href={link.url} rel="noreferrer" target="_blank">
       <span className="lookup-feature-link__label">{link.label}</span>
       <ExternalIcon className="size-4" />
     </a>
@@ -202,16 +173,20 @@ function VrcdnPreviewLink({ link }: { link: { label: string; url: string } }) {
 
 function CopyableUrlBar({
   className,
+  copyName,
   label,
   labelCh,
   value,
   valueCh,
+  wrap = false,
 }: {
   className?: string;
   label: string;
+  copyName?: string;
   labelCh?: number;
   value: string;
   valueCh?: number;
+  wrap?: boolean;
 }) {
   const urlInputCh = Math.min(Math.max(valueCh ?? value.length, 18), 68);
   const labelWidthCh = Math.max(labelCh ?? label.length, label.length);
@@ -222,16 +197,20 @@ function CopyableUrlBar({
       style={{ "--lookup-label-ch": labelWidthCh, "--lookup-url-ch": urlInputCh } as CSSProperties}
     >
       <span className="lookup-primary-url-label">{label}</span>
-      <input
-        aria-label={`${label} URL`}
-        className="lookup-primary-url-value"
-        readOnly
-        title={value}
-        value={value}
-        onClick={(event) => event.currentTarget.select()}
-        onFocus={(event) => event.currentTarget.select()}
-      />
-      <LookupCopyButton className="lookup-primary-url-copy" label="Copy" value={value} />
+      {wrap ? (
+        <code className="lookup-primary-url-value lookup-primary-url-value--wrapped">{value}</code>
+      ) : (
+        <input
+          aria-label={`${label} URL`}
+          className="lookup-primary-url-value"
+          readOnly
+          title={value}
+          value={value}
+          onClick={(event) => event.currentTarget.select()}
+          onFocus={(event) => event.currentTarget.select()}
+        />
+      )}
+      <LookupCopyButton accessibleName={copyName} className="lookup-primary-url-copy" value={value} />
     </div>
   );
 }
@@ -246,20 +225,6 @@ function TwitchFeatureLink({ labelCh, link, valueCh }: { labelCh: number; link: 
       valueCh={valueCh}
     />
   );
-}
-
-function CodeCopyBar({
-  label,
-  labelCh,
-  value,
-  valueCh,
-}: {
-  label: string;
-  labelCh: number;
-  value: string;
-  valueCh: number;
-}) {
-  return <CopyableUrlBar label={label} labelCh={labelCh} value={value} valueCh={valueCh} />;
 }
 
 export function PublicProfileLinks({ links }: { links: PublicSearchPerson["outboundLinks"] }) {
@@ -279,14 +244,33 @@ export function PublicProfileLinks({ links }: { links: PublicSearchPerson["outbo
 
     return value ? [{ key: `${link.type}-${link.url}`, label: "Discord", value }] : [];
   });
-  const vrcdnPreviewLinks = [
-    ...explicitVrcdnPreviewLinks.map((link) => ({ label: link.label, url: link.url })),
-    ...vrcdnStreamLinks.flatMap((link) => {
-      const previewLink = deriveVrcdnPreviewLink(link.url);
-
-      return previewLink ? [previewLink] : [];
-    }),
-  ].filter((link, index, allLinks) => allLinks.findIndex((candidate) => candidate.url === link.url) === index);
+  const previewsByUrl = new Map<string, PublicProfileLink>();
+  for (const link of explicitVrcdnPreviewLinks) {
+    if (!previewsByUrl.has(link.url)) previewsByUrl.set(link.url, link);
+  }
+  const streamGroups = new Map<string, { link: PublicProfileLink; stream: ReturnType<typeof parseVrcdnStreamLinks> }>();
+  for (const link of vrcdnStreamLinks) {
+    const stream = parseVrcdnStreamLinks(link.url);
+    const key = stream?.reference ?? link.url;
+    if (!streamGroups.has(key)) streamGroups.set(key, { link, stream });
+  }
+  const groupPreviews = new Map<string, PublicProfileLink[]>();
+  const standalonePreviews: PublicProfileLink[] = [];
+  for (const preview of previewsByUrl.values()) {
+    const reference = parseVrcdnStreamLinks(preview.url)?.reference;
+    if (reference && streamGroups.has(reference)) {
+      const previews = groupPreviews.get(reference) ?? [];
+      previews.push(preview);
+      groupPreviews.set(reference, previews);
+    } else {
+      standalonePreviews.push(preview);
+    }
+  }
+  const groupLabels = new Map<string, number>();
+  for (const { link } of streamGroups.values()) {
+    const key = (link.label.trim() || "VRCDN").toLowerCase();
+    groupLabels.set(key, (groupLabels.get(key) ?? 0) + 1);
+  }
   const handled = new Set([
     ...explicitVrcdnPreviewLinks,
     ...vrcdnStreamLinks,
@@ -294,15 +278,13 @@ export function PublicProfileLinks({ links }: { links: PublicSearchPerson["outbo
     ...links.filter((link) => link.type === "discord" && discordCopyValue(link) !== null),
   ]);
   const iconLinks = links.filter((link) => !handled.has(link));
-  const vrcdnCopyLinks = vrcdnStreamLinks.flatMap((link) => deriveVrcdnCopyLinks(link.url).map((entry) => ({ ...entry, key: `${link.url}-${entry.label}` })));
   const copyRows = [
     ...discordCopyLinks,
-    ...vrcdnCopyLinks,
     ...twitchCopyLinks.map((link) => ({ key: `${link.type}-${link.url}`, label: "Twitch", value: link.url })),
   ];
   const copyValueCh = Math.max(18, ...copyRows.map((row) => row.value.length));
   const copyLabelCh = Math.max(0, ...copyRows.map((row) => row.label.length));
-  const hasPrimaryActions = vrcdnPreviewLinks.length > 0 || iconLinks.length > 0;
+  const hasPrimaryActions = standalonePreviews.length > 0 || iconLinks.length > 0;
   const hasCopyRows = copyRows.length > 0;
   const linkBoardStyle = hasCopyRows
     ? ({ "--lookup-board-label-ch": copyLabelCh, "--lookup-board-url-ch": Math.min(Math.max(copyValueCh, 18), 68) } as CSSProperties)
@@ -317,22 +299,13 @@ export function PublicProfileLinks({ links }: { links: PublicSearchPerson["outbo
               {iconLinks.map((link) => <IconCircleLink key={`${link.type}-${link.url}`} link={link} />)}
             </div>
           ) : null}
-          {vrcdnPreviewLinks.map((link) => <VrcdnPreviewLink key={link.url} link={link} />)}
+          {standalonePreviews.map((link) => <VrcdnPreviewLink key={link.url} link={link} />)}
         </div>
       ) : null}
       {hasCopyRows ? (
         <div className="lookup-copy-list">
           {discordCopyLinks.map((entry) => (
-            <CodeCopyBar
-              key={entry.key}
-              label={entry.label}
-              labelCh={copyLabelCh}
-              value={entry.value}
-              valueCh={copyValueCh}
-            />
-          ))}
-          {vrcdnCopyLinks.map((entry) => (
-            <CodeCopyBar
+            <CopyableUrlBar
               key={entry.key}
               label={entry.label}
               labelCh={copyLabelCh}
@@ -350,6 +323,36 @@ export function PublicProfileLinks({ links }: { links: PublicSearchPerson["outbo
           ))}
         </div>
       ) : null}
+      {[...streamGroups].map(([key, { link, stream }]) => {
+        const label = link.label.trim() || "VRCDN";
+        const repeatedLabel = (groupLabels.get(label.toLowerCase()) ?? 0) > 1;
+        const name = repeatedLabel && stream ? `${label} · ${stream.streamId}` : label;
+        const previews = groupPreviews.get(key);
+        return (
+          <div aria-label={name} className="lookup-vrcdn-group" key={key} role="group">
+            <div className="lookup-vrcdn-group__heading">
+              <span>{name}</span>
+              {previews?.map((preview) => <VrcdnPreviewLink key={preview.url} link={preview} />)}
+              {stream && !previewsByUrl.has(stream.previewUrl) ? (
+                <VrcdnPreviewLink
+                  accessibleName={`${name} preview`}
+                  link={{ label: "Preview", url: stream.previewUrl }}
+                />
+              ) : null}
+            </div>
+            <div className="lookup-copy-list">
+              {stream ? (
+                <>
+                  <CopyableUrlBar copyName={`Copy ${name} Quest MPEG-TS`} label="Quest MPEG-TS" value={stream.questUrl} wrap />
+                  <CopyableUrlBar copyName={`Copy ${name} PC RTSPT`} label="PC RTSPT" labelCh={"Quest MPEG-TS".length} value={stream.pcUrl} wrap />
+                </>
+              ) : (
+                <CopyableUrlBar copyName={`Copy ${name}`} label="VRCDN stream" value={link.url} wrap />
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

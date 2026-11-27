@@ -774,11 +774,11 @@ test.describe("fixture lookup smoke", () => {
     await expect(page).toHaveURL(/\/search\?q=BASICBIT&view=dj$/);
     await expect(page.getByRole("link", { name: "BASICBIT", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Website: basicbit.net", exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "VRCDN preview", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "VRCDN stream preview", exact: true })).toBeVisible();
     await expect(page.locator('input[value="basic_bit"]')).toHaveCount(2);
     await expect(page.getByRole("link", { name: /Discord:/ })).toHaveCount(0);
-    await expect(page.locator('input[value="https://stream.vrcdn.live/live/basicbit.live.ts"]')).toHaveCount(2);
-    await expect(page.locator('input[value="rtspt://stream.vrcdn.live/live/basicbit"]')).toHaveCount(2);
+    await expect(page.locator("code").filter({ hasText: "https://stream.vrcdn.live/live/basicbit.live.ts" })).toHaveCount(2);
+    await expect(page.locator("code").filter({ hasText: "rtspt://stream.vrcdn.live/live/basicbit" })).toHaveCount(2);
     await expect(page.locator('input[value="https://www.twitch.tv/basic_bit"]')).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Twitch: twitch.tv", exact: true })).toBeVisible();
     await expect(page.getByText("BASIC", { exact: true })).toHaveCount(2);
