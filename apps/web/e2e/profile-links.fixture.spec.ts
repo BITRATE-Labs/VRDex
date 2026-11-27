@@ -264,4 +264,5 @@ test("pictured profile occurrences keep their artwork and canonical link @fixtur
   await expect(title).toHaveAttribute("href", /^\/playwright-afterglow-social\/events\//);
   const card = page.getByRole("article").filter({ has: title });
   await expect(card.locator(":scope > div").first()).toHaveCSS("background-image", /url\(/);
+  await expect(card.getByText("Afterglow Social", { exact: true })).toBeVisible();
 });

@@ -256,7 +256,7 @@ export function EventPreviewCard({
         {(!compactWithoutArtwork || hasDate) ? (
           <div className={cn(
             "flex flex-wrap items-center text-sm font-medium",
-            isSeries || compactWithoutArtwork ? "gap-x-3 gap-y-1" : "gap-2",
+            isSeries || compactWithoutArtwork ? "gap-x-3 gap-y-1" : "gap-x-4 gap-y-1",
             useThemeColors ? "text-muted" : "text-white/84",
           )}>
             {hasSeriesDate ? (
@@ -269,7 +269,9 @@ export function EventPreviewCard({
                 Doors <ViewerLocalEventTime timestamp={event.doorsOpenAt} />
               </span>
             ) : null}
-            {!compactWithoutArtwork && event.communityName ? <span>{isSeries ? null : "/ "}{event.communityName}</span> : null}
+            {!compactWithoutArtwork && event.communityName ? (
+              <span className={isSeries ? undefined : "min-w-0 font-normal [overflow-wrap:anywhere]"}>{event.communityName}</span>
+            ) : null}
           </div>
         ) : null}
         <h3 className={cn(
