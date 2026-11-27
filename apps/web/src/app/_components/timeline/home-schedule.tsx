@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 import type {
   PlanReference,
   TimelineRange,
@@ -258,14 +258,15 @@ function ScheduleContent({
     navigation.favoritesOnly && data.isCurrentViewport &&
     data.kind === "ready" && !data.revalidating && empty;
   const showFavoritesEmptyState = navigation.favoritesOnly && compactEmpty;
-  const emptyStateRef = useCallback((element: HTMLDivElement | null) => {
-    if (!element) return;
-    return () => {
-      if (element.contains(document.activeElement)) {
-        document.getElementById("schedule-favorites")?.focus();
-      }
-    };
-  }, []);
+  const clearFilterFocused = useRef(false);
+  useLayoutEffect(() => {
+    if (showFavoritesEmptyState || !clearFilterFocused.current) return;
+    clearFilterFocused.current = false;
+    // The browser moves focus to the body when a focused control is removed.
+    if (document.activeElement === document.body) {
+      document.getElementById("schedule-favorites")?.focus();
+    }
+  }, [showFavoritesEmptyState]);
   const nextEvent = empty ? data.records.flatMap((event) => {
     const schedule = event.schedule;
     if (schedule.kind === "date_only") {
@@ -359,12 +360,19 @@ function ScheduleContent({
         saved={data.saved}
         compactEmpty={compactEmpty}
         emptyState={showFavoritesEmptyState ? (
-          <div className={styles.emptyState} ref={emptyStateRef}>
+          <div className={styles.emptyState}>
             <p role="status">No favorites in this range</p>
             <Button
               size="sm"
               type="button"
-              onClick={() => navigate({ favoritesOnly: false })}
+              onFocus={() => { clearFilterFocused.current = true; }}
+              onBlur={() => { clearFilterFocused.current = false; }}
+              onClick={(event) => {
+                if (event.currentTarget === document.activeElement) {
+                  document.getElementById("schedule-favorites")?.focus();
+                }
+                navigate({ favoritesOnly: false });
+              }}
             >
               Clear filter
             </Button>
