@@ -70,7 +70,7 @@ test("published lineups are directly reachable from the event hero @flow @fixtur
   }
 });
 
-test("listed events show the world and original listing before the poster on mobile @flow @fixture", async ({ page }) => {
+test("listed events order visitor links on mobile and group context beside the poster on desktop @flow @fixture", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 740 });
   await page.goto(path + listedSlug);
 
@@ -94,6 +94,37 @@ test("listed events show the world and original listing before the poster on mob
   await expect(reference).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(poster).toBeFocused();
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await poster.locator("img").evaluate((image: HTMLImageElement) => image.decode());
+
+  const host = main.getByRole("link", { name: "Afterglow Social Host", exact: true });
+  const lineup = main.getByRole("heading", { name: "Lineup", exact: true });
+  const [desktopPoster, desktopReference, desktopHost, desktopLineup] = await Promise.all([
+    poster.boundingBox(),
+    reference.boundingBox(),
+    host.boundingBox(),
+    lineup.boundingBox(),
+  ]);
+  if (!desktopPoster || !desktopReference || !desktopHost || !desktopLineup) {
+    throw new Error("Missing desktop listed event layout");
+  }
+  for (const box of [desktopReference, desktopHost, desktopLineup]) {
+    expect(box.x).toBeGreaterThan(desktopPoster.x + desktopPoster.width);
+  }
+  expect(Math.abs(desktopReference.y - desktopPoster.y)).toBeLessThanOrEqual(2);
+  expect(desktopReference.y + desktopReference.height).toBeLessThan(desktopHost.y);
+  expect(desktopHost.y + desktopHost.height).toBeLessThan(desktopLineup.y);
+  expect(desktopLineup.y).toBeLessThan(desktopPoster.y + desktopPoster.height);
+
+  await reference.focus();
+  await page.keyboard.press("Tab");
+  await expect(poster).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(host).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(lineup.locator("..").getByRole("link").first()).toBeFocused();
 });
 
 for (const timezoneId of ["UTC", "America/Los_Angeles"]) {

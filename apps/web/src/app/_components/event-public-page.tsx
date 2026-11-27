@@ -446,70 +446,72 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
 
         {event.source.sourceType === "contributor" ? <p className="text-sm text-muted">{event.source.label}</p> : null}
         <EventContributionControls eventId={event.id} reportOpen={reportOpen} onReportClose={() => setReportOpen(false)} />
-        <section className={cn(styles.media, "grid grid-cols-[minmax(0,1fr)] items-start gap-4")}>
-          <div className={styles.lead}>
-            <div className={styles.watch}><EventWatchForEvent event={event} /></div>
-            {event.worlds.length > 0 || sourceUrl ? (
-              <div className={cn(styles.locationLinks, "flex flex-wrap gap-2")}>
-                {event.worlds.map((world) => (
-                  <Link className={locationLinkClassName} href={`/${world.slug}`} key={world.slug}>
-                    <span className={actionLabelClassName}>{world.displayName}</span>
-                    <span className={actionMetaClassName}>World</span>
-                  </Link>
-                ))}
-                {sourceUrl ? (
-                  <a className={locationLinkClassName} href={sourceUrl} rel="noreferrer" target="_blank">
-                    <span className="flex items-start gap-2">
-                      <span className={actionLabelClassName}>{event.source.label}</span>
-                      <ExternalLink aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-accent-strong" />
-                    </span>
-                    <span className={actionMetaClassName}>Reference link</span>
-                  </a>
-                ) : null}
+        <div className={styles.eventBody}>
+          <section className={cn(styles.media, "grid grid-cols-[minmax(0,1fr)] items-start gap-4")}>
+            <div className={styles.lead}>
+              <div className={styles.watch}><EventWatchForEvent event={event} /></div>
+              {event.worlds.length > 0 || sourceUrl ? (
+                <div className={cn(styles.locationLinks, "flex flex-wrap gap-2")}>
+                  {event.worlds.map((world) => (
+                    <Link className={locationLinkClassName} href={`/${world.slug}`} key={world.slug}>
+                      <span className={actionLabelClassName}>{world.displayName}</span>
+                      <span className={actionMetaClassName}>World</span>
+                    </Link>
+                  ))}
+                  {sourceUrl ? (
+                    <a className={locationLinkClassName} href={sourceUrl} rel="noreferrer" target="_blank">
+                      <span className="flex items-start gap-2">
+                        <span className={actionLabelClassName}>{event.source.label}</span>
+                        <ExternalLink aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-accent-strong" />
+                      </span>
+                      <span className={actionMetaClassName}>Reference link</span>
+                    </a>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+            {event.posterImageUrl ? (
+              <div className={cn(styles.poster, "lg:sticky lg:top-6")}>
+                <a href={event.posterImageUrl} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-card border border-border bg-surface">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={event.posterImageUrl} alt={event.title + " poster"} className="h-auto w-full object-contain" />
+                </a>
               </div>
             ) : null}
-          </div>
-          {event.posterImageUrl ? (
-            <div className={cn(styles.poster, "lg:sticky lg:top-6")}>
-              <a href={event.posterImageUrl} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-card border border-border bg-surface">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={event.posterImageUrl} alt={event.title + " poster"} className="h-auto w-full object-contain" />
-              </a>
-            </div>
-          ) : null}
 
-          {standaloneHost ? hostDetails : (
-            <Card className={cn(styles.details, "text-sm")} surface="white">
-              {hostDetails}
+            {standaloneHost ? hostDetails : (
+              <Card className={cn(styles.details, "text-sm")} surface="white">
+                {hostDetails}
+              </Card>
+            )}
+          </section>
+
+          {lineup.length > 0 ? (
+            <Card className={styles.lineup} surface="white">
+              <h2
+                className="scroll-mt-24 text-xl font-semibold tracking-tight focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent"
+                id="event-lineup"
+                tabIndex={-1}
+              >
+                Lineup
+              </h2>
+              <ol className="mt-5 divide-y divide-border">
+                {lineup.map((row) => (
+                  <li className="flex min-w-0 items-center gap-4 py-4 first:pt-0 last:pb-0" key={row.key}>
+                    <EventAvatar appearance={row.performer?.avatarAppearance} imageUrl={row.performer?.imageUrl} label={row.displayLabel} />
+                    <div className="min-w-0">
+                      {row.performer ? (
+                        <Link className={cn(inlineActionClassName, "[overflow-wrap:anywhere]")} href={`/${row.performer.slug}`}>{row.displayLabel}</Link>
+                      ) : <span className="font-semibold [overflow-wrap:anywhere]">{row.displayLabel}</span>}
+                      {row.roleLabel ? <div className="mt-1 text-sm text-muted">{row.roleLabel}</div> : null}
+                      {row.startAt !== undefined ? <ViewerLocalEventTimeRange className="mt-1 block text-sm text-muted" endAt={row.endAt} startAt={row.startAt} /> : null}
+                    </div>
+                  </li>
+                ))}
+              </ol>
             </Card>
-          )}
-        </section>
-
-        {lineup.length > 0 ? (
-          <Card surface="white">
-            <h2
-              className="scroll-mt-24 text-xl font-semibold tracking-tight focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent"
-              id="event-lineup"
-              tabIndex={-1}
-            >
-              Lineup
-            </h2>
-            <ol className="mt-5 divide-y divide-border">
-              {lineup.map((row) => (
-                <li className="flex min-w-0 items-center gap-4 py-4 first:pt-0 last:pb-0" key={row.key}>
-                  <EventAvatar appearance={row.performer?.avatarAppearance} imageUrl={row.performer?.imageUrl} label={row.displayLabel} />
-                  <div className="min-w-0">
-                    {row.performer ? (
-                      <Link className={cn(inlineActionClassName, "[overflow-wrap:anywhere]")} href={`/${row.performer.slug}`}>{row.displayLabel}</Link>
-                    ) : <span className="font-semibold [overflow-wrap:anywhere]">{row.displayLabel}</span>}
-                    {row.roleLabel ? <div className="mt-1 text-sm text-muted">{row.roleLabel}</div> : null}
-                    {row.startAt !== undefined ? <ViewerLocalEventTimeRange className="mt-1 block text-sm text-muted" endAt={row.endAt} startAt={row.startAt} /> : null}
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </Card>
-        ) : null}
+          ) : null}
+        </div>
 
         {seriesPath || publicLinks.length > 0 ? (
           <Card surface="white">
