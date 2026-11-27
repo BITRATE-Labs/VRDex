@@ -125,6 +125,7 @@
   "workers/restream/output-sender.mjs",
   "workers/restream/output-tunnel.mjs",
   "workers/restream/packaging-manifest.json",
+  "workers/restream/poster-hold-frame.mjs",
   "workers/restream/program-renderer.mjs",
   "workers/restream/resource-policy.mjs",
   "workers/restream/resource-sampler.mjs",

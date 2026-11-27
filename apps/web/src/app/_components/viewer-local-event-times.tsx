@@ -68,7 +68,7 @@ function getServerTimeZone(): string | null {
   return "UTC";
 }
 
-function useViewerTimeZone(explicitTimeZone?: string): string {
+export function useViewerTimeZone(explicitTimeZone?: string): string {
   const timeZone = useSyncExternalStore(
     subscribeToTimeZone,
     getBrowserTimeZone,

@@ -4,7 +4,7 @@ import { validateAllocationSnapshot } from '../workers/restream/worker-allocatio
 import {resolveControlTarget,admitControlOperation,cancelControlOperation,isControl,supersedePending,findControlRequest,recordControlRequest} from "./_eventBroadcastControl";
 import {canManageEventMedia} from "./_eventBroadcastAuthority";
 import { NEW_PROGRAM_MEDIA_SETTINGS, parseMediaSettings, resolveDestinationProfile } from "../workers/restream/broadcast-profiles.mjs";
-import { broadcastInputValidator, authoredBroadcastInput, eventProfileBroadcastInputChoices, resolveBroadcastInput, broadcastInputPublicUrl, eventMediaSourceBroadcastInput, eventMediaSourceProjectionAvailable, listUsableEventMediaSources } from "./_eventBroadcastSources";
+import { broadcastInputValidator, authoredBroadcastInput, eventProfileBroadcastInputChoices, resolveBroadcastInput, broadcastInputPublicUrl, eventMediaSourceBroadcastInput, eventMediaSourceProjectionAvailable, listUsableEventMediaSources, resetSlotAssignmentForPerformerChange } from "./_eventBroadcastSources";
 import { sanitizeTwitchOutput, getTwitchOutputAccount, listTwitchOutputAccounts, eventOutputIsAuthorized } from './_eventOutputSetup';
 import { EVENT_BROADCAST_MAX_OUTPUTS, validateBroadcastPolicy, allocateSessionCommandSequence, settleTerminalSessionCommands, requireEventMediaBridgeToken } from "./_eventBroadcastInputs";
 import { dateOnlyEventsEnabled, eventDateForInstant, eventSortAt, eventSortEndAt, normalizeEventSchedule, publicEventSchedule, requireDateOnlyEventsEnabled } from "./_eventSchedule";
@@ -778,6 +778,7 @@ async function replaceEventSlots(
     const previousInputSlot = preservedSlot ?? existing.find(previous => previous.position === slot.position);
     const broadcastInput = authoredBroadcastInput({ value: slot.broadcastInput, previous: previousInputSlot?.broadcastInput, samePerson: previousInputSlot !== undefined && previousInputSlot.personProfileId === personProfileId, profile: profile ?? previousProfile });
     if (preservedSlot !== undefined) {
+      await resetSlotAssignmentForPerformerChange(db, preservedSlot, { personProfileId, displayLabel: slot.displayLabel }, now);
       await db.patch(preservedSlot._id, {
         broadcastInput,
         selectedStreamId: slot.selectedStreamId,
@@ -1658,7 +1659,7 @@ async function getWritableEventMediaSession(
   return session;
 }
 
-async function getOpenEventMediaSession(
+export async function getOpenEventMediaSession(
   db: DatabaseReader,
   program: Doc<"eventMediaPrograms">,
 ): Promise<Doc<"eventMediaSessions"> | null> {
@@ -2507,7 +2508,10 @@ export const getEventMediaControlStatus = query({
       .query("eventSlots")
       .withIndex("by_eventId_startAt", (query) => query.eq("eventId", event._id))
       .take(100);
-    const slotState = findEventOperationSlots(slots, args.now ?? Date.now());
+    const slotState = {
+      ...findEventOperationSlots(slots, args.now ?? Date.now()),
+      lineupSlots: slots.map(slot => ({ id: slot._id, label: slot.displayLabel, startAt: slot.startAt })),
+    };
 
     if (program === null) {
       return {
@@ -2589,6 +2593,8 @@ export const getEventMediaControlStatus = query({
             type: source.type,
             input,
             revision: source.revision ?? 1,
+            assignedFromSourceId: source.assignedFromSourceId,
+            assignable: !source.profileProjection && !source.sourceProfileId && !source.eventSlotId && source.temporaryExpiresAt === undefined && input !== undefined,
             editable: !source.profileProjection && !source.sourceProfileId && !source.eventSlotId && source.state !== "disabled",
             publicUrl: input ? broadcastInputPublicUrl(input) : undefined,
             purpose: source.purpose,

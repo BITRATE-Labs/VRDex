@@ -194,3 +194,30 @@ test("legacy stream settings stay visible until an admitted profile is saved @fl
  await expect(page.getByText("Active",{exact:true}).first().locator("..")).toContainText("720p30 · 160 kbps");
  await page.getByRole("complementary",{name:"Destination",exact:true}).screenshot({path:info.outputPath("qualified-settings.png")});
 });
+
+test("assigns a saved input to a lineup slot @flow @fixture", async ({ page }, info) => {
+  await page.goto("/playwright/event-operator?lineupAssignment=1");
+  await page.getByText("Assign lineup input", { exact: true }).click();
+  await page.getByRole("combobox", { name: "Lineup slot", exact: true }).selectOption("slot-a");
+  await expect(page.getByRole("combobox", { name: "Saved input", exact: true }).locator("option")).toHaveText(["Choose an input", "Automatic", "Paste a link", "Custom"]);
+  await page.getByRole("combobox", { name: "Saved input", exact: true }).selectOption({ label: "Custom" });
+  await page.getByRole("button", { name: "Save assignment" }).click();
+  await expect(page.getByRole("link", { name: "https://www.twitch.tv/custom", exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("lineup-input-assigned.png") });
+  await page.getByRole("combobox", { name: "Saved input", exact: true }).selectOption("automatic");
+  await page.getByRole("button", { name: "Save assignment" }).click();
+  await expect(page.getByRole("link", { name: "https://www.twitch.tv/custom", exact: true })).toHaveCount(0);
+});
+
+test("fills a missing lineup input during a broadcast @flow @fixture", async ({ page }, info) => {
+  await page.goto("/playwright/event-operator");
+  await page.getByText("Assign lineup input", { exact: true }).click();
+  await page.getByRole("combobox", { name: "Lineup slot", exact: true }).selectOption("slot-late");
+  const input = page.getByRole("combobox", { name: "Saved input", exact: true });
+  await input.selectOption("paste");
+  await page.getByRole("textbox", { name: "Stream link", exact: true }).fill("rtspt://stream.vrcdn.live/live/lateguest");
+  await page.getByRole("button", { name: "Save assignment" }).click();
+  await expect(page.getByRole("link", { name: "https://stream.vrcdn.live/live/lateguest.live.ts", exact: true })).toBeVisible();
+  await expect(input.locator('option[value="paste"]')).toHaveAttribute("disabled", "");
+  await page.screenshot({ path: info.outputPath("lineup-input-added-live.png") });
+});

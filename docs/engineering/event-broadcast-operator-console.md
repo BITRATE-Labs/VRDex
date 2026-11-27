@@ -33,6 +33,8 @@ its confirmation. Return to auto remains available in schedule gaps; the resulti
 automatic slate is valid. Start retains admission, output reservation, and terminal
 cleanup restrictions. Every live state change has a captured-target confirmation. Next preserves automatic/manual mode, and its persisted lineup cursor survives worker recovery and temporary custom takeovers. Hold validates the captured current source. Resume re-prepares the last actually observed source. No UI path bypasses the measured allocation map.
 
+Pre-show, manual hold, and input fallback use the event poster with silent audio. The worker loads VRDex-hosted event artwork or a direct Discord attachment when the broadcast starts. If the poster is unavailable, the neutral slate stays on air.
+
 A Stop arriving during a progress report supersedes that report without accepting
 new output evidence. Lease and owner checks still apply, and the worker can claim
 and acknowledge Stop on its next tick instead of reporting an authority failure.
@@ -102,6 +104,10 @@ Resolution and frame rate expose all six presets. Audio choices are 160/320 kbps
 new programs default to 320 and legacy programs remain 160. Twitch is always
 160-kbps stereo/48-kHz AAC. Active session settings remain immutable while saved
 settings apply on the next start.
+
+In Broadcast controls, **Assign lineup input** sets a timed slot to a saved event input or a pasted playback URL. Operators can fill an unassigned slot during a broadcast. The worker uses it as soon as it refreshes the schedule in Automatic mode. If an operator took the link manually, **Return to auto** selects the assigned input for the current slot. An existing assignment can be cleared once it is off air and no switch to it is pending. Stop the broadcast to replace an existing input. The assignment takes precedence over the performer's profile input and works for unlinked performers. The same feed can be assigned to multiple slots. Choose **Automatic** to clear an assignment and restore the profile fallback. Clear or reassign all slots using a saved input before replacing or removing it.
+
+Replacing the performer clears the assignment. Rescheduling the same performer preserves it.
 
 The editor's Broadcast input field is separate from performer-sequence Stream.
 It uses `getPersonBroadcastInputChoices({personSlug})`, preserves unavailable

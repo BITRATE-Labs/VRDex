@@ -17,6 +17,7 @@ import { ViewerLocalEventDateTime } from "./viewer-local-event-times";
 import { operatorViewState } from "@/lib/event-operator-state";
 import {
   EventOperatorSources,
+  type LineupAssignment,
   type SourceAuthoring,
 } from "./event-operator-sources";
 import { EventOperatorDiagnostics } from "./event-operator-diagnostics";
@@ -60,6 +61,7 @@ export function EventOperatorView({
   const create = useMutation(api.eventMediaSources.create);
   const replace = useMutation(api.eventMediaSources.replace);
   const remove = useMutation(api.eventMediaSources.remove);
+  const assign = useMutation(api.eventMediaSources.assignToSlot);
   const settings = useMutation(api.eventMediaSettings.configure);
   // A loading/rejected replacement subscription must never restore old authority.
   const current = status;
@@ -78,6 +80,7 @@ export function EventOperatorView({
           })
         }
         onCreate={(input) => create({ currentSlug, ...input })}
+        onAssign={(input) => assign({ currentSlug, ...input })}
         onPrepare={(label,url,idempotencyKey) => create({currentSlug,label,url,idempotencyKey,...{temporary:true}})}
         onReplace={(source, input, expected) =>
           replace({ currentSlug, sourceId: source.sourceId, ...input, ...expected })
@@ -138,6 +141,7 @@ type ControlsProps = {
     id: OperatorStatus["commands"][number]["commandId"],
   ) => Promise<unknown>;
   onCreate: (input: SourceAuthoring) => Promise<unknown>;
+  onAssign?: (input: LineupAssignment) => Promise<unknown>;
   onReplace: (
     source: OperatorStatus["sources"][number],
     input: SourceAuthoring,
@@ -155,6 +159,7 @@ export function EventOperatorControls({
   onPolicy,
   onCancel,
   onCreate,
+  onAssign,
   onReplace,
   onRemove,
   onSaveSettings,
@@ -425,6 +430,7 @@ export function EventOperatorControls({
             }
             onCancel={() => {if (!session) return;setChange({title:"Cancel this switch?",message:"Keep the current output.",label:"Cancel switch",sessionId:session.sessionId,epoch:session.epoch,run:cancel});}}
             onCreate={onCreate}
+            onAssign={onAssign}
             onReplace={(source,input) => {
               const expected = {expectedSourceRevision:source.revision,...(active && session ? {expectedSessionId:session.sessionId,expectedIntentSequence:session.intentSequence ?? 0} : {})};
               if (!active || !session) return onReplace(source,input,expected);

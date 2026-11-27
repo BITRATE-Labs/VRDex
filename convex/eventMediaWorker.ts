@@ -5,7 +5,7 @@ import { recordResourceSnapshot, computeRuntimeValidator, trustedComputeRuntime 
 import {assertWorkerProtocol,beginControlPreparation,promoteControlOperation,completeControlOperation,controlFence,coherentEvidence,writeControlObservation,broadcastModeForIntent,isCut,isControl,settleControl,supersedePending} from "./_eventBroadcastControl";
 import {controlTargetValidator,controlResultValidator,controlFailureValidator} from "./_eventMediaControl";
 import { parseMediaSettings, resolveDestinationProfile } from "../workers/restream/broadcast-profiles.mjs";
-import { eventProfileBroadcastInputChoices, resolveBroadcastInput, broadcastInputPublicUrl, eventMediaSourceWorkerDescriptor } from "./_eventBroadcastSources";
+import { assignedEventMediaSource, eventProfileBroadcastInputChoices, resolveBroadcastInput, broadcastInputPublicUrl, eventMediaSourceWorkerDescriptor } from "./_eventBroadcastSources";
 import { outputHealthValidator, eventOutputIsAuthorized } from './_eventOutputSetup';
 import { canReadProfile } from "./_profilePermissions";
 import { v } from "convex/values";
@@ -379,12 +379,24 @@ export const acknowledgeCommand = mutation({
         return { accepted: true as const, duplicate: false };
     },
 });
+function posterForWorker(event: Doc<"events">): string | undefined {
+    if (!event.posterImageUrl?.startsWith(`/api/v0/events/${event._id}/artwork/`)) return event.posterImageUrl;
+    try {
+        return new URL(event.posterImageUrl, process.env.SITE_URL ?? "https://vrdex.net").href;
+    } catch {
+        return undefined;
+    }
+}
+
 async function configuration(ctx: MutationCtx, { session, program, event }: NonNullable<Awaited<ReturnType<typeof records>>>) {
     const authored = await ctx.db.query("eventSlots").withIndex("by_eventId_startAt", q => q.eq("eventId", event._id)).take(65);
     if (authored.length > 64)
         throw new Error("Event schedule exceeds worker limits.");
     const slots = [];
+    const assignedSlots = new Set<string>();
     for (const slot of authored) {
+        const assigned = await assignedEventMediaSource(ctx.db, program._id, slot);
+        if (assigned) assignedSlots.add(slot._id);
         let source = await ctx.db.query("eventMediaSources").withIndex("by_programId_key", q => q.eq("programId", program._id).eq("key", `slot-${slot._id}`)).first();
         if (slot.personProfileId) {
             const profile = await ctx.db.get(slot.personProfileId);
@@ -405,7 +417,8 @@ async function configuration(ctx: MutationCtx, { session, program, event }: NonN
             source = null;
         }
         if (!source && !slot.personProfileId)
-            source = (await ctx.db.query("eventMediaSources").withIndex("by_programId_eventSlotId", q => q.eq("programId", program._id).eq("eventSlotId", slot._id)).take(EVENT_BROADCAST_MAX_SOURCES + 1)).find(s => s.eventSlotId === slot._id && !s.profileProjection && !(s.sourceProfileId && s.key === `slot-${slot._id}`)) ?? null;
+            source = (await ctx.db.query("eventMediaSources").withIndex("by_programId_eventSlotId", q => q.eq("programId", program._id).eq("eventSlotId", slot._id)).take(EVENT_BROADCAST_MAX_SOURCES + 1)).find(s => s.eventSlotId === slot._id && !s.profileProjection && s.state !== "disabled" && s.projectionAvailable !== false && !(s.sourceProfileId && s.key === `slot-${slot._id}`)) ?? null;
+        source = assigned ?? source;
         slots.push({ slotKey: slot._id, sourceId: source?._id, startAt: slot.startAt, endAt: slot.endAt, available: source !== null && source.state !== "disabled" && source.projectionAvailable !== false && eventMediaSourceWorkerDescriptor(source) !== undefined });
     }
     // Index each current slot plus unbound manual sources. Detached projections
@@ -414,7 +427,12 @@ async function configuration(ctx: MutationCtx, { session, program, event }: NonN
     for (const slotId of [undefined, ...authored.map(slot => slot._id)]) {
         const eligible = await ctx.db.query("eventMediaSources")
             .withIndex("by_programId_eventSlotId", q => q.eq("programId", program._id).eq("eventSlotId", slotId))
-            .filter(q => q.and(q.eq(q.field("eventId"), event._id), q.neq(q.field("state"), "disabled"), q.neq(q.field("projectionAvailable"), false)))
+            .filter(q => q.and(
+                q.eq(q.field("eventId"), event._id),
+                q.neq(q.field("state"), "disabled"),
+                q.neq(q.field("projectionAvailable"), false),
+                q.neq(q.field("key"), slotId && assignedSlots.has(slotId) ? `slot-${slotId}` : null),
+            ))
             .take(EVENT_BROADCAST_MAX_SOURCES + 1 - sources.length);
         sources.push(...eligible);
         if (sources.length > EVENT_BROADCAST_MAX_SOURCES)
@@ -432,6 +450,7 @@ async function configuration(ctx: MutationCtx, { session, program, event }: NonN
         await ctx.db.patch(session._id, { runtimeDeadlineAt: deadline });
     return {
         connectionTest: session.connectionTest,
+        posterImageUrl: posterForWorker(event),
         programId: program._id, eventId: event._id, outputId: session.outputId,
         committedIntent:session.committedIntent,intentSequence:session.intentSequence,
         lineupCursor:session.lineupCursor,

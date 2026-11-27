@@ -1,4 +1,4 @@
-import { authoredBroadcastInput } from "./_eventBroadcastSources";
+import { authoredBroadcastInput, resetSlotAssignmentForPerformerChange } from "./_eventBroadcastSources";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { DatabaseWriter } from "./_generated/server";
 import { sanitizeEventLineupInput, type EventLineupInput } from "./_eventInputs";
@@ -109,6 +109,7 @@ export async function replaceEventLineup(
       };
       if (existing !== undefined) {
         keptSlots.add(existing._id);
+        await resetSlotAssignmentForPerformerChange(db, existing, fields, now);
         await db.patch(existing._id, fields);
       } else await db.insert("eventSlots", { ...fields, createdAt: now });
     } else {

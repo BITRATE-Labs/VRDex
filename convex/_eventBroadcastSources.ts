@@ -2,7 +2,7 @@ import { parseBroadcastInputUrl, normalizeBroadcastInput, broadcastInputKey, bro
 export { parseBroadcastInputUrl, normalizeBroadcastInput, broadcastInputKey, broadcastInputPublicUrl } from "./_broadcastInputUrl";
 import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { DatabaseReader } from "./_generated/server";
+import type { DatabaseReader, DatabaseWriter } from "./_generated/server";
 import { eventMediaSourceStateValidator } from "./_eventMediaControl";
 import { canReadProfile } from "./_profilePermissions";
 import { publicProfileOutboundLinks } from "./_profilePublic";
@@ -91,10 +91,15 @@ export async function eventMediaSourceProjectionAvailable(
     (source.eventSlotId !== undefined &&
       source.sourceProfileId !== undefined &&
       source.key === `slot-${source.eventSlotId}`);
-  if (!projected) return true;
+  if (!projected) {
+    if (!source.eventSlotId || !source.key.startsWith("override-")) return true;
+    const slot = await db.get(source.eventSlotId);
+    return slot?.eventId === source.eventId;
+  }
   const slot =
     source.eventSlotId === undefined ? null : await db.get(source.eventSlotId);
   if (!slot?.personProfileId || slot.eventId !== source.eventId) return false;
+  if (await assignedEventMediaSource(db, source.programId, slot)) return false;
   const profile = await db.get(slot.personProfileId);
   if (!profile || !canReadProfile("public", profile)) return false;
   const input = resolveBroadcastInput({
@@ -107,6 +112,40 @@ export async function eventMediaSourceProjectionAvailable(
     broadcastInputPublicUrl(input) === source.publicUrl &&
     source.projectionAvailable !== false
   );
+}
+
+/** Event inputs assigned to a slot take precedence over its profile links. */
+export async function assignedEventMediaSource(
+  db: DatabaseReader,
+  programId: Id<"eventMediaPrograms">,
+  slot: Doc<"eventSlots">,
+) {
+  const source = await db.query("eventMediaSources")
+    .withIndex("by_programId_key", q => q.eq("programId", programId).eq("key", `override-${slot._id}`))
+    .unique();
+  return source?.eventSlotId === slot._id && source.eventId === slot.eventId &&
+    source.state !== "disabled" && source.projectionAvailable !== false && eventMediaSourceWorkerDescriptor(source)
+    ? source : null;
+}
+
+export async function resetSlotAssignmentForPerformerChange(
+  db: DatabaseWriter,
+  previous: Doc<"eventSlots">,
+  next: Pick<Doc<"eventSlots">, "personProfileId" | "displayLabel">,
+  now: number,
+) {
+  if (previous.personProfileId === next.personProfileId &&
+      (next.personProfileId !== undefined || previous.displayLabel === next.displayLabel)) return;
+  for await (const source of db.query("eventMediaSources")
+    .withIndex("by_eventSlotId", q => q.eq("eventSlotId", previous._id))) {
+    if (source.eventId !== previous.eventId || source.key !== `override-${previous._id}` || source.state === "disabled") continue;
+    await db.patch(source._id, { state: "disabled", updatedAt: now });
+    const program = await db.get(source.programId);
+    const session = program?.activeSessionId ? await db.get(program.activeSessionId) : null;
+    if (session?.resumeSource?.sourceId === source._id) {
+      await db.patch(session._id, { resumeSource: undefined });
+    }
+  }
 }
 
 /** Bound usable rows, not disabled history or unavailable profile projections. */

@@ -41,6 +41,8 @@ export function fixtureSource(
         ? `https://stream.vrcdn.live/live/${key}.live.ts`
         : `https://www.twitch.tv/${key}`,
     editable: true,
+    assignable: true,
+    assignedFromSourceId: undefined,
   };
 }
 export function fixtureCommand(
@@ -87,6 +89,10 @@ export function operatorFixture(): FixtureStatus {
     serverNow: fixtureNow,
     canControl: true,
     outputConfigurationLocked: true,
+    lineupSlots: [
+      { id: fixtureId("eventSlots", "slot-a"), label: "Aurora", startAt: fixtureNow },
+      { id: fixtureId("eventSlots", "slot-late"), label: "Late guest", startAt: fixtureNow + 3600000 },
+    ],
     eventId: fixtureId("events", "event"),
     eventPath: "/playwright-afterglow-social/events/playwright-event-host-view",
     program: {
@@ -105,12 +111,14 @@ export function operatorFixture(): FixtureStatus {
       {
         ...fixtureSource("aurora", "Aurora"),
         editable: false,
+        assignable: false,
         eventSlotId: fixtureId("eventSlots", "slot-a"),
       },
       {
         ...fixtureSource("nova", "Nova", "twitch"),
         hasPublicUrl: false,
         editable: false,
+        assignable: false,
         sourceProfileId: fixtureId("profiles", "nova"),
       },
       fixtureSource("custom", "Custom", "twitch"),

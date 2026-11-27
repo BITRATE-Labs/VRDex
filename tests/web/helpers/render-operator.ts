@@ -27,7 +27,7 @@ export function renderOperator(status: unknown) {
         React.createElement("div", props),
       PageShell: (props: object) => React.createElement("div", props),
     },
-    "./viewer-local-event-times": { ViewerLocalEventDateTime: () => null },
+    "./viewer-local-event-times": { ViewerLocalEventDateTime: () => null, useViewerTimeZone: () => "UTC" },
     "./event-host-view": { EventHostView: () => null },
   };
   function load(file: string): Record<string, any> {
