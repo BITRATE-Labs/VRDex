@@ -4,6 +4,7 @@ import { Star } from "lucide-react";
 import type { MouseEvent } from "react";
 import { EntityImage } from "@/components/ui/entity-image";
 import { InterestButton } from "@/components/ui/interest-button";
+import { formatCalendarDate } from "@/lib/calendar/zoned-date-time";
 import type { FavoriteLineupResult } from "@/lib/discovery/favorite-lineup";
 import type { DiscoverySnapshot } from "@/lib/discovery/controller";
 import type { TimelinePreferences } from "@/lib/timeline/preferences";
@@ -35,18 +36,24 @@ export function DiscoveryEventCard({
     (reference) => reference.kind === "event" && reference.eventId === event.id,
   );
   const schedule = event.schedule;
-  const date =
-    schedule.kind === "date_only"
-      ? schedule.eventDate
-      : new Intl.DateTimeFormat(undefined, {
-          timeZone,
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-          hour12,
-        }).format(schedule.startAt);
+  let date: string | undefined;
+  if (schedule.kind === "date_only") {
+    try {
+      date = formatCalendarDate(schedule.eventDate);
+    } catch {
+      // Keep the host visible if a stored date is invalid.
+    }
+  } else {
+    date = new Intl.DateTimeFormat(undefined, {
+      timeZone,
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12,
+    }).format(schedule.startAt);
+  }
   const open = (activation: MouseEvent<HTMLAnchorElement>) => {
     if (
       activation.defaultPrevented ||
@@ -91,7 +98,7 @@ export function DiscoveryEventCard({
           </a>
         </h4>
         <p className={styles.date}>
-          {date} ·{" "}
+          {date && `${date} · `}
           <a className={styles.host} href={`/${event.host.slug}`}>
             {event.host.displayName}
           </a>
