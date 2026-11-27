@@ -6,16 +6,20 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/cn";
 import { ANALYTICS_CHOICE_KEY, ANALYTICS_OFFER_KEY, ANALYTICS_POLICY_VERSION, analyticsAccountMatches, parseAnalyticsChoice, resolveAnalyticsMode, type AnalyticsChoice, type AnalyticsMode } from "@/lib/analytics-preference";
 import { parseDeploymentCategory } from "@/lib/analytics-capture";
 import { ANALYTICS_FOUNDATION_ENABLED, ANALYTICS_CHOICE_OWNER_KEY, analyticsChoiceOwnerMatches } from "@/lib/analytics-preference";
+
+type PanelPlacement = "offer" | "settings";
 
 type AccountState = { resolved: boolean; choice?: AnalyticsChoice; analyticsId?: string; revision?: number; userId?: string };
 type Preferences = {
   mode: AnalyticsMode | undefined;
   analyticsId?: string;
   identityKey?: string;
-  open: () => void;
+  open: (opener: HTMLButtonElement) => void;
+  firstVisitOffer?: ReactNode;
   pauseRef: { current: (withdraw?: boolean) => void };
 };
 const Context = createContext<Preferences>({ mode: undefined, open: () => {}, pauseRef: { current: () => {} } });
@@ -86,7 +90,7 @@ function EnabledAnalyticsPreferencesProvider({ children }: { children: ReactNode
   const [account, setAccount] = useState<AccountState>({ resolved: !connected });
   const [ready, setReady] = useState(false);
   const [choice, setChoice] = useState<AnalyticsChoice>();
-  const [visible, setVisible] = useState(false);
+  const [placement, setPlacement] = useState<PanelPlacement>();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
   const pauseRef = useRef<(withdraw?: boolean) => void>(() => {});
@@ -106,7 +110,7 @@ function EnabledAnalyticsPreferencesProvider({ children }: { children: ReactNode
       if (!stored && process.env.NEXT_PUBLIC_POSTHOG_KEY?.trim()
         && parseDeploymentCategory(process.env.NEXT_PUBLIC_POSTHOG_DEPLOYMENT_CATEGORY)
         && localStorage.getItem(ANALYTICS_OFFER_KEY) !== "1") {
-        setVisible(true);
+        setPlacement("offer");
         localStorage.setItem(ANALYTICS_OFFER_KEY, "1");
       }
     } catch { /* Browser storage is optional; do not assume consent. */ }
@@ -133,14 +137,17 @@ function EnabledAnalyticsPreferencesProvider({ children }: { children: ReactNode
       return state;
     });
   }, []);
-  const failedAccountSave = useCallback(() => { setError(true); setVisible(true); }, []);
+  const failedAccountSave = useCallback(() => {
+    setError(true);
+    setPlacement((current) => current ?? "settings");
+  }, []);
   const inheritedChoice = useCallback(() => {
     setChoice(undefined);
-    setVisible(true);
+    setPlacement((current) => current ?? "settings");
     try { localStorage.removeItem(ANALYTICS_CHOICE_KEY); } catch { /* Keep capture unconsented in memory. */ }
   }, []);
   const dismiss = () => {
-    setVisible(false);
+    setPlacement(undefined);
     returnFocusRef.current?.focus();
     try { localStorage.setItem(ANALYTICS_OFFER_KEY, "1"); } catch { /* Keep the page usable. */ }
   };
@@ -169,38 +176,67 @@ function EnabledAnalyticsPreferencesProvider({ children }: { children: ReactNode
     }
   };
   useEffect(() => {
-    if (visible && focusOnOpenRef.current) {
+    if (placement && focusOnOpenRef.current) {
       panelRef.current?.focus();
       focusOnOpenRef.current = false;
     }
-  }, [visible]);
-  return <Context.Provider value={{ mode, analyticsId: account.analyticsId, identityKey: `${account.userId ?? "guest"}:${account.revision ?? 0}`, open: () => {
-    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    focusOnOpenRef.current = true;
-    setVisible(true);
-  }, pauseRef }}>
+  }, [placement]);
+  const isOffer = placement === "offer";
+  const panel = placement && ready ? (
+    <section
+      ref={panelRef}
+      tabIndex={-1}
+      onKeyDown={(event) => { if (event.key === "Escape") dismiss(); }}
+      aria-label="Usage & privacy"
+      data-ph-no-capture
+      className={cn(
+        "max-w-md rounded-panel border border-border-strong bg-surface-strong p-5 text-foreground shadow-hero sm:fixed sm:right-6 sm:bottom-4 sm:z-50 sm:max-h-[calc(100dvh-2rem)] sm:overflow-y-auto",
+        isOffer
+          ? "max-sm:mx-4 max-sm:mt-3 max-sm:max-w-none max-sm:px-3 max-sm:py-2"
+          : "max-sm:fixed max-sm:inset-x-4 max-sm:bottom-4 max-sm:z-50 max-sm:mx-auto max-sm:max-h-[calc(100dvh-2rem)] max-sm:overflow-y-auto",
+      )}
+    >
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="text-lg font-semibold">Analytics</h2>
+        <Button size="sm" variant="ghost" className={isOffer ? "max-sm:min-h-11" : undefined} onClick={dismiss} aria-label="Close analytics preferences">Close</Button>
+      </div>
+      <p className={cn("mt-2 text-sm text-muted", isOffer && "max-sm:mt-0")}>Usage analytics and masked session replay.</p>
+      <div className={isOffer ? "contents max-sm:mt-1 max-sm:flex max-sm:flex-wrap max-sm:items-center max-sm:justify-between max-sm:gap-x-3" : "contents"}>
+        <Link href="/privacy" className={cn("mt-2 inline-block text-sm underline underline-offset-4", isOffer && "max-sm:mt-0 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center")}>Privacy policy</Link>
+        <div className={cn("mt-4 grid grid-cols-2 gap-3", isOffer && "max-sm:mt-0 max-sm:gap-2")} aria-label="Analytics choice">
+          <Button className={isOffer ? "max-sm:min-h-11 max-sm:min-w-11 max-sm:px-3" : undefined} disabled={saving} variant={mode === "off" ? "primary" : "secondary"} aria-pressed={mode === "off"} onClick={() => void save("off")}>Off</Button>
+          <Button className={isOffer ? "max-sm:min-h-11 max-sm:min-w-11 max-sm:px-3" : undefined} disabled={saving || !account.resolved} variant={mode === "full" ? "primary" : "secondary"} aria-pressed={mode === "full"} onClick={() => void save("on")}>On</Button>
+        </div>
+      </div>
+      <div role="status" className={cn("mt-2 text-sm text-muted", isOffer && "max-sm:empty:mt-0")}>{saving ? "Saving…" : error ? "Could not save. Try again." : ""}</div>
+    </section>
+  ) : null;
+  return <Context.Provider value={{
+    mode,
+    analyticsId: account.analyticsId,
+    identityKey: `${account.userId ?? "guest"}:${account.revision ?? 0}`,
+    firstVisitOffer: isOffer ? panel : null,
+    open: (opener) => {
+      returnFocusRef.current = opener;
+      focusOnOpenRef.current = true;
+      setPlacement("settings");
+    },
+    pauseRef,
+  }}>
     {connected && (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
       ? <ClerkAccount update={updateAccount} saveRef={saveRef} browserChoice={choice} failed={failedAccountSave} inherited={inheritedChoice} />
       : <ConnectedAccount update={updateAccount} saveRef={saveRef} browserChoice={choice} failed={failedAccountSave} inherited={inheritedChoice} />)}
     {children}
-    {visible && ready && <section ref={panelRef} tabIndex={-1} onKeyDown={(event) => { if (event.key === "Escape") dismiss(); }} aria-label="Usage & privacy" data-ph-no-capture className="fixed inset-x-4 bottom-4 z-50 mx-auto max-h-[calc(100dvh-2rem)] max-w-md overflow-y-auto rounded-panel border border-border-strong bg-surface-strong p-5 text-foreground shadow-hero sm:left-auto sm:right-6 sm:mx-0">
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="text-lg font-semibold">Analytics</h2>
-        <Button size="sm" variant="ghost" onClick={dismiss} aria-label="Close analytics preferences">Close</Button>
-      </div>
-      <p className="mt-2 text-sm text-muted">Usage analytics and masked session replay.</p>
-      <Link href="/privacy" className="mt-2 inline-block text-sm underline underline-offset-4">Privacy policy</Link>
-      <div className="mt-4 grid grid-cols-2 gap-3" aria-label="Analytics choice">
-        <Button disabled={saving} variant={mode === "off" ? "primary" : "secondary"} aria-pressed={mode === "off"} onClick={() => void save("off")}>Off</Button>
-        <Button disabled={saving || !account.resolved} variant={mode === "full" ? "primary" : "secondary"} aria-pressed={mode === "full"} onClick={() => void save("on")}>On</Button>
-      </div>
-      <div role="status" className="mt-2 text-sm text-muted">{saving ? "Saving…" : error ? "Could not save. Try again." : ""}</div>
-    </section>}
+    {!isOffer && panel}
   </Context.Provider>;
+}
+
+export function AnalyticsFirstVisitOffer() {
+  return useAnalyticsPreferences().firstVisitOffer;
 }
 
 export function AnalyticsSettingsButton() {
   const { open } = useAnalyticsPreferences();
   if (!ANALYTICS_FOUNDATION_ENABLED) return null;
-  return <button type="button" onClick={open} className="cursor-pointer text-muted underline-offset-4 hover:text-foreground hover:underline">Usage & privacy</button>;
+  return <button type="button" onClick={(event) => open(event.currentTarget)} className="cursor-pointer text-muted underline-offset-4 hover:text-foreground hover:underline">Usage & privacy</button>;
 }
