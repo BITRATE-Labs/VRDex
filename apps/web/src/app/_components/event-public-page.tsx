@@ -440,6 +440,7 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
           canHost={canHost === true}
           event={event}
           eventPath={eventPath}
+          hasLineup={lineup.length > 0}
           onReport={() => setReportOpen(true)}
         />
 
@@ -486,7 +487,13 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
 
         {lineup.length > 0 ? (
           <Card surface="white">
-            <h2 className="text-xl font-semibold tracking-tight">Lineup</h2>
+            <h2
+              className="scroll-mt-24 text-xl font-semibold tracking-tight focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent"
+              id="event-lineup"
+              tabIndex={-1}
+            >
+              Lineup
+            </h2>
             <ol className="mt-5 divide-y divide-border">
               {lineup.map((row) => (
                 <li className="flex min-w-0 items-center gap-4 py-4 first:pt-0 last:pb-0" key={row.key}>
