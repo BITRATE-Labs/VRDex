@@ -131,7 +131,13 @@ for (const state of [
       const artwork = (await event.getByRole("link", { name: /^Open / }).boundingBox())!;
       const action = (await interest.boundingBox())!;
       const caption = (await event.locator("p").first().boundingBox())!;
-      expect(action.y).toBeGreaterThanOrEqual(artwork.y + artwork.height);
+      if (isMobile) {
+        expect(caption.y + caption.height).toBeLessThanOrEqual(artwork.y);
+        const nextArtwork = (await page.getByTestId("discovery-event-card").nth(1).getByRole("link", { name: /^Open / }).boundingBox())!;
+        expect(artwork.y).toBeCloseTo(nextArtwork.y);
+      } else {
+        expect(action.y).toBeGreaterThanOrEqual(artwork.y + artwork.height);
+      }
       expect(caption.width).toBeCloseTo(artwork.width + 2);
     }
     if (state.includes("-no-")) {
@@ -175,5 +181,18 @@ for (const state of [
       threshold: 0.2,
       scale: "css",
     });
+    if (state === "mixed") {
+      const events = page.getByTestId("discovery-event-card");
+      const event = events.first();
+      await event.getByRole("link", { name: "ORBIT", exact: true }).focus();
+      await page.keyboard.press("Tab");
+      await expect(event.getByRole("button", { name: "Interested: ORBIT" })).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(event.getByRole("link", { name: "Prism Collective" })).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(event.getByRole("link", { name: "Aurora" })).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(events.nth(1).getByRole("link", { name: "Low Tide", exact: true })).toBeFocused();
+    }
   });
 }
