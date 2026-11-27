@@ -564,6 +564,39 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
     />
   );
   const stackOwnershipPrompt = !embedded && isPerson && !useCompactIdentity;
+  const useCommunityOwnershipFooter = !isPerson && !embedded;
+  const profileOwnership = canClaim ? (
+    <aside
+      aria-label="Profile ownership"
+      className={useCompactIdentity
+        ? cn("grid gap-2 border-t border-border py-4", useCompactCommunity ? "lg:py-2" : "px-4 sm:px-6")
+        : cn("flex flex-wrap items-center justify-between gap-x-6 gap-y-3 py-2", useCommunityOwnershipFooter && "border-t border-border pt-4")}
+    >
+      {!useCommunityOwnershipFooter
+        ? <p className={useCompactIdentity ? "text-sm font-medium text-foreground" : "text-sm text-muted"}>Unclaimed</p>
+        : null}
+      <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-2", stackOwnershipPrompt && "basis-full sm:basis-auto")}>
+        <p className={cn("text-sm text-muted", (useCompactIdentity || stackOwnershipPrompt) && "basis-full sm:basis-auto")}>
+          {isPerson ? "Is this your profile?" : "Manage this community?"}
+        </p>
+        <Link
+          className={cn(buttonVariants({ size: "sm", variant: useCompactCommunity ? "ghost" : "secondary" }), "shrink-0 whitespace-nowrap", compactContributionStyle)}
+          href={profileClaimPath(profile.slug, "profile")}
+        >
+          Claim profile
+        </Link>
+        {/* Offered to every reader of an unclaimed profile rather than
+            only to those who could act on it: this page is server
+            rendered with no viewer, and the editor handles sign-in. */}
+        <Link
+          className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "shrink-0 whitespace-nowrap", compactContributionStyle)}
+          href={`${profileBasePath}/edit`}
+        >
+          Suggest an edit
+        </Link>
+      </div>
+    </aside>
+  ) : null;
   const Shell = embedded ? Fragment : PageShell;
   return (
     <Shell>
@@ -613,7 +646,9 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                     >
                       {profile.displayName}
                     </h1>
-                    {useCompactCommunity ? <p className="mt-1 text-sm font-semibold text-foreground">Unclaimed</p> : null}
+                    {canClaim && useCommunityOwnershipFooter ? (
+                      <p className={cn("mt-1 text-sm font-semibold", useCompactCommunity ? "text-foreground" : "text-white/75")}>Unclaimed</p>
+                    ) : null}
                     {aliases.length > 0 ? (
                       <div className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-white/75">
                         <span>AKA {aliases.join(", ")}</span>
@@ -640,41 +675,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
             {useCompactCommunity && creatorLinks.length > 0 ? profileLinks : null}
           </section>
 
-          {canClaim ? (
-            <aside
-              aria-label="Profile ownership"
-              className={useCompactIdentity
-                ? cn("grid gap-2 border-t border-border px-4 py-4 sm:px-6", useCompactCommunity && "lg:py-2")
-                : "flex flex-wrap items-center justify-between gap-x-6 gap-y-3 py-2"}
-            >
-              {!useCompactCommunity
-                ? <p className={useCompactIdentity ? "text-sm font-medium text-foreground" : "text-sm text-muted"}>Unclaimed</p>
-                : null}
-
-              {canClaim ? (
-                <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-2", stackOwnershipPrompt && "basis-full sm:basis-auto")}>
-                  <p className={cn("text-sm text-muted", (useCompactIdentity || stackOwnershipPrompt) && "basis-full sm:basis-auto")}>
-                    {profile.profileType === "person" ? "Is this your profile?" : "Manage this community?"}
-                  </p>
-                  <Link
-                    className={cn(buttonVariants({ size: "sm", variant: useCompactCommunity ? "ghost" : "secondary" }), "shrink-0 whitespace-nowrap", compactContributionStyle)}
-                    href={profileClaimPath(profile.slug, "profile")}
-                  >
-                    Claim profile
-                  </Link>
-                  {/* Offered to every reader of an unclaimed profile rather than
-                      only to those who could act on it: this page is server
-                      rendered with no viewer, and the editor handles sign-in. */}
-                  <Link
-                    className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "shrink-0 whitespace-nowrap", compactContributionStyle)}
-                    href={`${profileBasePath}/edit`}
-                  >
-                    Suggest an edit
-                  </Link>
-                </div>
-              ) : null}
-            </aside>
-          ) : null}
+          {!useCommunityOwnershipFooter ? profileOwnership : null}
         </div>
 
         {profile.profileType === "person" && <HomeLiveNow key={profile.slug} performerSlug={profile.slug} />}
@@ -686,6 +687,8 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
           const content = secondarySections[section];
           return content ? <Fragment key={section}>{content}</Fragment> : null;
         })}
+
+        {useCommunityOwnershipFooter ? profileOwnership : null}
 
         {!embedded ? <ProfilePrivateRecord profilePath={profileBasePath} slug={profile.slug} community={!isPerson} profileId={profile.id as Id<"profiles"> | undefined} /> : null}
       </PageContainer>
