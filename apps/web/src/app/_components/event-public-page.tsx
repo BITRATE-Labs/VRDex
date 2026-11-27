@@ -400,6 +400,10 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
     && !bannerStyle && !event.posterImageUrl && !event.watchSurfaceEnabled
     && event.worlds.length === 0 && lineup.length === 0 && event.slots.length === 0
     && !seriesPath && !sourceUrl && event.mediaLinks.length === 0;
+  const locationLinkClassName = cn(
+    actionCardVariants({ padding: "sm" }),
+    "w-full min-w-0 [overflow-wrap:anywhere] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus sm:w-auto",
+  );
 
   const hostDetails = event.communitySlug ? (
     <Link
@@ -443,7 +447,28 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
         {event.source.sourceType === "contributor" ? <p className="text-sm text-muted">{event.source.label}</p> : null}
         <EventContributionControls eventId={event.id} reportOpen={reportOpen} onReportClose={() => setReportOpen(false)} />
         <section className={cn(styles.media, "grid grid-cols-[minmax(0,1fr)] items-start gap-4")}>
-          <div className={styles.watch}><EventWatchForEvent event={event} /></div>
+          <div className={styles.lead}>
+            <div className={styles.watch}><EventWatchForEvent event={event} /></div>
+            {event.worlds.length > 0 || sourceUrl ? (
+              <div className={cn(styles.locationLinks, "flex flex-wrap gap-2")}>
+                {event.worlds.map((world) => (
+                  <Link className={locationLinkClassName} href={`/${world.slug}`} key={world.slug}>
+                    <span className={actionLabelClassName}>{world.displayName}</span>
+                    <span className={actionMetaClassName}>World</span>
+                  </Link>
+                ))}
+                {sourceUrl ? (
+                  <a className={locationLinkClassName} href={sourceUrl} rel="noreferrer" target="_blank">
+                    <span className="flex items-start gap-2">
+                      <span className={actionLabelClassName}>{event.source.label}</span>
+                      <ExternalLink aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-accent-strong" />
+                    </span>
+                    <span className={actionMetaClassName}>Reference link</span>
+                  </a>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
           {event.posterImageUrl ? (
             <div className={cn(styles.poster, "lg:sticky lg:top-6")}>
               <a href={event.posterImageUrl} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-card border border-border bg-surface">
@@ -454,22 +479,8 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
           ) : null}
 
           {standaloneHost ? hostDetails : (
-            <Card className={styles.details} surface="white">
-              <div className="grid gap-3 text-sm">
-                {hostDetails}
-                {event.worlds.map((world) => (
-                  <Link className={cn(actionCardVariants({ variant: "accent" }), "flex items-center gap-3")} href={`/${world.slug}`} key={world.slug}>
-                    <EntityImage imageUrl={world.heroImageUrl} label={world.displayName} />
-                    <span className="min-w-0">
-                      <span className={actionLabelClassName}>
-                        {world.displayName}
-                      </span>
-                      {world.summary ? <span className="mt-1 block text-muted">{world.summary}</span> : null}
-                      <span className={actionMetaClassName}>World</span>
-                    </span>
-                  </Link>
-                ))}
-              </div>
+            <Card className={cn(styles.details, "text-sm")} surface="white">
+              {hostDetails}
             </Card>
           )}
         </section>
@@ -494,21 +505,13 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
           </Card>
         ) : null}
 
-        {seriesPath || sourceUrl || publicLinks.length > 0 ? (
+        {seriesPath || publicLinks.length > 0 ? (
           <Card surface="white">
             <Eyebrow>Links</Eyebrow>
             <div className="mt-4 grid gap-3">
               {seriesPath ? <Link className={actionCardVariants({ variant: "accent" })} href={seriesPath}>
                 <span className={actionLabelClassName}>Upcoming nights</span>
               </Link> : null}
-              {sourceUrl ? (
-                <a className={actionCardVariants({ variant: "accent" })} href={sourceUrl} rel="noreferrer" target="_blank">
-                  <span className={actionLabelClassName}>
-                    {event.source.label}
-                  </span>
-                  <span className={actionMetaClassName}>Reference link</span>
-                </a>
-              ) : null}
               {publicLinks.map((link) => link.presentation === "copy" ? (
                 <CopyValueRow compact key={`${link.type}-${link.url}`} label={link.label} value={link.url} />
               ) : (

@@ -1,6 +1,7 @@
 import { expect, test, type Locator } from "@playwright/test";
 
 const path = "/playwright-afterglow-social/events/";
+const listedSlug = "playwright-afterglow-harbor-sessions";
 const watchSlug = "playwright-afterglow-watch-room";
 const guestWatchSlug = `${watchSlug}-guest`;
 const sparseSlug = "playwright-date-only-sparse-guest";
@@ -34,6 +35,32 @@ async function renderedTimeLines(time: Locator) {
 }
 
 test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), "Public event layout fixtures run locally.");
+
+test("listed events show the world and original listing before the poster on mobile @flow @fixture", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.goto(path + listedSlug);
+
+  const main = page.getByRole("main");
+  const world = main.getByRole("link", { name: "Neon Harbor World", exact: true });
+  const reference = main.getByRole("link", { name: "Afterglow event listing Reference link", exact: true });
+  const poster = main.getByRole("link", { name: "Afterglow Harbor Sessions poster", exact: true });
+  await expect(world).toHaveAttribute("href", "/playwright-neon-harbor");
+  await expect(reference).toHaveAttribute("href", "https://example.invalid/events/afterglow-harbor-sessions");
+  await expect(reference).toHaveAttribute("target", "_blank");
+
+  for (const link of [world, reference]) {
+    await expect(link).toBeInViewport({ ratio: 1 });
+  }
+  const [referenceBox, posterBox] = await Promise.all([reference.boundingBox(), poster.boundingBox()]);
+  if (!referenceBox || !posterBox) throw new Error("Missing listed event layout");
+  expect(referenceBox.y + referenceBox.height).toBeLessThanOrEqual(posterBox.y);
+
+  await world.focus();
+  await page.keyboard.press("Tab");
+  await expect(reference).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(poster).toBeFocused();
+});
 
 for (const timezoneId of ["UTC", "America/Los_Angeles"]) {
   test.describe(`public event in ${timezoneId}`, () => {
