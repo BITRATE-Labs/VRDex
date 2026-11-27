@@ -533,6 +533,7 @@
     padding-top: 1.5rem;
   }
   .toolbar {
+    position: relative;
     gap: 0.5rem;
   }
   .toolbar h2 {
@@ -562,6 +563,11 @@
   }
   .status:empty {
     position: absolute;
+  }
+  .status:has(> .loadingMessage:only-child) {
+    position: absolute;
+    inset-block-start: 0.5rem;
+    inset-inline-end: 0;
   }
   .metadata {
     flex: 1 1 7rem;
