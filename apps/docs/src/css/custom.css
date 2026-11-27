@@ -347,6 +347,20 @@ html[class~="plugin-@easyops-cn/docusaurus-search-local"] .main-wrapper article 
   border-color: var(--ifm-color-emphasis-300);
 }
 
+html[class~="plugin-@easyops-cn/docusaurus-search-local"] .main-wrapper article[data-docs-search-destination="section"] {
+  position: relative;
+  padding-inline-start: 0.75rem;
+}
+
+html[class~="plugin-@easyops-cn/docusaurus-search-local"] .main-wrapper article[data-docs-search-destination="section"]::before {
+  position: absolute;
+  inset-block: 1rem;
+  inset-inline-start: 0;
+  inline-size: 2px;
+  background: color-mix(in srgb, var(--vrdex-docs-search-link) 32%, transparent);
+  content: "";
+}
+
 html[class~="plugin-@easyops-cn/docusaurus-search-local"] .main-wrapper article h2 {
   font-size: clamp(1.1875rem, 2.5vw, 1.375rem);
   line-height: 1.35;
@@ -365,9 +379,14 @@ html[class~="plugin-@easyops-cn/docusaurus-search-local"] .main-wrapper article 
   color: inherit;
 }
 
+html[class~="plugin-@easyops-cn/docusaurus-search-local"] .main-wrapper article h2 mark {
+  background: transparent;
+}
+
 html[class~="plugin-@easyops-cn/docusaurus-search-local"] .main-wrapper [class^="searchResultItemPath_"] {
-  color: color-mix(in srgb, var(--ifm-color-content-secondary) 75%, var(--ifm-color-content));
-  font-size: 0.875rem;
+  color: color-mix(in srgb, var(--ifm-color-content) 76%, var(--ifm-background-color));
+  margin: 0 0 0.375rem;
+  font-size: 0.8125rem;
   font-weight: 600;
 }
 

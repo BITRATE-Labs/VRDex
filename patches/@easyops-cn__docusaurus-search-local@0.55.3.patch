@@ -1,5 +1,5 @@
 diff --git a/dist/client/client/theme/SearchPage/SearchPage.jsx b/dist/client/client/theme/SearchPage/SearchPage.jsx
-index 2efb8b4817b76bfc13f70ad68d289ee4f2a6bfbf..2f810fe9366d0e5472f171bddfdc319d68bfc2f2 100644
+index 2efb8b4..263da26 100644
 --- a/dist/client/client/theme/SearchPage/SearchPage.jsx
 +++ b/dist/client/client/theme/SearchPage/SearchPage.jsx
 @@ -47,7 +47,7 @@ function SearchPageContent() {
@@ -11,7 +11,7 @@ index 2efb8b4817b76bfc13f70ad68d289ee4f2a6bfbf..2f810fe9366d0e5472f171bddfdc319d
              })();
          }
          else {
-@@ -144,7 +144,35 @@ function SearchPageContent() {
+@@ -144,37 +144,64 @@ function SearchPageContent() {
        </div>
      </React.Fragment>);
  }
@@ -48,8 +48,17 @@ index 2efb8b4817b76bfc13f70ad68d289ee4f2a6bfbf..2f810fe9366d0e5472f171bddfdc319d
      const isTitle = type === SearchDocumentType.Title;
      const isKeywords = type === SearchDocumentType.Keywords;
      const isDescription = type === SearchDocumentType.Description;
-@@ -156,17 +184,9 @@ function SearchResultItem({ searchResult: { document, type, page, tokens, metada
-     if (!isTitleRelated) {
+     const isDescriptionOrKeywords = isDescription || isKeywords;
+-    const isTitleRelated = isTitle || isDescriptionOrKeywords;
+     const isContent = type === SearchDocumentType.Content;
++    const isSection = Boolean(document.h && document.h !== "#");
+     const pathItems = (isTitle ? document.b : page.b).slice();
+     const articleTitle = (isContent || isDescriptionOrKeywords ? document.s : document.t);
+-    if (!isTitleRelated) {
++    if (pathItems[0] === "Docs") {
++        pathItems.shift();
++    }
++    if (isSection && pathItems.at(-1) !== page.t) {
          pathItems.push(page.t);
      }
 -    let search = "";
@@ -59,11 +68,26 @@ index 2efb8b4817b76bfc13f70ad68d289ee4f2a6bfbf..2f810fe9366d0e5472f171bddfdc319d
 -            params.append("_highlight", token);
 -        }
 -        search = `?${params.toString()}`;
--    }
-     return (<article className={styles.searchResultItem}>
++    if (!isSection && pathItems.at(-1) === articleTitle) {
++        pathItems.pop();
+     }
+-    return (<article className={styles.searchResultItem}>
++    const contextId = pathItems.length > 0 ? `docs-result-context-${document.i}` : undefined;
++    return (<article className={styles.searchResultItem} data-docs-search-destination={isSection ? "section" : "document"}>
++      {contextId && (<p id={contextId} className={styles.searchResultItemPath}>
++          {concatDocumentPath(pathItems)}
++        </p>)}
        <h2>
 -        <Link to={document.u + search + (document.h || "")} dangerouslySetInnerHTML={{
-+        <Link to={getResultHref(searchResult)} dangerouslySetInnerHTML={{
++        <Link to={getResultHref(searchResult)} aria-describedby={contextId} dangerouslySetInnerHTML={{
              __html: isContent || isDescriptionOrKeywords
                  ? highlight(articleTitle, tokens)
                  : highlightStemmed(articleTitle, getStemmedPositions(metadata, "t"), tokens, 100),
+         }}></Link>
+       </h2>
+-      {pathItems.length > 0 && (<p className={styles.searchResultItemPath}>
+-          {concatDocumentPath(pathItems)}
+-        </p>)}
+       {(isContent || isDescription) && (<p className={styles.searchResultItemSummary} dangerouslySetInnerHTML={{
+                 __html: highlightStemmed(document.t, getStemmedPositions(metadata, "t"), tokens, 100),
+             }}/>)}
