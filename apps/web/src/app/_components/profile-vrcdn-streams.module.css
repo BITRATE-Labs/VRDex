@@ -68,3 +68,27 @@
   font-size: 0.875rem;
   font-weight: 600;
 }
+
+.shortcutStatus {
+  display: none;
+}
+
+@media (width < 40rem) {
+  .profile:has([data-primary-vrcdn-live]) .streamShortcut {
+    padding-bottom: 0.75rem;
+  }
+
+  .profile:has([data-primary-vrcdn-live]) .shortcutStatus {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0.25rem;
+    display: block;
+    pointer-events: none;
+    color: #8ee6ae;
+    font-size: 0.625rem;
+    font-weight: 600;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+  }
+}

@@ -468,7 +468,7 @@ export async function expectPersonProfilePage(page: Page) {
   await expect(page.getByRole("heading", { name: "Watch", exact: true })).toHaveCount(0);
   // One badge per provider. The fixture is live on Twitch and on VRCDN, so a
   // single-match assertion would pass with either one of them missing.
-  const liveBadges = page.getByText("Live now", { exact: true });
+  const liveBadges = page.getByText("Live now", { exact: true }).and(page.locator(":not(nav *)"));
   await expect(liveBadges).toHaveCount(2);
   await expect(liveBadges.first()).toBeVisible();
   await expect(liveBadges.last()).toBeVisible();

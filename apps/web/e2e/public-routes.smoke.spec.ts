@@ -696,7 +696,7 @@ test.describe("fixture lookup smoke", () => {
     await expect(page.getByRole("heading", { name: "Watch", exact: true })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Open preview" })).toHaveCount(0);
     await expectProfilePlaybackLinks(page, 1);
-    await expect(page.getByText("Live now", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Live now", { exact: true }).and(page.locator(":not(nav *)"))).toHaveCount(0);
 
     await page.clock.install();
     const firstResponse = page.waitForResponse((response) =>
@@ -707,7 +707,7 @@ test.describe("fixture lookup smoke", () => {
     await page.clock.fastForward(17_000);
 
     await expect(page.getByText("VRCDN stream", { exact: true })).toBeVisible();
-    await expect(page.getByText("Live now", { exact: true })).toBeVisible();
+    await expect(page.getByText("Live now", { exact: true }).and(page.locator(":not(nav *)"))).toBeVisible();
     await expect(page.getByRole("button", { name: "Play VRCDN stream" })).toBeVisible();
     await expect(page.locator("video")).toHaveCount(0);
     expect(attempts).toBe(2);
@@ -749,10 +749,11 @@ test.describe("fixture lookup smoke", () => {
       await expect.poll(() => copiedPlayback).toBe(value);
     }
     await expect(page.getByRole("link", { exact: true, name: "VRCDN stream" })).toHaveCount(0);
-    await expect(page.getByText("Live now", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Live now", { exact: true }).and(page.locator(":not(nav *)"))).toHaveCount(0);
   });
 
   test("confirmed live VRCDN waits for two offline observations", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 760 });
     let attempts = 0;
     let releaseFirstResponse: () => void = () => {};
     const firstResponseHold = new Promise<void>((resolve) => {
@@ -771,6 +772,7 @@ test.describe("fixture lookup smoke", () => {
 
     await page.goto("/playwright-dj-aurora");
     const vrcdnBlock = page.getByRole("region", { name: "VRCDN dj-aurora", exact: true });
+    const shortcutStatus = page.getByRole("navigation", { name: "Profile sections" }).getByText("Live now", { exact: true });
     const player = page.getByRole("button", { name: "Play VRCDN" });
     const preview = page.getByRole("link", { name: "Open preview" });
     await expect(player).toBeVisible();
@@ -799,12 +801,14 @@ test.describe("fixture lookup smoke", () => {
     await expect(player).toHaveAttribute("data-lifecycle-marker", "original");
     await expect(player).toBeVisible();
     await expect(vrcdnBlock.getByText("Live now", { exact: true })).toBeVisible();
+    await expect(shortcutStatus).toBeVisible();
 
     await page.clock.fastForward(10_000);
 
     await expect.poll(() => attempts).toBe(2);
     await expect(player).toHaveCount(0);
     await expect(vrcdnBlock.getByText("Live now", { exact: true })).toHaveCount(0);
+    await expect(shortcutStatus).toBeHidden();
     await expect(vrcdnBlock.getByRole("button", { name: "Copy Quest for VRCDN dj-aurora", exact: true })).toBeVisible();
     expect(await copyPosition()).toEqual(copyBefore);
   });
