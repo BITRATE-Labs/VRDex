@@ -22,6 +22,7 @@
 .watch button [data-watch-play-poster] {
   --event-watch-fallback: linear-gradient(135deg, var(--media-raised), var(--media));
   background: var(--event-watch-fallback);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 24%);
 }
 
 .watch button [data-watch-play-control] {
@@ -79,7 +80,6 @@
     background-image: var(--event-watch-desktop-art, var(--event-watch-fallback));
     background-position: center;
     background-size: cover;
-    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 24%);
   }
 
   .media:has(> .poster) {
@@ -138,13 +138,6 @@
 
   .media:has(.watch:not(:empty) + .locationLinks):has(> .poster) .locationLinks > a {
     flex: 1 1 auto;
-  }
-
-  .media:has(.watch:not(:empty) + .locationLinks):has(> .poster) > .details {
-    padding: 0;
-    border: 0;
-    background: none;
-    box-shadow: none;
   }
 
   .lead:has(> .watch:not(:empty)) + .poster {
