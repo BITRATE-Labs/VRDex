@@ -7,7 +7,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 
 type PublicProfileAsset = PublicProfileMediaDetails["asset"];
-type CardProps = { asset: PublicProfileAsset; label: string; featured?: boolean };
+type CardProps = { asset: PublicProfileAsset; label: string; featured?: boolean; compactOnMobile?: boolean };
 export type PublicMediaDetailsState =
   | { kind: "closed" }
   | { kind: "loading" }
@@ -61,7 +61,7 @@ function MediaDetails({ state }: { state: PublicMediaDetailsState }) {
   }
 }
 
-export function PublicMediaAssetCardView({ asset, label, featured = false, state, open, onOpenChange }: CardProps & {
+export function PublicMediaAssetCardView({ asset, label, featured = false, compactOnMobile = false, state, open, onOpenChange }: CardProps & {
   state: PublicMediaDetailsState;
   open: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -72,15 +72,33 @@ export function PublicMediaAssetCardView({ asset, label, featured = false, state
   const byteSize = asset.downloadByteSize ?? asset.byteSize;
   const size = byteSize === undefined ? null : byteSize >= 1024 * 1024 ? `${(byteSize / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(byteSize / 1024))} KB`;
   const hasHistory = publicDetailsSlug(asset) !== null;
-  return <article id={`media-${asset.assetId}`} className={cn("group grid min-w-0 scroll-mt-6 overflow-hidden rounded-card border border-border bg-surface-strong text-sm transition hover:-translate-y-0.5 hover:shadow-panel", featured ? "lg:grid-cols-[minmax(0,1.35fr)_minmax(16rem,0.65fr)]" : undefined)}>
-    <div className={cn("relative bg-canvas-muted", featured ? "min-h-72" : "aspect-[4/3]")}>
-      <MediaPreviewImage alt={asset.altText || title} className="absolute inset-0 size-full object-contain" src={asset.imageUrl ?? ""} />
+  const compact = compactOnMobile && !featured;
+  return <article id={`media-${asset.assetId}`} className={cn(
+    "group grid min-w-0 scroll-mt-6 overflow-hidden rounded-card border border-border bg-surface-strong text-sm transition hover:-translate-y-0.5 hover:shadow-panel",
+    featured && "lg:grid-cols-[18rem_minmax(0,1fr)]",
+    compact && "max-sm:grid-cols-[8.5rem_minmax(0,1fr)] max-sm:items-start",
+  )}>
+    <div className={cn(
+      "relative bg-canvas-muted",
+      featured ? "h-60 sm:h-72" : "aspect-[4/3]",
+      compact && "max-sm:m-3 max-sm:aspect-square max-sm:overflow-hidden max-sm:rounded-control",
+    )}>
+      <MediaPreviewImage
+        alt={asset.altText || title}
+        className={cn("absolute inset-0 size-full object-contain", compact && "max-sm:[&:is(div)]:p-2 max-sm:[&_button]:mt-2")}
+        src={asset.imageUrl ?? ""}
+      />
     </div>
-    <div className="grid min-w-0 content-start gap-2 p-4">
-      <h3 className={cn("break-words font-medium", featured ? "text-xl" : undefined)}>{title}</h3>
-      {asset.caption ? <p className="break-words leading-6 text-muted">{asset.caption}</p> : null}
-      <a aria-label={`Download ${title}`} className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "mt-2 w-fit")} download href={asset.downloadUrl}>Download</a>
-      {hasHistory || mimeType || size || creditUrl ? <details className="mt-3 min-w-0 border-t border-border pt-3" open={open}>
+    <div className={cn("grid min-w-0 content-start p-4", compact && "max-sm:contents")}>
+      <div className={cn("grid min-w-0 gap-2", compact && "max-sm:py-3 max-sm:pr-3")}>
+        <h3 className={cn("break-words font-medium", featured && "text-xl")}>{title}</h3>
+        {asset.caption ? <p className="break-words leading-6 text-muted">{asset.caption}</p> : null}
+        <a aria-label={`Download ${title}`} className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "mt-2 w-fit")} download href={asset.downloadUrl}>Download</a>
+      </div>
+      {hasHistory || mimeType || size || creditUrl ? <details className={cn(
+        "mt-5 min-w-0 border-t border-border pt-3",
+        compact && "max-sm:col-span-full max-sm:mx-3 max-sm:mt-0 max-sm:mb-3 max-sm:pt-2",
+      )} open={open}>
         <summary onClick={onOpenChange ? event => { event.preventDefault(); onOpenChange(!open); } : undefined} className="cursor-pointer rounded-sm py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent">Details &amp; history</summary>
         {open ? <div className="grid gap-3 pt-4">
         <p className="text-xs text-muted">{[mimeType?.replace(/^image\//, "").replace("svg+xml", "svg").toUpperCase(), size].filter(Boolean).join(" / ")}</p>

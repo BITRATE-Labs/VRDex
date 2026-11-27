@@ -492,7 +492,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
             galleryAssets
               .filter((asset) => asset.assetId !== mediaKit.featuredAsset?.assetId)
               .map((asset, index) => (
-                <PublicMediaAssetCard asset={asset} key={asset.assetId} label={`Media ${index + 1}`} />
+                <PublicMediaAssetCard asset={asset} compactOnMobile key={asset.assetId} label={`Media ${index + 1}`} />
               ))
           ) : (
             <>
@@ -504,7 +504,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
           )}
           {mediaKitGalleryEnabled
             ? remainingLogos.map((asset, index) => (
-                <PublicMediaAssetCard asset={asset} key={asset.assetId} label={`Logo ${index + 1}`} />
+                <PublicMediaAssetCard asset={asset} compactOnMobile key={asset.assetId} label={`Logo ${index + 1}`} />
               ))
             : null}
         </div>
@@ -533,6 +533,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
     ) : null,
   };
 
+  const stackOwnershipPrompt = !embedded && isPerson && !useCompactIdentity;
   const Shell = embedded ? Fragment : PageShell;
   return (
     <Shell>
@@ -617,8 +618,8 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
               <p className={useCompactIdentity ? "text-sm font-medium text-foreground" : "text-sm text-muted"}>Unclaimed</p>
 
               {canClaim ? (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                  <p className={cn("text-sm text-muted", useCompactIdentity && "basis-full sm:basis-auto")}>
+                <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-2", stackOwnershipPrompt && "basis-full sm:basis-auto")}>
+                  <p className={cn("text-sm text-muted", (useCompactIdentity || stackOwnershipPrompt) && "basis-full sm:basis-auto")}>
                     {profile.profileType === "person" ? "Is this your profile?" : "Manage this community?"}
                   </p>
                   <Link

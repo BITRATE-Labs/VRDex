@@ -56,7 +56,9 @@ shared series summary is shown only once.
 The public Person profile flow verifies that a sparse record keeps identity
 and ownership actions together at 320 px and on desktop. A separate
 multi-stream fixture checks the exact clipboard destinations and accessible
-control names for both playback devices.
+control names for both playback devices. The media-kit flow covers keyboard
+disclosure, missing history, and a failed thumbnail on a 320 px layout.
+It verifies that Retry fits and that the asset keeps its download link.
 
 The signed-out contribution smoke checks how Sign in names recognized
 profile actions. Unknown or rejected return paths keep the generic heading

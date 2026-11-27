@@ -69,8 +69,28 @@ test("missing actor stays unavailable without a fabricated contributor link @flo
   await expect(card.getByRole("link", { name: "BASICBIT" })).toHaveCount(0);
 });
 
-
-
-
-
-
+test("compact secondary artwork can retry a missing preview @flow @fixture", async ({ page }) => {
+  const assetId = "fixture-aurora-primary-logo";
+  let requests = 0;
+  await page.route(`**/api/e2e/fixture-assets/${assetId}`, (route) => {
+    requests++;
+    return requests === 1 ? route.fulfill({ status: 502, body: "" }) : route.continue();
+  });
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto(`/${slug}`);
+  const card = page.locator(`article#media-${assetId}`);
+  await card.scrollIntoViewIfNeeded();
+  const retry = card.getByRole("button", { name: "Retry", exact: true });
+  await expect(card.getByText("Preview unavailable.", { exact: true })).toBeVisible();
+  const preview = card.locator(":scope > div").first();
+  const [previewBox, buttonBox] = await Promise.all([preview.boundingBox(), retry.boundingBox()]);
+  if (!previewBox || !buttonBox) throw new Error("Missing preview or retry control");
+  expect(buttonBox.y).toBeGreaterThanOrEqual(previewBox.y);
+  expect(buttonBox.y + buttonBox.height).toBeLessThanOrEqual(previewBox.y + previewBox.height);
+  await retry.click();
+  await expect(card.locator("img")).toHaveClass(/opacity-100/);
+  expect(requests).toBe(2);
+  await expect(card.getByRole("link", { name: /^Download / })).toHaveAttribute(
+    "href", `/api/v0/profiles/${slug}/assets/${assetId}/file?download=1`,
+  );
+});
