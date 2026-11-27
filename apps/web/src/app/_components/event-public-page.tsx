@@ -519,7 +519,7 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
             <Card className={styles.lineup} surface="white">
               <div className="flex items-center justify-between gap-2 sm:justify-start sm:gap-4">
                 <h2
-                  className="scroll-mt-24 text-xl font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground"
+                  className={cn(styles.lineupTitle, "scroll-mt-24 text-xl font-semibold tracking-tight")}
                   id="event-lineup"
                   tabIndex={-1}
                 >
