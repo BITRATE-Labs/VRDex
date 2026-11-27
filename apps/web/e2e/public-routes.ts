@@ -568,10 +568,18 @@ export async function expectEventWatchPage(page: Page) {
   // Deliberately not clicked through: this runs inside the snapshot spec too,
   // so a click would put a real connection to `stream.vrcdn.live` into CI and
   // capture a connecting player as the baseline.
-  await expect(
-    page.getByRole("button", { name: "Play Afterglow Watch Room", exact: true }),
-  ).toBeVisible();
+  const play = page.getByRole("button", { name: "Play Afterglow Watch Room", exact: true });
+  await expect(play.getByText("Play", { exact: true })).toBeVisible();
   await expect(page.locator("video")).toHaveCount(0);
+
+  const poster = page.getByAltText("Afterglow Watch Room poster", { exact: true });
+  await expect(poster).toBeVisible();
+  if ((page.viewportSize()?.width ?? Infinity) < 1024) {
+    await expect.poll(async () => {
+      const [playBox, posterBox] = await Promise.all([play.boundingBox(), poster.boundingBox()]);
+      return playBox !== null && posterBox !== null && playBox.y < posterBox.y;
+    }).toBe(true);
+  }
   // No open affordance for a VRCDN stream, because there is nowhere to open: the
   // service publishes no page for one. The player above is the whole surface.
   // This used to assert an `https://vrcdn.live/<id>` href, which answered 404.
