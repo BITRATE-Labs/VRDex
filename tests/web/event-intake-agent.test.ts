@@ -306,14 +306,18 @@ it("tells the agent which events these messages already produced", async () => {
   assert.match(content[1]!.text!, /friday-night/);
 });
 const usage = (body: unknown) => { const value = JSON.parse(JSON.stringify(body)); value.usage = { input_tokens: 1000, output_tokens: 200 }; return new Response(JSON.stringify(value)); };
-const capture = () => { const log = { metas: [] as unknown[], generations: [] as any[], ends: [] as any[] };
-  return { log, sink: { start(meta: unknown) { log.metas.push(meta); return { generation(g: unknown) { log.generations.push(g); }, async end(r: unknown) { log.ends.push(r); } }; } } }; };
-it("personal sources retain operational metrics without tracing request or response content", async () => {
+const capture = () => { const log = { metas: [] as unknown[], generations: [] as any[], lookups: [] as unknown[], ends: [] as any[] };
+  return { log, sink: { start(meta: unknown) { log.metas.push(meta); return { generation(g: unknown) { log.generations.push(g); }, lookup(value: unknown) { log.lookups.push(value); }, async end(r: unknown) { log.ends.push(r); } }; } } }; };
+it("personal sources retain operational metrics without tracing request, response or lineup lookup content", async () => {
   const { log, sink } = capture();
-  await extractEventIntake({ draftId: "draft", sourceText: "Private announcement https://discord.com/channels/@me/secret" }, {
+  const candidate = { ...blank(), lineup: [{ performerLabel: "Unannounced performer", personSlug: null, roleLabel: null, start: null, end: null, startDate: null, endDate: null }] };
+  const result = await extractEventIntake({ draftId: "draft", sourceText: "Private announcement https://discord.com/channels/@me/secret" }, {
     ...base, authorize: async () => ({ actorUserId: "actor", version: 1, privateSource: true }), sink,
-    fetchImplementation: async () => response(blank()),
+    search_people: async () => [{ slug: "unannounced-performer", displayName: "Unannounced performer" }],
+    fetchImplementation: async () => response(candidate),
   });
+  assert.equal(result.lineup[0]?.personSlug, "unannounced-performer");
+  assert.deepEqual(log.lookups, []);
   assert.equal(log.ends.length, 1);
   assert.equal(log.generations.length, 1);
   assert.equal(log.generations[0].request, undefined);

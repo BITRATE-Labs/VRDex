@@ -68,6 +68,22 @@ test.describe("continuous schedule @flow @fixture", () => {
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("vrdex.timeline.preferences.v1")!).plan)).toEqual([]);
   });
 
+  test("a full saved plan can clear past selections while keeping other saves", async ({ page, timelineFixture }) => {
+    const past = { kind: "event", eventId: timelineFixture.eventIds[0] };
+    const upcoming = { kind: "event", eventId: timelineFixture.eventIds[1] };
+    const unavailable = Array.from({ length: 198 }, (_, index) => ({ kind: "event", eventId: `unavailable-${index}` }));
+    await page.evaluate(plan => localStorage.setItem("vrdex.timeline.preferences.v1", JSON.stringify({
+      version: 1, plan, favoriteProfileIds: [],
+    })), [past, upcoming, ...unavailable]);
+    await page.reload();
+    const clear = page.getByRole("button", { name: "Clear past selections", exact: true });
+    await expect(clear).toBeVisible();
+    await clear.click();
+    await expect(clear).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("vrdex.timeline.preferences.v1")!).plan))
+      .toEqual([upcoming, ...unavailable]);
+  });
+
   test("dateOnlyRecordsRemainDiscoverableWithoutAgenda", async ({ page, timelineFixture }) => {
     await page.goto(`/?at=${TIMELINE_NOW - 3600000}&tz=America%2FNew_York&scheduleView=agenda&tag=a&tag=b`);
     await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready");

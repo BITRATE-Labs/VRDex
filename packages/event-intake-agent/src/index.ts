@@ -229,7 +229,8 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
         timed.questions.push({ fieldPath: "event.timezone", reason: "time_context_required", alternatives: [] });
       }
       const result = revalidate(timed, people, communities, events, Boolean(input.context));
-      await resolveLineupPeople(result, deps.search_people, lookup => handle?.lookup?.(lookup));
+      await resolveLineupPeople(result, deps.search_people,
+        authority.privateSource ? undefined : lookup => handle?.lookup?.(lookup));
       decision = result.decision;
       return EventIntakeCandidateSchema.parse(result);
     }
