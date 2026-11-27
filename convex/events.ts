@@ -2507,9 +2507,12 @@ export const getEventMediaControlStatus = query({
       .query("eventSlots")
       .withIndex("by_eventId_startAt", (query) => query.eq("eventId", event._id))
       .take(100);
+    const slotTime = new Intl.DateTimeFormat("en-US", {
+      timeZone: event.timezone ?? "UTC", hour: "numeric", minute: "2-digit", timeZoneName: "short",
+    });
     const slotState = {
       ...findEventOperationSlots(slots, args.now ?? Date.now()),
-      lineupSlots: slots.map(slot => ({ id: slot._id, label: slot.displayLabel, startAt: slot.startAt })),
+      lineupSlots: slots.map(slot => ({ id: slot._id, label: slot.displayLabel, timeLabel: slotTime.format(slot.startAt) })),
     };
 
     if (program === null) {

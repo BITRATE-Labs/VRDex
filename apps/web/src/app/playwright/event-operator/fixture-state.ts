@@ -89,7 +89,10 @@ export function operatorFixture(): FixtureStatus {
     serverNow: fixtureNow,
     canControl: true,
     outputConfigurationLocked: true,
-    lineupSlots: [{ id: fixtureId("eventSlots", "slot-a"), label: "Aurora", startAt: fixtureNow }],
+    lineupSlots: [
+      { id: fixtureId("eventSlots", "slot-a"), label: "Aurora", timeLabel: "10:00 PM UTC" },
+      { id: fixtureId("eventSlots", "slot-late"), label: "Late guest", timeLabel: "11:00 PM UTC" },
+    ],
     eventId: fixtureId("events", "event"),
     eventPath: "/playwright-afterglow-social/events/playwright-event-host-view",
     program: {

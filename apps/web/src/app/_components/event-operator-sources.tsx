@@ -325,9 +325,11 @@ export function EventOperatorSources({
       </details>
       {onAssign && control.status.lineupSlots?.length > 0 ? (
         <details onToggle={(event) => {
-          if (event.currentTarget.open && !slotId) {
+          if (event.currentTarget.open) {
             const current = control.status.currentSlot?.slotId;
-            setSlotId(current && !sources.some(source => source.eventSlotId === current) ? current : control.status.nextSlot?.slotId);
+            const fallback = current && !sources.some(source => source.eventSlotId === current)
+              ? current : control.status.nextSlot?.slotId;
+            setSlotId(selected => selected ?? fallback);
           }
         }}>
           <summary className="cursor-pointer text-sm">Assign lineup input</summary>
@@ -340,7 +342,7 @@ export function EventOperatorSources({
                 setSlotUrl("");
               }}>
                 <option value="">Choose a slot</option>
-                {control.status.lineupSlots.map(slot => <option key={slot.id} value={slot.id}>{slot.label} · {new Date(slot.startAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</option>)}
+                {control.status.lineupSlots.map(slot => <option key={slot.id} value={slot.id}>{slot.label} · {slot.timeLabel}</option>)}
               </Select>
             </Field>
             <Field>
