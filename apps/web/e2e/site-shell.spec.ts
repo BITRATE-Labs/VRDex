@@ -19,6 +19,37 @@ test("public routes share one site header and footer", async ({ page }) => {
   }
 });
 
+test("the first Tab offers a shortcut to main content", async ({ page, isMobile }) => {
+  if (isMobile) await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto("/");
+  const skipLink = page.getByRole("link", { name: "Skip to content", exact: true });
+  const nav = page.getByRole("navigation", { name: "Primary navigation" });
+  const logo = nav.getByRole("link", { name: "VRDex", exact: true });
+  const main = page.getByRole("main");
+  const heading = main.getByRole("heading", { level: 1 });
+  const restingHeadingTop = (await heading.boundingBox())?.y;
+
+  await page.keyboard.press("Tab");
+  await expect(skipLink).toBeFocused();
+  await expect(skipLink).toBeInViewport({ ratio: 1 });
+  await expect(logo).toBeInViewport({ ratio: 1 });
+  expect((await nav.boundingBox())?.y).toBeGreaterThan(44);
+  await page.keyboard.press("Tab");
+  await expect(logo).toBeFocused();
+  await expect(skipLink).not.toBeInViewport();
+  await page.keyboard.press("Shift+Tab");
+  await expect(skipLink).toBeFocused();
+
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#main-content$/);
+  await expect(main).toBeFocused();
+  await expect(main).toHaveCSS("outline-style", "none");
+  await expect(heading).toBeInViewport({ ratio: 1 });
+  expect((await heading.boundingBox())?.y).toBe(restingHeadingTop);
+  await page.keyboard.press("Tab");
+  await expect(main.getByRole("combobox", { name: "Search VRDex" })).toBeFocused();
+});
+
 for (const width of [320, 390]) {
   test(`the ${width}px header keeps search and the navigation disclosure in one row`, async ({ page }) => {
     await page.setViewportSize({ width, height: 720 });
