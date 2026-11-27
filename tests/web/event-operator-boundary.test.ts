@@ -69,7 +69,7 @@ function operatorFixture({ isAuthenticated = true, isLoading = false } = {}) {
     '@/lib/event-broadcast-observation': { eventBroadcastObservationFresh: () => false },
     '@/components/ui/button': { Button: ({ variant, size, ...props }: any) => React.createElement('button', props) },
     '@/components/ui/page-shell': { PageActions: (props: any) => React.createElement('nav', props), PageContainer: ({ max, ...props }: any) => React.createElement('div', props), PageShell: (props: any) => React.createElement('div', props) },
-    './viewer-local-event-times': { ViewerLocalEventDateTime: () => null },
+    './viewer-local-event-times': { ViewerLocalEventDateTime: () => null, useViewerTimeZone: () => "UTC" },
     './event-host-view': { EventHostView: () => null },
   });
   return { component, requests, queries, status, React };

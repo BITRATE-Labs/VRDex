@@ -2,7 +2,6 @@ import { spawn } from "node:child_process";
 import { performance } from "node:perf_hooks";
 import { createInterface } from "node:readline";
 import { createInputSupervisor } from "./input-supervisor.mjs";
-import { loadPosterHoldFrame } from "./poster-hold-frame.mjs";
 export { VIDEO_PROFILES as QUALITY_PROFILES } from "./broadcast-profiles.mjs";
 import {
   VIDEO_PROFILES as QUALITY_PROFILES,
@@ -113,7 +112,7 @@ export function createProgramRenderer({
   silenceThresholdDb,
   clock = () => performance.now(),
   createInput = createInputSupervisor,
-  posterImageUrl,
+  loadHoldFrame,
 } = {}) {
   const settings = parseMediaSettings({
     videoPreset: quality,
@@ -325,8 +324,8 @@ export function createProgramRenderer({
       });
       for (const input of inputs.values()) input.start();
       tick();
-      if (posterImageUrl) {
-        void loadPosterHoldFrame(posterImageUrl, { ffmpeg, profile, signal: posterLoad.signal })
+      if (loadHoldFrame) {
+        void loadHoldFrame({ ffmpeg, profile, signal: posterLoad.signal })
           .then(frame => { if (running) posterFrame = frame; })
           .catch(() => {}); // An unavailable poster leaves the neutral slate on air.
       }

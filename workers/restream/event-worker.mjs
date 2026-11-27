@@ -16,6 +16,7 @@ import { createInputManager } from "./input-manager.mjs";
 import { createTwitchInput } from "./twitch-input.mjs";
 import { createOperatorControl } from "./operator-control.mjs";
 import { createProgramRenderer } from "./program-renderer.mjs";
+import { loadPosterHoldFrame } from "./poster-hold-frame.mjs";
 class ControlRequestError extends Error {
   constructor(operation, category, retryable = false) {
     super("Worker control request failed");
@@ -548,8 +549,16 @@ export async function runEventWorker({
       url: env.CONVEX_URL,
       token: env.VRDEX_EVENT_MEDIA_BRIDGE_TOKEN,
     }),
-    createRenderer: (options) =>
-      options.connectionTest ? createConnectionTestRenderer({...options,onError:()=>void worker?.stop()}) : createProgramRenderer({ ...options, onError: () => void worker?.stop() }),
+    createRenderer: ({ posterImageUrl, ...options }) =>
+      options.connectionTest
+        ? createConnectionTestRenderer({ ...options, onError: () => void worker?.stop() })
+        : createProgramRenderer({
+            ...options,
+            onError: () => void worker?.stop(),
+            loadHoldFrame: posterImageUrl
+              ? (params) => loadPosterHoldFrame(posterImageUrl, params)
+              : undefined,
+          }),
     createOutputs: (options) => createOutputs({ ...options, env }),
     maxSessionMs,
     readCounters,
