@@ -177,7 +177,7 @@ function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[];
       <EventSchedule className="mt-2 sm:mt-5" empty="No events">
         {events.map((event) => (
           <EventScheduleRow
-            className="[overflow-wrap:anywhere] max-sm:gap-1 max-sm:p-3"
+            className="[overflow-wrap:anywhere] max-sm:gap-1 max-sm:p-3 sm:grid-cols-[minmax(var(--spacing-schedule-gutter),max-content)_minmax(0,1fr)]"
             details={[
               event.communityName,
               event.worlds[0]?.displayName,
@@ -202,10 +202,10 @@ function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[];
             ) : undefined}
             status={publicScheduleStatus(event, now)}
             summary={event.summary}
-            time={<ViewerLocalEventDateTime className="text-xs font-medium text-foreground" timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />}
+            time={<ViewerLocalEventDateTime className="text-xs font-medium text-foreground" groupTime timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />}
             title={publicEventPath(event) ? (
               <TrackedDiscoveryLink
-                className="rounded-control text-section text-accent-strong underline decoration-accent/55 underline-offset-4 transition hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring max-sm:flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center max-sm:gap-2 sm:text-xl"
+                className="rounded-control text-section font-semibold text-accent-strong underline decoration-accent/55 underline-offset-4 transition hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring max-sm:flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center max-sm:gap-2 sm:text-xl"
                 eventName="event_card_clicked"
                 href={publicEventPath(event)!}
                 properties={{ entity_type: "event", surface: "upcoming_events" }}
@@ -253,7 +253,10 @@ function DiscoveryCard({
         {subtitle ? <span className="text-sm text-muted">{subtitle}</span> : null}
         {result.summary ? <span className="line-clamp-2 text-sm leading-6 text-muted">{result.summary}</span> : null}
       </span>
-      <ChevronRight aria-hidden="true" className="size-4 shrink-0 self-center text-muted group-hover:text-accent-strong" />
+      <ChevronRight aria-hidden="true" className={cn(
+        "size-4 shrink-0 self-center text-muted group-hover:text-accent-strong",
+        result.profileType === "community" && (subtitle || result.summary) && "max-sm:mt-1.5 max-sm:self-start",
+      )} />
     </TrackedDiscoveryLink>
   );
 }
@@ -505,7 +508,7 @@ export function DiscoveryLandingPage({
   ) : upcomingCount === 0 ? (
     <section className={cn(
       "flex flex-wrap items-center justify-between gap-x-3 sm:justify-start sm:gap-x-5",
-      singleDirectory && "lg:justify-between lg:rounded-panel lg:border lg:border-border lg:bg-surface lg:px-4 lg:py-1.5",
+      singleDirectory && "max-sm:rounded-panel max-sm:border max-sm:border-border max-sm:bg-surface max-sm:px-3 max-sm:py-0.5 lg:justify-between lg:rounded-panel lg:border lg:border-border lg:bg-surface lg:px-4 lg:py-1.5",
     )}>
       <div className={singleDirectory ? "sm:flex sm:items-baseline sm:gap-3 lg:block" : "sm:flex sm:items-baseline sm:gap-3"}>
         <SectionTitle className="text-base tracking-tight">Upcoming events</SectionTitle>
@@ -515,6 +518,7 @@ export function DiscoveryLandingPage({
         className={cn(
           buttonVariants({ size: "sm", variant: "ghost" }),
           "min-h-11 whitespace-nowrap !text-muted underline decoration-border-strong underline-offset-4 hover:decoration-current max-sm:self-start max-sm:items-start max-sm:py-0",
+          singleDirectory && "max-sm:self-center max-sm:items-center",
         )}
         href="/events/new"
       >

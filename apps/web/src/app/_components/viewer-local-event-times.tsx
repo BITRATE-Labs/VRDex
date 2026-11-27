@@ -37,18 +37,19 @@ const timeOptions: Intl.DateTimeFormatOptions = {
   minute: "2-digit",
 };
 
-function formatTimestamp(
-  timestamp: number,
+function timestampFormatter(
   timeZone: string,
   options: Intl.DateTimeFormatOptions,
-): string {
+): Intl.DateTimeFormat {
   try {
-    return new Intl.DateTimeFormat("en", { ...options, timeZone }).format(
-      new Date(timestamp),
-    );
+    return new Intl.DateTimeFormat("en", { ...options, timeZone });
   } catch {
-    return new Intl.DateTimeFormat("en", options).format(new Date(timestamp));
+    return new Intl.DateTimeFormat("en", options);
   }
+}
+
+function formatTimestamp(timestamp: number, timeZone: string, options: Intl.DateTimeFormatOptions): string {
+  return timestampFormatter(timeZone, options).format(timestamp);
 }
 
 function shareLocalDateAndOffset(timestamp: number, reference: number, timeZone: string): boolean {
@@ -99,6 +100,7 @@ export function ViewerLocalEventDateTime({
   eventDate,
   scheduleKind,
   compactRelativeTo,
+  groupTime = false,
   timeZone: explicitTimeZone,
   showTimeZone = true,
   hour12,
@@ -108,6 +110,7 @@ export function ViewerLocalEventDateTime({
   eventDate?: string;
   scheduleKind?: "timed" | "date_only";
   compactRelativeTo?: number;
+  groupTime?: boolean;
   timeZone?: string;
   hour12?: boolean;
   showTimeZone?: boolean;
@@ -132,19 +135,27 @@ export function ViewerLocalEventDateTime({
     );
   }
 
-  return (
-    <time className={className} dateTime={new Date(timestamp).toISOString()}>
-      {formatTimestamp(
-        timestamp,
-        timeZone,
-        {
-          ...dateTimeOptions,
-          hour12,
-          timeZoneName: showTimeZone ? dateTimeOptions.timeZoneName : undefined,
-        },
-      )}
-    </time>
-  );
+  const formatter = timestampFormatter(timeZone, {
+    ...dateTimeOptions,
+    hour12,
+    timeZoneName: showTimeZone ? dateTimeOptions.timeZoneName : undefined,
+  });
+  const dateTime = new Date(timestamp).toISOString();
+  if (groupTime) {
+    const parts = formatter.formatToParts(timestamp);
+    const timeStart = parts.findIndex((part) => part.type === "hour");
+    const separator = parts[timeStart - 1];
+    if (separator?.type === "literal") {
+      return (
+        <time className={className} dateTime={dateTime}>
+          {parts.slice(0, timeStart - 1).map((part) => part.value).join("")}
+          <span className="sm:sr-only">{separator.value}</span>
+          <span className="whitespace-nowrap sm:block">{parts.slice(timeStart).map((part) => part.value).join("")}</span>
+        </time>
+      );
+    }
+  }
+  return <time className={className} dateTime={dateTime}>{formatter.format(timestamp)}</time>;
 }
 
 export function ViewerLocalEventTime({
