@@ -428,7 +428,7 @@ export function DiscoveryLandingPage({
 
   return (
     <PageShell className="max-sm:py-5">
-      <PageContainer className="gap-5 sm:gap-6" max="7xl">
+      <PageContainer className="gap-4 sm:gap-6" max="7xl">
 
         <section className="grid gap-4 pb-1 sm:gap-5 lg:grid-cols-[0.7fr_1.3fr] lg:items-center lg:py-6">
           <div>
@@ -436,7 +436,7 @@ export function DiscoveryLandingPage({
               Discover VR
             </h1>
           </div>
-          <DiscoverySearchForm className="w-full" compact surface="home" tone="default" />
+          <DiscoverySearchForm className="w-full" compact placeholder="Search VRDex" surface="home" tone="default" />
         </section>
 
         {status === "live" ? null : <DiscoveryBackendNotice kind={status} />}
@@ -444,13 +444,13 @@ export function DiscoveryLandingPage({
         {data.eventSchedule && data.eventSchedule.length > 0 ? (
           <DiscoveryEventSchedule events={data.eventSchedule} now={now} />
         ) : data.upcomingEvents.length === 0 ? (
-          <section className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-panel border border-border bg-surface px-3 py-2 sm:px-4">
-            <div>
+          <section className="flex flex-wrap items-center justify-between gap-x-3">
+            <div className="sm:flex sm:items-baseline sm:gap-3">
               <SectionTitle className="text-base tracking-tight">Upcoming events</SectionTitle>
               {status === "live" ? <p className="text-sm leading-5 text-muted">No events</p> : null}
             </div>
             <Link
-              className={cn(buttonVariants({ size: "sm", variant: "surface" }), "min-h-11")}
+              className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "min-h-11 underline decoration-border-strong underline-offset-4 hover:decoration-current")}
               href="/events/new"
             >
               Add event

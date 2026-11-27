@@ -49,10 +49,17 @@ test("approved wordmark is exact and visible on Home and both search shells @flo
   await expect(page.getByRole("banner").getByRole("button", { name: "Search", exact: true })).toBeVisible();
 });
 
-test("new Home submissions and old root bookmarks retain distinct destinations @flow @fixture", async ({ page }) => {
+test("new Home submissions and old root bookmarks retain distinct destinations @flow @fixture", async ({ page, isMobile }) => {
+  if (isMobile) await page.setViewportSize({ width: 320, height: 800 });
   await page.goto("/");
   await expectHomePage(page);
   const input = page.getByRole("combobox", { name: /Search/i });
+  if (isMobile) {
+    const submit = page.getByRole("main").getByRole("button", { name: "Search VRDex", exact: true });
+    const [inputBounds, submitBounds] = await Promise.all([input.boundingBox(), submit.boundingBox()]);
+    expect(Math.abs(inputBounds!.y - submitBounds!.y)).toBeLessThanOrEqual(1);
+    expect(Math.min(submitBounds!.width, submitBounds!.height, inputBounds!.height)).toBeGreaterThanOrEqual(44);
+  }
   await input.fill("  BASICBIT  ");
   await input.press("Enter");
   await expect(page).toHaveURL(/\/search\?q=BASICBIT$/);
@@ -72,6 +79,7 @@ test("whitespace root query keeps Home and discovery reachable @flow @fixture", 
   await page.getByRole("link", { name: "Discovery", exact: true }).click();
   await expect(page).toHaveURL(/\/discovery$/);
   await expect(page.getByRole("heading", { name: "Discover VR", exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Search VRDex", exact: true })).toHaveAttribute("placeholder", "Search VRDex");
 });
 
 test("Home search, filters, refresh and history keep URL and results aligned @flow @fixture", async ({ page }) => {

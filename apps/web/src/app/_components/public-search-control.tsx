@@ -18,10 +18,11 @@ import { searchHref, type SearchResultFilter } from "./search-view-state";
 type PublicSearchControlProps = {
   action?: string;
   className?: string;
-  compact?: boolean;
+  compact?: boolean | "mobile";
   defaultQuery?: string;
   filter?: SearchResultFilter;
   inputId?: string;
+  placeholder?: string;
   surface?: "home" | "search";
   tone?: "default" | "inverse";
 };
@@ -51,7 +52,7 @@ export function EditPublicSearchLink({ inputId }: { inputId: string }) {
 }
 
 function SearchControl({
-  action = "/search", className, compact, defaultQuery, filter = "all", inputId, surface = "search", tone = "inverse",
+  action = "/search", className, compact, defaultQuery, filter = "all", inputId, placeholder = "Search people, communities, worlds, events...", surface = "search", tone = "inverse",
 }: PublicSearchControlProps) {
   const posthog = usePostHog();
   const router = useRouter();
@@ -112,14 +113,16 @@ function SearchControl({
           autoComplete="off"
           className={cn(
             "w-full rounded-control border pr-12 pl-5 text-base outline-none focus-visible:ring-2",
-            compact ? "min-h-11 py-2 max-sm:pr-11 max-sm:pl-3" : "min-h-14 py-3",
+            compact === true ? "min-h-11 py-2" : "min-h-14 py-3",
+            compact === "mobile" && "max-sm:min-h-11 max-sm:py-2",
+            compact && "max-sm:pr-11 max-sm:pl-3",
             isInverse
               ? "border-white/25 bg-white/16 text-white placeholder:text-white/62 focus:border-white/70 focus-visible:ring-white/25"
               : "border-border bg-surface text-foreground placeholder:text-muted focus:border-accent focus-visible:ring-accent/20",
           )}
           id={inputId}
           name="q"
-          placeholder="Search people, communities, worlds, events..."
+          placeholder={placeholder}
           ref={inputRef}
           role="combobox"
           value={query}
@@ -209,9 +212,10 @@ function SearchControl({
       {filter === "all" ? null : <input name="type" type="hidden" value={filter} />}
       <button
         className={cn(
-          compact
+          compact === true
             ? cn(buttonVariants({ size: "sm", variant: "surface" }), "min-h-11 shrink-0 max-sm:w-11 max-sm:p-0 sm:px-4")
             : cn(buttonVariants({ size: "lg", variant: isInverse ? "inversePrimary" : "primary" }), "min-h-14 px-6 font-semibold"),
+          compact === "mobile" && "max-sm:min-h-11 max-sm:w-11 max-sm:shrink-0 max-sm:p-0",
         )}
         type="submit"
       >

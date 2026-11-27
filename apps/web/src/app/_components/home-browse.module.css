@@ -47,6 +47,12 @@
     padding: 22px 0;
   }
 }
+@media (width < 640px) {
+  .searchRow {
+    gap: 0.75rem;
+    padding: 12px 0;
+  }
+}
 /* Home owns the gaps between search, schedule and discovery. */
 .home > [data-home-schedule] {
   margin: 0;
