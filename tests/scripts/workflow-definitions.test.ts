@@ -280,7 +280,15 @@ describe("optional browser and visual evidence contract", () => {
     assert.equal(candidate.with.capture_screenshots, "${{ needs.visual-selection.outputs.visuals == 'true' }}");
     const preview = parseYaml(readFileSync(".github/workflows/vercel-preview-deploy.yml", "utf8"));
     assert.notEqual(candidate.secrets, "inherit");
-    assert.deepEqual(Object.keys(candidate.secrets).sort(), Object.keys(preview.on.workflow_call.secrets).sort());
+    const sandboxOnlySecrets = new Set([
+      "VERCEL_SANDBOX_PROJECT_ID",
+      "VRDEX_SANDBOX_EVENT_MEDIA_BRIDGE_TOKEN",
+      "VRDEX_SANDBOX_EVENT_OUTPUT_BROKER_TOKEN",
+    ]);
+    assert.deepEqual(
+      Object.keys(candidate.secrets).sort(),
+      Object.keys(preview.on.workflow_call.secrets).filter((name) => !sandboxOnlySecrets.has(name)).sort(),
+    );
     assert.ok(preview.concurrency.group.includes("inputs.browser_acceptance"));
     const resolve = preview.jobs["deploy-preview"].steps.find((step: { id?: string }) => step.id === "pr");
     assert.ok(preview.concurrency.group.includes("github.event_name"));

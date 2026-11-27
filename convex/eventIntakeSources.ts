@@ -134,7 +134,11 @@ export const authorizeExtraction = internalMutation({ args: { ...actor, draftId:
     if (recent.length >= 20) throw new Error("EXTRACTION_QUOTA");
     await ctx.db.insert("eventIntakeModelAttempts", { actorUserId: args.actorUserId, draftId: draft._id, createdAt: Date.now() });
   }
-  return { actorUserId: args.actorUserId, version: draft.version, privateSource: Boolean(draft.personalSubmissionId) };
+  const submission = draft.personalSubmissionId ? await ctx.db.get(draft.personalSubmissionId) : null;
+  // Discord snowflakes encode the original message time, including for old DM imports.
+  const timeSources = submission && /^\d{17,20}$/.test(submission.messageId) ? [{ id: submission.messageId, text: draft.fields.sourceText ?? "",
+    referenceInstant: new Date(Number((BigInt(submission.messageId) >> 22n) + 1420070400000n)).toISOString() }] : [];
+  return { actorUserId: args.actorUserId, version: draft.version, privateSource: Boolean(draft.personalSubmissionId), timeSources };
 } });
 export const setEvidenceHold = mutation({ args: { ...sourceArg, reportId: v.union(v.id("eventReports"), v.null()) }, returns: v.null(), handler: async (ctx, args) => {
   if (!(await getAccountFeatureAccess(ctx.db, (await requireUser(ctx)).userId)).superAdmin) throw new Error("REVIEWER_REQUIRED");

@@ -139,7 +139,7 @@ resource "aws_ecs_cluster" "worker" {
 }
 
 resource "aws_ssm_parameter" "hosted_worker_enabled" {
-  name  = "/vrdex/restream/hosted-worker/enabled"
+  name  = var.name_prefix == "vrdex-restream-sandbox" ? "/vrdex/sandbox/restream/hosted-worker/enabled" : "/vrdex/restream/hosted-worker/enabled"
   type  = "String"
   value = var.kill_switch_enabled_default ? "true" : "false"
   tags  = local.tags

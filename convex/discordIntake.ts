@@ -7,7 +7,7 @@ import { getAccountFeatureAccess } from "./_accountFeatures";
 import { requireActiveBrowserSessionSubject } from "./_browserSessionAuthority";
 import {
   buildDraftSourceText, buildSourceText, clampQuietWindowSeconds, connectDiscordAnnouncements, discordAttachmentValidator, discordBotInviteUrl, discordCommandReplies, discordIntakeEnabled,
-  DISCORD_SNOWFLAKE, discordMessagePayloadValidator, findRunLink, isConnectableChannelType, isDiscordCdnUrl, liveChannelConnectors, messageRow, messageUrl, pickPosterAttachments, quietWindowMs,
+  DISCORD_SNOWFLAKE, discordMessagePayloadValidator, findRunLink, isConnectableChannelType, isDiscordCdnUrl, liveChannelConnectors, messageReferenceInstant, messageRow, messageUrl, pickPosterAttachments, quietWindowMs,
   readableTextChannels, resolveDiscordUserId, sanitizeRunEvidence, type DiscordChannel,
 } from "./_discordIntake";
 import { discordRequest } from "./_discordRest";
@@ -122,6 +122,7 @@ export const recordMessage = internalMutation({
       } else {
         const { authorId: author, authorDisplayName, content, createdAt, attachments } = payload;
         if (author === undefined || authorDisplayName === undefined || content === undefined || createdAt === undefined || attachments === undefined) throw new ConvexError({ code: "DISCORD_INTAKE_INVALID" });
+        if (!Number.isFinite(new Date(createdAt).getTime()) || payload.editedAt !== undefined && !Number.isFinite(new Date(payload.editedAt).getTime())) throw new ConvexError({ code: "DISCORD_INTAKE_INVALID" });
         if (!existing && createdAt < connector.createdAt) continue;
         if (existing?.deletedAt !== undefined) continue;
         const stored = { content: content.slice(0, MAX_CONTENT), attachments: attachments.filter(item => isDiscordCdnUrl(item.url)) };
@@ -174,6 +175,7 @@ export const claimRun = internalMutation({
     v.object({
       kind: v.literal("run"), authorityUserId: v.id("users"), mode: connectorMode, sourceText: v.string(), modelText: v.string(), sourceUrl: v.string(),
       posters: v.array(discordAttachmentValidator),
+      timeSources: v.array(v.object({ id: v.string(), text: v.string(), referenceInstant: v.string() })),
       context: v.object({
         trigger: v.literal("discord"), communitySlug: v.string(), connectorId: v.id("eventConnectors"), mode: connectorMode,
         priorEvents: v.array(v.object({ sourceMessageId: v.string(), eventSlug: v.string() })),
@@ -255,6 +257,7 @@ export const claimRun = internalMutation({
     return {
       kind: "run" as const, authorityUserId: connector.authorityUserId, mode: connector.mode,
       sourceText: buildDraftSourceText(messages), modelText: buildSourceText(messages, run.triggerMessageIds), sourceUrl: messageUrl(newest), posters: pickPosterAttachments(triggers, unusedContext),
+      timeSources: triggers.filter(row => row.deletedAt === undefined).map(row => ({ id: row.messageId, text: row.content, referenceInstant: messageReferenceInstant(row) })),
       context: { trigger: "discord" as const, communitySlug: community.slug, connectorId: connector._id, mode: connector.mode, priorEvents },
       ...(run.draftId ? { draftId: run.draftId } : {}),
     };
@@ -352,7 +355,9 @@ export const finishRun = internalMutation({
     // A draft slug goes no further as an update: as new, the named draft's link refreshes that draft, and nothing can read the slug as an event's.
     const candidate = draftSlug ? { ...sanitized, decision: { kind: "new" as const } } : sanitized;
     // Decision new can only be about a post other than the linked event, or follow an update slug that did not resolve; staff decide both.
-    const forceHold = !named && candidate.decision.kind === "new" && (draftSlug !== null || (runLink.hasUnsourcedTrigger && link !== null) || candidate.questions.some(question => question.fieldPath === "decision.slug"));
+    const timeReview = candidate.questions.some(question => /^(event\.|lineup(?:\.|\[))/.test(question.fieldPath)
+      && /^(?:time_|relative_|clock_time_required|event_time_context_conflict|authored_date_conflict|source_timezone_required|source_reference_time_required|date_timezone_required|start_date_required|end_date_required|ambiguous_local_time|nonexistent_local_time|invalid_local_time|invalid_date|timezone_choice_required|invalid_time_arguments)/.test(question.reason));
+    const forceHold = timeReview || !named && candidate.decision.kind === "new" && (draftSlug !== null || (runLink.hasUnsourcedTrigger && link !== null) || candidate.questions.some(question => question.fieldPath === "decision.slug"));
     let result = await applyEventCandidate(ctx, {
       connector, candidate, actorUserId: connector.authorityUserId, draftId: args.draftId, link: link ?? undefined, externalId,
       expectedUpdatedAt: args.expectedUpdatedAt, idempotencyKey: args.runId, forceHold,

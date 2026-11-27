@@ -29,6 +29,7 @@ export const captureSelectedMessage = internalMutation({
   handler: async (ctx, input) => {
     const ids = [input.interactionId, input.invokerDiscordUserId, input.channelId, input.guildId, input.message.messageId, input.message.authorId].filter((id): id is string => id !== undefined);
     if (ids.some(id => !DISCORD_SNOWFLAKE.test(id)) || input.message.sourceText.length > 12_000 || input.message.attachments.length > 10) throw new ConvexError({ code: "DISCORD_INTAKE_INVALID" });
+    if (input.message.editedAt !== undefined && !Number.isFinite(new Date(input.message.editedAt).getTime())) throw new ConvexError({ code: "DISCORD_INTAKE_INVALID" });
     for (const item of input.message.attachments) {
       let url: URL;
       try { url = new URL(item.url); } catch { throw new ConvexError({ code: "DISCORD_INTAKE_INVALID" }); }
@@ -55,6 +56,7 @@ export const captureSelectedMessage = internalMutation({
     const submissionId = await ctx.db.insert("discordPersonalIntakeSubmissions", {
       actorUserId, discordUserId: input.invokerDiscordUserId, channelId: input.channelId, messageId: input.message.messageId, interactionId: input.interactionId,
       fingerprint, ...(input.message.authorId ? { authorId: input.message.authorId } : {}), ...(input.guildId ? { guildId: input.guildId } : {}),
+      ...(input.message.editedAt !== undefined ? { sourceEditedAt: input.message.editedAt } : {}),
       attachments: input.message.attachments, preparationStatus: "pending", createdAt: now, updatedAt: now, expiresAt: now + EVENT_INTAKE_DRAFT_TTL_MS,
     });
     const { draftId } = await saveIntakeDraft(ctx.db, actorUserId, { patch: { sourceText: input.message.sourceText } }, now, { personalSubmissionId: submissionId });

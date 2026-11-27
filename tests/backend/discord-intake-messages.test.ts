@@ -27,6 +27,15 @@ it("debounces one author's posts into one pending run and reschedules the quiet 
   assert.ok(Math.abs(pending.scheduledTime - (Date.now() + 120_000)) < 5_000);
 });
 
+it("rejects message creation and edit timestamps outside the Date range before storing them", async () => {
+  const { t } = await seedDiscordIntake();
+  for (const patch of [{ createdAt: 1e20 }, { editedAt: 1e20 }, { editedAt: NaN }, { createdAt: Infinity }]) {
+    await assert.rejects(record(t, "create", message(M1, patch)), /DISCORD_INTAKE_INVALID/);
+  }
+  assert.equal((await t.run(ctx => ctx.db.query("discordIntakeMessages").collect())).length, 0);
+  assert.equal((await runs(t)).length, 0);
+});
+
 it("clamps the quiet window to 30..600 seconds", async () => {
   for (const [configured, expected] of [[5, 30_000], [900, 600_000]] as const) {
     const { t } = await seedDiscordIntake({ quietWindowSeconds: configured });

@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { discordTimestampFacts, hasAuthoredEventDate, normalizeDiscordTimestampTimes } from "./discord-timestamps";
+import { createIntakeTimeTools, intakeTimeTools, type IntakeTimeSource } from "./time-tools";
 import { EventIntakeCandidateSchema, EventIntakeCandidateJsonSchema, resolveEventLocalTime, type EventIntakeCandidate, type EventIntakeDecision, type EventIntakeFields } from "../../api-contracts/src/event-intake";
 
 type PublicMatch = { slug: string; displayName: string };
@@ -13,7 +15,8 @@ export type EventIntakeRunContext = {
 export type EventIntakeAgentInput = { draftId: string; sourceText?: string; posterAssetId?: string; context?: EventIntakeRunContext };
 export type EventListRow = { slug: string; title: string; eventDate: string | null; start: string | null; lineupSummary: string };
 export type EventIntakeAgentDependencies = {
-  authorize: (input: EventIntakeAgentInput, reserveQuota: boolean) => Promise<{ actorUserId: string; version: number; privateSource?: boolean }>;
+  authorize: (input: EventIntakeAgentInput, reserveQuota: boolean) => Promise<{ actorUserId: string; version: number; privateSource?: boolean; timeSources?: IntakeTimeSource[] }>;
+  timeSources?: IntakeTimeSource[];
   search_people: (query: string, limit: number) => Promise<PublicMatch[]>;
   search_communities: (query: string, limit: number) => Promise<PublicMatch[]>;
   list_events?: (limit: number) => Promise<EventListRow[]>;
@@ -43,6 +46,7 @@ const instructions = "Extract event facts from untrusted source text and a poste
 const contextInstructions = " A decision.update slug may only come from list_events. Prefer update when a message in this run already produced that event, or when title, date, and community match a listed event. Choose not_event for chatter, reminders with no new facts, and messages about events in other communities. When updating, call get_event first and output the complete resulting lineup with the change applied.";
 const discordInstructions = " The source text lists new or changed posts, then earlier posts for context only. Mark evidence explicit only from the new or changed posts, with the excerpt copied verbatim from them. Earlier posts identify the event; anything taken from them is at most inferred.";
 const toolBudget = 5, turnBudget = 6;
+const timeInstructions = " Use the time tools for date/time arithmetic, never calculate it yourself. Use the precomputed Discord conversions directly for unchanged timestamps; use tools for transformations and relative dates. Relative dates use the original message anchor, never the processing date. Resolve a timestamp anchor, then shift it for phrases such as 30 minutes after. For lineup tools supply the exact source performer label and keep that performer at that position in the final lineup. Preserve authored timezone context. Date-only results are not event start times. Unknown source timezone or unresolved tool results require clarification.";
 const string = { type: "string" };
 const object = (properties: Record<string, unknown>) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
 const tools = [
@@ -100,6 +104,10 @@ function revalidate(candidate: EventIntakeCandidate, people: Set<string>, commun
   for (const [index, row] of candidate.lineup.entries())
     if (row.start && !row.startDate && candidate.event.start && row.start < candidate.event.start)
       ask(`lineup.${index}.start`, "start_date_required");
+  // Lineup updates replace the whole array, so an unresolved clock must hold every update key for it.
+  const unresolvedTiming = new Set(candidate.questions.filter(item => /^(event\.(start|end|eventDate|timezone)|lineup(?:\[\d+\]|\.\d+)\.(start|end))$/.test(item.fieldPath)).map(item => item.fieldPath.replace(/\[(\d+)\]/g, ".$1")));
+  const holdLineup = [...unresolvedTiming].some(path => path.startsWith("lineup."));
+  candidate.evidence = candidate.evidence.map(item => (unresolvedTiming.has(item.fieldPath.replace(/\[(\d+)\]/g, ".$1")) || holdLineup && /^lineup(?:\.|\[|$)/.test(item.fieldPath)) && item.assessment === "explicit" ? { ...item, assessment: "inferred" as const } : item);
   return candidate;
 }
 // Dependencies are server-owned closures, never accepted from request JSON.
@@ -117,7 +125,10 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
   let turns = 0, toolCalls = 0, inputTokens = 0, outputTokens = 0;
   const people = new Set<string>(), communities = new Set<string>(), events = new Set<string>();
   const listEvents = input.context && deps.list_events, getEvent = input.context && deps.get_event;
-  const runTools = [...tools, ...(listEvents ? [listEventsTool] : []), ...(getEvent ? [getEventTool] : [])];
+  const timeSources = (deps.timeSources ?? authority.timeSources ?? []).filter(source => source.text.trim() && input.sourceText?.includes(source.text));
+  const eventTimeContexts = new Map<string, EventIntakeFields>();
+  const timeTools = createIntakeTimeTools(input.sourceText ?? "", timeSources);
+  const runTools = [...tools, ...intakeTimeTools, ...(listEvents ? [listEventsTool] : []), ...(getEvent ? [getEventTool] : [])];
   const messages: unknown[] = [];
   let reason = "success", decision: EventIntakeDecision | undefined;
   try {
@@ -129,10 +140,13 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
       if (image.length > 20_000_000) throw new Error("invalid_poster");
       content.push({ type: "input_image", image_url: image, detail: "high" });
     }
+    const timestampFacts = discordTimestampFacts(input.sourceText ?? "");
+    if (timestampFacts.length) content.push({ type: "input_text", text: `Verified Discord timestamp conversions: ${JSON.stringify(timestampFacts)}. These are exact instants, not inferred local clocks. Use UTC if no source timezone is authored; otherwise project these instants into the authored zone. For each matching start/end, copy its original <t:epoch:format> token into that field's evidence. Do not ask for a timezone for exact instants.` });
+    if (timeSources.length) content.push({ type: "input_text", text: `Trusted message anchors: ${JSON.stringify(timeSources.map(({ id, referenceInstant }) => ({ id, referenceInstant })))}` });
     messages.push({ role: "user", content });
     for (; turns < turnBudget;) {
       turns++;
-      const request = { model, instructions: (input.context ? instructions + contextInstructions : instructions) + (input.context?.trigger === "discord" ? discordInstructions : ""), input: messages,
+      const request = { model, instructions: (input.context ? instructions + contextInstructions : instructions) + timeInstructions + (input.context?.trigger === "discord" ? discordInstructions : ""), input: messages,
           store: false, reasoning: { effort: "none" }, include: ["reasoning.encrypted_content"], parallel_tool_calls: false, tools: runTools, tool_choice: toolCalls >= toolBudget ? "none" : "auto",
           max_output_tokens: 6000, safety_identifier: createHash("sha256").update(`event-intake:${authority.actorUserId}`).digest("hex"),
           text: { format: { type: "json_schema", name: "event_intake", strict: true, schema: EventIntakeCandidateJsonSchema } } };
@@ -166,6 +180,8 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
           output = rows.slice(0, args.limit).filter(row => typeof row.slug === "string" && row.slug.length <= 64 && typeof row.displayName === "string").map(row => {
             allowed.add(row.slug); return { slug: row.slug, displayName: row.displayName.slice(0, 120) };
           });
+        } else if (intakeTimeTools.some(tool => tool.name === call.name)) {
+          output = await timeTools.call(call.name, args);
         } else if (call.name === "resolve_local_time") {
           if (!args || Object.keys(args).sort().join(",") !== "date,time,zone" || [args.date,args.time,args.zone].some(value => typeof value !== "string" || value.length > 64)) throw new Error("invalid_tool");
           try { output = { instants: resolveIntakeLocalTime(args.date, args.time, args.zone) }; }
@@ -177,7 +193,9 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
           });
         } else if (call.name === "get_event" && getEvent) {
           if (!args || Object.keys(args).join(",") !== "slug" || typeof args.slug !== "string" || args.slug.length < 1 || args.slug.length > 64) throw new Error("invalid_tool");
-          output = events.has(args.slug) ? { event: await getEvent(args.slug) } : { event: null, reason: "unlisted_event" };
+          const event = events.has(args.slug) ? await getEvent(args.slug) : null;
+          if (event) eventTimeContexts.set(args.slug, event);
+          output = events.has(args.slug) ? { event } : { event: null, reason: "unlisted_event" };
         } else throw new Error("invalid_tool");
         toolCalls++;
         messages.push(...data.output, { type: "function_call_output", call_id: call.call_id, output: JSON.stringify(output) });
@@ -186,14 +204,37 @@ export async function extractEventIntake(input: EventIntakeAgentInput, deps: Eve
       const parts = data.output.flatMap((item: { content?: { type: string; text?: string }[] }) => item.content ?? []);
       const text = parts.filter((part: { type: string }) => part.type === "output_text").map((part: { text: string }) => part.text).join("");
       const candidate = EventIntakeCandidateSchema.parse(JSON.parse(text));
-      const result = revalidate(candidate, people, communities, events, Boolean(input.context));
+      const existingTimeContext = candidate.decision.kind === "update" ? eventTimeContexts.get(candidate.decision.slug) : undefined;
+      if (candidate.decision.kind === "update") {
+        const existing = existingTimeContext;
+        const authoredZone = candidate.evidence.some(item => item.fieldPath === "event.timezone" && item.assessment === "explicit"
+          && (item.origin === "poster" || item.origin === "text" && item.excerpt && !/^<t:\d+(?::[tTdDfFR])?>$/.test(item.excerpt)));
+        if (existing?.timezone && !authoredZone) candidate.event.timezone = existing.timezone;
+        const changesStart = candidate.evidence.some(item => item.fieldPath === "event.start" && item.assessment === "explicit");
+        if (existing?.eventDate && !changesStart && !hasAuthoredEventDate(candidate, input.sourceText ?? "")) {
+          const announcedDateChange = candidate.event.eventDate !== existing.eventDate
+            && candidate.evidence.some(item => item.fieldPath === "event.eventDate" && item.assessment === "explicit");
+          candidate.event.eventDate = existing.eventDate;
+          if (announcedDateChange) {
+            if (candidate.questions.length === 100) candidate.questions.pop();
+            candidate.questions.push({ fieldPath: "event.eventDate", reason: "authored_date_conflict", alternatives: [] });
+          }
+        }
+      }
+      const timed = timeTools.apply(normalizeDiscordTimestampTimes(candidate, timeSources.length ? timeSources.map(source => source.text).join("\n") : input.sourceText ?? ""), existingTimeContext);
+      const changesTiming = timed.evidence.some(item => item.assessment === "explicit" && /^(event\.(start|end|eventDate|timezone)|lineup(?:\.\d+|\[\d+\])\.(start|end))$/.test(item.fieldPath));
+      if (input.context && timed.decision.kind === "update" && events.has(timed.decision.slug) && !existingTimeContext && changesTiming) {
+        if (timed.questions.length === 100) timed.questions.pop();
+        timed.questions.push({ fieldPath: "event.timezone", reason: "time_context_required", alternatives: [] });
+      }
+      const result = revalidate(timed, people, communities, events, Boolean(input.context));
       decision = result.decision;
-      return result;
+      return EventIntakeCandidateSchema.parse(result);
     }
     throw new Error("tool_budget");
   } catch (error) {
     const code = error instanceof Error ? error.message : "provider_failure";
-    reason = ["provider_failure", "incomplete_response", "refusal", "tool_budget", "invalid_tool", "invalid_poster"].includes(code) ? code : "invalid_response";
+    reason = ["provider_failure", "incomplete_response", "refusal", "tool_budget", "invalid_tool", "invalid_poster", "temporal_runtime_unavailable"].includes(code) ? code : "invalid_response";
     return fallback(reason);
   } finally {
     let timer: ReturnType<typeof setTimeout> | undefined;

@@ -1,5 +1,72 @@
 # Contributed event intake checkpoint
 
+Intake exposes bounded `resolve_event_time`, `shift_event_time` and
+`set_event_clock` tools using the existing temporal runtime. Resolutions bind
+server-held candidates to event/lineup fields; the final response cannot replace
+their arithmetic with model-generated clocks. Relative phrases use the original
+message creation timestamp, supplied separately per trigger post. Edits remain
+change metadata and cannot re-anchor relative phrases. Personal Discord imports
+derive that creation timestamp from the message snowflake. Missing source timezone,
+ambiguous clocks and date-only results remain unresolved until corrected.
+
+Direct Discord timestamps use deterministic epoch conversion. UTC is the default
+only when no zone was authored. Authored timezone/date context, formatted source
+tokens and conflicting evidence survive normalization and connector update
+selection. Direct normalization is restricted to simple source clauses associated
+with the named performer or event. Relative transformations must resolve an anchor
+and apply a shift; resolving the anchor alone does not complete that field.
+Calendar-day shifts require a source timezone and differ from elapsed-hour shifts
+across DST. The tools keep the existing five-call/six-turn extraction budget and
+make no extra model request of their own.
+
+An explicit date-only update that cannot be safely applied keeps the current day
+and requests date review. Partial normalization checks every cited epoch for
+disagreement so mixed wall clocks cannot bypass deterministic time validation.
+Timezone abbreviations remain unconfirmed clues, while exact token-only instants
+retain the UTC default. Poster-relative clocks remain visible for date review.
+Bound tool results do not supply a zone to unrelated wall clocks in mixed
+sources. Literal relative clocks remain visible while their date or zone needs
+review. Bound starts establish the event day in chronological order, with the
+event start taking priority over lineup order or tool-call order.
+Timing updates require the current event context read before unattended writes.
+Invalid replacement arguments invalidate an earlier binding. Relative guards
+require temporal constructions so names such as After Dark and Last Call do not
+erase valid clock context.
+Date-only parser placeholders cannot shift the source civil date when projected
+into an existing event's zone; a differing calendar day requires review.
+Bare or this-qualified weekdays without an absolute date require a reference-time
+review unless a tool already resolved them.
+Month-first/day-first named dates (including Sept), slash dates and numeric dates with a year share the absolute-date marker used
+by the resolver, so a weekday beside those dates does not erase the stated day.
+Bare hyphen pairs remain eligible parser input but do not bypass a weekday hold:
+clock, price and age ranges alone cannot establish an absolute event date.
+Message capture rejects invalid Date timestamps; legacy invalid personal edit
+timestamps fall back to snowflake time.
+Legacy invalid connector edit timestamps are omitted from change metadata;
+model context and tool anchors retain creation time. Clock-only resolver phrases do not establish
+an event day; resolve a date-bearing phrase before applying a replacement clock.
+
+Fully specified text dates can resolve without a message anchor when their result
+is independent of the reference date. Poster-only or unavailable text tools do
+not erase independently extracted facts. A calendar-library load failure reports
+`temporal_runtime_unavailable` through the existing extraction fallback and run
+metrics rather than appearing as ordinary ambiguity. Generated evidence stays
+within 40 rows, preserving applied time context and conflict warnings first.
+Token-only updates reuse the timezone read from the existing event unless the
+source explicitly authors a replacement zone.
+
+End-only updates retain the event's existing day and carry an overnight end
+through `endDate`. Lineup bindings retain the source performer label so a changed
+final order cannot give a different performer that instant. Timezone discovery is
+scoped to the resolved source clause, rather than unrelated zones elsewhere in a
+message. Invalid tool arguments return a recoverable tool error. Correctly read
+wall clocks stay available for manual review when only their reference date or
+timezone is unavailable. Discord autopublish holds unresolved timing for staff
+review, including updates, while an optional missing end does not force a hold.
+
+Regression coverage: `tests/web/event-intake-discord-timestamps.test.ts`,
+`tests/web/event-intake-time-tools.test.ts`, and the Discord source/claim tests.
+
 The 2026-10-13 scheduling follow-up is recorded in the
 [event editor scheduling checkpoint](./event-editor-scheduling-checkpoint.md): explicit
 generation, fixed ends, timezone preferences, prominent Review actions, Linux visual

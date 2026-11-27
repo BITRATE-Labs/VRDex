@@ -1,0 +1,18 @@
+name_prefix                     = "vrdex-restream-sandbox"
+convex_url                      = "https://quick-yak-167.convex.cloud"
+managed_output_secret_namespace = "vrdex/sandbox/broadcast/"
+max_concurrent_workers          = 1
+max_session_seconds             = 900
+enable_event_media_bridge       = false
+kill_switch_enabled_default     = false
+
+vercel_output_broker = {
+  project_name = "vr-dex-sandbox"
+  role_name    = "vrdex-vercel-sandbox-broadcast-output"
+  environment  = "preview"
+}
+
+# Enable the bridge after the matching worker image and Lambda ZIP are published
+# to this stack's repository and private artifact bucket. Use the sandbox token
+# ARN and a digest in event_media_bridge. Keep credential_refs empty.
+event_media_bridge_schedule_enabled = false

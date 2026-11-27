@@ -58,6 +58,7 @@ export const listPage = query({
     const page: InventoryRow[] = [];
     const managementByCommunity = new Map<Id<"profiles">, Promise<boolean>>();
     for (const event of candidates.page) {
+      if (event.draftDiscardedAt !== undefined) continue;
       const communityId = event.communityProfileId;
       let managed = false;
       if (communityId && communities.some(entry => entry.profile._id === communityId)) {
