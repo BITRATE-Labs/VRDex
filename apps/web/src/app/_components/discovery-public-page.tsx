@@ -152,11 +152,27 @@ function ResultImage({ result, quietFallback = false }: { result: PublicSearchRe
   );
 }
 
+function DiscoveryUpcomingEventsHeading({ title }: { title: string }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <SectionTitle className="max-sm:text-xl">{title}</SectionTitle>
+      <Link
+        className={cn(
+          buttonVariants({ size: "sm", variant: "ghost" }),
+          "min-h-11 shrink-0 whitespace-nowrap !text-muted underline decoration-border-strong underline-offset-4 hover:decoration-current",
+        )}
+        href="/events/new"
+      >
+        Add event
+      </Link>
+    </div>
+  );
+}
+
 function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[]; now: number }) {
   return (
     <section className="min-w-0 border-t border-border pt-6">
-      <SectionTitle>Upcoming events</SectionTitle>
-      <Link href="/events/new" className="inline-flex min-h-11 items-center rounded-control text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-accent-strong">Add event</Link>
+      <DiscoveryUpcomingEventsHeading title="Upcoming events" />
       <EventSchedule className="mt-5" empty="No events">
         {events.map((event) => (
           <EventScheduleRow
@@ -407,14 +423,17 @@ function DiscoverySection({
 }) {
   return (
     <section className="min-w-0 border-t border-border pt-6">
-      <SectionTitle
-        className={headingId ? "scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent" : undefined}
-        id={headingId}
-        tabIndex={headingId ? -1 : undefined}
-      >
-        {title}
-      </SectionTitle>
-      {surface === "upcoming_events" ? <Link href="/events/new" className="inline-flex min-h-11 items-center rounded-control text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-accent-strong">Add event</Link> : null}
+      {surface === "upcoming_events" ? (
+        <DiscoveryUpcomingEventsHeading title={title} />
+      ) : (
+        <SectionTitle
+          className={headingId ? "scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent" : undefined}
+          id={headingId}
+          tabIndex={headingId ? -1 : undefined}
+        >
+          {title}
+        </SectionTitle>
+      )}
       <div className={cn("mt-5 grid gap-4", columns === "responsive" ? "lg:grid-cols-2" : undefined)}>
         {results.length === 0 ? (
           <p className="text-sm leading-6 text-muted">{empty}</p>

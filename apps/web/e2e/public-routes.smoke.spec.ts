@@ -87,6 +87,26 @@ test("featured world fits the narrow discovery viewport", async ({ page }) => {
     .toBe(320);
 });
 
+test("mobile discovery keeps Add event alongside the populated upcoming heading", async ({ page }) => {
+  test.skip(isHostedRun, "The populated event schedule uses a local fixture.");
+
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.goto("/discovery");
+
+  const heading = page.getByRole("heading", { name: "Upcoming events", exact: true });
+  const section = heading.locator("xpath=ancestor::section[1]");
+  const addEvent = section.getByRole("link", { name: "Add event", exact: true });
+  await expect(addEvent).toHaveAttribute("href", "/events/new");
+  await expect(section.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true })).toBeVisible();
+
+  const [headingBounds, actionBounds] = await Promise.all([heading.boundingBox(), addEvent.boundingBox()]);
+  if (!headingBounds || !actionBounds) throw new Error("Missing Discovery event header bounds");
+  expect(actionBounds.height).toBeGreaterThanOrEqual(44);
+  expect(actionBounds.x).toBeGreaterThanOrEqual(headingBounds.x + headingBounds.width);
+  expect(actionBounds.y).toBeLessThan(headingBounds.y + headingBounds.height);
+  expect(headingBounds.y).toBeLessThan(actionBounds.y + actionBounds.height);
+});
+
 test("mobile discovery jumps to the directory without hiding the heading", async ({ page }) => {
   test.skip(isHostedRun, "The populated discovery directory uses a local fixture.");
 
