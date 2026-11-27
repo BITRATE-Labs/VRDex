@@ -3,6 +3,7 @@ import { publicScheduleStatus } from "../../../../../convex/_eventRuntime";
 
 import { DiscoveryFeatureGate, DiscoverySearchForm, TrackedDiscoveryLink } from "./discovery-analytics";
 import { HomeActiveWorldsSection, type PublicActiveWorld } from "./home-active-worlds";
+import { EditPublicSearchLink } from "./public-search-control";
 import { searchHref, type SearchResultFilter } from "./search-view-state";
 import { SearchViewShell } from "./search-view-shell";
 import { PublicSearchResultDetails } from "./public-search-result-details";
@@ -232,7 +233,7 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
       <TrackedDiscoveryLink
         className={cn(
           "group flex gap-4 rounded-panel p-4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-strong",
-          result.claimEntryPath && "max-sm:pb-2",
+          result.claimEntryPath && "pb-2",
         )}
         eventName={result.entityType === "event" ? "event_card_clicked" : "search_result_clicked"}
         href={result.routePath}
@@ -258,7 +259,7 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
       </TrackedDiscoveryLink>
       {result.person ? <PublicSearchResultDetails person={result.person} /> : null}
       {result.claimEntryPath ? (
-        <div className="px-4 max-sm:w-fit sm:border-t sm:border-border">
+        <div className="w-fit px-4">
           <Link
             className="inline-flex min-h-11 items-center rounded-control text-sm font-medium text-muted underline decoration-border-strong underline-offset-4 hover:text-accent-strong hover:decoration-current focus-visible:outline-2 focus-visible:outline-accent-strong"
             href={result.claimEntryPath}
@@ -486,17 +487,18 @@ export function SearchResultsPage({
   status: DiscoveryStatus;
 }) {
   const hasQuery = Boolean(query.trim());
+  const inputId = "standard-search-query";
   const filters: SearchResultFilter[] = ["all", "event", "person", "community", "world"];
 
   return (
     <SearchViewShell
       activeView="standard"
       className="max-sm:py-5"
-      searchControl={<DiscoverySearchForm className="max-w-3xl" compact defaultQuery={query} filter={activeFilter} surface="search" tone="default" />}
+      searchControl={<DiscoverySearchForm className="max-w-3xl" compact defaultQuery={query} filter={activeFilter} inputId={inputId} surface="search" tone="default" />}
     >
         {activeFilter === "event" ? <Link className={buttonVariants({ variant: "primary" })} href="/events/new">Add event</Link> : null}
         {hasQuery ? (
-          <section aria-describedby="search-results-query" aria-label="Search results" className="space-y-4 sm:space-y-5">
+          <section aria-describedby="search-results-query" aria-label="Search results" className="w-full max-w-3xl space-y-4 sm:space-y-5">
             <p className="sr-only" id="search-results-query">Results for {query}</p>
             <div className="flex flex-wrap items-center gap-3">
               <nav aria-label="Entity type" className="flex flex-wrap gap-1 sm:gap-2">
@@ -531,11 +533,14 @@ export function SearchResultsPage({
                 ) : null}
               </Card>
             ) : results.length === 0 ? (
-              <Card surface="dashed">
-                <p className="text-pretty font-medium">No public results matched that search yet.</p>
-                <p className="mt-2 text-pretty text-sm leading-6 text-muted">
-                  Try a community name, DJ alias, world name, event title, genre, or scene term.
-                </p>
+              <Card className="flex flex-wrap items-center justify-between gap-4" surface="strong">
+                <div className="min-w-0 flex-[1_1_16rem]">
+                  <p className="text-pretty font-semibold">No public results matched that search yet.</p>
+                  <p className="mt-2 text-pretty text-sm leading-6 text-muted">
+                    Try a community name, DJ alias, world name, event title, genre, or scene term.
+                  </p>
+                </div>
+                <EditPublicSearchLink inputId={inputId} />
               </Card>
             ) : (
               <div className="grid gap-4">
