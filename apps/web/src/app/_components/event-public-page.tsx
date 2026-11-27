@@ -437,7 +437,7 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
                     {row.performer ? (
                       <Link className={cn(inlineActionClassName, "[overflow-wrap:anywhere]")} href={`/${row.performer.slug}`}>{row.displayLabel}</Link>
                     ) : <span className="font-semibold [overflow-wrap:anywhere]">{row.displayLabel}</span>}
-                    {row.roleLabel ? <div className="mt-1 text-sm text-muted">{row.roleLabel}</div> : null}
+                    {row.roleLabel && row.roleLabel.trim().toLowerCase() !== "participant" ? <div className="mt-1 text-sm text-muted">{row.roleLabel}</div> : null}
                     {row.startAt !== undefined ? <ViewerLocalEventTimeRange className="mt-1 block text-sm text-muted" endAt={row.endAt} startAt={row.startAt} /> : null}
                   </div>
                 </li>

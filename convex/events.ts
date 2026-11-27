@@ -4,7 +4,7 @@ import { validateAllocationSnapshot } from '../workers/restream/worker-allocatio
 import {resolveControlTarget,admitControlOperation,cancelControlOperation,isControl,supersedePending,findControlRequest,recordControlRequest} from "./_eventBroadcastControl";
 import {canManageEventMedia} from "./_eventBroadcastAuthority";
 import { NEW_PROGRAM_MEDIA_SETTINGS, parseMediaSettings, resolveDestinationProfile } from "../workers/restream/broadcast-profiles.mjs";
-import { broadcastInputValidator, authoredBroadcastInput, eventProfileBroadcastInputChoices, resolveBroadcastInput, broadcastInputPublicUrl, eventMediaSourceBroadcastInput, eventMediaSourceProjectionAvailable, listUsableEventMediaSources } from "./_eventBroadcastSources";
+import { broadcastInputValidator, authoredBroadcastInput, eventProfileBroadcastInputChoices, resolveBroadcastInput, broadcastInputPublicUrl, eventMediaSourceBroadcastInput, eventMediaSourceProjectionAvailable, listUsableEventMediaSources, resetSlotAssignmentForPerformerChange } from "./_eventBroadcastSources";
 import { sanitizeTwitchOutput, getTwitchOutputAccount, listTwitchOutputAccounts, eventOutputIsAuthorized } from './_eventOutputSetup';
 import { EVENT_BROADCAST_MAX_OUTPUTS, validateBroadcastPolicy, allocateSessionCommandSequence, settleTerminalSessionCommands, requireEventMediaBridgeToken } from "./_eventBroadcastInputs";
 import { dateOnlyEventsEnabled, eventDateForInstant, eventSortAt, eventSortEndAt, normalizeEventSchedule, publicEventSchedule, requireDateOnlyEventsEnabled } from "./_eventSchedule";
@@ -778,6 +778,7 @@ async function replaceEventSlots(
     const previousInputSlot = preservedSlot ?? existing.find(previous => previous.position === slot.position);
     const broadcastInput = authoredBroadcastInput({ value: slot.broadcastInput, previous: previousInputSlot?.broadcastInput, samePerson: previousInputSlot !== undefined && previousInputSlot.personProfileId === personProfileId, profile: profile ?? previousProfile });
     if (preservedSlot !== undefined) {
+      await resetSlotAssignmentForPerformerChange(db, preservedSlot, { personProfileId, displayLabel: slot.displayLabel }, now);
       await db.patch(preservedSlot._id, {
         broadcastInput,
         selectedStreamId: slot.selectedStreamId,

@@ -301,6 +301,30 @@ test("a saved event feed can drive multiple timed slots and override the perform
   assert.equal(afterClearing.sources.some(source => source.sourceId === lateSlot.sourceId), false);
 });
 
+test("a changed performer retires its saved feed without changing the slot ID", async () => {
+  const { t, owner, event } = await fixture();
+  const currentSlug = event.slug;
+  const row = { clientKey: "guest", position: 0, performerLabel: "Guest", personSlug: "guest", startAt };
+  const update = (lineup: (typeof row)[]) => owner.mutation(api.events.updateCommunityEvent, {
+    currentSlug, communitySlug: "club", lineup,
+  });
+  await update([row]);
+  const saved = await owner.mutation(api.eventMediaSources.create, { currentSlug, label: "Guest feed", url: "vrcdn:guest" });
+  const before = await owner.query(api.events.getEventMediaControlStatus, { currentSlug });
+  const slotId = before.lineupSlots[0]!.id;
+  await owner.mutation(api.eventMediaSources.assignToSlot, { currentSlug, slotId, sourceId: saved.sourceId });
+  await update([{ ...row, startAt: startAt + 300000 }]);
+  const afterReschedule = await owner.query(api.events.getEventMediaControlStatus, { currentSlug });
+  assert.equal(afterReschedule.sources.some(source => source.key === `override-${slotId}`), true);
+  await update([{ ...row, personSlug: "other", performerLabel: "New performer" }]);
+  await update([row]);
+  const afterRevert = await owner.query(api.events.getEventMediaControlStatus, { currentSlug });
+  assert.equal(afterRevert.lineupSlots[0]!.id, slotId);
+  assert.equal(afterRevert.sources.some(source => source.key === `override-${slotId}`), false);
+  assert.equal(await t.run(async ({ db }) => (await db.query("eventMediaSources")
+    .withIndex("by_eventSlotId", q => q.eq("eventSlotId", slotId)).first())?.state), "disabled");
+});
+
 test("legacy API slot writes preserve omitted broadcast choices without browser snapshot IDs", async () => {
   const { t, owner, event } = await fixture();
   const row = { displayLabel: "Guest", personSlug: "guest", startAt };

@@ -379,6 +379,15 @@ export const acknowledgeCommand = mutation({
         return { accepted: true as const, duplicate: false };
     },
 });
+function posterForWorker(event: Doc<"events">): string | undefined {
+    if (!event.posterImageUrl?.startsWith(`/api/v0/events/${event._id}/artwork/`)) return event.posterImageUrl;
+    try {
+        return new URL(event.posterImageUrl, process.env.SITE_URL ?? "https://vrdex.net").href;
+    } catch {
+        return undefined;
+    }
+}
+
 async function configuration(ctx: MutationCtx, { session, program, event }: NonNullable<Awaited<ReturnType<typeof records>>>) {
     const authored = await ctx.db.query("eventSlots").withIndex("by_eventId_startAt", q => q.eq("eventId", event._id)).take(65);
     if (authored.length > 64)
@@ -441,9 +450,7 @@ async function configuration(ctx: MutationCtx, { session, program, event }: NonN
         await ctx.db.patch(session._id, { runtimeDeadlineAt: deadline });
     return {
         connectionTest: session.connectionTest,
-        posterImageUrl: event.posterImageUrl?.startsWith(`/api/v0/events/${event._id}/artwork/`)
-            ? new URL(event.posterImageUrl, process.env.SITE_URL ?? "https://vrdex.net").href
-            : event.posterImageUrl,
+        posterImageUrl: posterForWorker(event),
         programId: program._id, eventId: event._id, outputId: session.outputId,
         committedIntent:session.committedIntent,intentSequence:session.intentSequence,
         lineupCursor:session.lineupCursor,

@@ -107,6 +107,8 @@ settings apply on the next start.
 
 In Broadcast controls, **Assign lineup input** sets a timed slot to a saved event input or a pasted playback URL. Operators can fill an unassigned slot during a broadcast. The worker uses it as soon as it refreshes the schedule in Automatic mode. If an operator took the link manually, **Return to auto** selects the assigned input for the current slot. An existing assignment can be cleared once it is off air and no switch to it is pending. Stop the broadcast to replace an existing input. The assignment takes precedence over the performer's profile input and works for unlinked performers. The same feed can be assigned to multiple slots. Choose **Automatic** to clear an assignment and restore the profile fallback. Clear or reassign all slots using a saved input before replacing or removing it.
 
+Replacing the performer clears the assignment. Rescheduling the same performer preserves it.
+
 The editor's Broadcast input field is separate from performer-sequence Stream.
 It uses `getPersonBroadcastInputChoices({personSlug})`, preserves unavailable
 explicit inputs, and emits null only for an explicit reset. Untimed conversion,
