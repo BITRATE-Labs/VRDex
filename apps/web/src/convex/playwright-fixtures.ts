@@ -1845,6 +1845,10 @@ export function getPlaywrightPublicEventFixture(slug: string): PublicEvent | nul
     return publicEvent;
   }
 
+  if (slug === playwrightGuestEventSlugs.listed) {
+    return { ...publicEvent, id: "event-" + slug, slug };
+  }
+
   if (slug === eventWatchSlug) {
     return publicWatchEvent;
   }
