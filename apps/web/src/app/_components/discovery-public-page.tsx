@@ -202,10 +202,10 @@ function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[];
             ) : undefined}
             status={publicScheduleStatus(event, now)}
             summary={event.summary}
-            time={<ViewerLocalEventDateTime timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />}
+            time={<ViewerLocalEventDateTime className="text-xs font-medium text-foreground" timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />}
             title={publicEventPath(event) ? (
               <TrackedDiscoveryLink
-                className="rounded-control text-section text-accent-strong underline decoration-accent/55 underline-offset-4 transition hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring max-sm:flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center max-sm:gap-2"
+                className="rounded-control text-section text-accent-strong underline decoration-accent/55 underline-offset-4 transition hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring max-sm:flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center max-sm:gap-2 sm:text-xl"
                 eventName="event_card_clicked"
                 href={publicEventPath(event)!}
                 properties={{ entity_type: "event", surface: "upcoming_events" }}
@@ -503,8 +503,11 @@ export function DiscoveryLandingPage({
   const upcoming = eventSchedule ? (
     <DiscoveryEventSchedule events={eventSchedule} now={now} />
   ) : upcomingCount === 0 ? (
-    <section className="flex flex-wrap items-center justify-between gap-x-3 sm:justify-start sm:gap-x-5">
-      <div className="sm:flex sm:items-baseline sm:gap-3">
+    <section className={cn(
+      "flex flex-wrap items-center justify-between gap-x-3 sm:justify-start sm:gap-x-5",
+      singleDirectory && "lg:justify-between lg:rounded-panel lg:border lg:border-border lg:bg-surface lg:px-4 lg:py-1.5",
+    )}>
+      <div className={singleDirectory ? "sm:flex sm:items-baseline sm:gap-3 lg:block" : "sm:flex sm:items-baseline sm:gap-3"}>
         <SectionTitle className="text-base tracking-tight">Upcoming events</SectionTitle>
         {status === "live" ? <p className="text-sm leading-5 text-muted">No events</p> : null}
       </div>
@@ -538,9 +541,9 @@ export function DiscoveryLandingPage({
 
   return (
     <PageShell className="max-sm:py-5">
-      <PageContainer className="gap-4 sm:gap-6" max={singleDirectory ? "3xl" : "7xl"}>
+      <PageContainer className={cn("gap-4 sm:gap-6", singleDirectory && "lg:max-w-[40rem]")} max={singleDirectory ? "3xl" : "7xl"}>
 
-        <section className={cn("grid gap-4 pb-1 sm:gap-5 lg:items-center lg:py-6", singleDirectory ? "lg:grid-cols-[auto_minmax(0,1fr)]" : "lg:grid-cols-[0.7fr_1.3fr]")}>
+        <section className={cn("grid gap-4 pb-1 sm:gap-5 lg:items-center", singleDirectory ? "lg:grid-cols-[auto_minmax(0,1fr)] lg:py-3" : "lg:grid-cols-[0.7fr_1.3fr] lg:py-6")}>
           <div>
             <h1 className="max-w-md text-4xl leading-none font-semibold sm:text-5xl">
               Discover VR
