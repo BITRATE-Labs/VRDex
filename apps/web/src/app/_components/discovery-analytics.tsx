@@ -54,6 +54,21 @@ export function TrackedDiscoveryLink<Event extends TrackedDiscoveryEvent>({
       onClick={() => {
         posthog?.capture(eventName, properties);
       }}
+      onNavigate={event => {
+        const clerk = (window as Window & { Clerk?: { loaded: boolean } }).Clerk;
+        if (
+          properties.surface === "search_results" &&
+          process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.startsWith("pk_test_") &&
+          !clerk?.loaded &&
+          typeof props.href === "string"
+        ) {
+          // Clerk's development startup rewrites history while Next is navigating.
+          event.preventDefault();
+          window.location.assign(props.href);
+          return;
+        }
+        props.onNavigate?.(event);
+      }}
     >
       {children}
     </Link>

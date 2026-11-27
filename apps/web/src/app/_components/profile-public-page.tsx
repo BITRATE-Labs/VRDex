@@ -436,12 +436,18 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
   const useCompactCommunity = !isPerson && hasSparseIdentity && !profile.telemetry && !profile.groupMembership
     && (visibleLinks.length === 0 || (visibleLinks.length === 1 && groupDestination?.kind === "vrchat_group"));
   const useCompactIdentity = useCompactCommunity || (isPerson && hasSparseIdentity && visibleLinks.length === 0);
-  const useMobileCommunityIdentity = !isPerson && !embedded && !useCompactIdentity;
+  const isRichPublicCommunity = !isPerson && !embedded && !useCompactIdentity;
+  const hasSingleCommunityEvent = isRichPublicCommunity && eventPreviews.length === 1;
   const quietContributionStyle = "!text-muted underline decoration-border-strong underline-offset-4 hover:decoration-current";
   const compactContributionStyle = useCompactCommunity && quietContributionStyle;
   const secondarySections: Partial<Record<ProfilePublicSectionKey, ReactNode>> = {
     events: eventPreviews.length > 0 || !isPerson ? (
-      <section className={cn("border-t border-border", useCompactCommunity ? "pb-4 pt-5 lg:pt-3" : "py-8")}>
+      <section className={cn(
+        "border-t border-border",
+        useCompactCommunity ? "pb-4 pt-5 lg:pt-3" : "py-8",
+        isRichPublicCommunity && "max-sm:py-5",
+        hasSingleCommunityEvent && "lg:grid lg:grid-cols-2 lg:gap-x-3",
+      )}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           {isPerson
             ? <SectionHeading>Upcoming events</SectionHeading>
@@ -456,7 +462,11 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
           ) : null}
         </div>
         {eventPreviews.length > 0 ? (
-          <div className="mt-5 grid gap-3 lg:grid-cols-2">
+          <div className={cn(
+            "mt-5 grid gap-3",
+            isRichPublicCommunity && "max-sm:mt-3",
+            hasSingleCommunityEvent ? "lg:col-start-1" : "lg:grid-cols-2",
+          )}>
             {eventPreviews.map((event) => (
               <EventPreviewCard event={event} key={`${event.slug ?? event.title}-${event.startAt}`} />
             ))}
@@ -528,6 +538,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
   const profileLinks = (
     <ProfileVrcdnStreams
       compactLinks={useCompactCommunity}
+      compactMobileSpacing={isRichPublicCommunity}
       discordHandles={discordHandles.map(({ handle, item }) => ({
         handle,
         key: item.link.url,
@@ -601,7 +612,10 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
   const Shell = embedded ? Fragment : PageShell;
   return (
     <Shell>
-      <PageContainer className={useCompactCommunity ? "max-w-2xl lg:gap-4" : undefined}>
+      <PageContainer className={cn(
+        useCompactCommunity && "max-w-2xl lg:gap-4",
+        isRichPublicCommunity && "max-sm:gap-3",
+      )}>
 
         <div className={useCompactIdentity ? cn("mx-auto w-full max-w-2xl rounded-panel border border-border-strong bg-surface-strong", !useCompactCommunity && "shadow-panel") : "contents"}>
           <section
@@ -616,13 +630,14 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
               <div
                 className={cn(
                   "relative grid gap-7",
+                  isRichPublicCommunity && "max-sm:gap-4",
                   aboutCopy ? "lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)] lg:items-center" : undefined,
                 )}
               >
                 <div className={cn(
                   "flex min-w-0",
                   useCompactIdentity ? "items-center gap-3 sm:gap-4" : "flex-col gap-6 sm:flex-row sm:items-center",
-                  useMobileCommunityIdentity && "max-sm:grid max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:items-center max-sm:gap-x-3 max-sm:gap-y-0",
+                  isRichPublicCommunity && "max-sm:grid max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:items-center max-sm:gap-x-3 max-sm:gap-y-0",
                 )}>
                   <div className="relative w-fit shrink-0">
                     <div
@@ -631,7 +646,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                         useCompactIdentity
                           ? "size-14 rounded-control border border-border-strong bg-surface-elevated text-xl text-foreground sm:size-16"
                           : "size-24 bg-white/20 text-3xl shadow-panel",
-                        useMobileCommunityIdentity && "max-sm:size-14 max-sm:text-xl",
+                        isRichPublicCommunity && "max-sm:size-14 max-sm:text-xl",
                       )}
                       style={useCompactIdentity ? undefined : avatarStyle}
                     >
@@ -645,13 +660,13 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                       <VerifiedTrustMark className="verified-trust-mark--avatar" />
                     ) : null}
                   </div>
-                  <div className={cn("min-w-0", useMobileCommunityIdentity && "max-sm:contents")}>
+                  <div className={cn("min-w-0", isRichPublicCommunity && "max-sm:contents")}>
                     <div className="min-w-0">
                       <h1
                         className={cn(
                           "break-words font-semibold",
                           useCompactIdentity ? "text-3xl leading-tight sm:text-4xl" : "text-4xl leading-none sm:text-5xl",
-                          useMobileCommunityIdentity && "max-sm:text-2xl max-sm:leading-tight",
+                          isRichPublicCommunity && "max-sm:text-2xl max-sm:leading-tight",
                         )}
                         id={`profile-title-${profile.slug}`}
                       >
@@ -661,7 +676,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                         <p className={cn("mt-1 text-sm font-semibold", useCompactCommunity ? "text-foreground" : "text-white/75")}>Unclaimed</p>
                       ) : null}
                     </div>
-                    <div className={useMobileCommunityIdentity ? "max-sm:col-span-2" : undefined}>
+                    <div className={isRichPublicCommunity ? "max-sm:col-span-2" : undefined}>
                       {aliases.length > 0 ? (
                         <div className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-white/75">
                           <span>AKA {aliases.join(", ")}</span>

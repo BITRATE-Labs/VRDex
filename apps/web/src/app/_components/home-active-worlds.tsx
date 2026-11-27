@@ -4,6 +4,8 @@ import Link from "next/link";
 import { SectionHeading } from "@/components/ui/card";
 import { EntityImage } from "@/components/ui/entity-image";
 import { Notice } from "@/components/ui/notice";
+import { cn } from "@/lib/cn";
+import { safeImageUrl } from "@/lib/safe-image";
 import { ViewerLocalEventDateTime } from "./viewer-local-event-times";
 
 type EventSourceType = "manual" | "community" | "partner" | "import" | "ai_suggested" | "contributor";
@@ -37,28 +39,39 @@ export type PublicActiveWorld = {
 
 function ActiveWorldCard({ world }: { world: PublicActiveWorld }) {
   const titleId = `featured-world-${world.slug}`;
+  const imageUrl = safeImageUrl(world.heroImageUrl);
+  const secondaryText = imageUrl ? "text-white/72" : "text-muted";
 
   return (
     <Link
       aria-labelledby={titleId}
-      className="group relative grid min-h-72 w-full min-w-0 grid-cols-1 overflow-hidden rounded-panel border border-border bg-media !text-white shadow-panel transition before:col-start-1 before:row-start-1 before:aspect-[4/3] hover:-translate-y-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
+      className={cn(
+        "group relative grid w-full min-w-0 grid-cols-1 overflow-hidden rounded-panel border transition hover:-translate-y-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong",
+        imageUrl
+          ? "min-h-72 border-border bg-media !text-white shadow-panel before:col-start-1 before:row-start-1 before:aspect-[4/3]"
+          : "self-start border-border-strong bg-surface !text-foreground",
+      )}
       href={`/${world.slug}`}
     >
-      <EntityImage alt="" className="absolute inset-0 size-full rounded-none bg-media" fallback={false} label={world.displayName} sizes="(min-width: 1024px) 33vw, 100vw" src={world.heroImageUrl} />
-      <span aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(135deg,color-mix(in_srgb,var(--media)_80%,transparent),color-mix(in_srgb,var(--accent)_16%,transparent))]" />
+      {imageUrl ? (
+        <>
+          <EntityImage alt="" className="absolute inset-0 size-full rounded-none bg-media" fallback={false} label={world.displayName} sizes="(min-width: 1024px) 33vw, 100vw" src={imageUrl} />
+          <span aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(135deg,color-mix(in_srgb,var(--media)_80%,transparent),color-mix(in_srgb,var(--accent)_16%,transparent))]" />
+        </>
+      ) : null}
 
       <div className="relative col-start-1 row-start-1 p-5 [overflow-wrap:anywhere]">
         <div className="flex items-start justify-between gap-3">
-          <h3 id={titleId} className="min-w-0 text-3xl font-semibold text-white">{world.displayName}</h3>
-          <ChevronRight aria-hidden="true" className="mt-2 size-4 shrink-0 text-white/75 group-hover:text-white" />
+          <h3 id={titleId} className="min-w-0 text-3xl font-semibold">{world.displayName}</h3>
+          <ChevronRight aria-hidden="true" className={cn("mt-2 size-4 shrink-0", imageUrl ? "text-white/75 group-hover:text-white" : "text-muted group-hover:text-foreground")} />
         </div>
-        <p className="mt-3 line-clamp-2 text-sm leading-6 text-white/76">
+        <p className={cn("mt-3 line-clamp-2 text-sm leading-6", imageUrl ? "text-white/76" : "text-muted")}>
           {world.summary ?? "Upcoming public events are linked here."}
         </p>
-        <div className="mt-4 border-t border-white/20 pt-3">
-          <p className="text-xs font-medium text-white/72">Next event</p>
-          <p className="mt-1 text-sm font-medium text-white">{world.nextEvent.title}</p>
-          <p className="mt-1 text-sm text-white/72">
+        <div className={cn("mt-4 border-t pt-3", imageUrl ? "border-white/20" : "border-border")}>
+          <p className={cn("text-xs font-medium", secondaryText)}>Next event</p>
+          <p className="mt-1 text-sm font-medium">{world.nextEvent.title}</p>
+          <p className={cn("mt-1 text-sm", secondaryText)}>
             <ViewerLocalEventDateTime timestamp={world.nextEvent.startAt} eventDate={world.nextEvent.eventDate} scheduleKind={world.nextEvent.scheduleKind} />
             {world.nextEvent.communityName ? ` by ${world.nextEvent.communityName}` : ""}
           </p>
