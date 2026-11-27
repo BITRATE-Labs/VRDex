@@ -105,12 +105,19 @@ for (const theme of ["light", "dark"] as const) {
     await page.goto(`/search?q=${query}`);
 
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-    const heading = page.getByRole("heading", { level: 2, name: `Results for ${query}`, exact: true });
-    await expect(heading).toBeVisible();
-    await expect.poll(() => heading.evaluate((element) =>
-      element.getBoundingClientRect().height / Number.parseFloat(getComputedStyle(element).lineHeight)
-    )).toBeLessThanOrEqual(2);
-    await expect(page.getByRole("combobox", { name: /Search/i })).toHaveValue(query);
+    const main = page.getByRole("main");
+    await expect(main.getByRole("heading", { name: /^Results for/ })).toHaveCount(0);
+    await expect(main.getByRole("heading", { level: 1, name: "Search results" })).toBeVisible();
+    await expect(main.getByRole("region", { name: "Search results" })).toHaveAccessibleDescription(`Results for ${query}`);
+    const input = main.getByRole("combobox", { name: "Search VRDex", exact: true });
+    const submit = main.getByRole("button", { name: "Search VRDex", exact: true });
+    await expect(input).toHaveValue(query);
+    await expect(submit).toBeVisible();
+    const fieldBounds = (await input.boundingBox())!;
+    const submitBounds = (await submit.boundingBox())!;
+    expect(submitBounds.x).toBeGreaterThan(fieldBounds.x + fieldBounds.width);
+    expect(submitBounds.y).toBeLessThan(fieldBounds.y + fieldBounds.height);
+    expect(Math.min(submitBounds.width, submitBounds.height)).toBeGreaterThanOrEqual(44);
     await expect(page.getByText("No public results matched that search yet.", { exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
   });
@@ -220,17 +227,24 @@ test("public result genres and Links disclose independently per person @flow @fi
   await expect(page).toHaveURL(/\/basicbit$/, { timeout: 15_000 });
 });
 
-test("sparse public results omit empty disclosure controls @flow @fixture", async ({ page }, info) => {
+test("sparse public results omit empty disclosure controls @flow @fixture", async ({ page, isMobile }, info) => {
+  if (isMobile) await page.setViewportSize({ width: 320, height: 800 });
   await prepareVisualPage(page);
   await page.addInitScript(() => localStorage.setItem("vrdex-theme", "dark"));
   await page.goto("/search?q=Sparse%20Import");
   const row = publicResultRow(page, "/playwright-sparse-import");
   await expect(row.getByRole("link", { name: /Sparse Import/ })).toBeVisible();
-  await expect(row.getByRole("link", { name: "Claim this profile", exact: true })).toHaveAttribute("href", "/claim/playwright-sparse-import?source=search");
+  const claim = row.getByRole("link", { name: "Claim this profile", exact: true });
+  await expect(claim).toHaveAttribute("href", "/claim/playwright-sparse-import?source=search");
   await expect(row.getByText("Links", { exact: true })).toHaveCount(0);
   await expect(row.locator("summary")).toHaveCount(0);
   await expect(row.getByText("No public links", { exact: true })).toHaveCount(0);
   await waitForVisualReady(page);
+  if (isMobile) {
+    expect((await row.boundingBox())!.y).toBeLessThan(410);
+    expect((await claim.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    expect((await claim.locator("..").boundingBox())!.width).toBeLessThan((await row.boundingBox())!.width);
+  }
   await page.screenshot({ path: info.outputPath("public-results-sparse.png"), fullPage: true });
 });
 

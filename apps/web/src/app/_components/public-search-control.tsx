@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { usePostHog } from "posthog-js/react";
-import { X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { type FormEvent, useId, useRef, useState } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { searchHref, type SearchResultFilter } from "./search-view-state";
 type PublicSearchControlProps = {
   action?: string;
   className?: string;
+  compact?: boolean;
   defaultQuery?: string;
   filter?: SearchResultFilter;
   surface?: "home" | "search";
@@ -30,7 +31,7 @@ export function PublicSearchControl(props: PublicSearchControlProps) {
 }
 
 function SearchControl({
-  action = "/search", className, defaultQuery, filter = "all", surface = "search", tone = "inverse",
+  action = "/search", className, compact, defaultQuery, filter = "all", surface = "search", tone = "inverse",
 }: PublicSearchControlProps) {
   const posthog = usePostHog();
   const router = useRouter();
@@ -75,7 +76,7 @@ function SearchControl({
   return (
     <form
       action={action}
-      className={cn("flex flex-col gap-3 sm:flex-row", className)}
+      className={cn("flex flex-col gap-3 sm:flex-row", compact && "flex-row gap-2 sm:gap-3", className)}
       method="get"
       onSubmit={onSubmit}
     >
@@ -91,6 +92,7 @@ function SearchControl({
           autoComplete="off"
           className={cn(
             "min-h-14 w-full rounded-control border py-3 pr-12 pl-5 text-base outline-none focus-visible:ring-2",
+            compact && "max-sm:min-h-11 max-sm:py-2 max-sm:pr-11 max-sm:pl-3",
             isInverse
               ? "border-white/25 bg-white/16 text-white placeholder:text-white/62 focus:border-white/70 focus-visible:ring-white/25"
               : "border-border bg-surface text-foreground placeholder:text-muted focus:border-accent focus-visible:ring-accent/20",
@@ -129,7 +131,7 @@ function SearchControl({
         {query ? (
           <button
             aria-label="Clear search"
-            className={cn("absolute top-2 right-1 flex size-10 items-center justify-center rounded-control focus-visible:ring-2 focus-visible:ring-focus", isInverse ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground")}
+            className={cn("absolute top-1/2 right-1 flex size-10 -translate-y-1/2 items-center justify-center rounded-control focus-visible:ring-2 focus-visible:ring-focus", isInverse ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground")}
             type="button"
             onClick={() => {
               reset();
@@ -184,7 +186,17 @@ function SearchControl({
         ) : null}
       </div>
       {filter === "all" ? null : <input name="type" type="hidden" value={filter} />}
-      <button className={cn(buttonVariants({ size: "lg", variant: isInverse ? "inversePrimary" : "primary" }), "min-h-14 px-6 font-semibold")} type="submit">Search VRDex</button>
+      <button
+        className={cn(
+          buttonVariants({ size: "lg", variant: isInverse ? "inversePrimary" : "primary" }),
+          "min-h-14 px-6 font-semibold",
+          compact && "shrink-0 max-sm:min-h-11 max-sm:w-11 max-sm:p-0",
+        )}
+        type="submit"
+      >
+        {compact ? <Search aria-hidden="true" className="size-5 sm:hidden" /> : null}
+        <span className={compact ? "max-sm:sr-only" : undefined}>Search VRDex</span>
+      </button>
     </form>
   );
 }

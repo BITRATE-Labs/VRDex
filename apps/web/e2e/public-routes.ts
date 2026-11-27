@@ -250,7 +250,7 @@ export async function expectDiscoveryPage(page: Page) {
 
 export async function expectSearchPage(page: Page) {
   await expect(page.getByRole("heading", { name: "Search results", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Results for aurora/i })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Search results" })).toHaveAccessibleDescription("Results for aurora");
   await expect(page.getByRole("button", { name: /Search VRDex/i })).toBeVisible();
   await expect(page.getByRole("link", { name: /DJ Aurora/i }).first()).toBeVisible();
   await expect(page.locator('[title="Logo"]').first()).toBeVisible();

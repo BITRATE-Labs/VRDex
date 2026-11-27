@@ -250,6 +250,18 @@ function ScheduleContent({
     data.savedState === "ready" &&
     empty &&
     actions.plan.length === 0;
+  const noFavorites =
+    navigation.favoritesOnly && data.isCurrentViewport &&
+    data.kind === "ready" && !data.revalidating && empty;
+  const showFavoritesEmptyState = navigation.favoritesOnly && compactEmpty;
+  const emptyStateRef = useCallback((element: HTMLDivElement | null) => {
+    if (!element) return;
+    return () => {
+      if (element.contains(document.activeElement)) {
+        document.getElementById("schedule-favorites")?.focus();
+      }
+    };
+  }, []);
   const nextEvent = empty ? data.records.flatMap((event) => {
     const schedule = event.schedule;
     if (schedule.kind === "date_only") {
@@ -311,9 +323,7 @@ function ScheduleContent({
               </Button>
             </>
           )}
-          {data.kind === "ready" &&
-            empty &&
-            navigation.favoritesOnly && "No favorites in this range"}
+          {noFavorites && !showFavoritesEmptyState && "No favorites in this range"}
           {nextEvent !== undefined && (
             <Button size="sm" onClick={() => navigate({ anchor: nextEvent })}>Next event</Button>
           )}
@@ -349,6 +359,18 @@ function ScheduleContent({
         lanes={data.eventLanes}
         saved={data.saved}
         compactEmpty={compactEmpty}
+        emptyState={showFavoritesEmptyState ? (
+          <div className={styles.emptyState} ref={emptyStateRef}>
+            <p role="status">No favorites in this range</p>
+            <Button
+              size="sm"
+              type="button"
+              onClick={() => navigate({ favoritesOnly: false })}
+            >
+              Clear filter
+            </Button>
+          </div>
+        ) : null}
         range={range}
         now={now}
         slotCoverage={data.slotCoverage}

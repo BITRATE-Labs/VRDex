@@ -1,5 +1,5 @@
 "use client";
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import type {
   SavedResolution,
   TimelineEvent,
@@ -17,6 +17,7 @@ export function TimelineChart({
   lanes,
   saved,
   compactEmpty,
+  emptyState,
   range,
   now,
   slotCoverage,
@@ -29,6 +30,7 @@ export function TimelineChart({
   lanes: ReadonlyArray<EventLane>;
   saved: SavedResolution[];
   compactEmpty: boolean;
+  emptyState?: ReactNode;
   range: TimelineRange;
   now: number;
   slotCoverage: Record<string, "partial" | "complete">;
@@ -63,9 +65,10 @@ export function TimelineChart({
     : 0;
   const publicLanes = compactEmpty ? [] : lanes;
   const height = Math.max(compactEmpty ? 1 : 4, ...publicLanes.map((l) => l.lane + 1)) * 94;
+  const showEmptyState = Boolean(emptyState);
   useLayoutEffect(() => {
     const el = scroller.current;
-    if (!el) return;
+    if (!el || showEmptyState) return;
     const target = timeToX({
       instant: range.startAt,
       origin,
@@ -75,7 +78,7 @@ export function TimelineChart({
       if (drag.current) drag.current.scroll += target - el.scrollLeft;
       el.scrollLeft = target;
     }
-  }, [origin, range.startAt]);
+  }, [origin, range.startAt, showEmptyState]);
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
@@ -86,6 +89,9 @@ export function TimelineChart({
     observer.observe(el);
     return () => observer.disconnect();
   }, [onWidth]);
+  if (showEmptyState) {
+    return <div ref={scroller} className={styles.scroller} data-testid="favorites-empty-state">{emptyState}</div>;
+  }
   const formatHour = new Intl.DateTimeFormat(undefined, {
     timeZone: range.timeZone,
     hour: "numeric",
