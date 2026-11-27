@@ -46,6 +46,10 @@ Public Contact and Privacy request snapshots cover their initial topic states.
 The shared shell flow checks that the signed-out 320 px header uses two rows.
 It also checks that Search opens within the viewport and Escape restores focus.
 
+The public Series flow checks that an empty schedule shows its status rather
+than a download action. Its direct calendar URL still returns a valid empty
+feed. A populated occurrence still links back to the shared series schedule.
+
 PowerShell data-flow run with video:
 
 ```powershell
