@@ -35,7 +35,7 @@ export function PublicSearchControl(props: PublicSearchControlProps) {
 export function EditPublicSearchLink({ inputId }: { inputId: string }) {
   return (
     <a
-      className={cn(buttonVariants({ size: "sm", variant: "surface" }), "min-h-11 sm:row-span-2")}
+      className={cn(buttonVariants({ size: "sm", variant: "primary" }), "mt-1 min-h-11")}
       href={`#${inputId}`}
       onClick={(event) => {
         if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;

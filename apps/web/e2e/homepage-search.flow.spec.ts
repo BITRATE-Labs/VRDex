@@ -149,7 +149,9 @@ for (const theme of ["light", "dark"] as const) {
     const hint = main.getByText("Try a community name, DJ alias, world name, event title, genre, or scene term.", { exact: true });
     const editBounds = (await edit.boundingBox())!;
     expect(Math.min(editBounds.width, editBounds.height)).toBeGreaterThanOrEqual(44);
-    expect(editBounds.y + editBounds.height).toBeLessThan((await hint.boundingBox())!.y);
+    const hintBounds = (await hint.boundingBox())!;
+    expect(editBounds.y).toBeGreaterThan(hintBounds.y + hintBounds.height);
+    expect(editBounds.x).toBe(hintBounds.x);
     await waitForPublicSearchHydration(page);
     const originalUrl = page.url();
     await edit.focus();
@@ -294,6 +296,11 @@ test("sparse public results omit empty disclosure controls @flow @fixture", asyn
   expect((await claim.locator("..").boundingBox())!.width).toBeLessThan((await row.boundingBox())!.width);
   expect((await claim.boundingBox())!.x).toBe((await row.getByText("Sparse Import", { exact: true }).boundingBox())!.x);
   if (isMobile) {
+    const typeBounds = (await profile.getByText("Person", { exact: true }).boundingBox())!;
+    const trustBounds = (await profile.getByText("Unclaimed", { exact: true }).boundingBox())!;
+    expect(trustBounds.x).toBe(typeBounds.x);
+    expect(trustBounds.y).toBeGreaterThanOrEqual(typeBounds.y + typeBounds.height);
+    await expect(profile.getByText("·", { exact: true })).toHaveCount(0);
     expect((await row.boundingBox())!.y).toBeLessThan(410);
   }
   await page.screenshot({ path: info.outputPath("public-results-sparse.png"), fullPage: true });
