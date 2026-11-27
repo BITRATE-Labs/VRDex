@@ -39,7 +39,7 @@ export function EventPublicHero({
   );
 
   return (
-    <section className={cn("overflow-hidden rounded-hero border border-border", bannerStyle ? "bg-media shadow-hero" : "bg-surface-strong shadow-sm")}>
+    <section className={cn("overflow-hidden rounded-hero border border-border shadow-sm", bannerStyle ? "bg-media" : "bg-surface-strong")}>
       <div
         className={cn(
           "flex flex-col bg-cover bg-center p-4 sm:min-h-56 sm:p-6 lg:min-h-60 lg:p-8",
@@ -94,7 +94,7 @@ export function EventPublicHero({
               type="button"
               aria-label="Report event"
               aria-haspopup="dialog"
-              className={cn(actionClassName, "max-sm:border-transparent max-sm:bg-transparent max-sm:text-inherit! max-sm:hover:bg-current/10")}
+              className={cn(actionClassName, "border-transparent bg-transparent text-inherit! hover:border-transparent hover:bg-current/10")}
               onClick={onReport}
             >
               <Flag aria-hidden="true" />
