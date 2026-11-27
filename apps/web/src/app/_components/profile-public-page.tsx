@@ -650,7 +650,10 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
         <div className={useCompactIdentity ? cn("mx-auto w-full max-w-2xl rounded-panel border border-border-strong bg-surface-strong", !useCompactCommunity && "shadow-panel") : "contents"}>
           <section
             aria-labelledby={`profile-title-${profile.slug}`}
-            className={useCompactIdentity ? undefined : "overflow-hidden rounded-card border border-border bg-media shadow-panel"}
+            className={useCompactIdentity ? undefined : cn(
+              "overflow-hidden rounded-card border border-border bg-media shadow-panel",
+              isRichPublicPerson && "max-sm:[html[data-theme=light]_&]:shadow-sm",
+            )}
           >
             <div
               className={useCompactIdentity ? "p-4 sm:p-6" : "relative bg-media bg-cover bg-center p-5 text-white sm:p-6"}
@@ -727,13 +730,13 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                   <nav
                     aria-label="Profile sections"
                     className={cn(
-                      "flex flex-wrap gap-x-1 max-sm:rounded-control max-sm:ring-1 max-sm:ring-white/20 max-sm:ring-inset",
+                      "flex flex-wrap gap-x-1 max-sm:justify-center max-sm:rounded-control max-sm:px-1 max-sm:ring-1 max-sm:ring-white/20 max-sm:ring-inset",
                       aboutCopy && "lg:col-span-2 lg:row-start-2",
                     )}
                   >
                     {visitorLinks.map(({ id, label }) => (
                       <a
-                        className="inline-flex min-h-11 items-center rounded-control px-2 text-sm font-medium text-white underline decoration-white/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-white max-sm:min-w-11 max-sm:px-1.5"
+                        className="inline-flex min-h-11 items-center rounded-control px-2 text-sm font-medium text-white underline decoration-white/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-white max-sm:min-w-11 max-sm:justify-center max-sm:px-1.5 max-[360px]:px-1"
                         href={"#" + id}
                         key={id}
                       >
