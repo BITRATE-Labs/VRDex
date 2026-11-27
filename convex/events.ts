@@ -2963,7 +2963,8 @@ export const getEventOwnerMode = query({
     const mode = viewer.user.eventOwnerMode;
     if (!mode || mode.expiresAt <= Date.now()) return { community: null };
     const profile = await ctx.db.get(mode.communityProfileId);
-    return { community: profile ? { slug: profile.slug, name: profile.displayName, expiresAt: mode.expiresAt } : null };
+    return { community: profile?.profileType === "community" && canReadProfile("public", profile)
+      ? { slug: profile.slug, name: profile.displayName, expiresAt: mode.expiresAt } : null };
   },
 });
 

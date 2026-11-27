@@ -543,6 +543,9 @@ JWT to the application hostname, but sibling subdomains can still write cookies
 for the parent domain. See [Clerk's session token documentation](https://clerk.com/docs/guides/how-clerk-works/overview#session-token).
 
 For shared sandbox iteration, push the reviewed commit to `codex/sandbox`.
+In the BITRATE Labs repository, branch protection restricts direct pushes to
+`BASIC-BIT` and applies to admins. It disables force pushes and deletion. Keep
+this restriction in place while branch builds use deployment credentials.
 When `VERCEL_SANDBOX_PROJECT_ID` is configured, only this branch can update the
 sandbox alias. Pushes queue and use the existing `sandbox-shared` Convex preview,
 so drafts and OAuth grants survive deploys. Before deployment the workflow

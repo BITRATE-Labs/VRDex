@@ -39,6 +39,24 @@ it("discards only an authorized, current unpublished draft", async () => {
   const apiEvents = await t.query(internal.events.listCommunityManagedEventsForApiOwner, { ownerUserId: ids.owner });
   assert.deepEqual(apiEvents.map(event => event.id), [publishedId]);
 });
+it("blocks discard until an older broadcast program has stopped", async () => {
+  const { t, actor, event } = await fixture();
+  const eventId = await event({ sourceType: "manual", contributorUserId: undefined, publicationState: "draft_private" });
+  const { sessionId, version } = await t.run(async ({ db }) => {
+    const program = { eventId, state: "draft" as const, publicLinks: [], directFallbackLinks: [], createdAt: 1, updatedAt: 1 };
+    const programId = await db.insert("eventMediaPrograms", program);
+    const sessionId = await db.insert("eventMediaSessions", { programId, eventId, status: "starting", createdAt: 1, updatedAt: 1 });
+    await db.insert("eventMediaPrograms", { ...program, createdAt: 2, updatedAt: 2 });
+    return { sessionId, version: (await db.get(eventId))!.updatedAt };
+  });
+
+  const owner = actor("owner");
+  const args = { draft: { kind: "managed_event" as const, id: eventId, version } };
+  await assert.rejects(owner.mutation(api.eventInventory.discardDraft, args), /Stop the active broadcast first/);
+  await t.run(({ db }) => db.patch(sessionId, { status: "ended", workerTaskStatus: "stopped" }));
+  await owner.mutation(api.eventInventory.discardDraft, args);
+});
+
 async function fixture() {
   process.env.EVENT_DATE_ONLY_ENABLED = "true";
   const t = convexTest({ schema, modules: {
