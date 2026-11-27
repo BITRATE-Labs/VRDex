@@ -1451,6 +1451,50 @@ body > .ph-no-capture {
     width: 100%;
   }
 
+  .lookup-theme .lookup-vrcdn-group[data-community-submitted] {
+    background: var(--surface-strong);
+    border-color: var(--border-strong);
+    border-style: dashed;
+  }
+
+  .lookup-theme .lookup-vrcdn-group__heading > span {
+    flex: 1 1 min-content;
+  }
+
+  .lookup-theme .lookup-vrcdn-group__heading > span > .text-muted {
+    color: var(--foreground);
+    font-weight: 500;
+  }
+
+  .lookup-theme .lookup-feature-link,
+  .lookup-theme .lookup-vrcdn-group .lookup-primary-url-copy {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+  }
+
+  .lookup-theme .lookup-vrcdn-group .lookup-primary-url-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .lookup-theme .lookup-vrcdn-group .lookup-primary-url-label {
+    grid-column: 1;
+  }
+
+  .lookup-theme .lookup-vrcdn-group .lookup-primary-url-value {
+    grid-column: 1 / -1;
+  }
+
+  .lookup-theme .lookup-vrcdn-group .lookup-primary-url-copy {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .lookup-theme .lookup-vrcdn-group .lookup-primary-url-value--wrapped > span {
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: top;
+  }
+
   .lookup-bulk-row {
     grid-template-columns: 1fr;
   }
