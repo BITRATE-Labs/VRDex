@@ -60,14 +60,18 @@
   align-items: center;
   gap: 0.3rem;
 }
+.navigation input,
 .navigation .pendingDate {
-  position: relative;
   width: 140px;
-  height: 36px;
   min-width: 0;
+  min-height: 36px;
+  padding-inline: 0.5rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   background: var(--surface-strong);
+}
+.navigation .pendingDate {
+  position: relative;
   opacity: 0.6;
 }
 .navigation .pendingDate::after {
@@ -85,10 +89,6 @@
   color-scheme: inherit;
   color: var(--foreground);
   font-size: 0.8rem;
-  min-width: 0;
-  width: 140px;
-  border: 0;
-  background: transparent;
 }
 @media (forced-colors: none) {
   :global(html[data-theme="dark"]) .navigation input::-webkit-calendar-picker-indicator {
@@ -668,9 +668,6 @@
     width: 100%;
     min-height: 44px;
     padding: 0.5rem;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-control);
-    background: var(--surface-strong);
   }
   .status {
     order: 1;
