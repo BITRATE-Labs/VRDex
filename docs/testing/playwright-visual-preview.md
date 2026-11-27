@@ -727,6 +727,8 @@ six-hour runtime window for display only. Date-only selections use the backend's
 end-of-date grace through UTC-12. The timeline flow regression mixes ended and
 upcoming saves, checks Next saved, then advances three days and checks that old
 selections stay hidden while the stored history remains intact.
+At the storage limit, Schedule offers **Clear past selections** so new saves
+can be added. The action preserves upcoming and unresolved references.
 
 Broadcast Candidate Acceptance first checks changed paths. Schedule-only timeline
 components, helpers, fixtures and documentation skip the expensive browser/native

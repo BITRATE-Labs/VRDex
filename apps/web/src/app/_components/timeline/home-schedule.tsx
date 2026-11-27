@@ -17,7 +17,8 @@ import {
   type TimelineNavigation,
 } from "@/lib/timeline/navigation";
 import { localDayBands } from "@/lib/timeline/geometry";
-import { nextSavedStart, togglePlanAction } from "@/lib/timeline/plan-actions";
+import { isPastSaved, nextSavedStart, togglePlanAction } from "@/lib/timeline/plan-actions";
+import { PLAN_LIMIT } from "@/lib/timeline/preferences";
 import { HOUR, inRange, recentEventTime, timelineQueryRange } from "@/lib/timeline/window-cache";
 import { useTimelinePreferences } from "./use-timeline-preferences";
 import { useTimelineData } from "./use-timeline-data";
@@ -236,6 +237,9 @@ function ScheduleContent({
     if (!action) return;
     browse.onPreferenceAction(action);
   };
+  const pastSelections = preference.preferences.plan.length >= PLAN_LIMIT
+    ? data.saved.filter(item => isPastSaved(item, now)).map(item => item.reference)
+    : [];
   const actions: TimelineActions = {
     selection,
     plan: preference.preferences.plan,
@@ -375,6 +379,11 @@ function ScheduleContent({
             <Button size="sm" onClick={() => navigate({ anchor: nextEvent })}>Next event</Button>
           )}
           {preference.persistence === "session" && <span>Not saved</span>}
+          {pastSelections.length > 0 && (
+            <Button size="sm" onClick={() => browse.onPreferenceAction({ type: "remove-plans", references: pastSelections })}>
+              Clear past selections
+            </Button>
+          )}
           {data.savedState === "loading" && !retainedRefresh && <span>Loading events</span>}
           {data.savedState === "error" && (
             <>

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { it } from "node:test";
 import type { SavedResolution, TimelineSchedule } from "../../convex/_eventTimelineTypes";
 import { isPastSaved, nextSavedStart } from "../../apps/web/src/lib/timeline/plan-actions";
+import { PLAN_LIMIT, reducePreferences, type TimelinePreferences } from "../../apps/web/src/lib/timeline/preferences";
 
 const now = Date.UTC(2026, 10, 17, 12);
 const hour = 3_600_000;
@@ -59,4 +60,18 @@ it("selected sets expire at their own end while the parent event remains ongoing
   assert.equal(isPastSaved(parent, now), false);
   assert.equal(isPastSaved(set, now), true);
   assert.equal(nextSavedStart([set], now, now), undefined);
+});
+
+it("clearing selected past references frees a full plan without removing other saves", () => {
+  const past = { kind: "set", eventId: "event", slotId: "past" } as const;
+  const upcoming = { kind: "set", eventId: "event", slotId: "upcoming" } as const;
+  const other = Array.from({ length: PLAN_LIMIT - 2 }, (_, index) => ({ kind: "event" as const, eventId: String(index) }));
+  const full: TimelinePreferences = { version: 1, plan: [past, upcoming, ...other], favoriteProfileIds: ["favorite"] };
+  const add = { type: "add-plan", reference: { kind: "event", eventId: "new" } } as const;
+  assert.equal(reducePreferences(full, add).outcome, "limit");
+  const cleared = reducePreferences(full, { type: "remove-plans", references: [past] });
+  assert.equal(cleared.outcome, "changed");
+  assert.deepEqual(cleared.state.plan, [upcoming, ...other]);
+  assert.deepEqual(cleared.state.favoriteProfileIds, full.favoriteProfileIds);
+  assert.equal(reducePreferences(cleared.state, add).outcome, "changed");
 });
