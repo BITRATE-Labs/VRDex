@@ -108,7 +108,7 @@ function sourceTarget(
   };
 }
 
-async function sourceForSlot(
+export async function sourceForSlot(
   db: DatabaseReader,
   session: Session,
   slot: Doc<"eventSlots">,

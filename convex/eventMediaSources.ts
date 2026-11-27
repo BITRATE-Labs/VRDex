@@ -1,12 +1,12 @@
-import {disableSourceControl} from "./_eventBroadcastControl";
-import { v } from "convex/values";
+import {disableSourceControl, sourceForSlot} from "./_eventBroadcastControl";
+import { ConvexError, v } from "convex/values";
 import { internalMutation, mutation, type MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { requireActiveBrowserSessionSubject } from "./_browserSessionAuthority";
 import { eventOutputConfigurationLocked, getLatestEventMediaProgram, getMediaManageableEventBySlug, getOpenEventMediaSession, getOrCreateEventMediaProgram, recordEventMediaAuditEvent } from "./events";
 import { EVENT_BROADCAST_MAX_SOURCES } from "./_eventBroadcastInputs";
-import { eventMediaSourceBroadcastInput, parseBroadcastInputUrl, broadcastInputPublicUrl, listUsableEventMediaSources } from "./_eventBroadcastSources";
+import { eventMediaSourceBroadcastInput, eventProfileBroadcastInputChoices, parseBroadcastInputUrl, broadcastInputPublicUrl, listUsableEventMediaSources, resolveBroadcastInput } from "./_eventBroadcastSources";
 import { normalizeProfileInlineText } from "./_profileSubmissions";
 
 function sourceLabel(value: string): string {
@@ -20,7 +20,7 @@ async function requireUnassignedSource(ctx: MutationCtx, sourceId: Id<"eventMedi
     .withIndex("by_assignedFromSourceId", q => q.eq("assignedFromSourceId", sourceId))) {
     if (row.state === "disabled" || !row.eventSlotId) continue;
     const slot = await ctx.db.get(row.eventSlotId);
-    if (slot?.eventId === row.eventId) throw Error("Clear or reassign the lineup slots using this input first.");
+    if (slot?.eventId === row.eventId) throw new ConvexError("Clear or reassign the lineup slots using this input first.");
   }
 }
 
@@ -102,9 +102,28 @@ export const assignToSlot = mutation({
     if (sourceId !== null && url !== undefined) throw Error("Choose one lineup input.");
     if (await eventOutputConfigurationLocked(ctx.db, program)) {
       const session = await getOpenEventMediaSession(ctx.db, program);
-      if (!session || session.status === "stopping" || session.stopRequestedAt !== undefined ||
-          clearing || (existing && existing.state !== "disabled")) {
-        throw Error("Stop the broadcast before changing an assigned lineup input.");
+      if (!session || session.status === "stopping" || session.stopRequestedAt !== undefined) {
+        throw new ConvexError("Wait for the broadcast to stop before changing lineup inputs.");
+      }
+      if (clearing && existing && existing.state !== "disabled") {
+        const pending = session.pendingControlCommandId ? await ctx.db.get(session.pendingControlCommandId) : null;
+        if (session.currentSourceId === existing._id ||
+            (session.committedIntent?.kind === "manual" && session.committedIntent.sourceId === existing._id) ||
+            (pending?.controlTarget?.kind === "source" && pending.controlTarget.source.sourceId === existing._id)) {
+          throw new ConvexError("Switch away from this input before clearing it.");
+        }
+      }
+      if (!clearing) {
+        const profile = slot.personProfileId ? await ctx.db.get(slot.personProfileId) : null;
+        const profileInput = profile && resolveBroadcastInput({
+          choices: eventProfileBroadcastInputChoices(profile),
+          explicitInput: slot.broadcastInput,
+          legacySelectedStreamId: slot.selectedStreamId,
+        });
+        if ((existing && existing.state !== "disabled") || profileInput ||
+            await sourceForSlot(ctx.db, session, slot)) {
+          throw new ConvexError("This slot already has an input. Stop the broadcast before replacing it.");
+        }
       }
     }
     const now = Date.now();

@@ -217,15 +217,16 @@ test("a saved event feed can drive multiple timed slots and override the perform
   const { t, owner, event } = await fixture();
   const currentSlug = event.slug;
   await owner.mutation(api.events.updateCommunityEvent, {
-    currentSlug, communitySlug: "club", lineup: [
+    currentSlug, communitySlug: "club", endAt: startAt + 10800000, lineup: [
       { clientKey: "guest", position: 0, performerLabel: "Guest", personSlug: "guest", startAt, endAt: startAt + 3600000, broadcastInput: input },
       { clientKey: "manual", position: 1, performerLabel: "Manual guest", startAt: startAt + 3600000, endAt: startAt + 5400000 },
       { clientKey: "late", position: 2, performerLabel: "Late guest", startAt: startAt + 5400000, endAt: startAt + 7200000 },
+      { clientKey: "profile", position: 3, performerLabel: "Profile guest", personSlug: "other", startAt: startAt + 7200000, endAt: startAt + 10800000, broadcastInput: input },
     ],
   });
   const shared = await owner.mutation(api.eventMediaSources.create, { currentSlug, label: "Shared", url: "vrcdn:bean" });
   const status = await owner.query(api.events.getEventMediaControlStatus, { currentSlug });
-  const [guest, manual, late] = status.lineupSlots;
+  const [guest, manual, late, profileSlot] = status.lineupSlots;
   const assign = (slotId: typeof guest.id, sourceId: typeof shared.sourceId | null) =>
     owner.mutation(api.eventMediaSources.assignToSlot, { currentSlug, slotId, sourceId });
   const outsider = t.withIdentity({ subject: newClerkUserId(), issuer: "test", emailVerified: true });
@@ -247,7 +248,7 @@ test("a saved event feed can drive multiple timed slots and override the perform
     rightsClearedMediaAccepted: true, playbackLinks: [{ platform: "browser", url: "https://example.test/watch" }],
   });
   const scheduled = await owner.mutation(api.events.scheduleEventMediaWorker, { currentSlug });
-  await assert.rejects(assign(guest.id, null), /Stop the broadcast/);
+  await assert.rejects(assign(profileSlot.id, shared.sourceId), /already has an input/);
   await t.run(ctx => ctx.db.patch(scheduled.sessionId, { scheduledStartAt: Date.now() - 1000 }));
   process.env.VRDEX_EVENT_MEDIA_BRIDGE_TOKEN = "sources-test-bridge";
   const lease = await t.mutation(makeFunctionReference<"mutation">("eventMediaWorker:acquireSession"), {
@@ -266,6 +267,11 @@ test("a saved event feed can drive multiple timed slots and override the perform
   const projection = await t.run(ctx => ctx.db.query("eventMediaSources").withIndex("by_programId_key", q =>
     q.eq("programId", lease.configuration.programId).eq("key", `slot-${guest.id}`)).unique());
   assert.equal(projection?.publicUrl, "https://www.twitch.tv/basic_bit");
+  const profileSource = lease.configuration.sources.find((source: { key: string }) => source.key === `slot-${profileSlot.id}`);
+  await t.run(ctx => ctx.db.patch(scheduled.sessionId, { currentSourceId: profileSource.id, committedIntent: { kind: "manual", sourceId: profileSource.id, revision: 1 } }));
+  await assert.rejects(assign(profileSlot.id, shared.sourceId), /already has an input/);
+  const stillUsable = await owner.query(api.events.getEventMediaControlStatus, { currentSlug });
+  assert.equal(stillUsable.sources.some(source => source.sourceId === profileSource.id), true);
 
   await t.run(ctx => ctx.db.patch(late.id, { startAt: Date.now() - 60000, endAt: Date.now() + 60000 }));
   await owner.mutation(api.eventMediaSources.assignToSlot, { currentSlug, slotId: late.id, sourceId: null, url: "vrcdn:late-guest" });
@@ -281,6 +287,14 @@ test("a saved event feed can drive multiple timed slots and override the perform
   }));
   assert.equal(automatic.kind, "source");
   if (automatic.kind === "source") assert.equal(automatic.source.sourceId, lateSlot.sourceId);
+  await t.run(ctx => ctx.db.patch(scheduled.sessionId, { currentSourceId: lateSlot.sourceId }));
+  await assert.rejects(assign(late.id, null), /Switch away from this input/);
+  await t.run(ctx => ctx.db.patch(scheduled.sessionId, { currentSourceId: profileSource.id }));
+  await assign(late.id, null);
+  await assign(guest.id, null);
+  const afterClearing = await owner.query(api.events.getEventMediaControlStatus, { currentSlug });
+  assert.equal(afterClearing.sources.some(source => source.sourceId === projection?._id), true);
+  assert.equal(afterClearing.sources.some(source => source.sourceId === lateSlot.sourceId), false);
 });
 
 test("legacy API slot writes preserve omitted broadcast choices without browser snapshot IDs", async () => {

@@ -189,7 +189,7 @@ export function EventOperatorFixture({ legacySettings = false, lineupAssignment 
             if (!saved || !slot) return { ...value, sources };
             return { ...value, sources: [...sources, {
               ...saved, sourceId: fixtureId("eventMediaSources", key), key,
-              eventSlotId: slotId, label: slot.label, assignable: false, editable: false,
+              eventSlotId: slotId, assignedFromSourceId: sourceId ?? undefined, label: slot.label, assignable: false, editable: false,
             }] };
           });
         }}

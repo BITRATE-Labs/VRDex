@@ -42,6 +42,7 @@ export function fixtureSource(
         : `https://www.twitch.tv/${key}`,
     editable: true,
     assignable: true,
+    assignedFromSourceId: undefined,
   };
 }
 export function fixtureCommand(
