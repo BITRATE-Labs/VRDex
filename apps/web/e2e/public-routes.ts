@@ -260,7 +260,7 @@ export async function expectSearchPage(page: Page) {
 }
 
 export async function expectLookupPage(page: Page) {
-  await expect(page.getByRole("heading", { name: "Search VRDex" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "DJ links", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Search results", exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Search view" })).toHaveCount(0);
   await expect(page.getByLabel("DJ name")).toBeVisible();
@@ -281,7 +281,7 @@ export async function expectLookupPage(page: Page) {
 export async function expectPrivateSeedLookupPage(page: Page) {
   const privateResult = page.locator(".lookup-result-card.ph-no-capture:visible");
 
-  await expect(page.getByRole("heading", { name: "Search VRDex" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "DJ links", exact: true })).toBeVisible();
   await expect(privateResult).toHaveCount(1);
   await expect(privateResult.getByText("DJ Northstar", { exact: true })).toBeVisible();
   await expect(privateResult.getByText("Northstar", { exact: true })).toBeVisible();

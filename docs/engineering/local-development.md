@@ -39,9 +39,11 @@ work directly.
 
 Compatibility checks: nonempty `/?q=BASICBIT` and `/lookup?q=BASICBIT` redirect
 to `/search?q=BASICBIT&view=dj`. Whitespace-only root queries stay on public
-Home. `/lookup/suggest`, legacy bulk lookup and permission-scoped private seed
-access remain unchanged. Public Home/search do not read lookup recents or
-request private suggestions. `/discover?q=aurora` redirects to standard search.
+Home. The DJ links page preserves legacy bulk lookup and permission-scoped
+private seed access. A completed single query with no matches offers Search
+results for the same query. `/lookup/suggest` returns 503 when lookup is
+unavailable. Public Home/search do not read lookup recents or request private
+suggestions. `/discover?q=aurora` redirects to standard search.
 Home also includes the continuous Schedule, nonmodal event details,
 browser-local My night and private DJ/club favorites. No sign-in is required.
 Without JavaScript, the interactive schedule is hidden and GET search and

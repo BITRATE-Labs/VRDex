@@ -103,7 +103,7 @@ test("unified BASICBIT search views @visual", async ({ page }, testInfo) => {
   await captureRouteScreenshot(page, testInfo, "search-basicbit-standard");
 
   await page.goto("/search?q=BASICBIT&view=dj");
-  await expect(page.getByRole("heading", { name: "Search VRDex" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "DJ links", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Website: basicbit.net", exact: true })).toBeVisible();
   await captureRouteScreenshot(page, testInfo, "search-basicbit-dj");
 });

@@ -362,7 +362,7 @@ test.describe("hosted lookup smoke", () => {
 
   test("lookup route and suggest endpoint render", async ({ page }) => {
     await page.goto("/lookup");
-    await expect(page.getByRole("heading", { name: "Search VRDex" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "DJ links", exact: true })).toBeVisible();
     await expect(page).toHaveURL(/\/search\?view=dj$/);
     await expect(page.getByLabel("DJ name")).toBeVisible();
     await expect(page.getByRole("button", { name: "Lookup", exact: true })).toBeVisible();
@@ -882,7 +882,7 @@ test.describe("fixture lookup smoke", () => {
     await expect(page.getByRole("link", { name: "DJ links", exact: true })).toHaveCount(0);
     await page.goto("/search?q=BASICBIT&view=dj");
     await expect(page).toHaveURL(/\/search\?q=BASICBIT&view=dj$/);
-    await expect(page.getByRole("heading", { name: "Search VRDex" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "DJ links", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Search results", exact: true })).toHaveAttribute("href", "/search?q=BASICBIT");
     await expect(page.getByRole("link", { name: "BASICBIT", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Website: basicbit.net", exact: true })).toBeVisible();
@@ -908,18 +908,64 @@ test.describe("fixture lookup smoke", () => {
     await expect(page.getByRole("heading", { name: "Search results", exact: true })).toBeVisible();
   });
 
-  test("search views share empty states and legacy lookup preserves its query", async ({ page }) => {
+  test("DJ links preserves the legacy lookup query and offers search recovery", async ({ page }) => {
     await page.goto("/lookup?q=No%20Matching%20Fixture");
     await expect(page).toHaveURL(/\/search\?q=No(?:%20|\+)Matching(?:%20|\+)Fixture&view=dj$/);
-    await expect(page.getByText("No matches found.", { exact: true })).toBeVisible();
+    const lookupResults = page.getByRole("region", { name: "Lookup results" });
+    await expect(lookupResults.getByText("No matches found.", { exact: true })).toBeVisible();
+    const searchRecovery = lookupResults.getByRole("link", { name: "Search results", exact: true });
+    await expect(page.getByRole("link", { name: "Search results", exact: true })).toHaveCount(1);
 
-    await page.getByRole("link", { name: "Search results", exact: true }).click();
+    await searchRecovery.click();
     await expect(page).toHaveURL(/\/search\?q=No(?:%20|\+)Matching(?:%20|\+)Fixture$/);
     await expect(page.getByText("No public results matched that search yet.", { exact: true })).toBeVisible();
 
     await page.goto("/search?q=BASICBIT&view=dj&type=world");
     await expect(page).toHaveURL(/\/search\?q=BASICBIT&view=dj$/);
     await expect(page.getByRole("link", { name: "Search results", exact: true })).toHaveAttribute("href", "/search?q=BASICBIT");
+  });
+
+  test("DJ links recovers a community miss and keeps its clear control usable on phones", async ({ page }) => {
+    await page.goto("/search?q=Afterglow+Social&view=dj");
+    const lookupResults = page.getByRole("region", { name: "Lookup results" });
+    await expect(lookupResults.getByText("No matches found.", { exact: true })).toBeVisible();
+
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      const clearControl = page.getByRole("button", { name: "Clear lookup" });
+      await expect(clearControl).toBeVisible();
+      const bounds = await clearControl.boundingBox();
+      expect(bounds?.width).toBeGreaterThanOrEqual(40);
+      expect(bounds?.height).toBeGreaterThanOrEqual(40);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    }
+
+    await lookupResults.getByRole("link", { name: "Search results", exact: true }).click();
+    await expect(page).toHaveURL("/search?q=Afterglow+Social");
+    await expect(page.getByRole("region", { name: "Search results" })
+      .getByText("Afterglow Social", { exact: true }).first()).toBeVisible();
+  });
+
+  test("DJ links distinguishes unavailable lookup and all-miss bulk results", async ({ page }) => {
+    await page.route("**/lookup/suggest?q=Unavailable%20Lookup", async (route) => {
+      await route.fulfill({ status: 503, json: { results: [], privateResults: [] } });
+    });
+    await page.goto("/search?q=Afterglow+Social&view=dj");
+    await expect(page.getByText("No matches found.", { exact: true })).toBeVisible();
+    await page.getByLabel("DJ name").fill("Unavailable Lookup");
+    await page.getByRole("button", { name: "Lookup", exact: true }).click();
+    await expect(page.getByText("Lookup data is temporarily unavailable.")).toBeVisible();
+    await expect(page.getByText("No matches found.", { exact: true })).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Bulk", exact: true }).click();
+    await page.getByLabel("Lineup text").fill("No Artist Alpha Fixture\nNo Artist Beta Fixture");
+    await expect(page.getByText("No match", { exact: true })).toHaveCount(2);
+    await expect(page.getByText("No matches found.", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Lookup data is temporarily unavailable.")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Search results", exact: true })).toHaveAttribute(
+      "href",
+      "/search",
+    );
   });
 
   test("standard search supports keyboard typeahead and sparse profile fallbacks", async ({ page }) => {

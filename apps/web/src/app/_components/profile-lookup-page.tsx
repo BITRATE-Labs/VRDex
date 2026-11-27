@@ -11,6 +11,7 @@ import { PublicProfileLinks } from "./public-profile-links";
 import { LookupSearchBox } from "./lookup-search-box";
 import { mergeLookupSuggestions } from "./lookup-suggestion-merge";
 import { SearchViewShell } from "./search-view-shell";
+import { searchHref } from "./search-view-state";
 import { Card } from "@/components/ui/card";
 import { EntityImage } from "@/components/ui/entity-image";
 import { ProfileAvatarImage } from "@/components/ui/profile-avatar-image";
@@ -514,11 +515,14 @@ function ProfileLookupPageContent({
   const [seedViewerAccess, setSeedViewerAccess] = useState(viewerAccess);
   const [lookupStatus, setLookupStatus] = useState<LookupStatus>(status);
   const [bulkEntries, setBulkEntries] = useState<BulkLookupEntry[]>([]);
-  const [pendingLabel, setPendingLabel] = useState<string | null>(null);
-  const requestVersionRef = useRef(0);
-  const privateLookupQueryRef = useRef<string | null>(
-    privateResults.length > 0 ? query : null,
+  const initialPrivateLookupQuery =
+    status === "live" && viewerAccess.allowed && privateResults.length === 0 && queryPrivateResults
+      ? query.trim()
+      : "";
+  const [pendingLabel, setPendingLabel] = useState<string | null>(
+    initialPrivateLookupQuery && results.length === 0 ? `Searching ${initialPrivateLookupQuery}` : null,
   );
+  const requestVersionRef = useRef(0);
   const [isPending, startTransition] = useTransition();
   const isSearching = pendingLabel !== null || isPending;
   const privateUiEnabled = seedViewerAccess.allowed;
@@ -533,6 +537,8 @@ function ProfileLookupPageContent({
   const seedViewerAccessAllowed = seedViewerAccess.allowed;
   const seedViewerAccessSource = seedViewerAccess.source;
   const hasQuery = Boolean(displayQuery.trim()) || bulkEntries.length > 0 || isSearching;
+  const isSingleMiss = lookupStatus === "live" && !isSearching &&
+    bulkEntries.length === 0 && !visibleResults.length && Boolean(displayQuery.trim());
 
   useEffect(() => {
     const handleHistoryNavigation = () => window.location.reload();
@@ -571,7 +577,6 @@ function ProfileLookupPageContent({
       return [];
     }
 
-    privateLookupQueryRef.current = nextQuery;
     try {
       return await queryPrivateResults(nextQuery);
     } catch (error) {
@@ -582,45 +587,32 @@ function ProfileLookupPageContent({
   }, [queryPrivateResults]);
 
   useEffect(() => {
-    const currentQuery = displayQuery.trim();
-
-    if (
-      bulkEntries.length > 0 ||
-      currentQuery.length < 1 ||
-      displayPrivateResults.length > 0 ||
-      !seedViewerAccess.allowed ||
-      !queryPrivateResults ||
-      privateLookupQueryRef.current === currentQuery
-    ) {
+    // Explicit single and bulk submissions handle their own private results.
+    if (!initialPrivateLookupQuery || !queryPrivateResults || requestVersionRef.current !== 0) {
       return;
     }
 
     let cancelled = false;
-    const requestVersion = requestVersionRef.current;
-    privateLookupQueryRef.current = currentQuery;
 
-    void queryPrivateResults(currentQuery)
-      .then((initialPrivateResults) => {
-        if (!cancelled && requestVersionRef.current === requestVersion) {
-          startTransition(() => setDisplayPrivateResults(initialPrivateResults));
-        }
-      })
+    void queryPrivateResults(initialPrivateLookupQuery)
       .catch((error: unknown) => {
         const message = error instanceof Error ? error.message : String(error);
         console.error(`Client-side private seed lookup failed: ${message}`);
+        return [];
+      })
+      .then((initialPrivateResults) => {
+        if (!cancelled && requestVersionRef.current === 0) {
+          startTransition(() => {
+            setDisplayPrivateResults(initialPrivateResults);
+            setPendingLabel(null);
+          });
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [
-    bulkEntries.length,
-    displayPrivateResults.length,
-    displayQuery,
-    queryPrivateResults,
-    seedViewerAccess.allowed,
-    seedViewerAccess.source,
-  ]);
+  }, [initialPrivateLookupQuery, queryPrivateResults]);
 
   const runLookup = useCallback(async (nextQuery: string) => {
     const normalizedQuery = nextQuery.trim();
@@ -677,6 +669,7 @@ function ProfileLookupPageContent({
   ) => {
     if (lines.length === 0) {
       requestVersionRef.current += 1;
+      setPendingLabel(null);
       startTransition(() => {
         setBulkEntries([]);
         setDisplayQuery("");
@@ -778,12 +771,20 @@ function ProfileLookupPageContent({
 
   const canonicalView = view ?? "dj";
   const switcherQuery = bulkEntries.length > 0 ? undefined : displayQuery;
+  const searchNavigation = (
+    <Link
+      className="w-fit text-sm font-medium text-accent-strong underline underline-offset-4"
+      href={searchHref({ query: switcherQuery })}
+    >
+      Search results
+    </Link>
+  );
 
   return (
     <SearchViewShell
       activeView={canonicalView}
       className="lookup-theme"
-      query={switcherQuery}
+      searchNavigation={isSingleMiss ? null : searchNavigation}
       searchControl={(
         <LookupSearchBox
           actionPath={routePath}
@@ -804,39 +805,38 @@ function ProfileLookupPageContent({
           <section aria-label="Lookup results" className="grid gap-3">
             {isSearching ? <span className="sr-only">{pendingLabel ?? "Searching"}</span> : null}
             <BulkLookupSummary entries={bulkEntries} />
-            <div className={cn("lookup-results-wrap", isSearching ? "lookup-results-wrap--pending" : undefined)}>
-              {visiblePublicResults.length === 0 && visiblePrivateResults.length === 0 && !isSearching ? (
-                <Card className="lookup-panel" surface="dashed">
-                  <p className="font-medium">No matches found.</p>
-                </Card>
-              ) : visiblePublicResults.length > 0 || visiblePrivateResults.length > 0 ? (
-                <>
-                  <div className="grid gap-3 min-[1320px]:hidden">
-                    {visiblePublicResults.map((profile) => <LookupResultCard key={profile.slug} profile={profile} />)}
-                    {visiblePrivateResults.map((candidate) => (
-                      <PrivateSeedResultCard candidate={candidate} key={candidate.id} />
-                    ))}
-                  </div>
-                  <TableFrame className="lookup-table hidden min-[1320px]:block">
-                    <Table>
-                      <TableHead>
-                        <tr>
-                          <TableHeaderCell>Name</TableHeaderCell>
-                          <TableHeaderCell>Genres</TableHeaderCell>
-                          <TableHeaderCell>Links</TableHeaderCell>
-                        </tr>
-                      </TableHead>
-                      <tbody className="divide-y divide-border">
-                        {visiblePublicResults.map((profile) => <LookupResultRow key={profile.slug} profile={profile} />)}
-                        {visiblePrivateResults.map((candidate) => (
-                          <PrivateSeedResultRow candidate={candidate} key={candidate.id} />
-                        ))}
-                      </tbody>
-                    </Table>
-                  </TableFrame>
-                </>
-              ) : null}
-            </div>
+            {isSingleMiss ? (
+              <Card className="grid gap-2" surface="dashed">
+                <p className="font-medium">No matches found.</p>
+                {searchNavigation}
+              </Card>
+            ) : visibleResults.length > 0 ? (
+              <div className={cn("lookup-results-wrap", isSearching ? "lookup-results-wrap--pending" : undefined)}>
+                <div className="grid gap-3 min-[1320px]:hidden">
+                  {visiblePublicResults.map((profile) => <LookupResultCard key={profile.slug} profile={profile} />)}
+                  {visiblePrivateResults.map((candidate) => (
+                    <PrivateSeedResultCard candidate={candidate} key={candidate.id} />
+                  ))}
+                </div>
+                <TableFrame className="lookup-table hidden min-[1320px]:block">
+                  <Table>
+                    <TableHead>
+                      <tr>
+                        <TableHeaderCell>Name</TableHeaderCell>
+                        <TableHeaderCell>Genres</TableHeaderCell>
+                        <TableHeaderCell>Links</TableHeaderCell>
+                      </tr>
+                    </TableHead>
+                    <tbody className="divide-y divide-border">
+                      {visiblePublicResults.map((profile) => <LookupResultRow key={profile.slug} profile={profile} />)}
+                      {visiblePrivateResults.map((candidate) => (
+                        <PrivateSeedResultRow candidate={candidate} key={candidate.id} />
+                      ))}
+                    </tbody>
+                  </Table>
+                </TableFrame>
+              </div>
+            ) : null}
           </section>
         ) : null}
     </SearchViewShell>

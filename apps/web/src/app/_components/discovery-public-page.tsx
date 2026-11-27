@@ -518,7 +518,6 @@ export function SearchResultsPage({
   return (
     <SearchViewShell
       activeView="standard"
-      query={query}
       searchControl={<DiscoverySearchForm className="max-w-3xl" defaultQuery={query} filter={activeFilter} surface="search" tone="default" />}
     >
         {status === "live" ? null : <Card surface="dashed">{status === "missing-url" ? "Search data is not available in this environment yet." : "Search data is temporarily unavailable."}</Card>}
