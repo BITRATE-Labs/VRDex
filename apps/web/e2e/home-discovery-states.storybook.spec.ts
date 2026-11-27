@@ -16,6 +16,8 @@ test("club rail controls follow overflow and keep keyboard focus at the ends @st
 
   await expect(next).toBeEnabled();
   await expect(previous).toBeDisabled();
+  await expect(previous).toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
+  await expect(next).not.toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
   await expect(rail).toHaveAttribute("data-scroll-right", "");
   await expect(rail).toHaveCSS("mask-image", /linear-gradient/);
   await cards.first().getByRole("button").focus();
@@ -28,6 +30,7 @@ test("club rail controls follow overflow and keep keyboard focus at the ends @st
     await expect(cards.last()).not.toBeInViewport();
     await next.press("Enter");
     await expect(next).toBeDisabled();
+    await expect(next).toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
     await expect(next).toBeFocused();
     await expect(previous).toBeEnabled();
     await expect(cards.first()).not.toBeInViewport();
@@ -92,6 +95,13 @@ for (const state of [
       page.getByRole("heading", { name: "Discover", exact: true }),
     ).toBeVisible();
     await waitForVisualReady(page);
+    if (isMobile && state === "mixed") {
+      const interest = page.getByRole("button", { name: /^Interested:/ }).first();
+      await expect(interest).toBeVisible();
+      const bounds = (await interest.boundingBox())!;
+      expect(bounds.width).toBeGreaterThanOrEqual(44);
+      expect(bounds.height).toBeGreaterThanOrEqual(44);
+    }
     if (state.includes("-no-")) {
       const emptyName = state.endsWith("-no-events") ? "Events" : "Clubs";
       const populatedName = emptyName === "Events" ? "Clubs" : "Events";

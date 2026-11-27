@@ -76,6 +76,7 @@
   cursor: pointer;
 }
 .railControls button[aria-disabled="true"] {
+  border-color: transparent;
   background: transparent;
   color: var(--muted);
   cursor: default;
@@ -440,7 +441,9 @@
   }
 }
 @media (hover: none), (pointer: coarse), (max-width: 760px) {
-  .save {
+  .card .save {
+    min-width: 44px;
+    min-height: 44px;
     opacity: 1;
   }
 }
