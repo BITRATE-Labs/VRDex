@@ -1,0 +1,69 @@
+diff --git a/dist/client/client/theme/SearchPage/SearchPage.jsx b/dist/client/client/theme/SearchPage/SearchPage.jsx
+index 2efb8b4817b76bfc13f70ad68d289ee4f2a6bfbf..2f810fe9366d0e5472f171bddfdc319d68bfc2f2 100644
+--- a/dist/client/client/theme/SearchPage/SearchPage.jsx
++++ b/dist/client/client/theme/SearchPage/SearchPage.jsx
+@@ -47,7 +47,7 @@ function SearchPageContent() {
+         if (searchQuery) {
+             (async () => {
+                 const results = await searchByWorker(versionUrl, searchContext, searchQuery, 100);
+-                setSearchResults(results);
++                setSearchResults(groupResultsByHref(results));
+             })();
+         }
+         else {
+@@ -144,7 +144,35 @@ function SearchPageContent() {
+       </div>
+     </React.Fragment>);
+ }
+-function SearchResultItem({ searchResult: { document, type, page, tokens, metadata }, }) {
++function groupResultsByHref(results) {
++    const matches = new Map();
++    for (const result of results) {
++        const href = getResultHref(result);
++        const first = matches.get(href);
++        // Retain the first rank, with the earliest snippet if that hit had none.
++        if (!first || (!hasResultSnippet(first) && hasResultSnippet(result))) {
++            matches.set(href, result);
++        }
++    }
++    return Array.from(matches.values());
++}
++function hasResultSnippet({ document, type }) {
++    return (type === SearchDocumentType.Content || type === SearchDocumentType.Description) &&
++        Boolean(document.t?.trim());
++}
++function getResultHref({ document, tokens }) {
++    let search = "";
++    if (Mark && tokens.length > 0) {
++        const params = new URLSearchParams();
++        for (const token of tokens) {
++            params.append("_highlight", token);
++        }
++        search = `?${params.toString()}`;
++    }
++    return document.u + search + (document.h || "");
++}
++function SearchResultItem({ searchResult }) {
++    const { document, type, page, tokens, metadata } = searchResult;
+     const isTitle = type === SearchDocumentType.Title;
+     const isKeywords = type === SearchDocumentType.Keywords;
+     const isDescription = type === SearchDocumentType.Description;
+@@ -156,17 +184,9 @@ function SearchResultItem({ searchResult: { document, type, page, tokens, metada
+     if (!isTitleRelated) {
+         pathItems.push(page.t);
+     }
+-    let search = "";
+-    if (Mark && tokens.length > 0) {
+-        const params = new URLSearchParams();
+-        for (const token of tokens) {
+-            params.append("_highlight", token);
+-        }
+-        search = `?${params.toString()}`;
+-    }
+     return (<article className={styles.searchResultItem}>
+       <h2>
+-        <Link to={document.u + search + (document.h || "")} dangerouslySetInnerHTML={{
++        <Link to={getResultHref(searchResult)} dangerouslySetInnerHTML={{
+             __html: isContent || isDescriptionOrKeywords
+                 ? highlight(articleTitle, tokens)
+                 : highlightStemmed(articleTitle, getStemmedPositions(metadata, "t"), tokens, 100),

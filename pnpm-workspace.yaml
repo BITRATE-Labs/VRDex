@@ -11,3 +11,6 @@ onlyBuiltDependencies:
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
+
+patchedDependencies:
+  '@easyops-cn/docusaurus-search-local@0.55.3': patches/@easyops-cn__docusaurus-search-local@0.55.3.patch
