@@ -1,11 +1,10 @@
 "use client";
 import Image from "next/image";
 import { EntityImage } from "@/components/ui/entity-image";
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { FavoriteButton } from "@/components/ui/favorite-button";
 import { InterestButton } from "@/components/ui/interest-button";
 import { safeImageUrl } from "@/lib/safe-image";
-import { publicEventPath } from "@/lib/event-path";
 import { planSaveState, togglePlanAction } from "@/lib/timeline/plan-actions";
 import type {
   TimelinePreferences,
@@ -29,17 +28,21 @@ export type DetailPreferenceProps = {
 function Save({
   reference,
   label,
+  visibleLabelClassName,
   preferences,
   onPreferenceAction,
 }: {
   reference: PlanReference;
   label: string;
+  visibleLabelClassName?: string;
 } & DetailPreferenceProps) {
   const state = planSaveState(preferences.plan, reference);
   return (
     <InterestButton
       label={label}
       state={state}
+      visibleLabelClassName={visibleLabelClassName}
+      keepLabelWhenSaved
       onToggle={() => {
         const action = togglePlanAction(preferences.plan, reference);
         if (action) onPreferenceAction(action);
@@ -84,6 +87,7 @@ export function EventDetailContent({
   timeZone: string;
   hour12?: boolean;
 } & DetailPreferenceProps) {
+  const lineupHeading = useId();
   const selected = useRef<HTMLLIElement | null>(null);
   const selectedIndex = rows.findIndex((row) => row.key === slotId);
   const selectedKey = rows[selectedIndex]?.key;
@@ -96,77 +100,67 @@ export function EventDetailContent({
       row.getBoundingClientRect().top - scroll.getBoundingClientRect().top - 12;
   }, [selectedKey, selectedIndex, slotId]);
   const poster = safeImageUrl(event.posterImageUrl);
-  const href = publicEventPath(event);
   return (
-    <>
-      {poster ? (
-        <div className={styles.poster}>
-          <Image
-            unoptimized
-            src={poster}
-            alt={`${event.title} poster`}
-            width={800}
-            height={1000}
-          />
-        </div>
-      ) : null}
-      <div className={styles.content}>
-        <h3>{href ? <a href={href}>{event.title}</a> : event.title}</h3>
-        {event.status === "cancelled" ? <span>Cancelled</span> : null}
-        <div className={styles.identity}>
-          {event.communitySlug ? (
-            <a href={`/${event.communitySlug}`}>{event.communityName}</a>
-          ) : (
-            event.communityName
-          )}
-          {host ? <Favorite person={host} {...preferences} /> : null}
-        </div>
-        <p className={styles.time}>
-          <ViewerLocalEventDateTime
-            timeZone={timeZone}
-            hour12={hour12}
-            showTimeZone={false}
-            timestamp={event.startAt}
-            eventDate={event.eventDate}
-            scheduleKind={event.scheduleKind}
-          />
-          {event.endAt !== undefined ? (
-            <>
-              {" "}
-              -{" "}
-              <ViewerLocalEventDateTime
-                timestamp={event.endAt}
-                timeZone={timeZone}
-                hour12={hour12}
-                showTimeZone={false}
-              />
-            </>
-          ) : event.scheduleKind !== "date_only" ? (
-            " · Time TBA"
-          ) : null}
-        </p>
-        <p className={styles.meta}>
-          {timeZone.replaceAll("_", " ")} · {hour12 ? "12h" : "24h"}
-        </p>
-        {event.venueLabel ? <p>{event.venueLabel}</p> : null}
-        {event.worlds.map((world) => (
-          <a className="flex items-center gap-3" key={world.slug} href={`/${world.slug}`}>
-            <EntityImage label={world.displayName} src={"heroImageUrl" in world && typeof world.heroImageUrl === "string" ? world.heroImageUrl : undefined} className="h-10 w-16 rounded-control" sizes="64px" />
-            {world.displayName}
-          </a>
-        ))}
-        {event.summary ? (
-          <p className={styles.description}>{event.summary}</p>
+    <div className={styles.content}>
+      <h3>{event.title}</h3>
+      {event.status === "cancelled" ? <span>Cancelled</span> : null}
+      <div className={styles.identity}>
+        {event.communitySlug ? (
+          <a href={`/${event.communitySlug}`}>{event.communityName}</a>
+        ) : (
+          event.communityName
+        )}
+        {host ? <Favorite person={host} {...preferences} /> : null}
+      </div>
+      <p className={styles.time}>
+        <ViewerLocalEventDateTime
+          timeZone={timeZone}
+          hour12={hour12}
+          timestamp={event.startAt}
+          eventDate={event.eventDate}
+          scheduleKind={event.scheduleKind}
+          showYear
+        />
+        {event.endAt !== undefined ? (
+          <>
+            {" "}
+            -{" "}
+            <ViewerLocalEventDateTime
+              timestamp={event.endAt}
+              timeZone={timeZone}
+              hour12={hour12}
+              compactRelativeTo={event.startAt}
+              yearReferenceAt={event.startAt}
+            />
+          </>
+        ) : event.scheduleKind !== "date_only" ? (
+          " · Time TBA"
         ) : null}
-        <div className={styles.actions}>
-          <Save
-            reference={{ kind: "event", eventId: event.id }}
-            label={event.title}
-            {...preferences}
-          />
-        </div>
-        {rows.length > 0 ? (
-          <ol className={styles.lineup} aria-label="Lineup">
+      </p>
+      <div className={styles.actions}>
+        <Save
+          reference={{ kind: "event", eventId: event.id }}
+          label={event.title}
+          visibleLabelClassName={styles.interestLabel}
+          {...preferences}
+        />
+      </div>
+      {event.venueLabel ? <p>{event.venueLabel}</p> : null}
+      {event.worlds.map((world) => (
+        <a className="flex items-center gap-3" key={world.slug} href={`/${world.slug}`}>
+          <EntityImage label={world.displayName} src={"heroImageUrl" in world && typeof world.heroImageUrl === "string" ? world.heroImageUrl : undefined} className="h-10 w-16 rounded-control" sizes="64px" />
+          {world.displayName}
+        </a>
+      ))}
+      {event.summary ? (
+        <p className={styles.description}>{event.summary}</p>
+      ) : null}
+      {rows.length > 0 ? (
+        <section>
+          <h4 className={styles.lineupHeading} id={lineupHeading}>
+            Lineup
+          </h4>
+          <ol className={styles.lineup} aria-labelledby={lineupHeading}>
             {rows.map((row) => (
               <li
                 key={row.key}
@@ -207,6 +201,7 @@ export function EventDetailContent({
                         slotId: row.key,
                       }}
                       label={row.displayLabel}
+                      visibleLabelClassName={styles.setInterestLabel}
                       {...preferences}
                     />
                   ) : null}
@@ -214,8 +209,19 @@ export function EventDetailContent({
               </li>
             ))}
           </ol>
-        ) : null}
-      </div>
-    </>
+        </section>
+      ) : null}
+      {poster ? (
+        <div className={styles.poster}>
+          <Image
+            unoptimized
+            src={poster}
+            alt={`${event.title} poster`}
+            width={800}
+            height={1000}
+          />
+        </div>
+      ) : null}
+    </div>
   );
 }

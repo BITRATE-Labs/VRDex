@@ -12,13 +12,15 @@ export type InterestButtonProps = {
   size?: "default" | "compact";
   className?: string;
   visibleLabelClassName?: string;
+  keepLabelWhenSaved?: boolean;
 };
 
-export function InterestButton({ label, state, onToggle, size = "default", className, visibleLabelClassName }: InterestButtonProps) {
+export function InterestButton({ label, state, onToggle, size = "default", className, visibleLabelClassName, keepLabelWhenSaved }: InterestButtonProps) {
   const { iconRef, onClick, onAnimationEnd } = usePreferenceSelectionPop(state === "saved", onToggle);
   const title = state === "included" ? "Included with event" : state === "saved" ? "Remove interest" : "Interested";
+  const actionLabel = state === "saved" && keepLabelWhenSaved ? "Interested" : title;
   return (
-    <button type="button" aria-label={`${title}: ${label}`} title={title} aria-pressed={state !== "unsaved"}
+    <button type="button" aria-label={`${actionLabel}: ${label}`} title={title} aria-pressed={state !== "unsaved"}
       disabled={state === "included"} data-state={state}
       className={cn(styles.control, styles.interest, size === "compact" && styles.compact, className)} onClick={onClick}>
       <svg ref={iconRef} onAnimationEnd={onAnimationEnd} viewBox="0 0 24 24" aria-hidden="true" className={styles.icon}>
@@ -26,7 +28,7 @@ export function InterestButton({ label, state, onToggle, size = "default", class
         <path data-glyph="check" className={styles.check} d="m5 12 4.5 4.5L19 7" />
         <path data-glyph="remove" className={styles.remove} d="m6 6 12 12M18 6 6 18" />
       </svg>
-      {visibleLabelClassName && <span className={visibleLabelClassName} aria-hidden="true">{title}</span>}
+      {visibleLabelClassName && <span className={visibleLabelClassName} aria-hidden="true">{actionLabel}</span>}
     </button>
   );
 }
