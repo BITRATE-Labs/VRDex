@@ -1,9 +1,10 @@
+import { ArrowDown, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 import { EntityImage } from "@/components/ui/entity-image";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { Card, Eyebrow, SectionHeading, SectionTitle } from "@/components/ui/card";
+import { Card, Eyebrow, SectionTitle } from "@/components/ui/card";
 import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { cn } from "@/lib/cn";
 import { publicEventPath } from "@/lib/event-path";
@@ -279,6 +280,7 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
   const referenceUrl = sourceUrl === canonicalWorldUrl ? null : sourceUrl;
   const heroImageUrl = safeImageUrl(world.heroImageUrl);
   const { upcoming, recent } = world.eventContext;
+  const hasEvents = upcoming.length > 0 || recent.length > 0;
   const hasTags = world.tags.length > 0;
   const hasCredits = world.creatorAttributions.length > 0;
   const description = world.description?.trim();
@@ -287,7 +289,7 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
     return href ? [{ ...link, href }] : [];
   });
   const hasLinks = referenceUrl || outboundLinks.length > 0;
-  const hasDetails = description || upcoming.length > 0 || recent.length > 0 || hasTags || hasCredits || hasLinks;
+  const hasDetails = description || hasEvents || hasTags || hasCredits || hasLinks;
   const hasPlatforms = world.platformCompatibility.length > 0;
   const isSparse = !heroImageUrl && !hasDetails && !canonicalWorldUrl
     && !world.vrchatWorldId && !world.summary?.trim()
@@ -315,7 +317,7 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
     <a
       className={cn(
         buttonVariants({ variant: "primary" }),
-        hasLaunchDetails ? "mt-3 max-sm:min-h-11 sm:col-span-2 sm:row-start-4 sm:mt-5 sm:justify-self-start" : "mt-5",
+        hasLaunchDetails && "max-sm:min-h-11",
         heroImageUrl
           ? "focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-media"
           : "focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-strong",
@@ -326,6 +328,25 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
     >
       Open VRChat world
     </a>
+  ) : null;
+  const navigationLinkClassName = "inline-flex min-h-11 items-center gap-1.5 rounded-control text-sm font-medium underline decoration-current/40 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2";
+  const actions = launchAction || hasEvents ? (
+    <div className={cn(
+      "flex flex-wrap items-center gap-x-3 gap-y-1 lg:block",
+      hasLaunchDetails ? "mt-3 sm:col-span-2 sm:row-start-4 sm:mt-5 sm:justify-self-start" : "mt-5",
+      !launchAction && "lg:hidden",
+    )}>
+      {launchAction}
+      {hasEvents ? (
+        <a
+          className={cn(navigationLinkClassName, "lg:hidden", heroImageUrl ? "text-white/90 focus-visible:outline-white" : "text-accent-strong focus-visible:outline-accent")}
+          href="#world-events"
+        >
+          Events
+          <ArrowDown aria-hidden="true" className="size-3.5" />
+        </a>
+      ) : null}
+    </div>
   ) : null;
 
   return (
@@ -351,7 +372,7 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
               {hasLaunchDetails ? (
                 <div className="mt-4 sm:contents">
                   <dl className="text-sm sm:col-start-2 sm:row-start-3 sm:mt-5">{platformDetails}</dl>
-                  {launchAction}
+                  {actions}
                 </div>
               ) : null}
               {!isSparse && world.summary ? <p className={cn(
@@ -381,7 +402,13 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
                   {hasPlatforms && !hasLaunchDetails ? platformDetails : null}
                 </dl>
               )}
-              {hasLaunchDetails ? null : launchAction}
+              {hasLaunchDetails ? null : actions}
+              {isSparse ? (
+                <Link className={cn(navigationLinkClassName, "mt-2 text-accent-strong focus-visible:outline-accent sm:hidden [@media(scripting:none)]:hidden")} href="/discovery">
+                  Discovery
+                  <ArrowRight aria-hidden="true" className="size-3.5" />
+                </Link>
+              ) : null}
             </div>
             {heroImageUrl ? (
               <EntityImage label={world.displayName} src={heroImageUrl} className="aspect-video w-full rounded-card border border-white/20 text-4xl" sizes="(min-width: 1024px) 45vw, 100vw" priority />
@@ -396,9 +423,15 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
           </Card>
         ) : null}
 
-        {upcoming.length > 0 || recent.length > 0 ? (
+        {hasEvents ? (
           <Card surface="white" className="max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:shadow-none">
-            <SectionHeading>Events at this world</SectionHeading>
+            <SectionTitle
+              className="scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent"
+              id="world-events"
+              tabIndex={-1}
+            >
+              Events at this world
+            </SectionTitle>
             <div className={cn("mt-4 grid gap-4 sm:mt-6", upcoming.length > 0 && recent.length > 0 && "lg:grid-cols-2")}>
               {upcoming.length > 0 ? (
                 <WorldEventBucket heading="Upcoming and active" events={upcoming} />
