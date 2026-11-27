@@ -436,18 +436,18 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
   const useCompactCommunity = !isPerson && hasSparseIdentity && !profile.telemetry && !profile.groupMembership
     && (visibleLinks.length === 0 || (visibleLinks.length === 1 && groupDestination?.kind === "vrchat_group"));
   const useCompactIdentity = useCompactCommunity || (isPerson && hasSparseIdentity && visibleLinks.length === 0);
-  const compactContributionStyle = useCompactCommunity
-    && "!text-muted underline decoration-border-strong underline-offset-4 hover:decoration-current";
+  const quietContributionStyle = "!text-muted underline decoration-border-strong underline-offset-4 hover:decoration-current";
+  const compactContributionStyle = useCompactCommunity && quietContributionStyle;
   const secondarySections: Partial<Record<ProfilePublicSectionKey, ReactNode>> = {
     events: eventPreviews.length > 0 || !isPerson ? (
       <section className={cn("border-t border-border", useCompactCommunity ? "pb-4 pt-5 lg:pt-3" : "py-8")}>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          {useCompactCommunity
-            ? <SectionTitle className="text-xl">Hosted events</SectionTitle>
-            : <SectionHeading>{isPerson ? "Upcoming events" : "Hosted events"}</SectionHeading>}
+          {isPerson
+            ? <SectionHeading>Upcoming events</SectionHeading>
+            : <SectionTitle className={useCompactCommunity ? "text-xl" : "max-sm:text-xl"}>Hosted events</SectionTitle>}
           {!isPerson ? (
             <Link
-              className={cn(buttonVariants({ variant: useCompactCommunity ? "ghost" : "secondary", size: "sm" }), compactContributionStyle)}
+              className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "min-h-11 shrink-0 whitespace-nowrap", quietContributionStyle)}
               href={`/events/new?community=${encodeURIComponent(profile.slug)}`}
             >
               Add event
