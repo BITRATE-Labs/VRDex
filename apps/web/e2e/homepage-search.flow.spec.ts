@@ -334,9 +334,9 @@ test("populated Search aligns titles and keeps media and role details available 
   const expandedLinks = links.locator("..").locator(":scope > div");
   await expect(expandedLinks.getByRole("link", { name: "Website: basicbit.net", exact: true })).toHaveAttribute("href", "https://basicbit.net/");
   const [genresPanel, linksPanel] = await Promise.all([expandedGenres.boundingBox(), expandedLinks.boundingBox()]);
-  expect(genresPanel!.x).toBeLessThan(previewBounds!.x);
-  expect(linksPanel!.x).toBe(genresPanel!.x);
-  expect(linksPanel!.width).toBe(genresPanel!.width);
+  expect(genresPanel!.x).toBe(previewBounds!.x);
+  expect(linksPanel!.x).toBeLessThan(genresPanel!.x);
+  expect(linksPanel!.x + linksPanel!.width).toBe(genresPanel!.x + genresPanel!.width);
   expect(linksPanel!.y).toBeGreaterThanOrEqual(genresPanel!.y + genresPanel!.height);
   await links.press("Space");
   await expect(links).toBeFocused();
