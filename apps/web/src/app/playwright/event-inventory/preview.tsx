@@ -1,6 +1,7 @@
 "use client";
 
 import { ConvexProviderWithAuth, type ConvexReactClient } from "convex/react";
+import { ConvexError } from "convex/values";
 import { getFunctionName, type FunctionArgs, type FunctionReference, type FunctionReturnType } from "convex/server";
 import { useEffect, useState } from "react";
 import { api } from "@convex-generated-api";
@@ -45,7 +46,7 @@ const sparseHeldRows: HeldImports = [
   { ...heldOrigin, connectorKind: "google_calendar", targetName: "Club calendar", kind: "flag", eventId: eventId("flag-2"), reason: "external_deleted", title: "Lantern Night", href: "/afterglow/events/lantern/edit", updatedAt: 1 },
 ];
 
-function inventoryFixture(contributorOnly: boolean, failShortcuts: boolean, held?: string, superAdmin = false) {
+function inventoryFixture(contributorOnly: boolean, failShortcuts: boolean, held?: string, superAdmin = false, discardLocked = false) {
   const listeners = new Set<() => void>();
   const cache = new Map<string, unknown>();
   let shortcutsUnavailable = failShortcuts;
@@ -93,7 +94,10 @@ function inventoryFixture(contributorOnly: boolean, failShortcuts: boolean, held
       if (args.view === "past" && row.title !== "Past session") return false;
       return `${row.title ?? ""} ${row.community?.displayName ?? ""}`.toLowerCase().includes(args.query);
     });
-    return { page: pageRows, isDone: true, continueCursor: "done" };
+    const visibleRows = discardLocked
+      ? pageRows.map(row => row.id === staffDraft.id ? { ...row, discardVersion: 1 } : row)
+      : pageRows;
+    return { page: visibleRows, isDone: true, continueCursor: "done" };
   }
 
   // The native Convex hook owns accumulation, cursors, loading and error
@@ -110,6 +114,7 @@ function inventoryFixture(contributorOnly: boolean, failShortcuts: boolean, held
     async mutation(mutation: FunctionReference<"mutation">, args: { draftId?: string; eventId?: string; communitySlug?: string | null; draft?: { id: string; version: number } }) {
       const name = getFunctionName(mutation);
       if (name === "eventInventory:discardDraft" && args.draft) {
+        if (discardLocked) throw new ConvexError({ code: "BROADCAST_ACTIVE", message: "Stop the active broadcast first." });
         discarded.add(args.draft.id);
         cache.clear();
         notify();
@@ -173,7 +178,7 @@ function useFixtureAuth(session?: string) {
 export function EventInventoryPreview({ contributorOnly, held, session }: { contributorOnly: boolean; held?: string; session?: string }) {
   const [fixture, setFixture] = useState<ReturnType<typeof inventoryFixture> | null>(null);
   useEffect(() => {
-    const value = inventoryFixture(contributorOnly, session === "shortcuts-failure", held, session === "owner-mode");
+    const value = inventoryFixture(contributorOnly, session === "shortcuts-failure", held, session === "owner-mode", session === "discard-locked");
     setFixture(value);
     return value.dispose;
   }, [contributorOnly, held, session]);

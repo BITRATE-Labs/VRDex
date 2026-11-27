@@ -9,6 +9,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { SectionTitle } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
 import { EventIdentityPicker } from "@/app/events/event-identity-picker";
+import { ViewerLocalEventDateTime } from "@/app/_components/viewer-local-event-times";
 import type { EventIdentityOption } from "@/lib/event-editor-identity";
 import { EventInventoryControls, EventInventoryList, type EventInventoryCriteria, type EventInventoryView } from "./event-inventory-list";
 import { HeldImportsSection } from "./held-imports-section";
@@ -102,6 +103,7 @@ function EventOwnerMode() {
       {mode.community ? (
         <>
           <span>Admin access · {mode.community.name}</span>
+          <span className="text-sm text-muted">Expires <ViewerLocalEventDateTime timestamp={mode.community.expiresAt} /></span>
           <button className={buttonVariants({ variant: "secondary" })} disabled={saving} type="button"
             onClick={() => void change(null)}>End admin access</button>
         </>

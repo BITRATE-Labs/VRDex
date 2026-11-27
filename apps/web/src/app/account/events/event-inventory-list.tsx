@@ -1,6 +1,7 @@
 "use client";
 
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
+import { ConvexError } from "convex/values";
 import Link from "next/link";
 import { useId, useRef, useState } from "react";
 import { useMutation } from "convex/react";
@@ -78,17 +79,19 @@ function DraftActions({ draft, title }: { draft: DiscardableDraft; title: string
   const dialog = useRef<HTMLDialogElement>(null);
   const headingId = useId();
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
 
   async function confirmDiscard() {
     if (busy) return;
     setBusy(true);
-    setFailed(false);
+    setFailure(null);
     try {
       await discard({ draft });
       dialog.current?.close();
-    } catch {
-      setFailed(true);
+    } catch (error) {
+      setFailure(error instanceof ConvexError && typeof error.data?.message === "string"
+        ? error.data.message
+        : "Could not discard this draft. Close this dialog and try again.");
     } finally {
       setBusy(false);
     }
@@ -109,7 +112,7 @@ function DraftActions({ draft, title }: { draft: DiscardableDraft; title: string
       <div className="absolute right-0 z-20 mt-1 w-max rounded-control border border-border bg-surface-elevated p-1 shadow-lg">
         <Button size="sm" variant="dangerGhost" onClick={() => {
           if (menu.current) menu.current.open = false;
-          setFailed(false);
+          setFailure(null);
           dialog.current?.showModal();
         }}>Discard draft</Button>
       </div>
@@ -119,7 +122,7 @@ function DraftActions({ draft, title }: { draft: DiscardableDraft; title: string
     }} onClose={() => menu.current?.querySelector("summary")?.focus()}>
       <h2 id={headingId} className="text-xl font-semibold">Discard draft?</h2>
       <p className="mt-2 break-words text-sm text-muted">{title}</p>
-      {failed ? <Notice className="mt-3" role="alert" variant="error">Could not discard this draft. Close this dialog and try again.</Notice> : null}
+      {failure ? <Notice className="mt-3" role="alert" variant="error">{failure}</Notice> : null}
       <div className="mt-5 flex flex-wrap gap-2">
         <Button autoFocus disabled={busy} onClick={() => dialog.current?.close()}>Keep draft</Button>
         <Button disabled={busy} variant="danger" onClick={() => void confirmDiscard()}>Discard draft</Button>
