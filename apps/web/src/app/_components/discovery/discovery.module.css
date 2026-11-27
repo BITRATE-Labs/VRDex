@@ -227,6 +227,21 @@
       justify-self: start;
     }
   }
+  @container event-rail (26.5rem <= width < 35rem) {
+    .cards:has(> div + div > .eventCard) .eventCard > .eventMetadata {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+    .cards:has(> div + div > .eventCard) .eventMetadata > .name {
+      grid-column: 1 / -1;
+    }
+    .cards:has(> div + div > .eventCard) .eventMetadata > .save {
+      grid-area: 3 / 1;
+      justify-self: start;
+    }
+    .cards:has(> div + div > .eventCard) .eventMetadata > .favoriteSummary {
+      grid-area: 3 / 2;
+    }
+  }
   @container event-rail (width < 12rem) {
     .groups[data-single-event-with-clubs] .eventCard > .eventMetadata {
       grid-template-columns: minmax(0, 1fr);
