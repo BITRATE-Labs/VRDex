@@ -269,6 +269,28 @@ test("a sparse person profile puts its identity and ownership together @fixture"
   }
 });
 
+test("a rich community confirms when its hosted event list is empty @fixture", async ({ page }) => {
+  const slug = "playwright-group-population";
+  expect((await page.goto(`/${slug}`, { waitUntil: "commit" }))?.status()).toBe(200);
+
+  const heading = page.getByRole("heading", { name: "Hosted events", exact: true });
+  const events = heading.locator("xpath=ancestor::section[1]");
+  const status = events.getByText("No events", { exact: true });
+  const addEvent = events.getByRole("link", { name: "Add event", exact: true });
+
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 740 });
+    await heading.scrollIntoViewIfNeeded();
+    await expect(status).toBeVisible();
+    await expect(addEvent).toHaveAttribute("href", `/events/new?community=${slug}`);
+    const [statusBox, actionBox] = await Promise.all([status.boundingBox(), addEvent.boundingBox()]);
+    if (!statusBox || !actionBox) throw new Error("Missing hosted event status or action");
+    expect(statusBox.y).toBeGreaterThanOrEqual(actionBox.y + actionBox.height);
+    expect(actionBox.height).toBeGreaterThanOrEqual(44);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+  }
+});
+
 test("a sparse community highlights its group and confirms empty hosted events @fixture", async ({ page }) => {
   const slug = "playwright-sparse-community";
   const groupUrl = "https://vrchat.com/home/group/grp_12345678-1234-1234-1234-123456789abc";
