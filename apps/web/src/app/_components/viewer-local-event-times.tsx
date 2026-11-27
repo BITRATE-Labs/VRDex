@@ -102,6 +102,7 @@ export function ViewerLocalEventDateTime({
   compactRelativeTo,
   groupTime = false,
   showYear = false,
+  yearReferenceAt,
   timeZone: explicitTimeZone,
   showTimeZone = true,
   hour12,
@@ -113,6 +114,7 @@ export function ViewerLocalEventDateTime({
   compactRelativeTo?: number;
   groupTime?: boolean;
   showYear?: boolean;
+  yearReferenceAt?: number;
   timeZone?: string;
   hour12?: boolean;
   showTimeZone?: boolean;
@@ -137,9 +139,14 @@ export function ViewerLocalEventDateTime({
     );
   }
 
+  let includeYear = showYear;
+  if (!includeYear && yearReferenceAt !== undefined) {
+    const yearFormatter = timestampFormatter(timeZone, { year: "numeric" });
+    includeYear = yearFormatter.format(timestamp) !== yearFormatter.format(yearReferenceAt);
+  }
   const formatter = timestampFormatter(timeZone, {
     ...dateTimeOptions,
-    year: showYear ? "numeric" : undefined,
+    year: includeYear ? "numeric" : undefined,
     hour12,
     timeZoneName: showTimeZone ? dateTimeOptions.timeZoneName : undefined,
   });

@@ -332,7 +332,17 @@ export function ProfileBackendNotice({ kind }: { kind: "missing-url" | "error" }
   );
 }
 
-export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = false }: { profile: PublicProfile; mediaKitGalleryEnabled: boolean; embedded?: boolean }) {
+export function ProfilePublicPage({
+  profile,
+  mediaKitGalleryEnabled,
+  embedded = false,
+  yearReferenceAt,
+}: {
+  profile: PublicProfile;
+  mediaKitGalleryEnabled: boolean;
+  embedded?: boolean;
+  yearReferenceAt?: number;
+}) {
   const isPerson = profile.profileType === "person";
   const bannerStyle = safeImageBackground(profile.bannerImageUrl);
   const avatarImageUrl = safeImageUrl(profile.avatarImageUrl);
@@ -510,7 +520,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
             !hasSingleCommunityEvent && linksColumnSection !== "events" && "lg:grid-cols-2",
           )}>
             {eventPreviews.map((event) => (
-              <EventPreviewCard event={event} key={`${event.slug ?? event.title}-${event.startAt}`} variant={isRichPublicCommunity ? "community" : undefined} />
+              <EventPreviewCard event={event} key={`${event.slug ?? event.title}-${event.startAt}`} variant={isRichPublicCommunity ? "community" : undefined} yearReferenceAt={yearReferenceAt} />
             ))}
           </div>
         ) : useCompactCommunity ? <p className="mt-2 text-sm font-medium text-foreground">No events</p> : null}
