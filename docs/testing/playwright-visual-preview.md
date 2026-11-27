@@ -48,7 +48,10 @@ It also checks that Search opens within the viewport and Escape restores focus.
 
 The public Series flow checks that an empty schedule shows its status rather
 than a download action. Its direct calendar URL still returns a valid empty
-feed. A populated occurrence still links back to the shared series schedule.
+feed. The populated fixture verifies four distinct occurrence routes, localized
+accessible link names, and complete start and end times in the calendar feed.
+It also checks that a note unique to one night remains visible when the
+shared series summary is shown only once.
 
 PowerShell data-flow run with video:
 
