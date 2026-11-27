@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, MapPin } from "lucide-react";
 import { publicScheduleStatus } from "../../../../../convex/_eventRuntime";
 
 import { DiscoveryFeatureGate, DiscoverySearchForm, TrackedDiscoveryLink } from "./discovery-analytics";
@@ -178,10 +178,17 @@ function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[];
         {events.map((event) => (
           <EventScheduleRow
             className="[overflow-wrap:anywhere] max-sm:gap-1 max-sm:p-3 sm:grid-cols-[minmax(var(--spacing-schedule-gutter),max-content)_minmax(0,1fr)]"
-            details={[
-              event.communityName,
-              event.worlds[0]?.displayName,
-            ].filter(Boolean).join(" · ") || undefined}
+            details={event.communityName || event.worlds[0] ? (
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                {event.communityName ? <span>{event.communityName}</span> : null}
+                {event.worlds[0] ? (
+                  <span className="inline-flex min-w-0 items-baseline gap-1">
+                    <MapPin aria-hidden="true" className="size-3.5 shrink-0 self-center" />
+                    <span><span className="sr-only">World: </span>{event.worlds[0].displayName}</span>
+                  </span>
+                ) : null}
+              </div>
+            ) : undefined}
             key={event.slug ?? `${event.title}:${event.startAt}`}
             metadata={event.nextSlots && event.nextSlots.length > 0 ? (
               <ul className="grid text-sm text-muted sm:gap-1.5">
@@ -189,7 +196,7 @@ function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[];
                   <li className="flex flex-wrap items-center gap-x-2 sm:items-baseline" key={`${slot.startAt}:${slot.displayLabel}`}>
                     <ViewerLocalEventTime className="font-mono text-xs text-foreground" timestamp={slot.startAt} />
                     {slot.performer ? (
-                      <Link className="rounded-control font-medium text-foreground underline decoration-border-strong underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-accent-strong max-sm:inline-flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center" href={`/${slot.performer.slug}`}>
+                      <Link className="rounded-control font-medium text-accent-strong underline decoration-accent/65 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-accent-strong max-sm:inline-flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center" href={`/${slot.performer.slug}`}>
                         {slot.performer.displayName}
                       </Link>
                     ) : (
@@ -508,11 +515,11 @@ export function DiscoveryLandingPage({
   ) : upcomingCount === 0 ? (
     <section className={cn(
       "flex flex-wrap items-center justify-between gap-x-3 sm:justify-start sm:gap-x-5",
-      singleDirectory && "max-sm:rounded-panel max-sm:border max-sm:border-border max-sm:bg-surface max-sm:px-3 max-sm:py-0.5 lg:justify-between lg:rounded-panel lg:border lg:border-border lg:bg-surface lg:px-4 lg:py-1.5",
+      singleDirectory && "max-sm:rounded-panel max-sm:border max-sm:border-border-strong max-sm:bg-surface max-sm:px-3 max-sm:py-0.5 lg:justify-between lg:rounded-panel lg:border lg:border-border-strong lg:bg-surface lg:px-4 lg:py-1.5",
     )}>
       <div className={singleDirectory ? "sm:flex sm:items-baseline sm:gap-3 lg:block" : "sm:flex sm:items-baseline sm:gap-3"}>
-        <SectionTitle className="text-base tracking-tight">Upcoming events</SectionTitle>
-        {status === "live" ? <p className="text-sm leading-5 text-muted">No events</p> : null}
+        <SectionTitle className="text-lg leading-6 tracking-tight">Upcoming events</SectionTitle>
+        {status === "live" ? <p className="text-sm leading-5 text-foreground">No events</p> : null}
       </div>
       <Link
         className={cn(

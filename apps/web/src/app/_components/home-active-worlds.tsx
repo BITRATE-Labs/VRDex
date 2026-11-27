@@ -103,10 +103,10 @@ export function HomeActiveWorldsSection({
 }) {
   return (
     <section className="min-w-0 border-t border-border pt-3 sm:pt-6">
-      <SectionTitle className="max-sm:text-xl">Featured worlds</SectionTitle>
+      <SectionTitle className={cn("max-sm:text-xl", paired && "xl:flex xl:min-h-11 xl:items-center")}>Featured worlds</SectionTitle>
 
       {worlds.length > 0 ? (
-        <div className={cn("mt-3 grid grid-cols-1 gap-4 sm:mt-6 lg:grid-cols-3", paired && "xl:grid-cols-1")}>
+        <div className={cn("mt-3 grid grid-cols-1 gap-4 sm:mt-6 lg:grid-cols-3", paired && "xl:mt-5 xl:grid-cols-1")}>
           {worlds.map((world) => (
             <ActiveWorldCard
               compactNextEvent={singleUpcomingEventPath !== undefined && publicEventPath(world.nextEvent) === singleUpcomingEventPath}
