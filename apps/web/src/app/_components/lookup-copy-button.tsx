@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 
-export function LookupCopyButton({ className, label = "Copy", value }: { className?: string; label?: string; value: string }) {
+export function LookupCopyButton({ accessibleName, className, label = "Copy", value }: { accessibleName?: string; className?: string; label?: string; value: string }) {
   const [status, setStatus] = useState<"idle" | "copied" | "failed">("idle");
   const buttonRef = useRef<HTMLButtonElement>(null);
   const copyOperation = useRef(0);
@@ -63,7 +63,7 @@ export function LookupCopyButton({ className, label = "Copy", value }: { classNa
   return (
     <>
       <button
-        aria-label={copied ? "Copied" : label}
+        aria-label={copied ? "Copied" : accessibleName ?? label}
         className={cn(
           buttonVariants({ size: "sm", variant: "secondary" }),
           "lookup-copy-button px-2 py-1 text-xs",

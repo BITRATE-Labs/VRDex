@@ -1148,6 +1148,54 @@ body > .ph-no-capture {
   width: clamp(18ch, calc(var(--lookup-url-ch, 36) * 1ch), 68ch);
 }
 
+.lookup-primary-url-value--wrapped {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  width: 100%;
+}
+
+.lookup-vrcdn-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.55rem;
+  width: 100%;
+}
+
+.lookup-vrcdn-group__heading {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.lookup-vrcdn-group__heading > span {
+  font-size: 0.875rem;
+  font-weight: 700;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.lookup-vrcdn-group__heading .lookup-feature-link {
+  min-width: 0;
+}
+
+.lookup-vrcdn-group__heading .lookup-feature-link__label {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.lookup-vrcdn-group .lookup-copy-list {
+  width: 100%;
+}
+
 .lookup-primary-url-value:focus {
   box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 60%, transparent);
 }

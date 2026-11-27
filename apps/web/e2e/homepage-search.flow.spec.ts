@@ -25,7 +25,10 @@ test("approved wordmark is exact and visible on Home and both search shells @flo
     expect(box!.width).toBe(128);
     expect(box!.width / box!.height).toBeCloseTo(469.002 / 132, 2);
     const explanation = page.getByText("Search across public people, communities, worlds, and events.", { exact: true });
-    await expect(explanation).toHaveCount(route.includes("view=dj") ? 1 : 0);
+    await expect(explanation).toHaveCount(0);
+    if (route.includes("view=dj")) {
+      await expect(page.getByRole("heading", { name: "DJ links", exact: true })).toBeVisible();
+    }
     await page.getByRole("button", { name: "Toggle color theme", exact: true }).click();
     await expect(wordmark).toBeVisible();
     await expect(wordmark).toHaveAttribute("src", dark ? "/brand/vrdex-wordmark-light.svg" : "/brand/vrdex-wordmark.svg");
@@ -315,17 +318,44 @@ test("overlapping public copies retain one reset timer and cancel it on unmount 
 });
 
 test("expanded public links agree with legacy provider formatting @flow @fixture", async ({ page }) => {
-  await page.goto("/search?q=BASICBIT");
-  const row = publicResultRow(page, "/basicbit");
-  await row.getByText("Links", { exact: true }).click();
-  const values = await row.locator("input[readonly]").evaluateAll((inputs) => inputs.map((input) => input.getAttribute("value")));
-  const preview = await row.getByRole("link", { name: "VRCDN preview", exact: true }).getAttribute("href");
-  await expect(row.getByRole("link", { name: "Twitch: twitch.tv", exact: true })).toHaveAttribute("href", "https://www.twitch.tv/basic_bit");
-  expect(values).toEqual(["basic_bit", "https://stream.vrcdn.live/live/basicbit.live.ts", "rtspt://stream.vrcdn.live/live/basicbit"]);
-  await page.goto("/search?q=BASICBIT&view=dj");
-  const legacy = page.locator(".lookup-result-card").filter({ has: page.locator('a[href="/basicbit"]') }).first();
-  expect(await legacy.locator("input[readonly]").evaluateAll((inputs) => inputs.map((input) => input.getAttribute("value")))).toEqual(values);
-  await expect(legacy.getByRole("link", { name: "VRCDN preview", exact: true })).toHaveAttribute("href", preview!);
+  const copied: string[] = [];
+  await page.exposeFunction("recordStreamCopy", (value: string) => copied.push(value));
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: {
+      writeText: (value: string) => Reflect.get(window, "recordStreamCopy")(value),
+    } });
+  });
+
+  for (const view of ["standard", "dj"]) {
+    await page.goto(`/search?q=DJ+Aurora${view === "dj" ? "&view=dj" : ""}`);
+    if (view === "standard") {
+      await publicResultRow(page, "/playwright-dj-aurora").getByText("Links", { exact: true }).click();
+    }
+
+    const previousCopies = copied.length;
+    const expectedCopies: string[] = [];
+    for (const [name, id] of [["VRCDN", "dj-aurora"], ["Suggested VRCDN", "suggested-aurora"]]) {
+      const group = page.getByRole("group", { name, exact: true });
+      await expect(group.getByText(name, { exact: true })).toBeVisible();
+      await expect(group.getByRole("link", { name: `${name} preview`, exact: true })).toHaveAttribute(
+        "href", `https://panel.vrcdn.live/preview/${id}`,
+      );
+
+      for (const [platform, value] of [
+        ["Quest MPEG-TS", `https://stream.vrcdn.live/live/${id}.live.ts`],
+        ["PC RTSPT", `rtspt://stream.vrcdn.live/live/${id}`],
+      ]) {
+        const row = group.locator(".lookup-primary-url-card").filter({ hasText: platform });
+        const address = row.locator("code");
+        await expect(address).toHaveText(value);
+        expect(await address.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+        await row.getByRole("button", { name: `Copy ${name} ${platform}`, exact: true }).click();
+        await expect(row.getByRole("status")).toHaveText("Copied");
+        expectedCopies.push(value);
+      }
+    }
+    expect(copied.slice(previousCopies)).toEqual(expectedCopies);
+  }
 });
 
 test("non-person public results retain canonical metadata and viewer-local event dates @flow @fixture", async ({ browser, baseURL }) => {
