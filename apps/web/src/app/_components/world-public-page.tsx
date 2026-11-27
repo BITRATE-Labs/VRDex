@@ -111,8 +111,9 @@ export type PublicWorld = {
   };
 };
 
-// The lightest stop keeps muted white text legible over bright artwork in either theme.
-const worldEventArtworkOverlay = "linear-gradient(135deg, rgb(5 12 24 / 80%), rgb(5 12 24 / 70%))";
+// Keep event text legible over artwork in either theme.
+const worldEventArtworkOverlay =
+  "linear-gradient(135deg, var(--surface-strong) 30%, color-mix(in srgb, var(--surface-strong) 88%, transparent))";
 
 function safeHttpsUrl(url: string): string | null {
   try {
@@ -196,57 +197,47 @@ function WorldEventBucket({ heading, events }: { heading: string; events: Public
       {events.map((event) => {
         const sourceUrl = event.source.url ? safeHttpsUrl(event.source.url) : null;
         const eventPath = publicEventPath(event);
-        const posterStyle = safeImageBackground(event.thumbnailImageUrl, worldEventArtworkOverlay);
-        const posterTextClass = posterStyle ? "text-white/76" : "text-muted";
+        const artworkStyle = safeImageBackground(event.thumbnailImageUrl, worldEventArtworkOverlay);
 
         return (
           <article
-            className="overflow-hidden rounded-card border border-border bg-surface text-sm"
+            className="min-w-0 rounded-card border border-border bg-surface-strong bg-cover bg-center p-3 text-sm sm:p-4"
             key={`${event.slug ?? event.title}-${event.eventDate ?? event.startAt}`}
+            style={artworkStyle}
           >
-            <div
-              className={cn(
-                "px-3 pt-3 sm:px-4 sm:pt-4",
-                posterStyle ? "bg-cover bg-center pb-3 sm:pb-4" : "pb-2",
+            <h4 className="break-words text-lg font-semibold leading-snug tracking-[-0.03em]">
+              {eventPath ? <Link href={eventPath}>{event.title}</Link> : event.title}
+            </h4>
+            <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted">
+              <ViewerLocalEventDateTime
+                className="min-w-0 break-words text-sm font-semibold text-foreground"
+                timestamp={event.startAt}
+                eventDate={event.eventDate}
+                scheduleKind={event.scheduleKind}
+              />
+              <span>Confirmed venue</span>
+            </div>
+            {event.communityName ? <p className="mt-1 text-muted">Hosted by {event.communityName}</p> : null}
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 break-words text-xs text-muted">
+              {sourceUrl ? (
+                <a
+                  className="min-w-0 text-sm font-medium text-accent-strong underline decoration-accent/35 underline-offset-4"
+                  href={sourceUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  {event.source.label}
+                </a>
+              ) : (
+                <span>{event.source.label}</span>
               )}
-              style={posterStyle}
-            >
-              <h4 className={cn("break-words text-lg font-semibold leading-snug tracking-[-0.03em]", posterStyle && "text-white")}>
-                {eventPath ? <Link href={eventPath}>{event.title}</Link> : event.title}
-              </h4>
-              <div className={cn("mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs", posterTextClass)}>
-                <ViewerLocalEventDateTime
-                  className="min-w-0 break-words"
-                  timestamp={event.startAt}
-                  eventDate={event.eventDate}
-                  scheduleKind={event.scheduleKind}
-                />
-                <span>Confirmed venue</span>
-              </div>
-              {event.communityName ? <p className={`mt-1 ${posterTextClass}`}>Hosted by {event.communityName}</p> : null}
+              {event.mediaLinks.length > 0 ? (
+                <span>
+                  {event.mediaLinks.length} media link{event.mediaLinks.length === 1 ? "" : "s"}
+                </span>
+              ) : null}
             </div>
-            <div className={cn("px-3 pb-3 sm:px-4 sm:pb-4", posterStyle && "pt-3 sm:pt-4")}>
-              {event.summary ? <p className="leading-6 text-muted">{event.summary}</p> : null}
-              <div className={cn("flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted", event.summary && "mt-2 sm:mt-3")}>
-                {event.mediaLinks.length > 0 ? (
-                  <span>
-                    {event.mediaLinks.length} media link{event.mediaLinks.length === 1 ? "" : "s"}
-                  </span>
-                ) : null}
-                {sourceUrl ? (
-                  <a
-                    className="font-medium text-accent-strong underline decoration-accent/35 underline-offset-4"
-                    href={sourceUrl}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    {event.source.label}
-                  </a>
-                ) : (
-                  <span>{event.source.label}</span>
-                )}
-              </div>
-            </div>
+            {event.summary ? <p className="mt-2 break-words leading-6 text-muted">{event.summary}</p> : null}
           </article>
         );
       })}
