@@ -105,6 +105,11 @@
   background: var(--canvas-muted);
   scrollbar-color: var(--border-strong) var(--surface);
 }
+@media (width > 760px) {
+  :global(html[data-theme="light"]) .scroller {
+    border-color: var(--border-strong);
+  }
+}
 .scroller[data-pending-scroller] {
   pointer-events: none;
 }
