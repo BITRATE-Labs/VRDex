@@ -14,6 +14,8 @@ export function PublicSearchResultDetails({ person }: { person: PublicSearchPers
   const genres = orderedPublicSearchGenres(person.genres);
   const visibleGenres = genres.slice(0, 3).map(publicSearchGenreLabel);
   const remainingGenres = genres.slice(3).map(publicSearchGenreLabel);
+  const remainingGenreCount = remainingGenres.length;
+  const genreNoun = remainingGenreCount === 1 ? "genre" : "genres";
 
   if (genres.length === 0 && person.outboundLinks.length === 0) return null;
 
@@ -22,10 +24,13 @@ export function PublicSearchResultDetails({ person }: { person: PublicSearchPers
       {visibleGenres.length > 0 ? (
         <span className="min-w-0 [overflow-wrap:anywhere] max-sm:basis-full">{visibleGenres.join(" · ")}</span>
       ) : null}
-      {remainingGenres.length > 0 ? (
+      {remainingGenreCount > 0 ? (
         <details className={cn(disclosureClassName, "group/genres")}>
-          <summary aria-label={`${remainingGenres.length} more genres`} className={summaryClassName}>
-            +{remainingGenres.length}
+          <summary aria-label={`${remainingGenreCount} more ${genreNoun}`} className={summaryClassName}>
+            <span>
+              +{remainingGenreCount}
+              <span className="sm:hidden"> {genreNoun}</span>
+            </span>
             <ChevronDown aria-hidden="true" className="size-3 shrink-0 group-open/genres:rotate-180 sm:hidden" />
           </summary>
           <p className={cn(detailPanelClassName, "[overflow-wrap:anywhere]")}>{remainingGenres.join(" · ")}</p>

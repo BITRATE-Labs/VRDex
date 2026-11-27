@@ -300,7 +300,8 @@ test("populated Search aligns titles and keeps media and role details available 
   await expect(moth.getByText("Community submitted", { exact: true })).toHaveCSS("border-inline-start-width", "0px");
 
   const genrePreview = basicbit.getByText("DnB · House · Techno", { exact: true });
-  const moreGenres = basicbit.getByText("+8", { exact: true });
+  const moreGenres = basicbit.getByLabel("8 more genres", { exact: true });
+  await expect.poll(() => moreGenres.innerText()).toBe("+8 genres");
   const links = basicbit.getByText("Links", { exact: true });
   const [previewBounds, moreBounds, linksBounds] = await Promise.all([
     genrePreview.boundingBox(),
@@ -376,7 +377,7 @@ test("public result genres and Links disclose independently per person @flow @fi
   await expect(second.getByRole("button", { name: "Copy", exact: true })).toHaveCount(0);
   await expect(first.getByText("Bass · 140 · Trap · Space Bass · Midtempo · UKG · Dancefloor · Neurofunk", { exact: true })).toBeHidden();
   await page.screenshot({ path: info.outputPath("public-results-collapsed.png"), fullPage: true });
-  const overflow = first.getByText("+8", { exact: true });
+  const overflow = first.getByLabel("8 more genres", { exact: true });
   await overflow.focus();
   await overflow.press("Enter");
   await expect(first.getByText("Bass · 140 · Trap · Space Bass · Midtempo · UKG · Dancefloor · Neurofunk", { exact: true })).toBeVisible();
