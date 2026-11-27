@@ -37,3 +37,49 @@ test("Twitch joins the link cards and compact VRCDN controls keep full copy valu
     expect(await page.evaluate(() => sessionStorage.getItem("copied-profile-link"))).toBe(value);
   }
 });
+
+test("multiple profile streams expose distinct copy actions and keep exact destinations @fixture", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: async (text: string) => { sessionStorage.setItem("copied-profile-link", text); } },
+    });
+  });
+  await page.route("**/api/profile-live/playwright-dj-aurora/vrcdn*", route => route.fulfill({ json: { states: {} } }));
+  await page.goto("/playwright-dj-aurora");
+
+  for (const [stream, context] of [
+    ["dj-aurora", "VRCDN dj-aurora"],
+    ["suggested-aurora", "Suggested VRCDN suggested-aurora"],
+  ]) {
+    for (const [device, value] of [
+      ["Quest", `https://stream.vrcdn.live/live/${stream}.live.ts`],
+      ["PC", `rtspt://stream.vrcdn.live/live/${stream}`],
+    ]) {
+      const copyName = `Copy ${device} for ${context}`;
+      const copy = page.getByRole("button", { name: copyName, exact: true });
+      await expect(copy).toHaveAttribute("title", copyName);
+      await copy.click();
+      await expect(page.getByRole("button", { name: `${device} copied for ${context}`, exact: true })).toBeVisible();
+      await expect.poll(() => page.evaluate(() => sessionStorage.getItem("copied-profile-link"))).toBe(value);
+    }
+  }
+});
+
+test("a sparse person profile puts its identity and ownership together @fixture", async ({ page }) => {
+  expect((await page.goto("/playwright-sparse-import"))?.status()).toBe(200);
+  const identity = page.getByRole("region", { name: "Sparse Import", exact: true });
+  const ownership = page.getByRole("complementary", { name: "Profile ownership" });
+  await expect(identity.getByRole("img", { name: "Sparse Import display image", exact: true })).toBeVisible();
+  await expect(ownership.getByText("Unclaimed", { exact: true })).toBeVisible();
+  await expect(ownership.getByRole("link", { name: "Claim profile", exact: true })).toHaveAttribute("href", "/claim/playwright-sparse-import?source=profile");
+  await expect(ownership.getByRole("link", { name: "Suggest an edit", exact: true })).toHaveAttribute("href", "/playwright-sparse-import/edit");
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 720 });
+    await expect(identity).toBeInViewport({ ratio: 1 });
+    const [hero, actions] = await Promise.all([identity.boundingBox(), ownership.boundingBox()]);
+    if (!hero || !actions) throw Error("Missing sparse profile identity or ownership bounds");
+    expect(Math.abs(hero.y + hero.height - actions.y)).toBeLessThanOrEqual(2);
+    expect(hero.width).toBeLessThanOrEqual(672);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+  }
+});

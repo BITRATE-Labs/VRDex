@@ -583,7 +583,7 @@ test.describe("fixture lookup smoke", () => {
     await expect(preview).toHaveCount(0);
     await waitForVisualReady(page);
     const copyPosition = () => vrcdnBlock.evaluate((block) => {
-      const link = block.querySelector('button[aria-label="Copy Quest"]')!;
+      const link = block.querySelector('button[aria-label="Copy Quest for VRCDN dj-aurora"]')!;
       const linkRect = link.getBoundingClientRect();
       const blockRect = block.getBoundingClientRect();
       return { x: linkRect.x - blockRect.x, y: linkRect.y - blockRect.y,
@@ -610,7 +610,7 @@ test.describe("fixture lookup smoke", () => {
     await expect.poll(() => attempts).toBe(2);
     await expect(player).toHaveCount(0);
     await expect(vrcdnBlock.getByText("Live now", { exact: true })).toHaveCount(0);
-    await expect(vrcdnBlock.getByRole("button", { name: "Copy Quest", exact: true })).toBeVisible();
+    await expect(vrcdnBlock.getByRole("button", { name: "Copy Quest for VRCDN dj-aurora", exact: true })).toBeVisible();
     expect(await copyPosition()).toEqual(copyBefore);
   });
 

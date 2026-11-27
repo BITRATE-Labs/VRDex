@@ -11,6 +11,7 @@ export function CopyValueRow({
   compact = false,
   actionOnly = false,
   children,
+  context,
   label,
   value,
 }: {
@@ -18,10 +19,13 @@ export function CopyValueRow({
   compact?: boolean;
   actionOnly?: boolean;
   children?: ReactNode;
+  context?: string;
   label: string;
   value: string;
 }) {
   const [copied, setCopied] = useState(false);
+  const copyLabel = copied ? `${label} copied` : `Copy ${label}`;
+  const actionLabel = context ? `${copyLabel} for ${context}` : copyLabel;
 
   async function copyValue() {
     try {
@@ -37,13 +41,13 @@ export function CopyValueRow({
     const statusIcon = copied ? <Check aria-hidden="true" className="size-4 shrink-0" /> : <Copy aria-hidden="true" className="size-4 shrink-0" />;
     return (
       <button
-        aria-label={copied ? `${label} copied` : `Copy ${label}`}
+        aria-label={actionLabel}
         className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "gap-2", className)}
         type="button"
         onClick={() => void copyValue()}
       >
         {children ?? statusIcon}
-        {children ? statusIcon : <span className="min-w-0 truncate">{copied ? `${label} copied` : `Copy ${label}`}</span>}
+        {children ? statusIcon : <span className="min-w-0 truncate">{copyLabel}</span>}
       </button>
     );
   }
@@ -68,9 +72,9 @@ export function CopyValueRow({
           {value}
         </code>
         <button
-          aria-label={copied ? `${label} copied` : `Copy ${label}`}
+          aria-label={actionLabel}
           className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "size-9 shrink-0 p-0")}
-          title={copied ? `${label} copied` : `Copy ${label}`}
+          title={actionLabel}
           type="button"
           onClick={() => void copyValue()}
         >

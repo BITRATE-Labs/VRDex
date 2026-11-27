@@ -476,7 +476,8 @@ export async function expectPersonProfilePage(page: Page) {
 export async function expectProfilePlaybackLinks(page: Page, count: number) {
   await expect(page.getByText("Playback links", { exact: true })).toHaveCount(0);
   for (const label of ["Quest", "PC"]) {
-    const buttons = page.getByRole("button", { name: `Copy ${label}`, exact: true });
+    const name = new RegExp(count > 1 ? `^Copy ${label} for .+$` : `^Copy ${label}$`);
+    const buttons = page.getByRole("button", { name });
     await expect(buttons).toHaveCount(count);
     for (const button of await buttons.all()) await expect(button).toBeVisible();
   }

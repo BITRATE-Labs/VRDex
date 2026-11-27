@@ -249,6 +249,7 @@ export function ProfileVrcdnStreams({
               live || lifecycle?.status === "pending_offline" || playbackActive || retained?.streamId === streamId
             );
             const title = streams.length > 1 ? `${label} ${streamId}` : label;
+            const copyContext = streams.length > 1 ? title : undefined;
 
             return (
               <Card className="min-w-0" padding="sm" aria-label={title} key={key}>
@@ -258,8 +259,8 @@ export function ProfileVrcdnStreams({
                 </div>
 
                 <div>
-                  <CopyValueRow className="grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-0 py-1" label="Quest" value={questUrl} />
-                  <CopyValueRow className="grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-0 py-1" label="PC" value={pcUrl} />
+                  <CopyValueRow className="grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-0 py-1" context={copyContext} label="Quest" value={questUrl} />
+                  <CopyValueRow className="grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-0 py-1" context={copyContext} label="PC" value={pcUrl} />
                 </div>
                 {showPlayer ? (
                   <div className="mt-3 overflow-hidden rounded-control border border-border">
