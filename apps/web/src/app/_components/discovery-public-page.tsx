@@ -525,7 +525,6 @@ export function SearchResultsPage({
       className="max-sm:py-5"
       searchControl={<DiscoverySearchForm compact defaultQuery={query} filter={activeFilter} inputId={inputId} surface="search" tone="default" />}
     >
-        {activeFilter === "event" ? <Link className={buttonVariants({ variant: "primary" })} href="/events/new">Add event</Link> : null}
         {hasQuery ? (
           <section aria-describedby="search-results-query" aria-label="Search results" className="space-y-3 sm:space-y-5">
             <p className="sr-only" id="search-results-query">Results for {query}</p>
@@ -561,11 +560,22 @@ export function SearchResultsPage({
               </Card>
             ) : results.length === 0 ? (
               <Card className="grid justify-items-start gap-2" surface="strong">
-                <p className="text-pretty font-semibold">No public results matched that search yet.</p>
-                <p className="text-pretty text-sm leading-6 text-muted">
-                  Try a community name, DJ alias, world name, event title, genre, or scene term.
-                </p>
-                <EditPublicSearchLink inputId={inputId} />
+                {activeFilter === "all" ? (
+                  <>
+                    <p className="text-pretty font-semibold">No public results matched that search yet.</p>
+                    <p className="text-pretty text-sm leading-6 text-muted">
+                      Try a community name, DJ alias, world name, event title, genre, or scene term.
+                    </p>
+                    <EditPublicSearchLink inputId={inputId} />
+                  </>
+                ) : (
+                  <>
+                    <p className="font-semibold">No {filterLabel(activeFilter).toLowerCase()}</p>
+                    <Link className={cn(buttonVariants({ size: "sm", variant: "primary" }), "min-h-11")} href={searchHref({ filter: "all", query })}>
+                      Search all
+                    </Link>
+                  </>
+                )}
               </Card>
             ) : (
               <div className="grid gap-4">
@@ -573,6 +583,14 @@ export function SearchResultsPage({
               </div>
             )}
           </section>
+        ) : null}
+        {activeFilter === "event" ? (
+          <Link
+            className="inline-flex min-h-11 w-fit items-center rounded-control text-sm font-medium text-muted underline underline-offset-4 hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-strong"
+            href="/events/new"
+          >
+            Add event
+          </Link>
         ) : null}
     </SearchViewShell>
   );

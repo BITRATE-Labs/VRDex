@@ -115,12 +115,45 @@ test("Home search, filters, refresh and history keep URL and results aligned @fl
   await assertCommunityState();
 });
 
+test("Search recovers from empty Events with the same query and preserves history @flow @fixture", async ({ page }) => {
+  await page.goto("/");
+  await waitForPublicSearchHydration(page);
+  const input = page.getByRole("combobox", { name: /Search/i });
+  await input.fill("DJ");
+  await input.press("Enter");
+  await expect(page).toHaveURL(/\/search\?q=DJ$/);
+  const match = publicResultRow(page, "/basicbit");
+  await expect(match).toBeVisible();
+
+  const filters = page.getByRole("navigation", { name: "Entity type" });
+  const events = filters.getByRole("link", { name: "Events", exact: true });
+  await events.click();
+  await expect(page).toHaveURL(/\/search\?q=DJ&type=event$/);
+  await expect(input).toHaveValue("DJ");
+  await expect(events).toHaveAttribute("aria-current", "page");
+  await expect(page.getByText("No events", { exact: true })).toBeVisible();
+  await expect(match).toHaveCount(0);
+  const recover = page.getByRole("link", { name: "Search all", exact: true });
+  await expect(recover).toHaveAttribute("href", "/search?q=DJ");
+  await expect(page.getByRole("link", { name: "Add event", exact: true })).toHaveAttribute("href", "/events/new");
+  await recover.click();
+  await expect(page).toHaveURL(/\/search\?q=DJ$/);
+  await expect(input).toHaveValue("DJ");
+  await expect(filters.getByRole("link", { name: "All", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(match).toBeVisible();
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/search\?q=DJ&type=event$/);
+  await expect(input).toHaveValue("DJ");
+  await expect(recover).toBeVisible();
+});
+
 for (const theme of ["light", "dark"] as const) {
   test(`Search preserves a long unbroken no-match query at 320px in ${theme} @flow @fixture`, async ({ page }) => {
     const query = `VRDexNoMatch${"W".repeat(35)}`;
     await page.setViewportSize({ width: 320, height: 800 });
     await page.addInitScript((value) => localStorage.setItem("vrdex-theme", value), theme);
-    await page.goto(`/search?q=${query}&type=community&source=fixture`);
+    await page.goto(`/search?q=${query}&source=fixture`);
 
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     const main = page.getByRole("main");
@@ -176,6 +209,7 @@ test("Search reports a failed fetch without claiming there were no matches @flow
   const results = page.getByRole("region", { name: "Search results" });
   const outage = results.getByRole("status").filter({ hasText: "Search data is temporarily unavailable." });
   await expect(outage).toBeVisible();
+  await expect(results.getByRole("link", { name: "Search all", exact: true })).toHaveCount(0);
   await expect(results.getByRole("link", { name: "Edit search", exact: true })).toHaveCount(0);
   await expect(results.getByText("No public results matched that search yet.", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("combobox", { name: /Search/i })).toHaveValue(query);
