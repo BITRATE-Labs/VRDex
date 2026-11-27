@@ -156,7 +156,7 @@ An unselected preview deploy happens when a person comments `@vrdex preview` or 
 
 This path reuses the existing `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` repository secrets and adds no new ones.
 
-The deploy job runs the full preview pipeline: `vercel pull`, the optional `pr-<number>` Convex preview backend with its runtime flags and smoke fixture, a local `vercel build`, and `vercel deploy --prebuilt` with the preview-only environment values. The local prebuilt build is what lets the Convex preview URL reach the client bundle through `NEXT_PUBLIC_CONVEX_URL`; a remote Vercel build would use the project's own Preview environment instead.
+The deploy job runs `vercel pull`, prepares the Convex preview backend and optional smoke fixture, then runs `vercel build` locally. It uploads the build with `vercel deploy --prebuilt --archive=tgz` to reduce file-upload requests. The local build embeds the intended Convex URL in the client through `NEXT_PUBLIC_CONVEX_URL`.
 
 ### Fork pull requests
 
