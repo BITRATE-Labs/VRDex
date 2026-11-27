@@ -63,20 +63,52 @@ test('manual suppression keeps explicit type and deep links reset context @flow 
  }
 });
 
-test('pending support disables context and failure retains the draft @flow @fixture', async ({page}) => {
+test('pending support keeps focus and failure preserves the draft for a keyboard retry @flow @fixture', async ({page}) => {
  await page.goto('/playwright/event-intake?source=support&topic=owner_opt_out',{waitUntil:'networkidle'});
  await page.getByLabel('Profile type',{exact:true}).selectOption('person');
  await page.getByRole('button',{name:'Enter a link or name',exact:true}).click();
  await page.getByLabel('Name',{exact:true}).fill('Missing person');
- await page.getByLabel('Message',{exact:true}).fill('Please review this profile listing.');
+ const form=page.locator('form');
+ const message=page.getByLabel('Message',{exact:true});
+ const error=form.locator('label').filter({has:message}).getByRole('alert');
+ const success=form.getByRole('status');
+ const send=form.getByRole('button',{name:'Send request',exact:true});
+ await message.fill('Please review this profile listing.');
+ await expect(error).toBeEmpty();
+ await expect(success).toBeEmpty();
  await page.evaluate(()=>{sessionStorage.setItem('fixture-support-defer','true');sessionStorage.setItem('fixture-support-fail','true');});
- await page.getByRole('button',{name:'Send request',exact:true}).click();
+ await send.focus();
+ await send.press('Enter');
+ const sending=form.getByRole('button',{name:'Sending...',exact:true});
+ await expect(sending).toBeDisabled();
+ await expect(sending).toBeFocused();
  await expect(page.getByLabel('Request type')).toBeDisabled();
  await expect(page.getByLabel('Profile type',{exact:true})).toBeDisabled();
  await expect(page.getByLabel('Name',{exact:true})).toBeDisabled();
+ await expect.poll(()=>page.evaluate(()=>sessionStorage.getItem('fixture-support-submission'))).not.toBeNull();
+ await message.fill('');
+ await sending.focus();
+ await sending.press('Enter');
+ await expect(sending).toBeFocused();
+ await message.fill('Please review this profile listing.');
+ await sending.focus();
  await page.evaluate(()=>window.dispatchEvent(new Event('fixture-support-release')));
- await expect(page.locator('form').getByRole('alert')).toHaveText('Tell us a little more about what you need.');
+ await expect(error).toHaveText('Tell us a little more about what you need.');
+ await expect(error).toBeInViewport({ ratio: 1 });
  await expect(page.getByLabel('Name',{exact:true})).toHaveValue('Missing person');
- await expect(page.getByLabel('Message',{exact:true})).toHaveValue('Please review this profile listing.');
- await expect(page.getByRole('button',{name:'Send request',exact:true})).toBeEnabled();
+ await expect(message).toHaveValue('Please review this profile listing.');
+ await expect(message).toHaveAttribute('aria-invalid','true');
+ await expect(message).toHaveAccessibleDescription('Tell us what happened. Paste links to anything that backs it up. Tell us a little more about what you need.');
+ await expect(message).toBeFocused();
+ await expect(send).toBeEnabled();
+ await page.evaluate(()=>{sessionStorage.removeItem('fixture-support-defer');sessionStorage.removeItem('fixture-support-fail');});
+ await message.fill('Please review this profile listing because it is out of date.');
+ await send.focus();
+ await send.press('Enter');
+ await expect(error).toBeEmpty();
+ await expect(message).not.toHaveAttribute('aria-invalid','true');
+ await expect(success).toHaveText('Request sent. You did not leave a contact, so we cannot reply to this one.');
+ await expect(success).toBeFocused();
+ await expect(success).toBeInViewport({ ratio: 1 });
+ await expect(page.getByLabel('Request type')).toHaveValue('');
 });

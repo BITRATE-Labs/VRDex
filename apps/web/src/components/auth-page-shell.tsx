@@ -12,15 +12,15 @@ import { AUTH_UNAVAILABLE_COPY } from "@/lib/auth-copy";
  */
 export function AuthPageShell({
   children,
+  compact,
   headingId,
-  journeyLabel,
   subtitle,
   title,
 }: {
   children: ReactNode;
+  compact?: boolean;
   headingId: string;
-  journeyLabel?: string;
-  subtitle: string;
+  subtitle?: string;
   title: string;
 }) {
   return (
@@ -28,7 +28,7 @@ export function AuthPageShell({
       <PageContainer className="gap-0" max="4xl">
 
         <div
-          className={journeyLabel
+          className={compact
             ? "flex flex-1 items-start justify-center py-4 sm:items-center sm:py-14"
             : "flex flex-1 items-center justify-center py-10 sm:py-14"}
         >
@@ -37,7 +37,7 @@ export function AuthPageShell({
               <h1 id={headingId} className="text-3xl font-semibold sm:text-4xl">
                 {title}
               </h1>
-              <p className="mt-2 text-sm leading-6 text-muted">{journeyLabel ?? subtitle}</p>
+              {subtitle && <p className="mt-2 text-sm leading-6 text-muted">{subtitle}</p>}
             </header>
 
             <div className="mt-6 flex justify-center">{children}</div>
