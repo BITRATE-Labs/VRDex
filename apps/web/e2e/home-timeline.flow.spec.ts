@@ -124,6 +124,8 @@ test.describe("continuous schedule @flow @fixture", () => {
     const filteredWidth = await schedule.getByTestId("favorites-empty-state").evaluate((element) => element.clientWidth);
     await expect(favorites).toHaveAttribute("aria-pressed", "true");
     await expect(star).not.toHaveCSS("fill", "none");
+    await expect(earlier.getByText("Earlier", { exact: true })).toBeVisible();
+    await expect(later.getByText("Later", { exact: true })).toBeVisible();
 
     const dateBounds = (await date.boundingBox())!;
     const laterBounds = (await later.boundingBox())!;
