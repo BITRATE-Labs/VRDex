@@ -53,8 +53,20 @@ for (const timezoneId of ["UTC", "America/Los_Angeles"]) {
         await expect(actions.getByRole("link", { name: "Add to calendar" })).toHaveAttribute("href", path + slug + "/calendar.ics");
         await expect(actions.getByRole("button", { name: "Report event" })).toBeVisible();
 
-        for (const width of [320, 360, 412]) {
+        await expect(actions.getByText("Calendar", { exact: true })).toBeVisible();
+        await expect(actions.getByText("Report", { exact: true })).toBeVisible();
+
+        for (const width of [320, 360, 412, 640, 768]) {
           await page.setViewportSize({ width, height: 720 });
+          const actionLayout = await actions.evaluate((nav) => {
+            const container = nav.getBoundingClientRect();
+            const buttons = [...nav.querySelectorAll("a, button")].map((button) => button.getBoundingClientRect());
+            return {
+              contained: buttons.every((button) => button.left >= container.left && button.right <= container.right),
+              singleRow: buttons.every((button) => Math.abs(button.top - buttons[0].top) <= 1),
+            };
+          });
+          expect(actionLayout).toEqual({ contained: true, singleRow: true });
           const lines = await renderedTimeLines(time);
           expect(lines).not.toContain("UTC");
           expect(lines).not.toContain("PST");
