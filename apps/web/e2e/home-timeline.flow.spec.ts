@@ -223,6 +223,20 @@ test.describe("continuous schedule @flow @fixture", () => {
     await expect(favorites).toHaveAttribute("aria-pressed", "true");
     await expect(clear).toBeVisible();
     await expect(chart).toHaveCount(0);
+    await clear.focus();
+    await page.goForward();
+    await expect(clear).toHaveCount(0);
+    await expect(favorites).toBeFocused();
+
+    await page.goBack();
+    await expect(clear).toBeVisible();
+    await later.focus();
+    await page.goForward();
+    await expect(clear).toHaveCount(0);
+    await expect(later).toBeFocused();
+
+    await page.goBack();
+    await expect(clear).toBeVisible();
     await favorites.press("Space");
     await expect(favorites).toBeFocused();
     await expect(favorites).toHaveAttribute("aria-pressed", "false");
