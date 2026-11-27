@@ -1,7 +1,7 @@
 "use client";
 import { inferLineupEnds } from "@vrdex/api-contracts";
 import { useQuery } from "convex/react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, MapPin } from "lucide-react";
 import Link from "next/link";
 import { type CSSProperties, useId, useState } from "react";
 import type { FunctionReturnType } from "convex/server";
@@ -402,7 +402,8 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
   const seriesPath = event.seriesId && event.communitySlug ? `/${event.communitySlug}/series/${event.seriesId}` : null;
   const publicLinks = event.mediaLinks.filter((link) => parseVrcdnStreamLinks(link.url) === null);
   const eventPath = publicEventPath(event);
-  const hasLocationLinks = event.worlds.length > 0 || Boolean(sourceUrl);
+  const hasWorlds = event.worlds.length > 0;
+  const hasLocationLinks = hasWorlds || Boolean(sourceUrl);
   const hasCompactHost = hasLocationLinks && Boolean(event.communitySlug || event.communityName);
   const standaloneHost = Boolean(event.communitySlug || event.communityName)
     && !bannerStyle && !event.posterImageUrl && !event.watchSurfaceEnabled
@@ -442,8 +443,8 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
   );
 
   return (
-    <PageShell className={cn(styles.page, "pt-[var(--event-watch-mobile-space,0.75rem)] pb-3 sm:py-6 lg:py-7")} tone="event">
-      <PageContainer className="gap-[var(--event-watch-mobile-space,0.75rem)] sm:gap-5">
+    <PageShell className={cn(styles.page, "pt-[var(--event-mobile-space,0.75rem)] pb-3 sm:py-6 lg:py-7")} tone="event">
+      <PageContainer className="gap-[var(--event-mobile-space,0.75rem)] sm:gap-5">
         <EventPublicHero
           bannerStyle={bannerStyle}
           canHost={canHost === true}
@@ -470,16 +471,19 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
               {hasLocationLinks ? (
                 <div className={cn(styles.locationLinks, "flex flex-wrap gap-2")}>
                   {event.worlds.map((world) => (
-                    <Link className={cn(locationLinkClassName, "max-sm:border-accent/30 max-sm:bg-accent/10")} href={`/${world.slug}`} key={world.slug}>
-                      <span className={actionLabelClassName}>{world.displayName}</span>
-                      <span className={cn(actionMetaClassName, "max-sm:mt-0.5")}>World</span>
+                    <Link className={cn(locationLinkClassName, styles.worldLink, "border-accent/50 bg-accent/10 hover:bg-accent/15")} href={`/${world.slug}`} key={world.slug}>
+                      <span className={cn(actionLabelClassName, "font-semibold")}>{world.displayName}</span>
+                      <span className={cn(actionMetaClassName, "flex items-center gap-1 max-sm:mt-0.5")}>
+                        <MapPin aria-hidden="true" className="size-3 shrink-0 text-accent-strong" />
+                        World
+                      </span>
                     </Link>
                   ))}
                   {sourceUrl ? (
                     <a className={locationLinkClassName} href={sourceUrl} rel="noreferrer" target="_blank">
                       <span className="flex items-start gap-2">
-                        <span className={actionLabelClassName}>{event.source.label}</span>
-                        <ExternalLink aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-accent-strong" />
+                        <span className={cn(actionLabelClassName, hasWorlds && "text-foreground decoration-border-strong")}>{event.source.label}</span>
+                        <ExternalLink aria-hidden="true" className={cn("mt-0.5 size-3.5 shrink-0", hasWorlds ? "text-muted" : "text-accent-strong")} />
                       </span>
                       <span className={cn(actionMetaClassName, "max-sm:mt-0.5")}>Reference link</span>
                     </a>
