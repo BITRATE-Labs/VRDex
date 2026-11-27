@@ -20,6 +20,7 @@ import {
   isPlaywrightGuestEventFixture,
   searchPlaywrightDiscoveryFixture,
 } from "./playwright-fixtures";
+import { PROFILE_SUGGESTION_QUERY } from "@/lib/auth-copy";
 import { profileClaimPath } from "@/lib/profile-claim";
 import type { PublicProfileShareCard } from "../../../../convex/_profileShareCard";
 import type { PublicEventShareCard } from "../../../../convex/_eventShareCard";
@@ -191,6 +192,19 @@ export async function fetchPublicProfileShareCardBySlug(slug: string) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`Server-side Convex profile share-card fetch failed: ${message}`);
     return { kind: "error" as const, entityType: null, profile: null };
+  }
+}
+
+export async function fetchPublicProfileSuggestionName(returnTo: string) {
+  if (!returnTo.endsWith(PROFILE_SUGGESTION_QUERY)) return undefined;
+  const pathname = returnTo.slice(0, -PROFILE_SUGGESTION_QUERY.length);
+
+  const slug = /^\/([a-z0-9]+(?:-[a-z0-9]+)*)\/edit$/.exec(pathname)?.[1];
+  if (!slug) return undefined;
+
+  const { profile } = await fetchPublicProfileShareCardBySlug(slug);
+  if (profile?.trustLabel === "unclaimed" || profile?.trustLabel === "community_submitted") {
+    return profile.displayName;
   }
 }
 

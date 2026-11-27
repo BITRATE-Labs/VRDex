@@ -5,7 +5,8 @@ import {
   AuthUnavailableNotice,
 } from "@/components/auth-page-shell";
 import styles from "@/components/clerk-auth-controls.module.css";
-import { contributionLabel } from "@/lib/auth-copy";
+import { fetchPublicProfileSuggestionName } from "@/convex/server";
+import { contributionLabel, PROFILE_SUGGESTION_LABEL } from "@/lib/auth-copy";
 import { authReturnLink, validateSignInReturnTo } from "@/lib/safe-return-to";
 
 export default async function SignUpPage({
@@ -20,14 +21,15 @@ export default async function SignUpPage({
   const params = await searchParams;
   const returnTo = validateSignInReturnTo(params.returnTo ?? params.redirectTo ?? params.return_to);
   const configured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
-  const journeyLabel = contributionLabel(returnTo);
-  const journeyHeading = configured ? journeyLabel : undefined;
+  const suggestionName = await fetchPublicProfileSuggestionName(returnTo);
+  const journeyLabel = suggestionName ? PROFILE_SUGGESTION_LABEL : contributionLabel(returnTo);
+  const journeyHeading = configured || suggestionName ? journeyLabel : undefined;
 
   return (
     <AuthPageShell
       compact={configured}
       headingId="sign-up-heading"
-      subtitle={journeyHeading ? undefined : (journeyLabel ?? "Create a VRDex account to claim a profile and publish events.")}
+      subtitle={suggestionName ?? (journeyHeading ? undefined : (journeyLabel ?? "Create a VRDex account to claim a profile and publish events."))}
       title={journeyHeading ?? "Create account"}
       visuallyHiddenTitle={configured && !journeyHeading}
     >

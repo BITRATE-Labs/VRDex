@@ -447,7 +447,7 @@ export async function expectPersonProfilePage(page: Page) {
   await expect(claimLink).toHaveAttribute("href", "/claim/playwright-dj-aurora?source=profile");
   await expect(ownershipAction.getByRole("link", { name: "Suggest an edit" })).toHaveAttribute(
     "href",
-    "/playwright-dj-aurora/edit",
+    "/playwright-dj-aurora/edit?intent=suggest",
   );
   await expect(ownershipAction.getByRole("link", { name: "Add media" })).toHaveCount(0);
   await expect(profileCard.getByRole("link", { name: "Claim profile" })).toHaveCount(0);
