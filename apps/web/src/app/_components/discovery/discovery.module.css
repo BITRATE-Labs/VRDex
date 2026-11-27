@@ -220,7 +220,7 @@
   );
 }
 .artwork:has(a:focus-visible),
-.clubLink:focus-visible .clubArtwork {
+.clubCard:has(.clubLink:focus-visible) .clubArtwork {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
@@ -309,6 +309,26 @@
     }
   }
 }
+.clubCard {
+  position: relative;
+  isolation: isolate;
+}
+.clubLink {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 55%, transparent);
+  text-underline-offset: 3px;
+}
+.clubLink::after {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  content: "";
+}
+.clubCard .favorite {
+  position: relative;
+  z-index: 3;
+}
+
 .clubMetadata {
   min-height: 72px;
   padding-top: 0.75rem;

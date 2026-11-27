@@ -25,6 +25,27 @@ test.describe("Home discovery @flow @fixture", () => {
       { timeout: 20000 },
     );
   });
+  test("club name opens its profile and Favorite remains a separate action", async ({ page, timelineFixture, isMobile }) => {
+    if (isMobile) await page.setViewportSize({ width: 320, height: 740 });
+    const discover = await usableDiscovery(page);
+    const card = discover.getByTestId("discovery-club-card").filter({
+      has: page.getByRole("heading", { name: "Prism Collective", exact: true }),
+    });
+    const title = card.getByRole("link", { name: "Prism Collective", exact: true });
+    const favorite = card.getByRole("button");
+    await expect(card.getByRole("link")).toHaveCount(1);
+    await expect(card.getByRole("heading").getByRole("link")).toHaveAttribute("href", `/${timelineFixture.runId}-community`);
+    const wasFavorite = await favorite.getAttribute("aria-pressed");
+    if (isMobile) await favorite.tap();
+    else await favorite.click();
+    await expect(favorite).toHaveAttribute("aria-pressed", wasFavorite === "true" ? "false" : "true");
+    await expect(page).toHaveURL(/\/$/);
+
+    if (isMobile) await title.tap();
+    else await title.press("Enter");
+    await expect(page).toHaveURL(new RegExp(`/${timelineFixture.runId}-community$`));
+  });
+
   test("favoriteChangeKeepsCandidatesAndCards", async ({ page }, info) => {
     const queries = observeDiscoveryQueries(page);
     await page.reload();
