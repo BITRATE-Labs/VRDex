@@ -13,6 +13,7 @@ import { ViewerLocalEventDateTime, ViewerLocalEventTime } from "./viewer-local-e
 import { buttonVariants } from "@/components/ui/button";
 import { Card, SectionTitle } from "@/components/ui/card";
 import { EntityImage } from "@/components/ui/entity-image";
+import { Notice } from "@/components/ui/notice";
 import { EventSchedule, EventScheduleRow } from "@/components/ui/event-schedule";
 import { ProfileAvatarImage } from "@/components/ui/profile-avatar-image";
 import type { PublicSearchResult } from "@/lib/public-search";
@@ -540,7 +541,7 @@ export function DiscoveryLandingPage({
     )}>
       <div className={singleDirectory ? "sm:flex sm:items-baseline sm:gap-3 lg:block" : "sm:flex sm:items-baseline sm:gap-3"}>
         <SectionTitle className="text-lg leading-6 tracking-tight">Upcoming events</SectionTitle>
-        {status === "live" ? <p className="text-sm font-medium leading-5 text-foreground">No events</p> : null}
+        <p className="text-sm font-medium leading-5 text-foreground">No events</p>
       </div>
       <Link
         className={cn(
@@ -597,7 +598,7 @@ export function DiscoveryLandingPage({
           </nav>
         ) : null}
 
-        {status === "live" ? null : <DiscoveryBackendNotice kind={status} />}
+        {status !== "live" && activeWorlds.length === 0 ? <DiscoveryBackendNotice kind={status} /> : null}
 
         {pairUpcomingAndWorld ? (
           <div className="contents xl:grid xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] xl:items-start xl:gap-6">
@@ -606,7 +607,7 @@ export function DiscoveryLandingPage({
           </div>
         ) : (
           <>
-            {upcoming}
+            {status === "live" ? upcoming : null}
             {featuredWorlds}
           </>
         )}
@@ -634,7 +635,12 @@ export function DiscoveryLandingPage({
               title={title}
             />
           ))}
-        </section> : null}
+        </section> : activeWorlds.length > 0 ? (
+          <section className="min-w-0 border-t border-border pt-3 sm:pt-6">
+            <SectionTitle className="max-sm:text-xl">Directory</SectionTitle>
+            <Notice className="mt-3 sm:mt-6" variant="dashed">Unavailable</Notice>
+          </section>
+        ) : null}
       </PageContainer>
     </PageShell>
   );
