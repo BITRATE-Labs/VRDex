@@ -171,14 +171,14 @@ const eventPosterOverlay = "linear-gradient(135deg, color-mix(in srgb, var(--med
 const eventPreviewOverlay = "linear-gradient(135deg, color-mix(in srgb, var(--media) 72%, transparent), color-mix(in srgb, var(--media) 69%, transparent))";
 const watchArtScrim = "linear-gradient(180deg, rgb(0 0 0 / 36%), rgb(0 0 0 / 68%))";
 
-function safeHttpsUrl(url: string | undefined): string | null {
+function parseHttpsUrl(url: string | undefined): URL | null {
   if (!url) {
     return null;
   }
 
   try {
     const parsed = new URL(url);
-    return parsed.protocol === "https:" ? parsed.href : null;
+    return parsed.protocol === "https:" ? parsed : null;
   } catch {
     return null;
   }
@@ -230,7 +230,7 @@ export function EventPreviewCard({
 }) {
   const titleId = useId();
   const dateId = titleId + "-date";
-  const sourceUrl = safeHttpsUrl(event.source.url);
+  const sourceUrl = parseHttpsUrl(event.source.url)?.href;
   const thumbnailStyle = safeImageBackground(event.thumbnailImageUrl, eventPreviewOverlay);
   const details = event.worlds.map((world) => world.displayName);
   const eventPath = publicEventPath(event);
@@ -411,9 +411,15 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
   const desktopWatchArt = watchBannerArt && watchBannerArt.backgroundImage !== watchPosterArt?.backgroundImage
     ? watchBannerArt
     : undefined;
-  const sourceUrl = safeHttpsUrl(event.source.url);
+  const sourceUrl = parseHttpsUrl(event.source.url)?.href;
   const seriesPath = event.seriesId && event.communitySlug ? `/${event.communitySlug}/series/${event.seriesId}` : null;
   const publicLinks = event.mediaLinks.filter((link) => parseVrcdnStreamLinks(link.url) === null);
+  const hasLinks = Boolean(seriesPath) || publicLinks.length > 0;
+  const isOpenMediaLink = (link: PublicEvent["mediaLinks"][number]) =>
+    link.presentation === "open" && (link.type === "watch" || link.type === "stream");
+  const hasMediaLinks = publicLinks.some(isOpenMediaLink);
+  const linksLabel = hasMediaLinks ? "Media links" : hasLinks ? "Links" : undefined;
+  const linksHeading = hasMediaLinks && (seriesPath || !publicLinks.every(isOpenMediaLink)) ? "Event links" : linksLabel;
   const eventPath = publicEventPath(event);
   const hasWorlds = event.worlds.length > 0;
   const hasLocationLinks = hasWorlds || Boolean(sourceUrl);
@@ -464,6 +470,7 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
           event={event}
           eventPath={eventPath}
           hasLineup={lineup.length > 0}
+          linksLabel={linksLabel}
           onReport={() => setReportOpen(true)}
         />
 
@@ -589,32 +596,45 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
           ) : null}
         </div>
 
-        {seriesPath || publicLinks.length > 0 ? (
-          <Card surface="white">
-            <Eyebrow>Links</Eyebrow>
+        {linksHeading ? (
+          <Card aria-labelledby="event-links" surface="white">
+            <h2
+              className="w-fit scroll-mt-24 text-xl font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current max-sm:scroll-mt-[4.5rem]"
+              id="event-links"
+              tabIndex={-1}
+            >
+              {linksHeading}
+            </h2>
             <div className="mt-4 grid gap-3">
               {seriesPath ? <Link className={actionCardVariants({ variant: "accent" })} href={seriesPath}>
                 <span className={actionLabelClassName}>Upcoming nights</span>
               </Link> : null}
-              {publicLinks.map((link) => link.presentation === "copy" ? (
-                <CopyValueRow compact key={`${link.type}-${link.url}`} label={link.label} value={link.url} />
-              ) : (
-                <a
-                  className={cn(actionCardVariants({ variant: "accent" }), (link.type === "watch" || link.type === "stream") && styles.externalStreamLink)}
-                  href={link.url}
-                  key={`${link.type}-${link.url}`}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  <span className={actionLabelClassName}>
-                    {link.label}
-                  </span>
-                  <span className={cn(actionMetaClassName, styles.openLinkLabel)}>
-                    Open link
-                  </span>
-                  <ExternalLink aria-hidden="true" className={cn(styles.outboundIcon, "size-3.5 shrink-0 text-muted")} />
-                </a>
-              ))}
+              {publicLinks.map((link) => {
+                const key = `${link.type}-${link.url}`;
+                if (link.presentation === "copy") {
+                  return <CopyValueRow compact key={key} label={link.label} value={link.url} />;
+                }
+                const hostname = parseHttpsUrl(link.url)?.hostname;
+                return (
+                  <a
+                    className={cn(actionCardVariants({ variant: "accent" }), (link.type === "watch" || link.type === "stream") && styles.externalStreamLink)}
+                    href={link.url}
+                    key={key}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <span className={actionLabelClassName}>
+                      {link.label}
+                    </span>
+                    {hostname ? (
+                      <span className={cn(actionMetaClassName, styles.openLinkLabel, "[overflow-wrap:anywhere]")}>
+                        {hostname}
+                      </span>
+                    ) : null}
+                    <ExternalLink aria-hidden="true" className={cn(styles.outboundIcon, "size-3.5 shrink-0 text-muted")} />
+                  </a>
+                );
+              })}
             </div>
           </Card>
         ) : null}

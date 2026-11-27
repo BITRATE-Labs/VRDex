@@ -302,7 +302,8 @@ test("sparse guest events preserve real content and deny Host routes @flow @fixt
   await expect(main.getByAltText(/ poster$/)).toHaveCount(0);
   await expect(main.getByRole("heading", { name: "Lineup", exact: true })).toHaveCount(0);
   await expect(main.getByRole("link", { name: "Lineup", exact: true })).toHaveCount(0);
-  await expect(main.getByText("Links", { exact: true })).toHaveCount(0);
+  await expect(main.getByRole("heading", { name: /^(Media links|Event links|Links)$/ })).toHaveCount(0);
+  await expect(main.getByRole("link", { name: /^(Media links|Links)$/ })).toHaveCount(0);
   const sparseHost = main.getByRole("link", { name: /Afterglow Social.*Host/ });
   await expect(sparseHost).toBeVisible();
   await expect(sparseHost).toHaveAttribute("href", "/playwright-afterglow-social");
@@ -335,7 +336,8 @@ test("sparse guest events preserve real content and deny Host routes @flow @fixt
 
   await page.goto(path + posterlessSlug);
   await expect(main.getByAltText(/ poster$/)).toHaveCount(0);
-  await expect(main.getByText("Links", { exact: true })).toBeVisible();
+  await expect(main.getByRole("heading", { name: "Media links", exact: true })).toBeVisible();
+  await expect(main.getByRole("link", { name: "Media links", exact: true })).toHaveAttribute("href", "#event-links");
   await expect(main.getByRole("heading", { name: "Lineup", exact: true })).toBeVisible();
   await expect(main.getByRole("button", { name: /^Play / })).toHaveCount(1);
   await expect(main.locator("video, iframe")).toHaveCount(0);

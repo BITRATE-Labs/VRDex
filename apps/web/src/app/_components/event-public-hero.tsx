@@ -1,12 +1,18 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { CalendarDays, Flag, ListMusic } from "lucide-react";
+import { ArrowDown, CalendarDays, Flag, ListMusic } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import type { PublicEvent } from "./event-public-page";
 import styles from "./event-public-page.module.css";
+import { useCurrentTimestamp } from "./event-watch-surface";
 import { ViewerLocalEventDateTime } from "./viewer-local-event-times";
+
+function WatchEndLabel({ endAt }: { endAt: number }) {
+  const now = useCurrentTimestamp([endAt + 1]);
+  return now !== null && now > endAt ? "Ended" : "End";
+}
 
 export function EventPublicHero({
   bannerStyle,
@@ -14,6 +20,7 @@ export function EventPublicHero({
   event,
   eventPath,
   hasLineup,
+  linksLabel,
   onReport,
 }: {
   bannerStyle?: CSSProperties;
@@ -21,6 +28,7 @@ export function EventPublicHero({
   event: PublicEvent;
   eventPath: string | undefined;
   hasLineup: boolean;
+  linksLabel: "Links" | "Media links" | undefined;
   onReport: () => void;
 }) {
   const actionClassName = cn(
@@ -32,6 +40,8 @@ export function EventPublicHero({
   const actionTooltipClassName = cn(tooltipClassName, "group-hover:block");
 
   const detailTextClassName = bannerStyle ? "text-white/80" : "text-muted";
+  const showWatchEndStatus = Boolean(linksLabel) && event.watchSurfaceEnabled && event.status !== "cancelled"
+    && event.startAt !== undefined && Number.isFinite(event.endAt);
   const startTime = (
     <ViewerLocalEventDateTime className={cn(
       "block text-base leading-snug font-semibold tabular-nums sm:text-lg",
@@ -68,7 +78,7 @@ export function EventPublicHero({
             ) : startTime}
             {event.scheduleKind !== "date_only" && (event.doorsOpenAt !== undefined || event.endAt !== undefined) ? <div className={cn("mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-sm tabular-nums sm:mt-2 sm:gap-x-5", detailTextClassName)}>
               {event.doorsOpenAt !== undefined ? <span><span>Doors open</span>{" "}<ViewerLocalEventDateTime timestamp={event.doorsOpenAt} compactRelativeTo={event.startAt} /></span> : null}
-              {event.endAt !== undefined ? <span><span>End</span>{" "}<ViewerLocalEventDateTime timestamp={event.endAt} compactRelativeTo={event.startAt} /></span> : null}
+              {event.endAt !== undefined ? <span><span>{showWatchEndStatus ? <WatchEndLabel endAt={event.endAt} /> : "End"}</span>{" "}<ViewerLocalEventDateTime timestamp={event.endAt} compactRelativeTo={event.startAt} /></span> : null}
             </div> : null}
             <h1 className="mt-3 text-4xl leading-[1.05] font-semibold tracking-[-0.05em] [overflow-wrap:anywhere] sm:mt-4 sm:text-7xl sm:leading-none">
               {event.title}
@@ -92,6 +102,12 @@ export function EventPublicHero({
             </a>
             <span role="tooltip" className={actionTooltipClassName}>Add to calendar</span>
           </span> : null}
+          {linksLabel ? (
+            <a className={actionClassName} href="#event-links">
+              <ArrowDown aria-hidden="true" className="block!" />
+              {linksLabel}
+            </a>
+          ) : null}
           <span className="group relative inline-flex">
             <button
               type="button"
