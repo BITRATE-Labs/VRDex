@@ -523,7 +523,7 @@ export function ProfilePublicPage({
               <EventPreviewCard event={event} key={`${event.slug ?? event.title}-${event.startAt}`} variant={isRichPublicCommunity ? "community" : undefined} yearReferenceAt={yearReferenceAt} />
             ))}
           </div>
-        ) : useCompactCommunity ? <p className="mt-2 text-sm font-medium text-foreground">No events</p> : null}
+        ) : <p className="mt-2 text-sm font-medium text-foreground">No events</p>}
       </section>
     ) : null,
     media_kit: hasMediaKit ? (
