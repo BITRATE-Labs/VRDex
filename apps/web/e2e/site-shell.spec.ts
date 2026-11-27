@@ -1,13 +1,17 @@
 import { expect, test } from "@playwright/test";
 
+import { closeSiteMenu, openSiteMenu, toggleSiteTheme, waitForSiteMenuHydration } from "./flow-navigation";
+
 test("public routes share one site header and footer", async ({ page }) => {
   for (const path of ["/", "/playwright-afterglow-social", "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions", "/sign-in", "/support", "/developers/api"]) {
     await page.goto(path);
     const header = page.getByRole("banner");
     await expect(header).toHaveCount(1);
     await expect(header.getByRole("img", { name: "VRDex", exact: true })).toBeVisible();
+    await openSiteMenu(page);
     await expect(header.getByRole("link", { name: "Discovery", exact: true })).toHaveAttribute("href", "/discovery");
     await expect(header.getByRole("link", { name: "Add profile", exact: true })).toHaveAttribute("href", "/submit");
+    await closeSiteMenu(page);
     await expect(header.getByRole("button", { name: "Search", exact: true })).toBeVisible();
     await expect(page.getByRole("contentinfo")).toHaveCount(1);
     await expect(page.getByRole("contentinfo").getByRole("link", { name: "Contact", exact: true })).toHaveAttribute("href", "/support");
@@ -15,44 +19,116 @@ test("public routes share one site header and footer", async ({ page }) => {
   }
 });
 
-test("the signed-out header fits a 320 px viewport with usable search", async ({ page }) => {
+for (const width of [320, 390]) {
+  test(`the ${width}px header keeps search and the navigation disclosure in one row`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 720 });
+    await page.addInitScript(() => localStorage.setItem("vrdex-theme", "dark"));
+    await page.goto("/support");
+
+    const nav = page.getByRole("navigation", { name: "Primary navigation", exact: true });
+    const logo = nav.getByRole("link", { name: "VRDex", exact: true });
+    const search = nav.getByRole("button", { name: "Search", exact: true });
+    const menu = nav.getByRole("button", { name: "Menu", exact: true });
+    const signIn = nav.getByRole("link", { name: "Sign in", exact: true });
+    const discovery = nav.getByRole("link", { name: "Discovery", exact: true });
+    const addProfile = nav.getByRole("link", { name: "Add profile", exact: true });
+    const theme = nav.getByRole("button", { name: "Toggle color theme", exact: true });
+
+    await expect(signIn).toBeVisible();
+    await expect(menu).toHaveAttribute("aria-expanded", "false");
+    await expect(discovery).toHaveCount(0);
+    await expect(theme).toHaveCount(0);
+    expect((await nav.boundingBox())?.height).toBeLessThanOrEqual(65);
+    const [mark, searchButton, account, menuButton] = await Promise.all(
+      [logo, search, signIn, menu].map(item => item.boundingBox()),
+    );
+    if (!mark || !searchButton || !account || !menuButton) throw new Error("Missing top-row bounds");
+    for (const control of [mark, searchButton, account, menuButton]) {
+      expect(control.width).toBeGreaterThanOrEqual(44);
+      expect(control.height).toBeGreaterThanOrEqual(44);
+      expect(Math.abs(control.y + control.height / 2 - (mark.y + mark.height / 2))).toBeLessThanOrEqual(1);
+    }
+
+    const mainHeading = page.getByRole("main").getByRole("heading", { level: 1 });
+    const before = (await mainHeading.boundingBox())?.y;
+    await waitForSiteMenuHydration(menu);
+    await menu.press("Enter");
+    await expect(menu).toHaveAttribute("aria-expanded", "true");
+    await expect(menu).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(discovery).toBeFocused();
+    await expect(discovery).toHaveAttribute("href", "/discovery");
+    await expect(addProfile).toHaveAttribute("href", "/submit");
+    await expect(nav.getByRole("link", { name: "My events", exact: true })).toHaveCount(0);
+    for (const control of [discovery, addProfile, theme]) {
+      expect((await control.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+    }
+    await discovery.press("Escape");
+    await expect(menu).toBeFocused();
+    await expect(discovery).toHaveCount(0);
+
+    const input = nav.getByRole("combobox", { name: "Search VRDex", exact: true });
+    await menu.click();
+    await search.click();
+    await expect(menu).toHaveAttribute("aria-expanded", "false");
+    await expect(input).toBeFocused();
+    await expect(input).toBeInViewport({ ratio: 1 });
+    expect((await input.boundingBox())?.width).toBeGreaterThanOrEqual(width - 60);
+    expect((await input.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+    expect((await mainHeading.boundingBox())?.y).toBe(before);
+    await input.press("Escape");
+    await expect(input).toHaveCount(0);
+    await expect(search).toBeFocused();
+
+    await search.press("Enter");
+    await expect(input).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(signIn).toBeFocused();
+    await expect(input).toHaveCount(0);
+
+    await menu.click();
+    await theme.click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await discovery.click();
+    await expect(page).toHaveURL(/\/discovery$/, { timeout: 15_000 });
+    await expect(menu).toHaveAttribute("aria-expanded", "false");
+    await openSiteMenu(page);
+    await discovery.click();
+    await expect(menu).toHaveAttribute("aria-expanded", "false");
+    await expect(menu).toBeFocused();
+    expect(await nav.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  });
+}
+
+test("the mobile menu meets the desktop navigation at 639 and 640 pixels", async ({ page }) => {
+  await page.setViewportSize({ width: 639, height: 720 });
+  await page.goto("/support");
+  const nav = page.getByRole("navigation", { name: "Primary navigation", exact: true });
+  const menu = nav.getByRole("button", { name: "Menu", exact: true });
+  const discovery = nav.getByRole("link", { name: "Discovery", exact: true });
+  const theme = nav.getByRole("button", { name: "Toggle color theme", exact: true });
+  await openSiteMenu(page);
+  await expect(discovery).toBeVisible();
+
+  await page.setViewportSize({ width: 640, height: 720 });
+  await expect(menu).toHaveCount(0);
+  await expect(discovery).toHaveCount(1);
+  await expect(theme).toHaveCount(1);
+  await page.setViewportSize({ width: 639, height: 720 });
+  await expect(menu).toHaveAttribute("aria-expanded", "false");
+  await expect(discovery).toHaveCount(0);
+});
+
+test("the header wraps its controls at enlarged text sizes without horizontal overflow", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 720 });
   await page.goto("/support");
-
+  await page.addStyleTag({ content: "html { font-size: 200%; }" });
   const nav = page.getByRole("navigation", { name: "Primary navigation", exact: true });
-  const logo = nav.getByRole("img", { name: "VRDex", exact: true });
-  const search = nav.getByRole("button", { name: "Search", exact: true });
-  const theme = nav.getByRole("button", { name: "Toggle color theme", exact: true });
-  const signIn = nav.getByRole("link", { name: "Sign in", exact: true });
-  const discovery = nav.getByRole("link", { name: "Discovery", exact: true });
-  const addProfile = nav.getByRole("link", { name: "Add profile", exact: true });
-  await expect(signIn).toBeVisible();
-  await expect(discovery).toHaveAttribute("href", "/discovery");
-  await expect(addProfile).toHaveAttribute("href", "/submit");
-
-  const [mark, searchButton, themeButton, account, directory, add] = await Promise.all(
-    [logo, search, theme, signIn, discovery, addProfile].map(item => item.boundingBox()),
-  );
-  if (!mark || !searchButton || !themeButton || !account || !directory || !add) {
-    throw new Error("Expected all primary navigation items to have a visible box.");
-  }
-  const topCenter = mark.y + mark.height / 2;
-  for (const control of [searchButton, themeButton, account]) {
-    expect(Math.abs(control.y + control.height / 2 - topCenter)).toBeLessThanOrEqual(1);
-  }
-  expect(directory.y).toBeGreaterThanOrEqual(searchButton.y + searchButton.height);
-  expect(Math.abs(directory.y - add.y)).toBeLessThanOrEqual(1);
-
-  const input = nav.getByRole("combobox", { name: "Search VRDex", exact: true });
-  await expect(input).toHaveCount(0);
-  await search.click();
-  await expect(input).toBeFocused();
-  await expect(input).toBeInViewport({ ratio: 1 });
-  await expect.poll(async () => (await input.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(80);
+  const menu = nav.getByRole("button", { name: "Menu", exact: true });
+  await expect(menu).toBeInViewport({ ratio: 1 });
+  await openSiteMenu(page);
+  await expect(nav.getByRole("link", { name: "Add profile", exact: true })).toBeInViewport({ ratio: 1 });
   expect(await nav.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-  await input.press("Escape");
-  await expect(input).toHaveCount(0);
-  await expect(search).toBeFocused();
 });
 
 test("the shared header switches to one readable logo in each theme", async ({ page }) => {
@@ -61,7 +137,7 @@ test("the shared header switches to one readable logo in each theme", async ({ p
   const logos = page.getByRole("banner").getByRole("img", { name: "VRDex", exact: true });
   await expect(logos).toHaveCount(1);
   const darkSource = await logos.getAttribute("src");
-  await page.getByRole("button", { name: "Toggle color theme", exact: true }).click();
+  await toggleSiteTheme(page);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await expect(logos).toHaveCount(1);
   await expect(logos).not.toHaveAttribute("src", darkSource ?? "");

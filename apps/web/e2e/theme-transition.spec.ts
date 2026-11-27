@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openSiteMenu, toggleSiteTheme } from "./flow-navigation";
 
 type Theme = "dark" | "light";
 
@@ -40,10 +41,11 @@ async function themeColors(page: Page, theme: Theme) {
 }
 
 async function sampleThemeTransition(page: Page): Promise<ThemeSample[]> {
-  return await page.evaluate(async () => {
+  await openSiteMenu(page);
+  const control = page.getByRole("banner").getByRole("button", { name: "Toggle color theme", exact: true });
+  return await control.evaluate(async (toggle) => {
     const heading = document.querySelector("h1");
     const mutedText = document.querySelector(".text-muted");
-    const toggle = document.querySelector('button[aria-label="Toggle color theme"]');
 
     if (
       !(heading instanceof HTMLElement) ||
@@ -149,7 +151,7 @@ test("reduced motion applies the final theme without color interpolation", async
 
   const targetColors = await themeColors(page, "dark");
   await setTheme(page, "light");
-  await page.getByRole("button", { name: "Toggle color theme" }).click();
+  await toggleSiteTheme(page);
 
   await expect(page.locator("h1")).toHaveCSS("color", targetColors.heading);
   await expect(page.locator(".text-muted").first()).toHaveCSS("color", targetColors.mutedText);

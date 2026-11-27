@@ -5,6 +5,7 @@ import sharp from "sharp";
 import type { PublicEventShareCard } from "../../../convex/_eventShareCard";
 import { AUTH_UNAVAILABLE_COPY } from "../src/lib/auth-copy";
 import { eventShareRevision } from "../src/lib/event-share-card";
+import { toggleSiteTheme } from "./flow-navigation";
 import {
   capturedRoutes,
   expectEventPage,
@@ -137,7 +138,7 @@ test("missing public event offers themed recovery", async ({ page }) => {
   const lightBackground = await page.locator("body").evaluate((body) => getComputedStyle(body).backgroundColor);
   await expect(main).toHaveCSS("background-color", lightBackground);
 
-  await page.getByRole("button", { name: "Toggle color theme" }).click();
+  await toggleSiteTheme(page);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   const darkBackground = await page.locator("body").evaluate((body) => getComputedStyle(body).backgroundColor);
   expect(darkBackground).not.toBe(lightBackground);

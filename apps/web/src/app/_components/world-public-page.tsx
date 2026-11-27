@@ -289,53 +289,68 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
   });
   const hasLinks = referenceUrl || outboundLinks.length > 0;
   const hasDetails = description || upcoming.length > 0 || recent.length > 0 || hasTags || hasCredits || hasLinks;
-  const isVisibilityOnly = !heroImageUrl && !hasDetails && !canonicalWorldUrl
+  const hasPlatforms = world.platformCompatibility.length > 0;
+  const isSparse = !heroImageUrl && !hasDetails && !canonicalWorldUrl
     && !world.vrchatWorldId && !world.summary?.trim()
-    && world.platformCompatibility.length === 0 && world.media.length === 0;
+    && !hasPlatforms && world.media.length === 0;
+  const hasLaunchDetails = hasPlatforms && Boolean(canonicalWorldUrl);
   const heroMetaClassName = heroImageUrl ? "text-white/76" : "text-muted";
 
   return (
-    <PageShell tone="world" className={isVisibilityOnly ? "flex items-center" : undefined}>
+    <PageShell tone="world">
       <PageContainer max={!heroImageUrl && !hasDetails ? "3xl" : undefined}>
         <section className={cn(
           "overflow-hidden rounded-hero border border-border",
           heroImageUrl ? "bg-media text-white shadow-hero" : "bg-surface-strong text-foreground shadow-sm",
         )}>
-          <div className={cn("p-6 sm:p-8", isVisibilityOnly && "sm:p-10", heroImageUrl && "grid items-center gap-6 lg:grid-cols-[1.1fr_1fr] lg:p-10")}>
+          <div className={cn(
+            "p-6 sm:p-8",
+            isSparse && "sm:p-10",
+            heroImageUrl && "grid items-center gap-6 lg:grid-cols-[1.1fr_1fr] lg:p-10",
+            hasLaunchDetails && "max-sm:p-4",
+          )}>
             <div className="min-w-0">
               <h1 className={cn(
                 "font-semibold leading-none tracking-[-0.05em] [overflow-wrap:anywhere]",
                 heroImageUrl ? "text-5xl sm:text-7xl" : "text-4xl sm:text-5xl",
               )}>{world.displayName}</h1>
-              {!isVisibilityOnly && world.summary ? <p className={cn("mt-4 max-w-2xl text-base leading-7 sm:text-lg", heroImageUrl ? "text-white/82" : "text-muted")}>{world.summary}</p> : null}
+              {!isSparse && world.summary ? <p className={cn(
+                "mt-4 max-w-2xl text-base leading-7 sm:text-lg",
+                hasLaunchDetails && "max-sm:mt-3 max-sm:leading-6",
+                heroImageUrl ? "text-white/82" : "text-muted",
+              )}>{world.summary}</p> : null}
               <dl className={cn(
                 "mt-5 flex flex-wrap items-start gap-x-6 gap-y-3 text-sm",
-                isVisibilityOnly && "grid grid-cols-2 border-t border-border-strong pt-4 sm:mt-7 sm:pt-5",
+                isSparse && "grid grid-cols-2 border-t border-border-strong pt-4 sm:mt-7 sm:grid-cols-3 sm:pt-5",
+                hasLaunchDetails && "max-sm:mt-4 max-sm:gap-x-3",
               )}>
-                <div>
-                  <dt className={heroMetaClassName}>{isVisibilityOnly ? "World visibility" : "Visibility"}</dt>
-                  <dd className="mt-1 font-medium">{visibilityLabel(world.visibilityStatus)}</dd>
-                </div>
-                {isVisibilityOnly ? (
+                {hasPlatforms || isSparse ? (
+                  <div>
+                    <dt className={hasLaunchDetails ? cn(heroMetaClassName, "max-sm:font-medium max-sm:text-inherit") : heroMetaClassName}>Platforms</dt>
+                    <dd className="mt-1 font-medium">
+                      {hasPlatforms ? (
+                        <PillList items={world.platformCompatibility.map(platformLabel)} onArtwork={Boolean(heroImageUrl)} />
+                      ) : "Unknown"}
+                    </dd>
+                  </div>
+                ) : null}
+                {isSparse ? (
                   <div>
                     <dt className={heroMetaClassName}>VRChat link</dt>
                     <dd className="mt-1 font-medium">Not listed</dd>
                   </div>
                 ) : null}
-                {world.platformCompatibility.length > 0 ? (
-                  <div>
-                    <dt className={heroMetaClassName}>Platforms</dt>
-                    <dd className="mt-1">
-                      <PillList items={world.platformCompatibility.map(platformLabel)} onArtwork={Boolean(heroImageUrl)} />
-                    </dd>
-                  </div>
-                ) : null}
+                <div className={cn(!isSparse && (hasLaunchDetails ? "sm:-order-1" : "-order-1"))}>
+                  <dt className={heroMetaClassName}>{isSparse ? "World visibility" : "Visibility"}</dt>
+                  <dd className="mt-1 font-medium">{visibilityLabel(world.visibilityStatus)}</dd>
+                </div>
               </dl>
               {canonicalWorldUrl ? (
                 <a
                   className={cn(
                     buttonVariants({ variant: "primary" }),
                     "mt-5",
+                    hasLaunchDetails && "max-sm:mt-4 max-sm:min-h-11",
                     heroImageUrl
                       ? "focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-media"
                       : "focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-strong",

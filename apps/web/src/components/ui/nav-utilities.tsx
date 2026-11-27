@@ -3,9 +3,9 @@
 import { useConvexAuth, useQuery } from "convex/react";
 import { Search } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { usePostHog } from "posthog-js/react";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { api } from "@convex-generated-api";
 import {
@@ -28,41 +28,16 @@ const convexEnabled = Boolean(process.env.NEXT_PUBLIC_CONVEX_URL);
  * the nav border and every route below it once auth settled. Sizing by content
  * is what let that happen, so these are sized by the row instead.
  */
-const NAV_CONTROL_HEIGHT = "h-10 py-0";
+const NAV_CONTROL_HEIGHT = "h-11 py-0 sm:h-10";
+const MOBILE_ACCOUNT_WIDTH = "max-sm:w-20";
+type HeaderPanel = "search" | "menu";
 
-/**
- * The nav's search: an icon that slides an input out to its left, rather than a
- * link to `/search`.
- *
- * The input is mounted only while open. The dedicated Search form also hides
- * this utility so the page has one place to enter a query.
- *
- * There is no `<form>` and no submit: Enter on a highlighted suggestion goes to
- * that entity, and Enter on nothing does nothing. Sending a half-typed query to
- * `/search` from a nav that is one keystroke from the answer is the worse of the
- * two outcomes.
- */
-function NavSearch() {
+function NavSearchPanel({ id, onClose }: { id: string; onClose: (restoreFocus?: boolean) => void }) {
   const posthog = usePostHog();
   const router = useRouter();
-  const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const listboxId = useId();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const toggleRef = useRef<HTMLButtonElement>(null);
   const { activeIndex, setActiveIndex, suggestions } = useSearchSuggestions(query, "all");
-
-  // `restoreFocus` for the closes a keyboard user makes from inside the box.
-  // Unmounting the focused input otherwise drops focus to <body>, and the next
-  // Tab starts from the top of the page.
-  function close({ restoreFocus = false } = {}) {
-    setIsOpen(false);
-    setQuery("");
-    setActiveIndex(-1);
-    if (restoreFocus) {
-      toggleRef.current?.focus();
-    }
-  }
 
   function selectSuggestion(result: SearchSuggestion) {
     captureProductEvent(posthog, "search_result_clicked", {
@@ -70,88 +45,53 @@ function NavSearch() {
       profile_type: result.profileType,
       surface: "nav",
     });
-    close();
+    onClose();
     router.push(result.routePath);
   }
 
   return (
-    // No `relative` here: the listbox spans `NavUtilities` instead, so it starts
-    // under the input and ends under the account control. Anchored to this box
-    // it overhung the left edge of a phone screen.
-    <div className={cn("flex min-w-0 items-center", styles.quickSearch)}>
-      {isOpen ? (
-        <input
-          aria-activedescendant={activeIndex >= 0 ? `${listboxId}-${activeIndex}` : undefined}
-          aria-autocomplete="list"
-          aria-controls={listboxId}
-          aria-expanded={suggestions.length > 0}
-          aria-label="Search VRDex"
-          autoFocus
-          ref={inputRef}
-          // `starting:` is the mount-time half of the slide; the element opens at
-          // zero width and transitions to full on its first frame, with no effect
-          // to schedule it.
-          className="h-10 w-48 min-w-0 rounded-control border border-border bg-surface px-3 text-sm text-foreground opacity-100 outline-none transition-[width,opacity] duration-200 placeholder:text-muted focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 sm:w-64 starting:w-0 starting:opacity-0"
-          placeholder="Search..."
-          role="combobox"
-          value={query}
-          // Delayed so a tap on an option lands first. Checked against the live
-          // input so a reopen inside the delay is not closed by the old blur.
-          onBlur={() => window.setTimeout(() => {
-            if (document.activeElement !== inputRef.current) {
-              close();
-            }
-          }, 100)}
-          onChange={(event) => {
-            setQuery(event.currentTarget.value);
-            setActiveIndex(-1);
-          }}
-          onKeyDown={(event) => {
-            // An IME uses these keys to pick and confirm candidates; they are
-            // not combobox moves until composition ends.
-            if (event.nativeEvent.isComposing) {
-              return;
-            }
-            if (event.key === "Escape") {
-              close({ restoreFocus: true });
-              return;
-            }
-            if (event.key === "ArrowDown" && suggestions.length > 0) {
-              event.preventDefault();
-              setActiveIndex((current) => (current + 1) % suggestions.length);
-              return;
-            }
-            if (event.key === "ArrowUp" && suggestions.length > 0) {
-              event.preventDefault();
-              setActiveIndex((current) => current <= 0 ? suggestions.length - 1 : current - 1);
-              return;
-            }
-            if (event.key === "Enter" && activeIndex >= 0 && suggestions[activeIndex]) {
-              event.preventDefault();
-              selectSuggestion(suggestions[activeIndex]);
-            }
-          }}
-        />
-      ) : null}
-      <button
-        aria-expanded={isOpen}
-        aria-label="Search"
-        className={cn(buttonVariants({ variant: "ghost" }), "size-10 shrink-0 p-0")}
-        ref={toggleRef}
-        title="Search"
-        type="button"
-        // Keep focus on the input so clicking the toggle is one close, not a
-        // blur-scheduled close racing a click that reopens.
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={() => isOpen ? close({ restoreFocus: true }) : setIsOpen(true)}
-      >
-        <Search aria-hidden="true" className="size-4" />
-      </button>
-      {isOpen && suggestions.length > 0 ? (
-        // `z-50` because the nav itself is sticky at `z-40`. Height-capped and
-        // scrollable because the page cannot scroll it into view: the nav is stuck.
+    <div id={id} className={cn(styles.mobilePanel, "sm:order-first sm:min-w-0")}>
+      <input
+        aria-activedescendant={activeIndex >= 0 ? `${listboxId}-${activeIndex}` : undefined}
+        aria-autocomplete="list"
+        aria-controls={suggestions.length > 0 ? listboxId : undefined}
+        aria-expanded={suggestions.length > 0}
+        aria-label="Search VRDex"
+        autoFocus
+        className="h-11 w-full min-w-0 rounded-control border border-border bg-surface px-3 text-sm text-foreground opacity-100 outline-none placeholder:text-muted focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/20 sm:h-10 sm:w-64 sm:transition-[width,opacity] sm:duration-200 sm:starting:w-0 sm:starting:opacity-0"
+        placeholder="Search..."
+        role="combobox"
+        value={query}
+        onChange={(event) => {
+          setQuery(event.currentTarget.value);
+          setActiveIndex(-1);
+        }}
+        onKeyDown={(event) => {
+          if (event.nativeEvent.isComposing) return;
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onClose(true);
+            return;
+          }
+          if (event.key === "ArrowDown" && suggestions.length > 0) {
+            event.preventDefault();
+            setActiveIndex((current) => (current + 1) % suggestions.length);
+            return;
+          }
+          if (event.key === "ArrowUp" && suggestions.length > 0) {
+            event.preventDefault();
+            setActiveIndex((current) => current <= 0 ? suggestions.length - 1 : current - 1);
+            return;
+          }
+          if (event.key === "Enter" && activeIndex >= 0 && suggestions[activeIndex]) {
+            event.preventDefault();
+            selectSuggestion(suggestions[activeIndex]);
+          }
+        }}
+      />
+      {suggestions.length > 0 ? (
         <div
-          className="absolute inset-x-0 top-full z-50 mt-2 grid max-h-[calc(100dvh-10rem)] overflow-y-auto rounded-card border border-border bg-surface-strong shadow-panel"
+          className="mt-2 grid overflow-y-auto rounded-card border border-border bg-surface-strong sm:absolute sm:inset-x-0 sm:top-full sm:z-50 sm:max-h-[calc(100dvh-10rem)] sm:shadow-panel"
           id={listboxId}
           role="listbox"
         >
@@ -159,15 +99,14 @@ function NavSearch() {
             <button
               aria-selected={activeIndex === index}
               className={cn(
-                "grid gap-1 px-4 py-3 text-left hover:bg-surface-elevated",
-                activeIndex === index ? "bg-surface-elevated" : undefined,
+                "grid min-h-11 gap-1 px-4 py-3 text-left hover:bg-surface-elevated",
+                activeIndex === index && "bg-surface-elevated",
               )}
               id={`${listboxId}-${index}`}
               key={`${result.entityType}:${result.slug}`}
-              // `aria-activedescendant` moves the highlight without moving
-              // focus, so nothing scrolls a capped list to follow the arrows.
               ref={activeIndex === index ? (element) => element?.scrollIntoView({ block: "nearest" }) : undefined}
               role="option"
+              tabIndex={-1}
               type="button"
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => selectSuggestion(result)}
@@ -182,9 +121,55 @@ function NavSearch() {
   );
 }
 
+function NavSearch({ isOpen, onOpen, onClose }: { isOpen: boolean; onOpen: () => void; onClose: () => void }) {
+  const panelId = useId();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+
+  function close(restoreFocus = false) {
+    if (restoreFocus) toggleRef.current?.focus();
+    onClose();
+  }
+
+  return (
+    <div
+      className={cn("flex min-w-0 items-center", styles.quickSearch)}
+      data-header-panel="search"
+      ref={containerRef}
+      onBlur={(event) => {
+        if (!isOpen || event.currentTarget.contains(event.relatedTarget)) return;
+        if (event.relatedTarget) {
+          close();
+          return;
+        }
+        // A touch suggestion can blur the input before its click.
+        const panel = document.getElementById(panelId);
+        window.setTimeout(() => {
+          if (panel?.isConnected && !containerRef.current?.contains(document.activeElement)) close();
+        }, 100);
+      }}
+    >
+      <button
+        aria-controls={isOpen ? panelId : undefined}
+        aria-expanded={isOpen}
+        aria-label="Search"
+        className={cn(buttonVariants({ variant: "ghost" }), "size-11 shrink-0 p-0 sm:size-10")}
+        ref={toggleRef}
+        title="Search"
+        type="button"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => isOpen ? close(true) : onOpen()}
+      >
+        <Search aria-hidden="true" className="size-4" />
+      </button>
+      {isOpen ? <NavSearchPanel id={panelId} onClose={close} /> : null}
+    </div>
+  );
+}
+
 function SignedOutControl() {
   return (
-    <Link className={cn(buttonVariants({ variant: "secondary" }), NAV_CONTROL_HEIGHT)} href="/sign-in">
+    <Link className={cn(buttonVariants({ variant: "secondary" }), NAV_CONTROL_HEIGHT, MOBILE_ACCOUNT_WIDTH, "whitespace-normal leading-tight")} href="/sign-in">
       Sign in
     </Link>
   );
@@ -195,7 +180,7 @@ function ConnectedAccountControl({ showMyEvents }: { showMyEvents: boolean }) {
   const viewer = useQuery(api.accounts.viewer, isAuthenticated ? {} : "skip");
 
   if (isLoading) {
-    return <span aria-hidden="true" className="h-10 w-24 rounded-control border border-border bg-surface-strong" />;
+    return <span aria-hidden="true" className={cn("rounded-control border border-border bg-surface-strong sm:w-24", NAV_CONTROL_HEIGHT, MOBILE_ACCOUNT_WIDTH)} />;
   }
 
   if (!isAuthenticated) {
@@ -206,10 +191,10 @@ function ConnectedAccountControl({ showMyEvents }: { showMyEvents: boolean }) {
 
   return (
     <>
-    {showMyEvents ? <Link className={cn(buttonVariants({ variant: "ghost" }), NAV_CONTROL_HEIGHT)} href="/account/events">My events</Link> : null}
+    {showMyEvents ? <Link className={cn(buttonVariants({ variant: "ghost" }), NAV_CONTROL_HEIGHT, "hidden sm:inline-flex")} href="/account/events">My events</Link> : null}
     <Link
       aria-label="Account"
-      className={cn(buttonVariants({ variant: "secondary" }), NAV_CONTROL_HEIGHT, "gap-2 px-1.5 sm:pr-3")}
+      className={cn(buttonVariants({ variant: "secondary" }), NAV_CONTROL_HEIGHT, MOBILE_ACCOUNT_WIDTH, "gap-2 px-1.5 sm:pr-3")}
       href="/account"
     >
       <EntityImage alt="" className="size-7 rounded-control" label={label} sizes="28px" src={viewer?.user.image} />
@@ -223,16 +208,113 @@ function AccountControl({ mode, showMyEvents }: { mode: "auto" | "signed-out"; s
   return mode === "auto" && convexEnabled ? <ConnectedAccountControl showMyEvents={showMyEvents} /> : <SignedOutControl />;
 }
 
-export function NavUtilities({ accountMode = "auto", showMyEvents = true }: { accountMode?: "auto" | "signed-out"; showMyEvents?: boolean }) {
+const menuItem = cn(buttonVariants({ variant: "ghost" }), "min-h-11 w-full justify-start whitespace-normal text-left");
+
+function MobileMyEvents({ onNavigate }: { onNavigate: (href: string) => void }) {
+  const { isAuthenticated } = useConvexAuth();
+  const href = "/account/events";
+
+  return isAuthenticated ? <Link className={menuItem} href={href} onNavigate={() => onNavigate(href)}>My events</Link> : null;
+}
+
+function HeaderControls({ accountMode, pathname, showMyEvents }: { accountMode: "auto" | "signed-out"; pathname: string; showMyEvents: boolean }) {
+  const [panel, setPanel] = useState<HeaderPanel | null>(null);
+  const menuId = useId();
+  const menuToggleRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!panel) return;
+
+    function handleOutsidePress(event: PointerEvent) {
+      if (event.target instanceof Element && !event.target.closest(`[data-header-panel="${panel}"]`)) setPanel(null);
+    }
+
+    const desktop = window.matchMedia("(min-width: 40rem)");
+    function closePanel() { setPanel(null); }
+
+    document.addEventListener("pointerdown", handleOutsidePress);
+    desktop.addEventListener("change", closePanel);
+    window.addEventListener("popstate", closePanel);
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsidePress);
+      desktop.removeEventListener("change", closePanel);
+      window.removeEventListener("popstate", closePanel);
+    };
+  }, [panel]);
+
+  function closeMenu() { setPanel((current) => current === "menu" ? null : current); }
+
+  function navigateFromMenu(href: string) {
+    if (href === pathname) menuToggleRef.current?.focus();
+    closeMenu();
+  }
+
   return (
-    // `min-w-0` so an open search can shrink to fit a phone-width row; the fixed
-    // controls are grouped `shrink-0` so the input is the only thing that gives.
-    <div className="relative ml-auto flex min-w-0 items-center justify-end gap-1">
-      <NavSearch />
+    <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1 sm:relative sm:flex-nowrap">
+      <NavSearch
+        isOpen={panel === "search"}
+        onOpen={() => setPanel("search")}
+        onClose={() => setPanel((current) => current === "search" ? null : current)}
+      />
       <div className="flex shrink-0 items-center gap-1">
-        <ThemeToggle className="size-10 p-0" />
+        <ThemeToggle className="hidden size-10 p-0 sm:inline-flex" />
         <AccountControl mode={accountMode} showMyEvents={showMyEvents} />
+      </div>
+      <div
+        className={cn("sm:hidden", styles.menu)}
+        data-header-panel="menu"
+        onBlur={(event) => {
+          const menu = event.currentTarget;
+          if (panel !== "menu" || menu.contains(event.relatedTarget)) return;
+          if (event.relatedTarget) {
+            closeMenu();
+            return;
+          }
+          // A touch link can blur the trigger before its click.
+          const openPanel = document.getElementById(menuId);
+          window.setTimeout(() => {
+            if (openPanel?.isConnected && !menu.contains(document.activeElement)) closeMenu();
+          }, 100);
+        }}
+        onKeyDown={(event) => {
+          if (panel !== "menu" || event.key !== "Escape") return;
+          event.preventDefault();
+          menuToggleRef.current?.focus();
+          closeMenu();
+        }}
+      >
+        <button
+          aria-controls={panel === "menu" ? menuId : undefined}
+          aria-expanded={panel === "menu"}
+          className={cn(buttonVariants({ variant: "ghost" }), "size-11 p-0")}
+          ref={menuToggleRef}
+          type="button"
+          onClick={(event) => {
+            if (panel === "menu") {
+              closeMenu();
+            } else {
+              event.currentTarget.focus();
+              setPanel("menu");
+            }
+          }}
+        >
+          Menu
+        </button>
+        {panel === "menu" ? (
+          <div className={styles.mobilePanel} id={menuId}>
+            <Link className={menuItem} href="/discovery" onNavigate={() => navigateFromMenu("/discovery")}>Discovery</Link>
+            <Link className={menuItem} href="/submit" onNavigate={() => navigateFromMenu("/submit")}>Add profile</Link>
+            {showMyEvents && accountMode === "auto" && convexEnabled ? <MobileMyEvents onNavigate={navigateFromMenu} /> : null}
+            <ThemeToggle className="min-h-11 min-w-11 justify-start gap-2 px-4 after:content-['Theme']" />
+          </div>
+        ) : null}
       </div>
     </div>
   );
+}
+
+export function NavUtilities({ accountMode = "auto", showMyEvents = true }: { accountMode?: "auto" | "signed-out"; showMyEvents?: boolean }) {
+  const pathname = usePathname();
+
+  return <HeaderControls key={pathname} accountMode={accountMode} pathname={pathname} showMyEvents={showMyEvents} />;
 }

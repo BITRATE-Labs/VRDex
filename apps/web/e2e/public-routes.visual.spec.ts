@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { toggleSiteTheme } from "./flow-navigation";
 import { manualPerformer } from "./event-performer-helpers";
 
 import {
@@ -30,7 +31,7 @@ test("home dark theme @visual", async ({ page }, testInfo) => {
     document.documentElement.dataset.theme = "light";
     document.documentElement.style.colorScheme = "light";
   });
-  await page.getByRole("button", { name: "Toggle color theme" }).click();
+  await toggleSiteTheme(page);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.reload();
   await expectHomePage(page);

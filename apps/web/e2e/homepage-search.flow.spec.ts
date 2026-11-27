@@ -1,5 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+import { openSiteMenu, toggleSiteTheme } from "./flow-navigation";
 import { expectHomePage, prepareVisualPage, waitForVisualReady } from "./public-routes";
 import { test, waitForPublicSearchHydration } from "./public-search-fixture";
 
@@ -35,7 +36,7 @@ test("approved wordmark is exact and visible on Home and both search shells @flo
     if (route.includes("view=dj")) {
       await expect(page.getByRole("heading", { name: "DJ links", exact: true })).toBeVisible();
     }
-    await page.getByRole("button", { name: "Toggle color theme", exact: true }).click();
+    await toggleSiteTheme(page);
     await expect(wordmark).toBeVisible();
     await expect(wordmark).toHaveAttribute("src", dark ? "/brand/vrdex-wordmark-light.svg" : "/brand/vrdex-wordmark.svg");
     await expect(wordmark.locator("..")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
@@ -54,6 +55,7 @@ test("new Home submissions and old root bookmarks retain distinct destinations @
   await page.goto("/");
   await expectHomePage(page);
   const input = page.getByRole("combobox", { name: /Search/i });
+  await waitForPublicSearchHydration(page);
   if (isMobile) {
     const submit = page.getByRole("main").getByRole("button", { name: "Search VRDex", exact: true });
     const [inputBounds, submitBounds] = await Promise.all([input.boundingBox(), submit.boundingBox()]);
@@ -62,7 +64,7 @@ test("new Home submissions and old root bookmarks retain distinct destinations @
   }
   await input.fill("  BASICBIT  ");
   await input.press("Enter");
-  await expect(page).toHaveURL(/\/search\?q=BASICBIT$/);
+  await expect(page).toHaveURL(/\/search\?q=BASICBIT$/, { timeout: 15_000 });
   await expect(publicResultRow(page, "/basicbit")).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Search view" })).toHaveCount(0);
   await page.goto("/?q=%20BASICBIT%20");
@@ -76,7 +78,8 @@ test("whitespace root query keeps Home and discovery reachable @flow @fixture", 
   await expectHomePage(page);
   await expect(page.getByRole("combobox", { name: /Search/i })).toHaveValue("");
   await expect(page.getByRole("heading", { name: /My night|Upcoming events|Favorites|Timeline/i })).toHaveCount(0);
-  await page.getByRole("link", { name: "Discovery", exact: true }).click();
+  await openSiteMenu(page);
+  await page.getByRole("banner").getByRole("link", { name: "Discovery", exact: true }).click();
   await expect(page).toHaveURL(/\/discovery$/);
   await expect(page.getByRole("heading", { name: "Discover VR", exact: true })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Search VRDex", exact: true })).toHaveAttribute("placeholder", "Search VRDex");
@@ -797,12 +800,15 @@ test("clearing an in-flight request invalidates it before the same query is rety
 });
 
 test("GET search remains usable without JavaScript @flow @fixture", async ({ browser, baseURL }) => {
-  const context = await browser.newContext({ baseURL, javaScriptEnabled: false });
+  const context = await browser.newContext({ baseURL, javaScriptEnabled: false, viewport: { width: 320, height: 800 } });
   const page = await context.newPage();
   await page.goto("/");
-  await expectHomePage(page);
+  await expect(page.getByRole("heading", { name: "DJs, clubs & events", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Schedule", exact: true })).toBeHidden();
-  await expect(page.getByRole("link", { name: "Discovery", exact: true })).toBeVisible();
+  const nav = page.getByRole("navigation", { name: "Primary navigation", exact: true });
+  await expect(nav.getByRole("link", { name: "Discovery", exact: true })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Add profile", exact: true })).toBeVisible();
+  await expect(nav.getByRole("button", { name: "Menu", exact: true })).toBeHidden();
   const homeInput = page.getByRole("combobox", { name: /Search/i });
   await homeInput.fill("BASICBIT");
   await homeInput.press("Enter");

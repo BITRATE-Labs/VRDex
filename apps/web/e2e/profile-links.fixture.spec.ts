@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { toggleSiteTheme } from "./flow-navigation";
 
 test("Discord keeps its handle visible and copies it from the compact control @fixture", async ({ page }) => {
   await page.addInitScript(() => {
@@ -101,7 +102,7 @@ test("an artless occurrence on a sparse profile uses its theme colors @fixture",
   let lightBackdrop: string | undefined;
   for (const theme of ["light", "dark"] as const) {
     if (theme === "dark") {
-      await page.getByRole("button", { name: "Toggle color theme" }).click();
+      await toggleSiteTheme(page);
     }
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     await expect(page.locator("html")).not.toHaveAttribute("data-theme-transition", "true");
