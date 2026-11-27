@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { usePostHog } from "posthog-js/react";
-import { Search, X } from "lucide-react";
+import { ArrowUpLeft, Search, X } from "lucide-react";
 import { type FormEvent, useId, useRef, useState } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
@@ -34,7 +34,7 @@ export function PublicSearchControl(props: PublicSearchControlProps) {
 export function EditPublicSearchLink({ inputId }: { inputId: string }) {
   return (
     <a
-      className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "min-h-11 shrink-0")}
+      className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "-ml-2 min-h-11 shrink-0 gap-1.5 px-2 underline-offset-4 hover:underline sm:ml-0")}
       href={`#${inputId}`}
       onClick={(event) => {
         if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
@@ -44,6 +44,7 @@ export function EditPublicSearchLink({ inputId }: { inputId: string }) {
         input.focus();
       }}
     >
+      <ArrowUpLeft aria-hidden="true" className="size-4 text-muted" />
       Edit search
     </a>
   );
@@ -110,8 +111,8 @@ function SearchControl({
           aria-label="Search VRDex"
           autoComplete="off"
           className={cn(
-            "min-h-14 w-full rounded-control border py-3 pr-12 pl-5 text-base outline-none focus-visible:ring-2",
-            compact && "max-sm:min-h-11 max-sm:py-2 max-sm:pr-11 max-sm:pl-3",
+            "w-full rounded-control border pr-12 pl-5 text-base outline-none focus-visible:ring-2",
+            compact ? "min-h-11 py-2 max-sm:pr-11 max-sm:pl-3" : "min-h-14 py-3",
             isInverse
               ? "border-white/25 bg-white/16 text-white placeholder:text-white/62 focus:border-white/70 focus-visible:ring-white/25"
               : "border-border bg-surface text-foreground placeholder:text-muted focus:border-accent focus-visible:ring-accent/20",
@@ -208,9 +209,9 @@ function SearchControl({
       {filter === "all" ? null : <input name="type" type="hidden" value={filter} />}
       <button
         className={cn(
-          buttonVariants({ size: "lg", variant: isInverse ? "inversePrimary" : "primary" }),
-          "min-h-14 px-6 font-semibold",
-          compact && "shrink-0 max-sm:min-h-11 max-sm:w-11 max-sm:p-0",
+          compact
+            ? cn(buttonVariants({ size: "sm", variant: "surface" }), "min-h-11 shrink-0 max-sm:w-11 max-sm:p-0 sm:px-4")
+            : cn(buttonVariants({ size: "lg", variant: isInverse ? "inversePrimary" : "primary" }), "min-h-14 px-6 font-semibold"),
         )}
         type="submit"
       >

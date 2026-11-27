@@ -118,6 +118,15 @@ for (const theme of ["light", "dark"] as const) {
     expect(submitBounds.x).toBeGreaterThan(fieldBounds.x + fieldBounds.width);
     expect(submitBounds.y).toBeLessThan(fieldBounds.y + fieldBounds.height);
     expect(Math.min(submitBounds.width, submitBounds.height)).toBeGreaterThanOrEqual(44);
+    const filters = main.getByRole("navigation", { name: "Entity type" }).getByRole("link");
+    await expect(filters).toHaveCount(5);
+    const filterBounds = [];
+    for (const link of await filters.all()) {
+      const bounds = (await link.boundingBox())!;
+      expect(Math.min(bounds.width, bounds.height)).toBeGreaterThanOrEqual(44);
+      filterBounds.push(bounds);
+    }
+    expect(Math.max(...filterBounds.map(({ y }) => y))).toBe(Math.min(...filterBounds.map(({ y }) => y)));
     await expect(page.getByText("No public results matched that search yet.", { exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
     const edit = main.getByRole("link", { name: "Edit search", exact: true });
@@ -258,6 +267,7 @@ test("sparse public results omit empty disclosure controls @flow @fixture", asyn
   expect(resultsBounds.width).toBe(formBounds.width);
   expect((await claim.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   expect((await claim.locator("..").boundingBox())!.width).toBeLessThan((await row.boundingBox())!.width);
+  expect((await claim.boundingBox())!.x).toBe((await row.getByText("Sparse Import", { exact: true }).boundingBox())!.x);
   if (isMobile) {
     expect((await row.boundingBox())!.y).toBeLessThan(410);
   }
