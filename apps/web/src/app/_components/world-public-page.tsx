@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowRight, ChevronRight, ExternalLink } from "lucide-react";
+import { ArrowDown, ArrowRight, ChevronRight, ExternalLink, MapPin } from "lucide-react";
 import Link from "next/link";
 
 import { EntityImage } from "@/components/ui/entity-image";
@@ -194,7 +194,7 @@ function PillList({ items, onArtwork }: { items: string[]; onArtwork?: boolean }
 function WorldEventBucket({ heading, events }: { heading: string; events: PublicWorldEventPreview[] }) {
   return (
     <section className="grid min-w-0 content-start gap-3">
-      <h3 className="text-sm font-semibold text-muted">{heading}</h3>
+      <h3 className="text-base font-semibold text-foreground">{heading}</h3>
       {events.map((event) => {
         const sourceUrl = event.source.url ? safeHttpsUrl(event.source.url) : null;
         const eventPath = publicEventPath(event);
@@ -206,31 +206,43 @@ function WorldEventBucket({ heading, events }: { heading: string; events: Public
             key={`${event.slug ?? event.title}-${event.eventDate ?? event.startAt}`}
             style={artworkStyle}
           >
-            <h4 className="break-words text-lg font-semibold leading-snug tracking-[-0.03em]">
+            <h4 className="break-words font-semibold leading-snug tracking-[-0.03em]">
               {eventPath ? (
                 <Link
-                  className="inline-flex max-w-full items-center gap-2 rounded-control text-accent-strong underline decoration-accent/45 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent max-sm:flex max-sm:min-h-11 max-sm:justify-between"
+                  className="inline-flex min-h-11 min-w-11 max-w-full items-center gap-2 rounded-control text-lg text-accent-strong underline decoration-accent/45 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent max-sm:flex max-sm:justify-between"
                   href={eventPath}
                 >
                   <span className="min-w-0 [overflow-wrap:anywhere]">{event.title}</span>
                   <ChevronRight aria-hidden="true" className="size-4 shrink-0" />
                 </Link>
-              ) : event.title}
+              ) : (
+                <span className="flex min-h-11 items-center text-base">{event.title}</span>
+              )}
             </h4>
-            <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted">
+            <div className="mt-1.5 grid gap-1">
               <ViewerLocalEventDateTime
                 className="min-w-0 break-words text-sm font-semibold text-foreground"
                 timestamp={event.startAt}
                 eventDate={event.eventDate}
                 scheduleKind={event.scheduleKind}
               />
-              <span>Confirmed venue</span>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                <span className="inline-flex items-center gap-1">
+                  <MapPin aria-hidden="true" className="size-3.5 shrink-0" />
+                  Confirmed venue
+                </span>
+                {event.mediaLinks.length > 0 ? (
+                  <span className="border-s border-border-strong ps-3">
+                    {event.mediaLinks.length} media link{event.mediaLinks.length === 1 ? "" : "s"}
+                  </span>
+                ) : null}
+              </div>
             </div>
             {event.communityName ? <p className="mt-1 text-muted">Hosted by {event.communityName}</p> : null}
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 break-words text-xs text-muted">
+            <div className="mt-2 break-words text-xs text-muted">
               {sourceUrl ? (
                 <a
-                  className="inline-flex min-w-0 items-center gap-1.5 rounded-control text-sm font-medium text-muted underline decoration-border-strong underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent max-sm:min-h-11 max-sm:min-w-11"
+                  className="inline-flex min-h-11 min-w-11 max-w-full items-center gap-1.5 rounded-control text-sm font-medium text-muted underline decoration-border-strong underline-offset-4 hover:text-accent-strong hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                   href={sourceUrl}
                   rel="noreferrer"
                   target="_blank"
@@ -241,11 +253,6 @@ function WorldEventBucket({ heading, events }: { heading: string; events: Public
               ) : (
                 <span>{event.source.label}</span>
               )}
-              {event.mediaLinks.length > 0 ? (
-                <span>
-                  {event.mediaLinks.length} media link{event.mediaLinks.length === 1 ? "" : "s"}
-                </span>
-              ) : null}
             </div>
             {event.summary ? <p className="mt-2 break-words leading-6 text-muted">{event.summary}</p> : null}
           </article>
@@ -437,7 +444,11 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
             >
               Events at this world
             </SectionTitle>
-            <div className={cn("mt-4 grid gap-4 sm:mt-6", upcoming.length > 0 && recent.length > 0 && "lg:grid-cols-2")}>
+            <div className={cn(
+              "mt-4 grid gap-4 sm:mt-6",
+              upcoming.length > 0 && recent.length > 0
+                && "lg:grid-cols-2 max-lg:[&>section+section]:border-t max-lg:[&>section+section]:border-border max-lg:[&>section+section]:pt-4",
+            )}>
               {upcoming.length > 0 ? (
                 <WorldEventBucket heading="Upcoming and active" events={upcoming} />
               ) : null}
