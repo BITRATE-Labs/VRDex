@@ -167,7 +167,7 @@ export type PublicEvent = Omit<PublicEventPreview, "worlds"> & {
   }>;
 };
 
-const eventPosterOverlay = "linear-gradient(135deg, color-mix(in srgb, var(--media) 72%, transparent), color-mix(in srgb, var(--accent) 12%, transparent))";
+const eventPosterOverlay = "linear-gradient(135deg, color-mix(in srgb, var(--media) 72%, transparent), color-mix(in srgb, var(--media) 72%, transparent))";
 const eventPreviewOverlay = "linear-gradient(135deg, color-mix(in srgb, var(--media) 72%, transparent), color-mix(in srgb, var(--media) 69%, transparent))";
 const watchArtScrim = "linear-gradient(180deg, rgb(0 0 0 / 36%), rgb(0 0 0 / 68%))";
 
