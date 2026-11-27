@@ -274,6 +274,43 @@ function publicResultRow(page: Page, path: string) {
   return page.getByRole("region", { name: "Search results" }).locator(`a[href="${path}"]`).locator("..");
 }
 
+test("mobile Search keeps event initials visible until artwork loads @flow @fixture", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 740 });
+  const poster = "**/events/afterglow-harbor-poster.png";
+  const event = page.getByRole("link", { name: /Afterglow Harbor Sessions/ }).first();
+  const initials = event.getByText("AH", { exact: true });
+  const artwork = event.locator("img");
+
+  for (const succeeds of [false, true]) {
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    await page.route(poster, async (route) => {
+      await pending;
+      if (!succeeds) return route.abort();
+      return route.fulfill({
+        contentType: "image/png",
+        body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jSioAAAAASUVORK5CYII=", "base64"),
+      });
+    });
+    try {
+      await page.goto("/search?q=Afterglow", { waitUntil: "commit" });
+      await expect(initials).toBeVisible();
+      await expect(artwork).toHaveCSS("opacity", "0");
+      release();
+      if (succeeds) {
+        await expect(artwork).toHaveCSS("opacity", "1");
+        await expect(initials).toHaveCount(0);
+      } else {
+        await expect(artwork).toHaveCount(0);
+        await expect(initials).toBeVisible();
+      }
+    } finally {
+      release();
+      await page.unroute(poster);
+    }
+  }
+});
+
 test("populated Search aligns titles and keeps media and role details available at 320px @flow @fixture", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 760 });
   await page.addInitScript(() => localStorage.setItem("vrdex-theme", "dark"));

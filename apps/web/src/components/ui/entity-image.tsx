@@ -17,6 +17,33 @@ function initialsFor(label: string): string {
   );
 }
 
+function EntityImageContent({
+  alt,
+  fallback,
+  ...imageProps
+}: Pick<ComponentPropsWithoutRef<typeof Image>, "alt" | "className" | "priority" | "sizes" | "src"> & {
+  fallback: ReactNode;
+}) {
+  const [status, setStatus] = useState<"loading" | "loaded" | "failed">("loading");
+
+  if (status === "failed") return fallback;
+
+  return (
+    <>
+      {status === "loading" ? <span aria-hidden="true">{fallback}</span> : null}
+      <Image
+        {...imageProps}
+        alt={alt}
+        className={cn(imageProps.className, status === "loading" && "opacity-0")}
+        fill
+        unoptimized
+        onError={() => setStatus("failed")}
+        onLoad={() => setStatus("loaded")}
+      />
+    </>
+  );
+}
+
 export function EntityImage({
   alt,
   className,
@@ -38,8 +65,7 @@ export function EntityImage({
   src?: string | null;
 }) {
   const imageUrl = safeImageUrl(src ?? undefined);
-  const [failedUrl, setFailedUrl] = useState<string | null>(null);
-  const failed = imageUrl !== undefined && failedUrl === imageUrl;
+  const fallbackContent = fallback ?? initialsFor(label);
 
   return (
     <span
@@ -50,19 +76,18 @@ export function EntityImage({
       {...props}
       aria-hidden={alt === "" ? true : props["aria-hidden"]}
     >
-      {imageUrl && !failed ? (
-        <Image
+      {imageUrl ? (
+        <EntityImageContent
           alt={alt ?? label}
           className={cn("object-cover", imageClassName)}
-          fill
+          fallback={fallbackContent}
+          key={imageUrl}
           priority={priority}
           sizes={sizes}
           src={imageUrl}
-          unoptimized
-          onError={() => setFailedUrl(imageUrl)}
         />
       ) : (
-        fallback ?? initialsFor(label)
+        fallbackContent
       )}
     </span>
   );
