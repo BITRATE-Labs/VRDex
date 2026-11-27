@@ -701,8 +701,11 @@
   .metadata > span:first-child {
     color: var(--foreground);
   }
-  .metadata svg {
+  .metadata > span:first-child svg {
     display: none;
+  }
+  .metadata > span:last-child svg {
+    flex-shrink: 0;
   }
   .toolbar button {
     min-width: 44px;
