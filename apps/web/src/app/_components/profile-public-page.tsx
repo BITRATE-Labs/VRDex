@@ -649,12 +649,12 @@ export function ProfilePublicPage({
     <div className={cn("grid min-w-0 gap-1", aboutCopy && "lg:col-start-1 lg:row-start-2")}>
       {featuredEvent && featuredEventPath ? (
         <Link
-          className="group grid min-h-11 w-full max-w-lg grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-control border border-white/25 bg-black/30 px-3 py-2 text-white hover:border-white/50 hover:bg-black/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:gap-3"
+          className="group grid min-h-11 w-full max-w-lg grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-control border border-white/45 bg-white/10 px-3 py-2 text-white hover:border-white/65 hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:gap-3"
           href={featuredEventPath}
         >
           <span className="min-w-0">
-            <span className="block text-xs leading-4 text-white/75">Hosted event</span>
-            <span className="block wrap-anywhere text-sm leading-5 font-semibold group-hover:underline">{featuredEvent.title}</span>
+            <span className="block text-xs leading-4 font-medium text-white/85">Hosted event</span>
+            <span className="block wrap-anywhere text-base leading-5 font-bold group-hover:underline">{featuredEvent.title}</span>
             <ViewerLocalEventDateTime
               className="block text-sm leading-5 text-white/90"
               eventDate={featuredEvent.eventDate}
@@ -663,7 +663,7 @@ export function ProfilePublicPage({
               yearReferenceAt={yearReferenceAt}
             />
           </span>
-          <ChevronRight aria-hidden="true" className="size-4 text-white/75" />
+          <ChevronRight aria-hidden="true" className="size-4 text-white/90" />
         </Link>
       ) : null}
       {showCommunityEventListLink ? (
