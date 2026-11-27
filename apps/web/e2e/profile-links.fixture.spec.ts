@@ -183,6 +183,14 @@ test("populated person profiles give visitors keyboard shortcuts before ownershi
   expect(avatar.x + avatar.width).toBeLessThan(name.x);
   expect(avatar.y).toBeLessThan(name.y + name.height);
   expect(name.y).toBeLessThan(avatar.y + avatar.height);
+  const linksSection = page.locator("#profile-links").locator("xpath=ancestor::section[1]");
+  const [vrchatLink, soundCloudTitle] = await Promise.all([
+    linksSection.getByRole("link", { name: /^VRChat/ }).boundingBox(),
+    linksSection.getByText("DJ Aurora SoundCloud", { exact: true }).boundingBox(),
+  ]);
+  if (!vrchatLink || !soundCloudTitle) throw new Error("Missing public visitor links");
+  expect(vrchatLink.y).toBeLessThanOrEqual(633);
+  expect(soundCloudTitle.y + soundCloudTitle.height).toBeLessThanOrEqual(760);
   await expect(ownership.getByRole("link", { name: "Claim profile", exact: true })).toHaveAttribute("href", "/claim/playwright-dj-aurora?source=profile");
   await expect(ownership.getByRole("link", { name: "Suggest an edit", exact: true })).toHaveAttribute("href", "/playwright-dj-aurora/edit");
 
