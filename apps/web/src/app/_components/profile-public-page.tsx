@@ -465,7 +465,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
     ) : <SectionHeading>{label}</SectionHeading>;
   }
   const quietContributionStyle = "!text-muted underline decoration-border-strong underline-offset-4 hover:decoration-current";
-  const compactContributionStyle = useCompactCommunity && quietContributionStyle;
+  const ownershipActionClassName = cn("shrink-0 whitespace-nowrap max-sm:min-h-11", useCompactCommunity && quietContributionStyle);
   const secondarySections: Partial<Record<ProfilePublicSectionKey, ReactNode>> = {
     events: eventPreviews.length > 0 || !isPerson ? (
       <section className={cn(
@@ -622,7 +622,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
           {isPerson ? "Is this your profile?" : "Manage this community?"}
         </p>
         <Link
-          className={cn(buttonVariants({ size: "sm", variant: useCompactCommunity ? "ghost" : "secondary" }), "shrink-0 whitespace-nowrap", compactContributionStyle)}
+          className={cn(buttonVariants({ size: "sm", variant: useCompactCommunity ? "ghost" : "secondary" }), ownershipActionClassName)}
           href={profileClaimPath(profile.slug, "profile")}
         >
           Claim profile
@@ -631,7 +631,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
             only to those who could act on it: this page is server
             rendered with no viewer, and the editor handles sign-in. */}
         <Link
-          className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "shrink-0 whitespace-nowrap", compactContributionStyle)}
+          className={cn(buttonVariants({ size: "sm", variant: "ghost" }), ownershipActionClassName)}
           href={`${profileBasePath}/edit`}
         >
           Suggest an edit
@@ -736,7 +736,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                   >
                     {visitorLinks.map(({ id, label }) => (
                       <a
-                        className="inline-flex min-h-11 items-center rounded-control px-2 text-sm font-medium text-white underline decoration-white/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-white max-sm:min-w-11 max-sm:justify-center max-sm:px-1.5 max-[360px]:px-1"
+                        className="inline-flex min-h-11 items-center rounded-control px-2 text-sm font-medium text-white underline decoration-white/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-white max-sm:min-w-11 max-sm:justify-center max-sm:px-1"
                         href={"#" + id}
                         key={id}
                       >

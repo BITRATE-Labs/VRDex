@@ -169,6 +169,7 @@ test("populated person profiles give visitors keyboard shortcuts before ownershi
   await expect(nav.getByRole("link")).toHaveText(["Links", "VRCDN", "Upcoming events", "Media kit", "Worlds"]);
   await expect(nav.getByRole("link", { name: "Upcoming events", exact: true })).toBeInViewport();
   await expect(nav.getByRole("link", { name: "VRCDN", exact: true })).toBeInViewport();
+  await page.evaluate(() => document.fonts.ready);
   const shortcutBounds = await nav.getByRole("link").evaluateAll(links => links.map(link => {
     const { y, width, height } = link.getBoundingClientRect();
     return { y, width, height };
@@ -186,7 +187,6 @@ test("populated person profiles give visitors keyboard shortcuts before ownershi
   const linksSection = page.locator("#profile-links").locator("xpath=ancestor::section[1]");
   const soundCloud = linksSection.getByRole("link", { name: /^DJ Aurora SoundCloud/ });
   await expect(soundCloud).toHaveAttribute("href", "https://soundcloud.com/dj-aurora-example");
-  await page.evaluate(() => document.fonts.ready);
   const [vrchatLink, soundCloudLink, soundCloudTitle, soundCloudDomain, soundCloudIcon] = await Promise.all([
     linksSection.getByRole("link", { name: /^VRChat/ }).boundingBox(),
     soundCloud.boundingBox(),
@@ -284,9 +284,12 @@ test("a sparse community highlights its group and confirms empty hosted events @
   const ownership = page.getByRole("complementary", { name: "Profile ownership" });
   const claim = ownership.getByRole("link", { name: "Claim profile", exact: true });
   await expect(claim).toHaveAttribute("href", `/claim/${slug}?source=profile`);
-  await expect(ownership.getByRole("link", { name: "Suggest an edit", exact: true })).toHaveAttribute("href", `/${slug}/edit`);
+  const suggestion = ownership.getByRole("link", { name: "Suggest an edit", exact: true });
+  await expect(suggestion).toHaveAttribute("href", `/${slug}/edit`);
   const [groupBounds, claimBounds] = await Promise.all([group.boundingBox(), claim.boundingBox()]);
   if (!groupBounds || !claimBounds) throw new Error("Missing community group link or claim action bounds");
+  expect(claimBounds.height).toBeGreaterThanOrEqual(44);
+  expect((await suggestion.boundingBox())?.height).toBeGreaterThanOrEqual(44);
   expect(groupBounds.y + groupBounds.height).toBeLessThan(claimBounds.y);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
 
