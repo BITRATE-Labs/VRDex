@@ -63,7 +63,7 @@ export default async function EntityPage({ params }: EntityPageProps) {
     case "profile":
       return <>
         {process.env.NEXT_PUBLIC_CONVEX_URL && result.entity.profile.outboundLinks.some(link => parseProfileLinkDestination(link)) ? <ProfileLinkRefresh slug={slug} /> : null}
-        <ProfilePublicPage profile={result.entity.profile} mediaKitGalleryEnabled={process.env.VRDEX_PROFILE_MEDIA_KIT_ENABLED === "true" || process.env.VRDEX_ENABLE_PLAYWRIGHT_FIXTURES === "true"} />
+        <ProfilePublicPage profile={result.entity.profile} yearReferenceAt={result.entity.yearReferenceAt} mediaKitGalleryEnabled={process.env.VRDEX_PROFILE_MEDIA_KIT_ENABLED === "true" || process.env.VRDEX_ENABLE_PLAYWRIGHT_FIXTURES === "true"} />
       </>;
     case "world": {
       const world: PublicWorld = result.entity.world;

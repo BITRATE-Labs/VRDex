@@ -40,6 +40,9 @@ const signedOutSeedAccess: SeedLookupViewerAccess = { allowed: false, source: "s
 
 type PublicProfileType = "person" | "community";
 
+// Keep the fixed 2026 public event fixtures independent of the test runner clock.
+const fixtureYearReferenceAt = Date.UTC(2026, 0, 2, 12);
+
 // `profileType` narrows to one of the two profile kinds. The root slug route omits it
 // because a bare /basicbit does not say which kind it is -- the slug itself decides.
 export async function fetchPublicProfileBySlug(
@@ -58,6 +61,7 @@ export async function fetchPublicProfileBySlug(
       kind: "live" as const,
       profile: fixtureProfile,
       shareCard: fixtureProfileShareCard(slug),
+      yearReferenceAt: fixtureYearReferenceAt,
     };
   }
 
@@ -66,10 +70,11 @@ export async function fetchPublicProfileBySlug(
   }
 
   try {
+    const yearReferenceAt = Date.now();
     const profile = await fetchQuery(api.profiles.getPublicBySlug, {
       slug,
       ...(profileType === undefined ? {} : { profileType }),
-      now: Date.now(),
+      now: yearReferenceAt,
       includeShareCard: true,
     });
 
@@ -100,6 +105,7 @@ export async function fetchPublicProfileBySlug(
           }
         : null,
       shareCard,
+      yearReferenceAt,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -252,7 +258,7 @@ export async function fetchPublicEventSeries(seriesId: string) {
   const fixtureSeries = getPlaywrightPublicEventSeriesFixture(seriesId);
 
   if (fixtureSeries !== null) {
-    return { kind: "live" as const, series: fixtureSeries };
+    return { kind: "live" as const, series: fixtureSeries, yearReferenceAt: fixtureYearReferenceAt };
   }
 
   if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
@@ -260,11 +266,13 @@ export async function fetchPublicEventSeries(seriesId: string) {
   }
 
   try {
+    const yearReferenceAt = Date.now();
     const series = await fetchQuery(api.eventSeries.getPublic, { seriesId });
 
     return {
       kind: "live" as const,
       series,
+      yearReferenceAt,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -439,6 +447,7 @@ type PublicEntity =
       type: "profile";
       profile: NonNullable<Awaited<ReturnType<typeof fetchPublicProfileBySlug>>["profile"]>;
       shareCard: PublicProfileShareCard | null;
+      yearReferenceAt: number;
     }
   | { type: "world"; world: NonNullable<Awaited<ReturnType<typeof fetchPublicWorldBySlug>>["world"]> };
 
@@ -468,6 +477,7 @@ async function fetchPublicEntityBySlugUncached(
         type: "profile",
         profile: profileResult.profile,
         shareCard: profileResult.shareCard,
+        yearReferenceAt: profileResult.yearReferenceAt,
       },
     };
   }

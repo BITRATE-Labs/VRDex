@@ -221,10 +221,12 @@ export function EventPreviewCard({
   event,
   variant = "default",
   seriesSummary,
+  yearReferenceAt,
 }: {
   event: PublicEventPreview;
   variant?: "default" | "series" | "community";
   seriesSummary?: string;
+  yearReferenceAt?: number;
 }) {
   const titleId = useId();
   const dateId = titleId + "-date";
@@ -237,7 +239,14 @@ export function EventPreviewCard({
   const hasSeriesDate = isSeries && hasDate;
   const hasDatedTitle = hasSeriesDate && Boolean(eventPath);
   const summary = isSeries && event.summary === seriesSummary ? undefined : event.summary;
-  const dateTime = <ViewerLocalEventDateTime timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />;
+  const dateTime = (
+    <ViewerLocalEventDateTime
+      timestamp={event.startAt}
+      eventDate={event.eventDate}
+      scheduleKind={event.scheduleKind}
+      yearReferenceAt={yearReferenceAt}
+    />
+  );
   const useThemeColors = !thumbnailStyle;
   const compactWithoutArtwork = !isSeries && useThemeColors;
 
