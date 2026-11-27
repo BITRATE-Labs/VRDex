@@ -95,7 +95,8 @@ test.describe("continuous schedule @flow @fixture", () => {
     const quietAnchor = Date.UTC(2026, 9, 26) - (4 + width / 100) * 3600000;
     await page.goto(`/?at=${quietAnchor}&tz=America%2FNew_York&favorites=1&tag=keep`);
     await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready");
-    await expect(page.getByTestId("public-timeline-lanes")).toHaveCSS("height", "94px");
+    await expect(page.getByText("No favorites in this range", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("public-timeline-lanes")).toHaveCount(0);
     await page.getByRole("button", { name: "Next event", exact: true }).click();
     const params = new URL(page.url()).searchParams;
     expect(params.get("at")).toBe(String(TIMELINE_NOW - 9000000));
@@ -114,8 +115,13 @@ test.describe("continuous schedule @flow @fixture", () => {
     const later = schedule.getByRole("button", { name: "Later", exact: true });
     const favorites = schedule.getByRole("button", { name: "Favorites only", exact: true });
     const star = favorites.locator("svg");
-    const status = schedule.getByRole("status", { name: "Schedule data state" });
-    await expect(status).toHaveText("No favorites in this range");
+    const empty = schedule.getByText("No favorites in this range", { exact: true });
+    const clear = schedule.getByRole("button", { name: "Clear filter", exact: true });
+    const chart = schedule.getByRole("region", { name: "Timeline chart", exact: true });
+    await expect(empty).toBeVisible();
+    await expect(clear).toBeVisible();
+    await expect(chart).toHaveCount(0);
+    const filteredWidth = await schedule.getByTestId("favorites-empty-state").evaluate((element) => element.clientWidth);
     await expect(favorites).toHaveAttribute("aria-pressed", "true");
     await expect(star).not.toHaveCSS("fill", "none");
 
@@ -137,12 +143,14 @@ test.describe("continuous schedule @flow @fixture", () => {
       await page.keyboard.press("Tab");
       await expect(next).toBeFocused();
     }
-    for (const previous of [later, now, earlier, date]) {
+    await page.keyboard.press("Tab");
+    await expect(clear).toBeFocused();
+    for (const previous of [favorites, later, now, earlier, date]) {
       await page.keyboard.press("Shift+Tab");
       await expect(previous).toBeFocused();
     }
 
-    await favorites.focus();
+    await clear.focus();
     await page.keyboard.press("Space");
     await expect(favorites).toBeFocused();
     await expect(favorites).toHaveAttribute("aria-pressed", "false");
@@ -152,7 +160,47 @@ test.describe("continuous schedule @flow @fixture", () => {
     expect(query.get("at")).toBe(String(TIMELINE_NOW));
     expect(query.get("tz")).toBe("UTC");
     expect(query.get("tag")).toBe("keep");
-    await expect(status).not.toContainText("No favorites in this range");
+    await expect(empty).toHaveCount(0);
+    await expect(chart).toBeVisible();
+    expect(await chart.evaluate((element) => element.clientWidth)).toBe(filteredWidth);
+
+    await page.goBack();
+    await expect(favorites).toHaveAttribute("aria-pressed", "true");
+    await expect(clear).toBeVisible();
+    await expect(chart).toHaveCount(0);
+    await favorites.press("Space");
+    await expect(favorites).toBeFocused();
+    await expect(favorites).toHaveAttribute("aria-pressed", "false");
+    await expect(chart).toBeVisible();
+  });
+  test("empty Favorites keeps its focused recovery action through refresh", async ({ page }) => {
+    let hold = false;
+    const buffered: (() => void)[] = [];
+    await page.routeWebSocket("**/api/**/sync", (socket) => {
+      const server = socket.connectToServer();
+      server.onMessage((message) => {
+        if (hold) buffered.push(() => socket.send(message));
+        else socket.send(message);
+      });
+    });
+    await page.goto(`/?at=${TIMELINE_NOW}&tz=UTC&favorites=1`);
+    const status = page.getByRole("status", { name: "Schedule data state" });
+    const clear = page.getByRole("button", { name: "Clear filter", exact: true });
+    await expect(status).toHaveAttribute("data-state", "ready");
+    await expect(clear).toBeVisible();
+    await clear.focus();
+    hold = true;
+    try {
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect(status).toHaveAttribute("data-state", "loading");
+      await expect(clear).toBeFocused();
+      await expect(page.getByText("No favorites in this range", { exact: true })).toBeVisible();
+    } finally {
+      hold = false;
+      buffered.splice(0).forEach((send) => send());
+    }
+    await expect(status).toHaveAttribute("data-state", "ready");
+    await expect(clear).toBeFocused();
   });
   test("defaultHomeGeometry", async ({ page, isMobile }, info) => {
     const sizes = isMobile ? [page.viewportSize()!] : [{ width: 1280, height: 800 }, { width: 1440, height: 900 }];

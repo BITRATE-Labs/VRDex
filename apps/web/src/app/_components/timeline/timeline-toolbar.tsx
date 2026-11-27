@@ -29,7 +29,7 @@ export function TimelineToolbar({
           <Button disabled={disabled} size="sm" aria-label="Later" onClick={() => onPan(3)}><span>Later</span><ChevronRight size={14} /></Button>
         </div>
       </div>
-      <Button className={styles.favoritesToggle} disabled={disabled} size="sm" aria-pressed={navigation.favoritesOnly} onClick={() => onNavigate({ favoritesOnly: !navigation.favoritesOnly })}>
+      <Button id="schedule-favorites" className={styles.favoritesToggle} disabled={disabled} size="sm" aria-pressed={navigation.favoritesOnly} onClick={() => onNavigate({ favoritesOnly: !navigation.favoritesOnly })}>
         <Star aria-hidden="true" size={14} />Favorites only
       </Button>
       {children}

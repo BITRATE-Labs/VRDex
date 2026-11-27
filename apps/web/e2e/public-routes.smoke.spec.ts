@@ -98,7 +98,7 @@ test("legacy discovery query redirects to search", async ({ page }) => {
 
   if (process.env.PLAYWRIGHT_BASE_URL) {
     await expect(page.getByRole("heading", { name: "Search results", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: /Results for aurora/i })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Search results" })).toHaveAccessibleDescription("Results for aurora");
     await expect(page.getByRole("button", { name: /Search VRDex/i })).toBeVisible();
     return;
   }
