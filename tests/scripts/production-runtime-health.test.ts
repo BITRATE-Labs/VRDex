@@ -182,7 +182,8 @@ test("fixture-backed handoff coverage runs in the flow lane and stays out of pro
 
   assert.equal(fixtureTags.length, 7);
   assert.equal(flowTags.length, 7);
-  assert.match(workflow, /playwright test --grep @flow --project=desktop-chromium/);
+  assert.match(workflow, /playwright test "\$CI_FLOW_PATTERN" --grep @flow --project=desktop-chromium/);
+  assert.match(workflow, /if: needs\.visual-selection\.outputs\.flows == 'true'/);
   const hostedScript = webPackage.scripts?.["test:e2e:hosted"] ?? "";
   assert.match(hostedScript, /--grep @flow/);
 

@@ -1,4 +1,4 @@
-import { timedEventRuntimeEndAt } from "./_eventRuntime";
+import { DATE_ONLY_END_GRACE_MS, timedEventRuntimeEndAt } from "./_eventRuntime";
 import { resolveEventLocalTime, type EventIntakeLocalTime } from "../packages/api-contracts/src/event-intake";
 
 export type EventSchedule =
@@ -82,7 +82,7 @@ export function eventSortAt(event: StoredEventSchedule): number {
 
 export function eventSortEndAt(event: StoredEventSchedule): number {
   // Keep the authored date upcoming until that date has ended everywhere (UTC-12).
-  return event.scheduleKind === "date_only" ? eventSortAt(event) + 36 * 60 * 60 * 1000 - 1
+  return event.scheduleKind === "date_only" ? eventSortAt(event) + DATE_ONLY_END_GRACE_MS - 1
     : timedEventRuntimeEndAt({ startAt: event.startAt ?? eventSortAt(event), endAt: event.endAt });
 }
 

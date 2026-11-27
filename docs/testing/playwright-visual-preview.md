@@ -1,6 +1,6 @@
 # Playwright visual preview
 
-PR labels select Playwright browser coverage. Use `ci:browsers` for assertions and `ci:visuals` for assertions, review screenshots, and committed-baseline image comparisons.
+PR labels select affected Playwright coverage. Use `ci:browsers` for assertions, `ci:visuals` for affected assertions/captures/comparisons, or `ci:full` for the complete suite.
 
 See `docs/testing/playwright-image-diffing.md` for the committed-baseline image diff workflow. Screenshot preview and image diffing are intentionally separate checks.
 
@@ -384,27 +384,30 @@ remain in use.
 Linux tests execute the helper against disposable missing, empty, unterminated and
 repeated mirror lists, including preservation of existing fallbacks.
 
-Default PR CI runs lint, types, unit tests, docs, API/MCP checks, the existing backend/restream checks, and the web build. Browser suites and the Storybook build are opt-in.
+Default PR CI runs lint, types, unit tests, docs, API/MCP checks, backend bootstrap and the web build. Broad script contracts and native restream work run for relevant changes or `ci:full`; main retains both. Build and production-release dependencies are unchanged.
 
-| Labels when a normal PR run starts | Browser assertions and Storybook build | Review screenshots and both image comparisons |
+| Labels when a normal PR run starts | Browser assertions | Review screenshots and image comparisons |
 | --- | --- | --- |
 | None | NOT SELECTED | NOT SELECTED |
-| `ci:browsers` | Run | NOT SELECTED |
-| `ci:visuals`, alone or with `ci:browsers` | Run | Run |
+| `ci:browsers` | Affected suites | NOT SELECTED |
+| `ci:visuals`, alone or with `ci:browsers` | Affected suites | Affected surfaces |
+| `ci:full` | Complete existing suite | All existing comparisons |
 
-Agents select `ci:browsers` for UI, authentication, and navigation changes. Select `ci:visuals` when screenshots or baseline comparisons are needed for review. Labels apply regardless of changed file paths.
+Agents select `ci:browsers` for UI, authentication and navigation changes. Add `ci:visuals` when screenshot evidence or baseline comparisons are needed. Small UI fixes must not select `ci:full` by default. Reserve it for an explicit complete run or cross-cutting changes and explain the reason in the PR.
 
-Same-repository browser selection requires candidate preview deployment and nonempty passing browser/backend evidence, including full commit and both Convex URLs. It never uses shared staging as PR evidence. Forks do not receive private browser credentials and cannot claim this acceptance. See [candidate preview acceptance](../deployment/vercel-preview.md).
+The selector snapshots changed paths and labels. Timeline changes select home/timeline flows and, with visuals, the timeline image cases. Profile and event surfaces select their flow families and public image specs. Player changes select media acceptance and Storybook; stories select Storybook additively. Shared UI primitives, security-sensitive and unmapped application changes conservatively select broad coverage. New isolated surfaces need an explicit mapping and regression case in `.github/scripts/ci-scopes.cjs` before narrowing. See [targeted PR CI](../engineering/targeted-pr-ci.md).
 
-Browser selection includes public-route smoke on desktop and mobile, local mutation-backed journeys, exact-head candidate preview journeys and development-instance signed-in account assertions, and public/Storybook previews. The Storybook build runs only for selected browser consumers. Main pushes skip these PR-only jobs; production deployment controls remain unchanged.
+Selected candidate preview acceptance requires a same-repository PR and nonempty passing browser/backend evidence, including full commit and both Convex URLs. It never uses shared staging as PR evidence. Forks do not receive private browser credentials and cannot claim this acceptance. See [candidate preview acceptance](../deployment/vercel-preview.md).
+
+Only selected jobs run. Storybook is not built for an unrelated timeline fix. Auth and media steps inside the data-flow job are selected independently; its ordinary flow invocation receives a quoted filename pattern. Main pushes skip PR-only browser jobs; production deployment controls remain unchanged.
 
 The local data-flow job has a 45-minute limit for its serial flow suite, composed-media acceptance and artifact upload. Its previous 30-minute limit canceled a run after 257 flow tests and 12 media tests had passed. Individual test timeouts and all selected coverage remain unchanged.
 
-In browsers-only mode, `Playwright Public Preview` and `Storybook Component Preview` run their existing assertions with `PLAYWRIGHT_CAPTURE_SCREENSHOTS=false`. They skip review PNG writes and attachments. Navigation, stabilization, editing, publication recovery, access checks, and cleanup still execute. Existing functional-flow diagnostic attachments, screenshots, traces, and videos keep their current behavior, including failure evidence. They do not establish that review screenshots were collected.
+In browsers-only mode, selected Storybook component assertions run with `PLAYWRIGHT_CAPTURE_SCREENSHOTS=false`. Affected public-route assertions also run without review captures. Review captures and image-diff jobs require `ci:visuals` or `ci:full`. Functional flows keep their existing failure screenshots, traces, and videos; those do not establish that review screenshots were collected.
 
-With `ci:visuals`, both preview jobs collect review screenshots, and `Playwright Image Diff` and `Storybook Image Diff` compare committed baselines. Requested comparisons fail on mismatches, runtime failures, cancellation, or unexpected skips. CI never updates baselines.
+With `ci:visuals`, selected preview jobs collect review screenshots and their corresponding image-diff jobs compare committed baselines. Requested comparisons fail on mismatches, runtime failures, cancellation or unexpected skips. CI never updates baselines.
 
-Add labels before a normal PR run (opened, synchronized, reopened, or marked ready for review). Label edits do not start application CI. Each run snapshots both selections from its event. Later label changes do not rewrite that run's results. Removing either selection label preserves failed history and records the observed selection when coverage changes; removing `ci:browsers` while `ci:visuals` remains does not remove browser selection. A new normal run records current coverage.
+Add labels before a normal PR run (opened, synchronized, reopened or marked ready for review). Label edits do not start application CI. Each run snapshots its selected jobs, scopes and full-suite flag. Later label changes do not rewrite that run's results. Removing a selection label preserves failed history and records changed coverage; `ci:full` implies both browser and visual selection. A new normal run records current coverage.
 
 Local commands keep their current defaults, including review screenshot collection. Set `PLAYWRIGHT_CAPTURE_SCREENSHOTS=false` only when intentionally exercising assertions without review captures. This switch does not disable `toHaveScreenshot` comparisons. There is no browser-only or visual-only manual workflow dispatch.
 
@@ -658,6 +661,20 @@ cleanup error preserves the primary exception as its cause.
 
 Compact My night cases check accessible descriptions for overlap, partial lineup
 and favorite markers, plus a heading on mixed fallback removal lists.
+
+My night and Next saved exclude expired selections without deleting saved history.
+Timed selections expire at their end; open-ended selections use the shared
+six-hour runtime window for display only. Date-only selections use the backend's
+end-of-date grace through UTC-12. The timeline flow regression mixes ended and
+upcoming saves, checks Next saved, then advances three days and checks that old
+selections stay hidden while the stored history remains intact.
+
+Broadcast Candidate Acceptance first checks changed paths. Schedule-only timeline
+components, helpers, fixtures and documentation skip the expensive browser/native
+rehearsal. Broadcast/runtime, shared application dependencies, lockfile and its
+CI workflow changes select it. A successful unselected check reports NOT SELECTED
+without requiring native artifacts. Selected runs still require assertions and
+current evidence, and use the same pinned local Convex backend as backend checks.
 
 ## Home polish measurement
 

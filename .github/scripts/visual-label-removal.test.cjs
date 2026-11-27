@@ -50,3 +50,9 @@ test("a stale event or changed head cannot invalidate current evidence", async (
   assert.deepEqual(await run({ head: "new-head" }), []);
   assert.deepEqual(await run({ finalHead: "new-head" }), []);
 });
+
+test("full label implies both modes and removing it invalidates narrower same-mode selection", async () => {
+  assert.deepEqual(await run({ labels: [{ name: "ci:full" }], recorded: { head: "current-sha", browsers: true, visuals: true, full: true } }), []);
+  const updates = await run({ removed: "ci:full", labels: [{ name: "ci:visuals" }], recorded: { head: "current-sha", browsers: true, visuals: true, full: true } });
+  assert.equal(updates.length, 1);
+});

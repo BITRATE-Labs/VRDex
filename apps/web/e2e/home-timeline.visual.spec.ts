@@ -1,7 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import { test, TIMELINE_NOW, loadCompleteSchedule } from "./home-timeline-fixture";
 import { initializeDiscovery, usableDiscovery } from "./home-discovery-fixture";
-import { prepareVisualPage, waitForVisualReady } from "./public-routes";
+import { captureRouteScreenshot, prepareVisualPage, waitForVisualReady } from "./public-routes";
 
 async function capture(page: Page, name: string) {
   await waitForVisualReady(page);
@@ -63,6 +63,9 @@ async function capture(page: Page, name: string) {
     scale: "css",
     threshold: 0.2,
   });
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS === "true") {
+    await captureRouteScreenshot(page, test.info(), `home-timeline-${name}`);
+  }
 }
 
 test.describe("Home schedule images @visual @snapshot @fixture", () => {
