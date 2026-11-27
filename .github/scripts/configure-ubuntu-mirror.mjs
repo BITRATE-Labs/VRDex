@@ -29,7 +29,17 @@ export async function configureUbuntuMirror(root) {
   for(const file of files) {
     const source=await readOptional(file);
     if(source===null) continue;
-    const updated=source.replace(/https?:\/\/(?:(?:azure\.archive|archive|security)\.ubuntu\.com|[a-z0-9-]+\.ec2\.archive\.ubuntu\.com|mirrors\.edge\.kernel\.org)\/ubuntu\/?(?=\s|$)/g,mirror);
+    let updated=source.replace(/https?:\/\/(?:(?:azure\.archive|archive|security)\.ubuntu\.com|[a-z0-9-]+\.ec2\.archive\.ubuntu\.com|mirrors\.edge\.kernel\.org)\/ubuntu\/?(?=\s|$)/g,mirror);
+    // FFmpeg and Playwright dependencies use Ubuntu packages; the runner's Microsoft feed can return 403.
+    if(file.endsWith(".list")) {
+      updated=updated.replace(/^([ \t]*deb(?:-src)?[ \t]+(?:\[[^\]\r\n]+\][ \t]+)?https:\/\/packages\.microsoft\.com\/ubuntu\/26\.04\/prod\/?[ \t]+resolute(?=[ \t]|$)[^\r\n]*)/gm,"# $1");
+    } else {
+      updated=updated.split(/(\r?\n[ \t]*\r?\n)/).map(stanza=>{
+        if(!/^URIs:[ \t]+https:\/\/packages\.microsoft\.com\/ubuntu\/26\.04\/prod\/?[ \t]*\r?$/im.test(stanza)) return stanza;
+        if(!/^Suites:[ \t]+resolute[ \t]*\r?$/im.test(stanza)) return stanza;
+        return /^Enabled:/im.test(stanza) ? stanza.replace(/^Enabled:[^\r\n]*/im,"Enabled: no") : `Enabled: no\n${stanza}`;
+      }).join("");
+    }
     if(updated!==source) await writeFile(file,updated);
   }
 }
