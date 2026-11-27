@@ -294,6 +294,7 @@ test("populated Search aligns titles and keeps media and role details available 
   await expect(basicbit.getByText("Software Dev · 3D Designer · VRDJ", { exact: true })).toHaveCount(0);
   const mothRoles = moth.getByText("DJ · VRDJ · Fixture lineup", { exact: true });
   await expect(mothRoles).toBeInViewport({ ratio: 1 });
+  await expect(moth.getByText("Techno · Hardgroove · Electro", { exact: true })).toBeInViewport({ ratio: 1 });
 
   const genrePreview = basicbit.getByText("DnB · House · Techno", { exact: true });
   const moreGenres = basicbit.getByText("+8", { exact: true });
@@ -312,7 +313,20 @@ test("populated Search aligns titles and keeps media and role details available 
   await expect(moreGenres).toBeFocused();
   const expandedGenres = basicbit.getByText("Bass · 140 · Trap · Space Bass · Midtempo · UKG · Dancefloor · Neurofunk", { exact: true });
   await expect(expandedGenres).toBeVisible();
-  expect((await expandedGenres.boundingBox())!.x).toBeLessThan(previewBounds!.x);
+  expect(await moreGenres.boundingBox()).toEqual(moreBounds);
+  expect(await links.boundingBox()).toEqual(linksBounds);
+  await links.focus();
+  await links.press("Enter");
+  await expect(links).toBeFocused();
+  expect(await links.boundingBox()).toEqual(linksBounds);
+
+  const expandedLinks = links.locator("..").locator(":scope > div");
+  await expect(expandedLinks.getByRole("link", { name: "Website: basicbit.net", exact: true })).toHaveAttribute("href", "https://basicbit.net/");
+  const [genresPanel, linksPanel] = await Promise.all([expandedGenres.boundingBox(), expandedLinks.boundingBox()]);
+  expect(genresPanel!.x).toBeLessThan(previewBounds!.x);
+  expect(linksPanel!.x).toBe(genresPanel!.x);
+  expect(linksPanel!.width).toBe(genresPanel!.width);
+  expect(linksPanel!.y).toBeGreaterThanOrEqual(genresPanel!.y + genresPanel!.height);
 
   const avatarRoute = "**/api/e2e/fixture-assets/fixture-aurora-profile-image";
   await page.route(avatarRoute, (route) => route.abort());

@@ -299,13 +299,13 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
             {result.title}
           </span>
           <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0 text-xs text-muted sm:text-sm">
-            <span>{entityLabel(result)}</span>
-            {trustLabel ? <span className="text-xs font-medium">{trustLabel}</span> : null}
+            <span className="font-medium text-foreground">{entityLabel(result)}</span>
+            {trustLabel ? <span className="border-s border-border ps-2 text-xs">{trustLabel}</span> : null}
             {subtitle ? <span>{subtitle}</span> : null}
             {result.startsAt === undefined && result.eventDate === undefined ? null : <ViewerLocalEventDateTime className="text-sm text-accent-strong" timestamp={result.startsAt} eventDate={result.eventDate} scheduleKind={result.scheduleKind} />}
           </span>
           {result.summary ? <span className="line-clamp-2 text-sm leading-5 text-muted">{result.summary}</span> : null}
-          {roleLabels.length > 0 ? <span className="text-xs text-muted">{roleLabels.join(" · ")}</span> : null}
+          {roleLabels.length > 0 ? <span className="text-xs font-semibold text-foreground">{roleLabels.join(" · ")}</span> : null}
         </span>
         <ChevronRight aria-hidden="true" className="absolute end-3 top-4 size-4 text-accent-strong sm:end-4 sm:top-5" />
       </TrackedDiscoveryLink>
