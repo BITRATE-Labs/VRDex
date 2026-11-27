@@ -28,6 +28,18 @@ it('validates preset servers with friendly errors and exact namespace binding', 
   assert.equal(managedSecretRefAllowed(prefix + 'vrdex/broadcast/abc/def/12345678-1234-1234-1234-123456789012-AbCd12', 'abc', 'def', '12345678-1234-1234-1234-123456789012'), true);
   assert.equal(managedSecretRefAllowed(prefix + 'vrdex/broadcast/other/def/12345678-1234-1234-1234-123456789012-AbCd12', 'abc', 'def', '12345678-1234-1234-1234-123456789012'), false);
 });
+it('restricts sandbox connection credentials to the sandbox namespace', () => {
+  const key = '12345678-1234-1234-1234-123456789012';
+  const original = process.env.VRDEX_EVENT_OUTPUT_SECRET_NAMESPACE;
+  try {
+    process.env.VRDEX_EVENT_OUTPUT_SECRET_NAMESPACE = 'vrdex/sandbox/broadcast/';
+    assert.equal(managedSecretRefAllowed(prefix + `vrdex/sandbox/broadcast/abc/def/${key}-AbCd12`, 'abc', 'def', key), true);
+    assert.equal(managedSecretRefAllowed(prefix + `vrdex/broadcast/abc/def/${key}-AbCd12`, 'abc', 'def', key), false);
+  } finally {
+    if (original === undefined) delete process.env.VRDEX_EVENT_OUTPUT_SECRET_NAMESPACE;
+    else process.env.VRDEX_EVENT_OUTPUT_SECRET_NAMESPACE = original;
+  }
+});
 it('rejects unauthorized setup, missing key and untrusted commit', async () => {
   const f = await fixture(); await assert.rejects(f.t.mutation(ref('prepareConnection'), f.input), /signed-in/);
   await assert.rejects(f.owner.mutation(ref('prepareConnection'), { ...f.input, replaceKey: false, credentialDigest: '' }), /Enter a stream key/);

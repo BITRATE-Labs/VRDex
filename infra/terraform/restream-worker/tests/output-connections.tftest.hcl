@@ -92,6 +92,43 @@ run "production_oidc_broker" {
     error_message = "Broker writes must stay within the exact account, region and output namespace."
   }
 }
+run "sandbox_broker_and_dispatch_are_isolated" {
+  command = plan
+  variables {
+    name_prefix                     = "vrdex-restream-sandbox"
+    managed_output_secret_namespace = "vrdex/sandbox/broadcast/"
+    enable_event_media_bridge       = true
+    max_session_seconds             = 900
+    vercel_output_broker = {
+      project_name = "vr-dex-sandbox"
+      role_name    = "vrdex-vercel-sandbox-broadcast-output"
+      environment  = "preview"
+    }
+    event_media_bridge = {
+      convex_url         = "https://quick-yak-167.convex.cloud"
+      image              = "079358094174.dkr.ecr.us-east-1.amazonaws.com/vrdex-restream-sandbox@sha256:fa5515d574355d6a647ce8390285f62edec1ad4f7e6e98956230c0b1391c2548"
+      bundle_key         = "event-media-bridge/sha256/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.zip"
+      bundle_sha256      = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      token_secret_arn   = "arn:aws:secretsmanager:us-east-1:079358094174:secret:vrdex/sandbox/restream/bridge-token-AbCdEf"
+      credential_refs    = {}
+      subnet_ids         = ["subnet-0123456789abcdef0"]
+      security_group_ids = ["sg-0123456789abcdef0"]
+    }
+  }
+  assert {
+    condition     = one(jsondecode(aws_iam_role.output_broker[0].assume_role_policy).Statement).Condition.StringEquals["oidc.vercel.com/basicbit:sub"] == "owner:basicbit:project:vr-dex-sandbox:environment:preview"
+    error_message = "The broker trust must select only the dedicated sandbox project."
+  }
+  assert {
+    condition     = one(one(data.aws_iam_policy_document.output_broker[0].statement).resources) == "arn:aws:secretsmanager:us-east-1:079358094174:secret:vrdex/sandbox/broadcast/*" && one(one(data.aws_iam_policy_document.managed_output_execution[0].statement).resources) == "arn:aws:secretsmanager:us-east-1:079358094174:secret:vrdex/sandbox/broadcast/*"
+    error_message = "The sandbox worker and broker must use the sandbox-only secret namespace."
+  }
+  assert {
+    condition     = aws_lambda_function.bridge[0].environment[0].variables.VRDEX_EVENT_MEDIA_ECS_TASK_FAMILY_PREFIX == "vrdex-restream-sandbox-event-media" && aws_lambda_function.bridge[0].environment[0].variables.VRDEX_EVENT_OUTPUT_SECRET_NAMESPACE == "vrdex/sandbox/broadcast/" && aws_ssm_parameter.hosted_worker_enabled.name == "/vrdex/sandbox/restream/hosted-worker/enabled"
+    error_message = "Sandbox dispatch must use separate task definitions, credentials and emergency switch."
+  }
+}
+
 run "existing_workload_role" {
   command = plan
   variables {

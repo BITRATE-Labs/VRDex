@@ -70,6 +70,8 @@ on:
         required: false
       VERCEL_PROJECT_ID:
         required: false
+      VERCEL_SANDBOX_PROJECT_ID:
+        required: false
       CONVEX_DEPLOY_KEY_PREVIEW:
         required: false
       CLERK_JWT_ISSUER_DOMAIN:
@@ -196,11 +198,22 @@ jobs:
 
       - name: Check Vercel deployment secrets
         env:
+          SANDBOX_REQUESTED: ${{ steps.pr.outputs.sandbox }}
+          DEDICATED_SANDBOX_CONFIGURED: ${{ secrets.VERCEL_SANDBOX_PROJECT_ID != '' }}
+          SHARED_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_PROJECT_ID: ${{ github.event_name == 'push' && steps.pr.outputs.sandbox == 'true' && secrets.VERCEL_SANDBOX_PROJECT_ID || secrets.VERCEL_PROJECT_ID }}
         run: |
           set -euo pipefail
+          if [ "$SANDBOX_REQUESTED" = "true" ] && [ "$DEDICATED_SANDBOX_CONFIGURED" = "true" ] && [ "$GITHUB_EVENT_NAME" != "push" ]; then
+            echo "::error::The dedicated sandbox project accepts pushes from codex/sandbox only."
+            exit 1
+          fi
+          if [ "$SANDBOX_REQUESTED" = "true" ] && [ "$DEDICATED_SANDBOX_CONFIGURED" = "true" ] && [ "$VERCEL_PROJECT_ID" = "$SHARED_PROJECT_ID" ]; then
+            echo "::error::The sandbox and shared preview Vercel projects must be different."
+            exit 1
+          fi
 
           missing=()
           if [ -z "$VERCEL_TOKEN" ]; then missing+=("VERCEL_TOKEN"); fi
@@ -228,7 +241,7 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_PROJECT_ID: ${{ github.event_name == 'push' && steps.pr.outputs.sandbox == 'true' && secrets.VERCEL_SANDBOX_PROJECT_ID || secrets.VERCEL_PROJECT_ID }}
         run: pnpm dlx vercel@54.4.1 pull --yes --environment=preview --token "$VERCEL_TOKEN"
 
       - name: Check Convex preview deploy key
@@ -329,7 +342,7 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_PROJECT_ID: ${{ github.event_name == 'push' && steps.pr.outputs.sandbox == 'true' && secrets.VERCEL_SANDBOX_PROJECT_ID || secrets.VERCEL_PROJECT_ID }}
         run: pnpm dlx vercel@54.4.1 build --target=preview --token "$VERCEL_TOKEN"
 
       - name: Deploy Vercel preview output
@@ -346,7 +359,7 @@ jobs:
           VRDEX_E2E_BROWSER_TOKEN: ${{ !inputs.sandbox && steps.pr.outputs.is_fork == 'false' && secrets.VRDEX_HOSTED_E2E_BROWSER_TOKEN || '' }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_PROJECT_ID: ${{ github.event_name == 'push' && steps.pr.outputs.sandbox == 'true' && secrets.VERCEL_SANDBOX_PROJECT_ID || secrets.VERCEL_PROJECT_ID }}
         run: |
           set -euo pipefail
           deploy_args=(deploy --prebuilt --target=preview --token "$VERCEL_TOKEN")

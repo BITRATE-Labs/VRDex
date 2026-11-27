@@ -207,6 +207,7 @@ export function loadConfig(options = {}) {
     configCheckOnly: process.env.VRDEX_EVENT_MEDIA_ECS_BRIDGE_CONFIG_CHECK_ONLY === "true",
     secretRefMap,
     managedOutputSecretArnPrefix:process.env.VRDEX_EVENT_OUTPUT_SECRET_ARN_PREFIX,
+    managedOutputSecretNamespace: process.env.VRDEX_EVENT_OUTPUT_SECRET_NAMESPACE,
     baseEnvironment,
     redactValues: [bridgeToken, ...Object.values(secretRefMap)],
   };
@@ -244,7 +245,11 @@ function environmentEntries(command, config, snapshot) {
 export function resolveOutputSecretArn(ref,config) {
  if(Object.hasOwn(config.secretRefMap,ref))return config.secretRefMap[ref];
  const prefix=config.managedOutputSecretArnPrefix;
- if(typeof prefix==='string' && /^arn:aws[a-z-]*:secretsmanager:[a-z0-9-]+:\d{12}:secret:$/.test(prefix) && typeof ref==='string' && ref.startsWith(prefix+'vrdex/broadcast/') && /^vrdex\/broadcast\/[A-Za-z0-9]{1,64}\/[A-Za-z0-9]{1,64}\/[a-f0-9-]{36}-[A-Za-z0-9]{6}$/.test(ref.slice(prefix.length)))return ref;
+ const namespace = config.managedOutputSecretNamespace ?? "vrdex/broadcast/";
+ if ((namespace === "vrdex/broadcast/" || namespace === "vrdex/sandbox/broadcast/") &&
+     typeof prefix === "string" && /^arn:aws[a-z-]*:secretsmanager:[a-z0-9-]+:\d{12}:secret:$/.test(prefix) &&
+     typeof ref === "string" && ref.startsWith(prefix + namespace) &&
+     /^[A-Za-z0-9]{1,64}\/[A-Za-z0-9]{1,64}\/[a-f0-9-]{36}-[A-Za-z0-9]{6}$/.test(ref.slice(prefix.length + namespace.length))) return ref;
  throw Error('Output secret reference has no authorized mapping');
 }
 export function taskDefinitionFor(command, config, resolve = resolveWorkerAllocation) {
