@@ -41,7 +41,8 @@
 }
 @media (760px < width <= 880px) {
   .groups {
-    grid-template-columns: minmax(0, calc(680px + var(--card-gap)));
+    grid-template-columns: minmax(0, calc(512px + var(--card-gap)));
+    justify-content: center;
   }
 }
 @media (width > 880px) {

@@ -9,7 +9,7 @@ import type { TimelineActions } from "../timeline/timeline-event-bar";
 import styles from "./discovery.module.css";
 
 const clubImageSizes =
-  "(max-width: 420px) 100vw, (max-width: 760px) 78vw, (max-width: 880px) 340px, 23vw";
+  "(max-width: 420px) 100vw, (max-width: 760px) 78vw, (max-width: 880px) 256px, 23vw";
 
 type Available = Extract<DiscoverySnapshot, { kind: "available" }>;
 export type DiscoveryClubCardProps = {
