@@ -33,6 +33,32 @@ test('the event owner switch opens and closes scoped community access @flow @fix
   await expect(setup).toHaveCount(0);
 });
 
+test('preserves authenticated navigation, search focus and mobile width @fixture', async ({ page }, testInfo) => {
+  test.setTimeout(60000);
+  await page.route(/\/search\/suggest\?q=aurora$/, (route) => route.fulfill({
+    json: { results: [{ entityType: 'profile', profileType: 'person', slug: 'aurora', title: 'Aurora', routePath: '/aurora' }] },
+  }));
+  await page.goto('/playwright/event-inventory?session=navigation');
+  const nav = page.getByTestId('inventory-navigation');
+  await expect(nav.getByRole('link', { name: 'My events', exact: true } )).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Add event', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Event reports', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Add event for Afterglow', exact: true })).toBeVisible();
+  const search = nav.getByRole('button', { name: 'Search', exact: true });
+  await search.click();
+  const input = nav.getByRole('combobox', { name: 'Search VRDex' });
+  await expect(input).toBeFocused();
+  await input.fill('aurora');
+  await expect(nav.getByRole('option')).toHaveCount(1);
+  await input.press('ArrowDown');
+  await input.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
+  await expect(page).toHaveURL(/playwright\/event-inventory\?session=navigation$/);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await input.press('Escape');
+  await expect(search).toBeFocused();
+  await page.screenshot({ path: testInfo.outputPath('my-events.png'), fullPage: true });
+});
+
 test.describe('My events @fixture', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/playwright/event-inventory');
@@ -120,25 +146,7 @@ test.describe('My events @fixture', () => {
     await expect(page.getByText('Recovered match')).toBeVisible();
   });
 
-  test('preserves authenticated navigation, search focus and mobile width', async ({ page }, testInfo) => {
-    await expect(page.getByRole('link', { name: 'My events', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Add event', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Event reports', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Add event for Afterglow', exact: true })).toBeVisible();
-    const search = page.getByRole('button', { name: 'Search', exact: true });
-    await search.click();
-    const input = page.getByRole('combobox', { name: 'Search VRDex' });
-    await expect(input).toBeFocused();
-    await input.fill('aurora');
-    await expect(page.getByRole('option')).toHaveCount(1);
-    await input.press('ArrowDown');
-    await input.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
-    await expect(page).toHaveURL(/playwright\/event-inventory$/);
-    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await input.press('Escape');
-    await expect(search).toBeFocused();
-    await page.screenshot({ path: testInfo.outputPath('my-events.png'), fullPage: true });
-  });
+
 });
 
 test('contributor-only inventory loads all filters with an empty search @fixture', async ({ page }) => {
