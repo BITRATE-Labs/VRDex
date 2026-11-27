@@ -10,8 +10,11 @@ test("owner mode requires a current super-admin grant, community and expiration"
   const other = "other" as Id<"profiles">;
   let mode: { communityProfileId: Id<"profiles">; expiresAt: number } | undefined;
   let admin = true;
+  let publicCommunity = true;
   const db = {
-    get: async () => ({ eventOwnerMode: mode }),
+    get: async (id: string) => id === community
+      ? { profileType: "community", publicationState: "published", publicSurfacingState: publicCommunity ? "public" : "suppressed" }
+      : { eventOwnerMode: mode },
     query: () => ({
       withIndex: () => ({
         collect: async () => admin ? [{ feature: "super_admin", state: "active" }] : [],
@@ -24,6 +27,9 @@ test("owner mode requires a current super-admin grant, community and expiration"
   assert.equal(await hasEventOwnerMode(db, user, other, 100), false);
   assert.equal(await hasEventOwnerMode(db, user, community, 110), false);
   assert.equal(await hasEventOwnerMode(db, null, community, 100), false);
+  publicCommunity = false;
+  assert.equal(await hasEventOwnerMode(db, user, community, 100), false);
+  publicCommunity = true;
   admin = false;
   assert.equal(await hasEventOwnerMode(db, user, community, 100), false);
 });

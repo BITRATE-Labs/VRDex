@@ -20,12 +20,6 @@ const client = {
       email: "organizer@example.com",
     };
   },
-  async mutation(_function: unknown, args: { expectedProfileId: string; expectedUserId: string; reason: string }) {
-    if (args.expectedProfileId !== "fixture-profile" || args.expectedUserId !== "fixture-recipient" || !args.reason) {
-      throw new Error("Assignment requires the reviewed profile, account and reason");
-    }
-    return { slug: "afterglow" };
-  },
   logger: { warn() {} },
 } as unknown as ConvexReactClient;
 

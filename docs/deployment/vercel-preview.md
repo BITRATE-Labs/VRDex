@@ -156,7 +156,7 @@ An unselected preview deploy happens when a person comments `@vrdex preview` or 
 
 This path reuses the existing `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` repository secrets and adds no new ones.
 
-The deploy job runs the full preview pipeline: `vercel pull`, the optional `pr-<number>` Convex preview backend with its runtime flags and smoke fixture, a local `vercel build`, and `vercel deploy --prebuilt` with the preview-only environment values. The local prebuilt build is what lets the Convex preview URL reach the client bundle through `NEXT_PUBLIC_CONVEX_URL`; a remote Vercel build would use the project's own Preview environment instead.
+The deploy job runs `vercel pull`, prepares the Convex preview backend and optional smoke fixture, then runs `vercel build` locally. It uploads the build with `vercel deploy --prebuilt --archive=tgz` to reduce file-upload requests. The local build embeds the intended Convex URL in the client through `NEXT_PUBLIC_CONVEX_URL`.
 
 ### Fork pull requests
 
@@ -543,11 +543,15 @@ JWT to the application hostname, but sibling subdomains can still write cookies
 for the parent domain. See [Clerk's session token documentation](https://clerk.com/docs/guides/how-clerk-works/overview#session-token).
 
 For shared sandbox iteration, push the reviewed commit to `codex/sandbox`.
+In the BITRATE Labs repository, branch protection restricts direct pushes to
+`BASIC-BIT` and applies to admins. It disables force pushes and deletion. Keep
+this restriction in place while branch builds use deployment credentials. The
+workflow also checks the push sender's GitHub account ID.
 When `VERCEL_SANDBOX_PROJECT_ID` is configured, only this branch can update the
 sandbox alias. Pushes queue and use the existing `sandbox-shared` Convex preview,
 so drafts and OAuth grants survive deploys. Before deployment the workflow
-verifies the existing backend and resolves its preview credential. If that
-identity check fails, recover the existing alias or bootstrap it explicitly.
+verifies the named preview against the pinned Convex URL, independently of the
+current alias. A mismatch stops deployment before uploading functions.
 
 ```powershell
 git push origin HEAD:codex/sandbox
@@ -562,6 +566,27 @@ Use the ordinary PR preview for a separate review deployment. Installations
 without a dedicated sandbox project can still request manual PR sandbox mode
 with `sandbox=true` and the exact PR head. That mode recreates its
 `sandbox-pr-<number>` backend, clearing its test data and OAuth grants.
+
+#### Bootstrap or recover the shared sandbox
+
+1. Check the Convex dashboard for the named `sandbox-shared` preview. If it
+   exists, keep it and record its cloud URL. Only when no such preview exists,
+   use the project preview deploy key in the shell and run
+   `pnpm exec convex deploy --yes --typecheck=enable --preview-create sandbox-shared`
+   from an authorized checkout. The create command replaces an existing preview.
+2. Set the repository variable `VRDEX_SANDBOX_CONVEX_URL` to the verified cloud
+   URL and `VERCEL_SANDBOX_PROJECT_ID` to the dedicated Vercel project. Configure
+   sandbox Clerk and Convex. For the worker and broker, see [broadcast output credentials](../engineering/broadcast-output-credentials.md)
+   and the sandbox procedure in `infra/terraform/restream-worker/README.md`.
+3. Issue a deploy key for this preview scoped to running internal queries,
+   mutations, and actions. Store it as the sensitive preview variable
+   `CONVEX_ADMIN_TOKEN` in that Vercel project. OAuth consent, token exchange
+   and validation, and MCP operations use those internal calls. The build
+   strips this variable from its pulled file. The workflow's deployment key
+   stays in the Convex deploy step.
+4. Push the reviewed commit to `codex/sandbox`. The workflow checks the deployed
+   preview identity before moving the alias. If Convex was recreated, rebind the
+   sandbox broadcast dispatcher and credentials before enabling its worker.
 
 Before reclaiming a closed PR's sandbox backend, compare its Convex URL with
 `https://sandbox.vrdex.net/api/deployment`. If they match, move the alias with

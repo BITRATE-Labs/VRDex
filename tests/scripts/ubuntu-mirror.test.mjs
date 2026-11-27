@@ -19,6 +19,11 @@ test("Ubuntu mirror prep handles direct and mirror-list sources without changing
     await writeFile(path.join(root,"apt-mirrors.txt"),(await readFile(path.join(root,"apt-mirrors.txt"),"utf8"))+regional);
     await mkdir(path.join(root,"apt.conf.d"));
     await writeFile(path.join(root,"apt.conf.d/20-custom"),"Custom::Setting true;\n");
+    const microsoftList="deb [signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/ubuntu/26.04/prod resolute main\n";
+    const olderMicrosoft="deb https://packages.microsoft.com/ubuntu/24.04/prod noble main\n";
+    const microsoftSources="Types: deb\nURIs: https://packages.microsoft.com/ubuntu/26.04/prod/\nSuites: resolute\nComponents: main\nSigned-By: /usr/share/keyrings/microsoft-prod.gpg\n";
+    await writeFile(path.join(root,"sources.list.d/microsoft.list"),microsoftList+olderMicrosoft);
+    await writeFile(path.join(root,"sources.list.d/microsoft.sources"),microsoftSources+"\n"+original);
     await configureUbuntuMirror(root);
     await configureUbuntuMirror(root);
     assert.equal(await readFile(path.join(root,"sources.list"),"utf8"),"deb https://archive.ubuntu.com/ubuntu/ noble main universe\n");
@@ -35,6 +40,9 @@ test("Ubuntu mirror prep handles direct and mirror-list sources without changing
     assert.doesNotMatch(mirrors,/^http:\/\/us-east-2\.ec2\.archive\.ubuntu\.com\//m);
     assert.match(mirrors,/us-east-2\.ec2\.archive\.ubuntu\.com\.example\.invalid/);
     assert.equal(await readFile(path.join(root,"sources.list.d/custom.list"),"utf8"),"deb https://example.invalid/packages stable main\n");
+    assert.equal(await readFile(path.join(root,"sources.list.d/microsoft.list"),"utf8"),"# "+microsoftList+olderMicrosoft);
+    assert.equal(await readFile(path.join(root,"sources.list.d/microsoft.sources"),"utf8"),"Enabled: no\n"+microsoftSources+"\n"+original.replace("https://security.ubuntu.com/ubuntu/","https://archive.ubuntu.com/ubuntu/"));
+
     assert.equal(await readFile(path.join(root,"apt.conf.d/20-custom"),"utf8"),"Custom::Setting true;\n");
   } finally { assert.ok(root.startsWith(path.join(tmpdir(),"vrdex-apt-"))); await rm(root,{recursive:true,force:true}); }
 });

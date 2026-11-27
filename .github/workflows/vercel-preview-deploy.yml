@@ -1,6 +1,8 @@
 name: On-Demand Vercel Preview
 
 on:
+  # Keep GitHub branch protection limited to BASIC-BIT, including admins.
+  # Pushes run the branch's workflow with deployment credentials.
   push:
     branches: [codex/sandbox]
   workflow_dispatch:
@@ -141,8 +143,8 @@ jobs:
             }
             if (context.eventName === "push") {
               if (context.ref !== "refs/heads/codex/sandbox" || context.payload.repository.id !== 1176245711
-                  || !/^[a-f0-9]{40}$/.test(context.sha)) {
-                core.setFailed("Shared sandbox deploys require the trusted codex/sandbox branch and an exact commit.");
+                  || context.payload.sender?.id !== 2165323 || !/^[a-f0-9]{40}$/.test(context.sha)) {
+                core.setFailed("Shared sandbox deploys require the trusted BASIC-BIT push on codex/sandbox and an exact commit.");
                 return;
               }
               core.setOutput("sandbox", "true");
@@ -228,6 +230,13 @@ jobs:
           VERCEL_PROJECT_ID: ${{ github.event_name == 'push' && steps.pr.outputs.sandbox == 'true' && secrets.VERCEL_SANDBOX_PROJECT_ID || secrets.VERCEL_PROJECT_ID }}
         run: |
           set -euo pipefail
+          if [ "$SANDBOX_REQUESTED" = "true" ] && [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            if [ "$DEDICATED_SANDBOX_CONFIGURED" != "true" ]; then
+              echo "::error::A shared sandbox push requires VERCEL_SANDBOX_PROJECT_ID."
+              exit 1
+            fi
+            echo "Deploy target: dedicated vr-dex-sandbox preview project." >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [ "$SANDBOX_REQUESTED" = "true" ] && [ "$DEDICATED_SANDBOX_CONFIGURED" = "true" ] && [ "$GITHUB_EVENT_NAME" != "push" ]; then
             echo "::error::The dedicated sandbox project accepts pushes from codex/sandbox only."
             exit 1
@@ -245,6 +254,15 @@ jobs:
           if [ "${#missing[@]}" -gt 0 ]; then
             printf '::error::Missing repository secrets for on-demand previews: %s\n' "${missing[*]}"
             exit 1
+          fi
+
+          if [ "$SANDBOX_REQUESTED" = "true" ] && [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            curl -fsS --max-time 15 --get \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              --data-urlencode "teamId=$VERCEL_ORG_ID" --data-urlencode "decrypt=false" \
+              "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID/env" \
+              | jq -e 'any(.envs[]; .key == "CONVEX_ADMIN_TOKEN" and .type == "sensitive" and .target == ["preview"] and (.gitBranch == null))' >/dev/null \
+              || { echo "::error::Configure the scoped CONVEX_ADMIN_TOKEN as a sensitive variable in the dedicated preview project."; exit 1; }
           fi
 
       - name: Setup pnpm
@@ -289,12 +307,14 @@ jobs:
       # deployment to exist — so it has to come from the project's preview
       # environment-variable defaults in the Convex dashboard. See
       # docs/deployment/convex-environments.md.
-      - name: Resolve existing shared sandbox backend
-        if: steps.pr.outputs.sandbox == 'true' && steps.pr.outputs.head_ref == 'codex/sandbox'
+      - name: Authorize the pinned shared sandbox backend
+        id: sandbox-backend
+        if: github.event_name == 'push' && steps.pr.outputs.sandbox == 'true'
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PREVIEW }}
           PREVIEW_NAME: ${{ steps.pr.outputs.preview_name }}
-        run: node scripts/capture-preview-runtime-credential.mjs --existing-sandbox
+          EXPECTED_CONVEX_PREVIEW_URL: ${{ vars.VRDEX_SANDBOX_CONVEX_URL || 'https://quick-yak-167.convex.cloud' }}
+        run: node scripts/capture-preview-runtime-credential.mjs
 
       - name: Deploy Convex preview functions
         if: steps.convex-preview-gate.outputs.enabled == 'true'
@@ -302,12 +322,14 @@ jobs:
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PREVIEW }}
           PREVIEW_NAME: ${{ steps.pr.outputs.preview_name }}
-          REUSE_SANDBOX: ${{ steps.pr.outputs.sandbox == 'true' && steps.pr.outputs.head_ref == 'codex/sandbox' }}
+          REUSE_SANDBOX: ${{ github.event_name == 'push' && steps.pr.outputs.sandbox == 'true' }}
+          VRDEX_PREVIEW_BACKEND_URL: ${{ vars.VRDEX_SANDBOX_CONVEX_URL || 'https://quick-yak-167.convex.cloud' }}
+          VRDEX_PREVIEW_DEPLOYMENT_KEY: ${{ steps.sandbox-backend.outputs.deployment_key }}
         run: |
           set -euo pipefail
           if [ "$REUSE_SANDBOX" = "true" ]; then
-            : "${VRDEX_PREVIEW_ADMIN_TOKEN:?Existing sandbox credential is required.}"
-            pnpm exec convex deploy --url "$VRDEX_PREVIEW_BACKEND_URL" --admin-key "$VRDEX_PREVIEW_ADMIN_TOKEN" --yes --typecheck=enable --cmd "node scripts/write-convex-preview-output.mjs" --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL
+            : "${VRDEX_PREVIEW_DEPLOYMENT_KEY:?Existing sandbox credential is required.}"
+            pnpm exec convex deploy --url "$VRDEX_PREVIEW_BACKEND_URL" --admin-key "$VRDEX_PREVIEW_DEPLOYMENT_KEY" --yes --typecheck=enable --cmd "node scripts/write-convex-preview-output.mjs" --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL
           else
             pnpm exec convex deploy --yes --typecheck=enable --preview-create "$PREVIEW_NAME" --cmd "node scripts/write-convex-preview-output.mjs" --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL
           fi
@@ -360,12 +382,14 @@ jobs:
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PREVIEW }}
           PREVIEW_NAME: ${{ steps.pr.outputs.preview_name }}
+          EXPECTED_CONVEX_PREVIEW_URL: ${{ vars.VRDEX_SANDBOX_CONVEX_URL || 'https://quick-yak-167.convex.cloud' }}
+          CONVEX_PREVIEW_URL: ${{ steps.convex-preview.outputs.convex_url }}
           BROKER_TOKEN: ${{ secrets.VRDEX_SANDBOX_EVENT_OUTPUT_BROKER_TOKEN }}
           BRIDGE_TOKEN: ${{ secrets.VRDEX_SANDBOX_EVENT_MEDIA_BRIDGE_TOKEN }}
         run: |
           set -euo pipefail
           test "$PREVIEW_NAME" = sandbox-shared
-          test "$VRDEX_PREVIEW_BACKEND_URL" = https://quick-yak-167.convex.cloud
+          test "$CONVEX_PREVIEW_URL" = "$EXPECTED_CONVEX_PREVIEW_URL"
           if [ -z "$BROKER_TOKEN" ] && [ -z "$BRIDGE_TOKEN" ]; then exit 0; fi
           : "${BROKER_TOKEN:?Sandbox broker token is required.}" "${BRIDGE_TOKEN:?Sandbox dispatcher token is required.}"
           printf '%s' "$BROKER_TOKEN" | pnpm exec convex env set --preview-name "$PREVIEW_NAME" VRDEX_EVENT_OUTPUT_BROKER_TOKEN
@@ -394,38 +418,31 @@ jobs:
           NEXT_PUBLIC_POSTHOG_DEPLOYMENT_CATEGORY=preview
           ENV
 
-      - name: Resolve sandbox runtime credential
-        if: steps.pr.outputs.sandbox == 'true'
-        env:
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PREVIEW }}
-          PREVIEW_NAME: ${{ steps.pr.outputs.preview_name }}
-          EXPECTED_CONVEX_PREVIEW_URL: ${{ steps.convex-preview.outputs.convex_url }}
-        run: node --import tsx scripts/capture-preview-runtime-credential.mjs
-
       - name: Generate sandbox OAuth runtime
-        if: steps.pr.outputs.sandbox == 'true'
+        if: github.event_name == 'push' && steps.pr.outputs.sandbox == 'true'
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PREVIEW }}
           PREVIEW_NAME: ${{ steps.pr.outputs.preview_name }}
-          REUSE_SANDBOX: ${{ steps.pr.outputs.head_ref == 'codex/sandbox' }}
-        run: |
-          if [ "$REUSE_SANDBOX" = "true" ]; then
-            node scripts/generate-preview-developer-runtime-secrets.mjs --reuse-sandbox
-          else
-            node scripts/generate-preview-developer-runtime-secrets.mjs
-          fi
+        run: node scripts/generate-preview-developer-runtime-secrets.mjs --reuse-sandbox
 
       - name: Build Vercel preview output
         env:
+          SHARED_SANDBOX: ${{ github.event_name == 'push' && steps.pr.outputs.sandbox == 'true' }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ github.event_name == 'push' && steps.pr.outputs.sandbox == 'true' && secrets.VERCEL_SANDBOX_PROJECT_ID || secrets.VERCEL_PROJECT_ID }}
-        run: pnpm dlx vercel@54.4.1 build --target=preview --token "$VERCEL_TOKEN"
+        run: |
+          set -euo pipefail
+          if [ "$SHARED_SANDBOX" = "true" ]; then
+            sed -i -E '/^CONVEX_ADMIN_TOKEN=/d' .vercel/.env.preview.local
+          fi
+          pnpm dlx vercel@54.4.1 build --target=preview --token "$VERCEL_TOKEN"
 
       - name: Deploy Vercel preview output
         id: deploy
         env:
           SANDBOX: ${{ steps.pr.outputs.sandbox }}
+          SHARED_SANDBOX: ${{ github.event_name == 'push' && steps.pr.outputs.sandbox == 'true' }}
           CLERK_JWT_ISSUER_DOMAIN: ${{ secrets.CLERK_JWT_ISSUER_DOMAIN }}
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY_PREVIEW }}
           CONVEX_PREVIEW_URL: ${{ steps.convex-preview.outputs.convex_url }}
@@ -439,7 +456,7 @@ jobs:
           VERCEL_PROJECT_ID: ${{ github.event_name == 'push' && steps.pr.outputs.sandbox == 'true' && secrets.VERCEL_SANDBOX_PROJECT_ID || secrets.VERCEL_PROJECT_ID }}
         run: |
           set -euo pipefail
-          deploy_args=(deploy --prebuilt --target=preview --token "$VERCEL_TOKEN")
+          deploy_args=(deploy --prebuilt --archive=tgz --target=preview --token "$VERCEL_TOKEN")
           if [ -n "$CONVEX_PREVIEW_URL" ]; then
             : "${VRDEX_PREVIEW_PERSISTENCE_SECRET:?Preview persistence secret was not configured.}"
             deploy_args+=(
@@ -479,9 +496,7 @@ jobs:
               --env "VRDEX_OAUTH_REFRESH_TOKEN_PEPPER=$oauth_refresh_token_pepper"
             )
           fi
-          if [ "$SANDBOX" = "true" ]; then
-            : "${VRDEX_PREVIEW_ADMIN_TOKEN:?Sandbox runtime credential was not configured.}"
-            deploy_args+=(--env "CONVEX_ADMIN_TOKEN=$VRDEX_PREVIEW_ADMIN_TOKEN")
+          if [ "$SHARED_SANDBOX" = "true" ]; then
             for setting in \
               "VRDEX_API_TOKEN_PEPPER:api-token-pepper" \
               "VRDEX_OAUTH_ACCESS_TOKEN_SIGNING_KEY:oauth-access-token-signing-key" \

@@ -18,6 +18,18 @@ test('draft row actions confirm discard without affecting other events @flow @fi
   await expect(page.getByRole('listitem').filter({ hasText: 'Date only night' })).toBeVisible();
 });
 
+test('discard shows the active broadcast error and keeps the draft @flow @fixture', async ({ page }) => {
+  await page.goto('/playwright/event-inventory?session=discard-locked');
+  const draft = page.getByRole('listitem').filter({ hasText: 'Harbor sessions' }).last();
+  await draft.getByLabel('More actions for Harbor sessions').click();
+  await draft.getByRole('button', { name: 'Discard draft' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Discard draft?' });
+  await dialog.getByRole('button', { name: 'Discard draft' }).click();
+  await expect(dialog.getByRole('alert')).toHaveText('Stop the active broadcast first.');
+  await dialog.getByRole('button', { name: 'Keep draft' }).click();
+  await expect(draft).toBeVisible();
+});
+
 test('the event owner switch opens and closes scoped community access @flow @fixture', async ({ page }, info) => {
   await page.goto('/playwright/event-inventory');
   await expect(page.getByRole('heading', { name: 'My events', exact: true })).toBeVisible();
@@ -28,12 +40,13 @@ test('the event owner switch opens and closes scoped community access @flow @fix
   await page.getByRole('button', { name: 'Manage as admin' }).click();
   const setup = page.getByRole('link', { name: 'Add event for District One' });
   await expect(setup).toHaveAttribute('href', '/district-one/events/create');
+  await expect(page.getByText('Admin access · District One', { exact: true }).locator('..').locator('time')).toBeVisible();
   await page.screenshot({ path: info.outputPath('event-owner-mode.png') });
   await page.getByRole('button', { name: 'End admin access' }).click();
   await expect(setup).toHaveCount(0);
 });
 
-test('preserves authenticated navigation, search focus and mobile width @fixture', async ({ page }, testInfo) => {
+test('preserves authenticated navigation, search focus and mobile width @flow @fixture', async ({ page }, testInfo) => {
   test.setTimeout(60000);
   await page.route(/\/search\/suggest\?q=aurora$/, (route) => route.fulfill({
     json: { results: [{ entityType: 'profile', profileType: 'person', slug: 'aurora', title: 'Aurora', routePath: '/aurora' }] },

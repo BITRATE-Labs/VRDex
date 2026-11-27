@@ -34,6 +34,7 @@ import { contributorStaffLock } from "./_eventContributorLock";
 import { replaceEventLineup } from "./_eventLineup";
 import { eventContributionFingerprint, normalizeIntakePublication } from "./_eventContributionPreflight";
 import { activeBrowserSessionSubjectOrNull, requireActiveBrowserSessionSubject } from "./_browserSessionAuthority";
+import { requireVerifiedActiveBrowserSession } from "./_claimSession";
 import {
   apiWriteAuditActorKindValidator,
   recordApiWriteAuditEvent,
@@ -1203,7 +1204,7 @@ export const listCommunityManagedEventsForApiOwner = internalQuery({
         .take(limit);
 
       for (const event of events) {
-        if (seenEventIds.has(event._id)) {
+        if (event.draftDiscardedAt !== undefined || seenEventIds.has(event._id)) {
           continue;
         }
 
@@ -2963,30 +2964,61 @@ export const getEventOwnerMode = query({
     const mode = viewer.user.eventOwnerMode;
     if (!mode || mode.expiresAt <= Date.now()) return { community: null };
     const profile = await ctx.db.get(mode.communityProfileId);
-    return { community: profile ? { slug: profile.slug, name: profile.displayName, expiresAt: mode.expiresAt } : null };
+    return { community: profile?.profileType === "community" && canReadProfile("public", profile)
+      ? { slug: profile.slug, name: profile.displayName, expiresAt: mode.expiresAt } : null };
   },
 });
 
 export const setEventOwnerMode = mutation({
   args: { communitySlug: v.union(v.string(), v.null()) },
   handler: async (ctx, { communitySlug }) => {
-    const { userId } = await requireActiveBrowserSessionSubject(ctx);
+    const { user, userId, subject } = communitySlug === null
+      ? await requireActiveBrowserSessionSubject(ctx)
+      : await requireVerifiedActiveBrowserSession(ctx);
     if (!(await getAccountFeatureAccess(ctx.db, userId)).superAdmin) {
       throw new Error("Super-admin access is required.");
     }
-    if (communitySlug === null) {
-      await ctx.db.patch(userId, { eventOwnerMode: undefined });
-      return;
-    }
-    const profile = await ctx.db.query("profiles")
+    const profile = communitySlug === null ? null : await ctx.db.query("profiles")
       .withIndex("by_slug", (q) => q.eq("slug", communitySlug.trim()))
       .unique();
-    if (profile?.profileType !== "community" || !canReadProfile("public", profile)) {
+    if (communitySlug !== null && (profile?.profileType !== "community" || !canReadProfile("public", profile))) {
       throw new Error("Community not found.");
     }
-    await ctx.db.patch(userId, {
-      eventOwnerMode: { communityProfileId: profile._id, expiresAt: Date.now() + 60 * 60_000 },
-    });
+
+    const now = Date.now();
+    const previous = user.eventOwnerMode;
+    if (previous) {
+      await ctx.db.insert("profileAuditEvents", {
+        profileId: previous.communityProfileId,
+        actor: subject,
+        action: "event_admin_access_ended",
+        sourceType: "moderator",
+        createdAt: now,
+      });
+    }
+    const mode = profile ? { communityProfileId: profile._id, expiresAt: now + 60 * 60_000 } : undefined;
+    if (mode) {
+      await ctx.db.insert("profileAuditEvents", {
+        profileId: mode.communityProfileId,
+        actor: subject,
+        action: "event_admin_access_started",
+        sourceType: "moderator",
+        note: `Expires ${new Date(mode.expiresAt).toISOString()}`,
+        createdAt: now,
+      });
+      await ctx.scheduler.runAt(mode.expiresAt, internal.events.expireEventOwnerMode, { userId, ...mode });
+    }
+    await ctx.db.patch(userId, { eventOwnerMode: mode });
+  },
+});
+
+export const expireEventOwnerMode = internalMutation({
+  args: { userId: v.id("users"), communityProfileId: v.id("profiles"), expiresAt: v.number() },
+  handler: async (ctx, { userId, communityProfileId, expiresAt }) => {
+    const mode = (await ctx.db.get(userId))?.eventOwnerMode;
+    if (mode?.communityProfileId === communityProfileId && mode.expiresAt === expiresAt && expiresAt <= Date.now()) {
+      await ctx.db.patch(userId, { eventOwnerMode: undefined });
+    }
   },
 });
 

@@ -4,7 +4,7 @@ import { it } from 'node:test';
 import { convexTest } from 'convex-test';
 import { makeFunctionReference } from 'convex/server';
 import schemaModule from '../../convex/schema';
-import { api } from '../../convex/_generated/api';
+import { api, internal } from '../../convex/_generated/api';
 import { newClerkUserId } from './_clerkTestIdentity';
 import { normalizeConnection, managedSecretRefAllowed } from '../../convex/_eventBroadcastConnections';
 import { bindVrcdnTestAccount } from './_eventOutputAccountFixture';
@@ -46,18 +46,24 @@ it('rejects unauthorized setup, missing key and untrusted commit', async () => {
   const grant = await f.owner.mutation(ref('prepareConnection'), f.input);
   await assert.rejects(f.owner.mutation(ref('commitConnection'), { grantId: grant.grantId, credentialRef: prefix + grant.secretName + '-AbCd12', brokerToken: 'bad' }), /unavailable/);
 });
-it('lets the community owner and a scoped super-admin each manage both event connections', async () => {
+it('lets the community owner and a scoped super-admin each manage both event connections', async (test) => {
+  test.mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.now() });
   const f = await fixture();
   const subject = newClerkUserId();
-  await f.t.run(async ({ db }) => {
+  const userId = await f.t.run(async ({ db }) => {
     const now = Date.now();
-    const userId = await db.insert('users', { clerkUserId: subject });
+    const userId = await db.insert('users', { clerkUserId: subject, email: 'admin@example.test', emailVerificationTime: now });
     await db.insert('accountFeatureGrants', {
       userId, state: 'active', feature: 'super_admin', grantedAt: now, updatedAt: now,
       grantedBy: { issuer: 'test', subject: 'operator', tokenIdentifier: 'test|operator' },
     });
+    return userId;
   });
-  const admin = f.t.withIdentity({ subject, issuer: 'test', tokenIdentifier: `test|${subject}` });
+  const identity = { subject, issuer: 'test', tokenIdentifier: `test|${subject}` };
+  const admin = f.t.withIdentity({ ...identity, emailVerified: true });
+  await assert.rejects(f.t.withIdentity({ ...identity, emailVerified: false }).mutation(
+    api.events.setEventOwnerMode, { communitySlug: 'club' },
+  ), /EMAIL_NOT_VERIFIED/);
   await assert.rejects(admin.mutation(ref('prepareConnection'), f.input), /permission/);
   await admin.mutation(api.events.setEventOwnerMode, { communitySlug: 'club' });
   const testEvent = await admin.mutation(api.events.createCommunityEvent, {
@@ -77,6 +83,26 @@ it('lets the community owner and a scoped super-admin each manage both event con
   }
   await admin.mutation(api.events.setEventOwnerMode, { communitySlug: null });
   await assert.rejects(admin.query(api.eventBroadcastConnections.getSetup, { currentSlug: testEvent.slug }), /permission/);
+  const audit = await f.t.run(({ db }) => db.query('profileAuditEvents').collect());
+  assert.deepEqual(audit.map(row => row.action), ['event_admin_access_started', 'event_admin_access_ended']);
+  assert.ok(audit.every(row => row.actor?.subject === subject && row.profileId === audit[0]?.profileId));
+  assert.equal(Date.parse(audit[0]!.note!.slice('Expires '.length)), audit[0]!.createdAt + 60 * 60_000);
+  await admin.mutation(api.events.setEventOwnerMode, { communitySlug: 'club' });
+  const previous = (await f.t.run(({ db }) => db.get(userId)))!.eventOwnerMode!;
+  test.mock.timers.setTime(Date.now() + 1000);
+  await admin.mutation(api.events.setEventOwnerMode, { communitySlug: 'club' });
+  const renewed = (await f.t.run(({ db }) => db.get(userId)))!.eventOwnerMode!;
+  const jobs = await f.t.run(({ db }) => db.system.query("_scheduled_functions").collect());
+  const expiryJob = jobs.find(job => job.name === "events:expireEventOwnerMode" && job.scheduledTime === renewed.expiresAt);
+  assert.deepEqual(expiryJob?.args, [{ userId, ...renewed }]);
+  test.mock.timers.setTime(previous.expiresAt);
+  await f.t.mutation(internal.events.expireEventOwnerMode, { userId, ...previous });
+  assert.equal((await admin.query(api.events.getEventOwnerMode, {}))?.community?.expiresAt, renewed.expiresAt);
+  test.mock.timers.setTime(renewed.expiresAt);
+  await f.t.mutation(internal.events.expireEventOwnerMode, { userId, ...renewed });
+  assert.equal((await f.t.run(({ db }) => db.get(userId)))?.eventOwnerMode, undefined);
+  assert.deepEqual(await admin.query(api.events.listManagedCommunities, {}), []);
+
 });
 it('commits CAS metadata, retains a blank key and rejects changed server or stale revision', async () => {
   const f = await fixture(); const grant = await f.owner.mutation(ref('prepareConnection'), f.input);

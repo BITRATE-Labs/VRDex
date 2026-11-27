@@ -441,6 +441,20 @@ it("reads the newest run's decision and shows a new row when the target is unusa
   assert.equal(await kind(newest), "new");
 });
 
+it("keeps the held import but removes links and flags for its discarded target", async () => {
+  const { t, ids, as, draft, googleLink, now } = await fixture();
+  await t.run(({ db }) => db.patch(ids.event, { publicationState: "draft_private" }));
+  const draftId = await draft(updateDraft, { connectorId: ids.google });
+  await googleLink({ draftId, eventId: ids.event, state: "external_deleted" });
+  const staff = as("staff");
+  const kinds = async () => (await staff.query(api.eventInventory.listHeldImports, {})).map(row => row.kind).sort();
+  assert.deepEqual(await kinds(), ["flag", "update"]);
+  await staff.mutation(api.eventInventory.discardDraft, {
+    draft: { kind: "managed_event", id: ids.event, version: now },
+  });
+  assert.deepEqual(await kinds(), ["new"]);
+});
+
 it("lists staff-attention rows from deleted links, one per event and reason", async () => {
   const { t, ids, as, draft, now } = await fixture();
   const { pier, gone } = await t.run(async ({ db }) => {

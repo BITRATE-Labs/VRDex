@@ -125,18 +125,19 @@ describe("fork-aware preview workflows", () => {
     assert.deepEqual((deployDocument.on as { push: unknown }).push, { branches: ["codex/sandbox"] });
     const resolve = deploySteps.find(step => step.name === "Resolve pull request");
     const execute = new Function("core", "github", "context", "process", `return (async () => { ${resolve?.with?.script} })()`);
-    for (const [ref, repositoryId, sha, accepted] of [
-      ["refs/heads/codex/sandbox", 1176245711, "a".repeat(40), true],
-      ["refs/heads/main", 1176245711, "a".repeat(40), false],
-      ["refs/heads/codex/sandbox", 123, "a".repeat(40), false],
-      ["refs/heads/codex/sandbox", 1176245711, "invalid", false],
+    for (const [ref, repositoryId, senderId, sha, accepted] of [
+      ["refs/heads/codex/sandbox", 1176245711, 2165323, "a".repeat(40), true],
+      ["refs/heads/main", 1176245711, 2165323, "a".repeat(40), false],
+      ["refs/heads/codex/sandbox", 123, 2165323, "a".repeat(40), false],
+      ["refs/heads/codex/sandbox", 1176245711, 123, "a".repeat(40), false],
+      ["refs/heads/codex/sandbox", 1176245711, 2165323, "invalid", false],
     ] as const) {
       let failure = "";
       const outputs: Record<string, unknown> = {};
       await execute(
         { setFailed(message: string) { failure = message; }, setOutput(name: string, value: unknown) { outputs[name] = value; } },
         {},
-        { eventName: "push", ref, sha, payload: { repository: { id: repositoryId } } },
+        { eventName: "push", ref, sha, payload: { repository: { id: repositoryId }, sender: { id: senderId } } },
         { env: {} },
       );
       assert.equal(!failure, accepted);
@@ -159,13 +160,11 @@ describe("fork-aware preview workflows", () => {
 
   it("gives sandbox its own OAuth keys without enabling auth helpers", () => {
     const generate = deploySteps.find(step => step.name === "Generate sandbox OAuth runtime");
-    assert.equal(generate?.if, "steps.pr.outputs.sandbox == 'true'");
+    assert.equal(generate?.if, "github.event_name == 'push' && steps.pr.outputs.sandbox == 'true'");
     assert.ok(generate?.run?.includes("generate-preview-developer-runtime-secrets.mjs --reuse-sandbox"));
-    const reuse = deploySteps.find(step => step.name === "Resolve existing shared sandbox backend");
-    assert.equal(reuse?.if, "steps.pr.outputs.sandbox == 'true' && steps.pr.outputs.head_ref == 'codex/sandbox'");
     const backend = deploySteps.find(step => step.name === "Deploy Convex preview functions");
     const shared = backend?.run?.split("else")[0] ?? "";
-    assert.ok(shared.includes('--url "$VRDEX_PREVIEW_BACKEND_URL" --admin-key "$VRDEX_PREVIEW_ADMIN_TOKEN"'));
+    assert.ok(shared.includes('--url "$VRDEX_PREVIEW_BACKEND_URL" --admin-key "$VRDEX_PREVIEW_DEPLOYMENT_KEY"'));
     assert.ok(!shared.includes("--preview-create"));
     const deployScript = deploySteps.find(step => step.name === "Deploy Vercel preview output")?.run ?? "";
     const sandboxKeys = deployScript.slice(deployScript.indexOf('for setting in'), deployScript.indexOf('deployment_url='));
@@ -175,6 +174,26 @@ describe("fork-aware preview workflows", () => {
     assert.ok(sandboxKeys.includes('::add-mask::$value'));
     assert.ok(!sandboxKeys.includes("E2E"));
     assert.ok(deployScript.includes('--env "VRDEX_ENABLE_E2E_AUTH_HELPERS=false"'));
+  });
+
+  it("archives the prebuilt preview before uploading it to Vercel", () => {
+    const upload = deploySteps.find(step => step.name === "Deploy Vercel preview output");
+    assert.match(upload?.run ?? "", /deploy_args=\(deploy --prebuilt --archive=tgz --target=preview /);
+    assert.match(upload?.run ?? "", /vercel@[^\s]+ "\$\{deploy_args\[@\]\}"/);
+  });
+
+  it("fails closed on the dedicated project and confines its credentials to the intended steps", () => {
+    const check = deploySteps.find(step => step.name === "Check Vercel deployment secrets")?.run ?? "";
+    assert.match(check, /shared sandbox push requires VERCEL_SANDBOX_PROJECT_ID/);
+    assert.ok(check.includes('.type == "sensitive" and .target == ["preview"]'));
+    const resolve = deploySteps.find(step => step.id === "sandbox-backend");
+    assert.equal(resolve?.if, "github.event_name == 'push' && steps.pr.outputs.sandbox == 'true'");
+    assert.ok(String(resolve?.env?.EXPECTED_CONVEX_PREVIEW_URL).includes("vars.VRDEX_SANDBOX_CONVEX_URL"));
+    const consumers = deploySteps.filter(step => Object.values(step.env ?? {}).some(value =>
+      String(value).includes("steps.sandbox-backend.outputs.deployment_key")));
+    assert.deepEqual(consumers.map(step => step.id), ["convex-preview"]);
+    assert.ok(deploySteps.find(step => step.name === "Build Vercel preview output")?.run?.includes("CONVEX_ADMIN_TOKEN=/d"));
+    assert.ok(!deploySteps.find(step => step.id === "deploy")?.run?.includes("CONVEX_ADMIN_TOKEN="));
   });
 
   it("withholds hosted e2e secrets from fork heads", () => {
