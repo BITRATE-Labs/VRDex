@@ -34,7 +34,8 @@ My events offers **Discard draft** for personal intake drafts and standalone
 community drafts that have never been published. Confirmation checks the latest
 draft version and the caller's authority. Personal Discord drafts also clear
 their import state. Community drafts retain their audit history and cannot be
-reopened, published or used for a broadcast after discard.
+reopened, published or used for a broadcast after discard. The owner API
+and MCP event list also omit discarded drafts.
 
 ## Event Times
 

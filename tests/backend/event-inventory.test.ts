@@ -3,7 +3,7 @@ import { it } from "node:test";
 import { convexTest } from "convex-test";
 import { makeFunctionReference, type FunctionArgs, type PaginationOptions, type PaginationResult } from "convex/server";
 import schemaModule from "../../convex/schema";
-import { api } from "../../convex/_generated/api";
+import { api, internal } from "../../convex/_generated/api";
 import type { Doc } from "../../convex/_generated/dataModel";
 import type { InventoryRow } from "../../convex/_eventInventory";
 import { listPage } from "../../convex/eventInventory";
@@ -14,7 +14,7 @@ const save = makeFunctionReference<"mutation">("eventIntake:saveEventIntakeDraft
 const criteria = { view: "all" as const, query: "", timeZone: "UTC", asOf: Date.parse("2026-10-22T12:00:00Z") };
 
 it("discards only an authorized, current unpublished draft", async () => {
-  const { t, actor, event } = await fixture();
+  const { t, ids, actor, event } = await fixture();
   const owner = actor("owner");
   const intake = await owner.mutation(save, { patch: { title: "Personal draft" } });
   const discard = api.eventInventory.discardDraft;
@@ -36,6 +36,8 @@ it("discards only an authorized, current unpublished draft", async () => {
   const publishedId = await event({ sourceType: "manual" });
   const published = (await t.run(({ db }) => db.get(publishedId)))!;
   await assert.rejects(owner.mutation(discard, { draft: { ...target, id: publishedId, version: published.updatedAt } }), /unavailable/);
+  const apiEvents = await t.query(internal.events.listCommunityManagedEventsForApiOwner, { ownerUserId: ids.owner });
+  assert.deepEqual(apiEvents.map(event => event.id), [publishedId]);
 });
 async function fixture() {
   process.env.EVENT_DATE_ONLY_ENABLED = "true";

@@ -1203,7 +1203,7 @@ export const listCommunityManagedEventsForApiOwner = internalQuery({
         .take(limit);
 
       for (const event of events) {
-        if (seenEventIds.has(event._id)) {
+        if (event.draftDiscardedAt !== undefined || seenEventIds.has(event._id)) {
           continue;
         }
 
