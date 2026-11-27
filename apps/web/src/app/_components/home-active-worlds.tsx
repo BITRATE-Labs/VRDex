@@ -93,12 +93,10 @@ function ActiveWorldCard({ world, compactNextEvent }: { world: PublicActiveWorld
 export function HomeActiveWorldsSection({
   paired = false,
   singleUpcomingEventPath,
-  status,
   worlds,
 }: {
   paired?: boolean;
   singleUpcomingEventPath?: string;
-  status: "live" | "missing-url" | "error";
   worlds: PublicActiveWorld[];
 }) {
   return (
@@ -116,13 +114,8 @@ export function HomeActiveWorldsSection({
           ))}
         </div>
       ) : (
-        <Notice className="mt-6 px-5 py-6" variant="dashed">
-          <p className="font-medium">No confirmed upcoming venues yet.</p>
-          <p className="mt-2 text-sm leading-6 text-muted">
-            {status === "live"
-              ? "Published events will appear here after they are explicitly linked to world profiles."
-              : "Start the local backend to read active world data, or use fixture mode during visual review."}
-          </p>
+        <Notice className="mt-3 sm:mt-6">
+          Unavailable
         </Notice>
       )}
     </section>

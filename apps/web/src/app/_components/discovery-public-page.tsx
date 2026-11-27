@@ -562,11 +562,10 @@ export function DiscoveryLandingPage({
       title="Upcoming events"
     />
   );
-  const featuredWorlds = activeWorlds.length > 0 || activeWorldStatus !== "live" ? (
+  const featuredWorlds = activeWorlds.length > 0 || (status === "live" && activeWorldStatus !== "live") ? (
     <HomeActiveWorldsSection
       paired={pairUpcomingAndWorld}
       singleUpcomingEventPath={singleUpcomingEventPath}
-      status={activeWorldStatus}
       worlds={activeWorlds}
     />
   ) : null;
@@ -623,7 +622,7 @@ export function DiscoveryLandingPage({
           </DiscoveryFeatureGate>
         ) : null}
 
-        <section className={cn("grid gap-4 sm:gap-5", directorySections.length === 3 ? "xl:grid-cols-3" : directorySections.length === 2 ? "xl:grid-cols-2" : undefined)}>
+        {status === "live" ? <section className={cn("grid gap-4 sm:gap-5", directorySections.length === 3 ? "xl:grid-cols-3" : directorySections.length === 2 ? "xl:grid-cols-2" : undefined)}>
           {directorySections.map(({ headingId, title, results, empty }) => (
             <DiscoverySection
               key={headingId}
@@ -635,7 +634,7 @@ export function DiscoveryLandingPage({
               title={title}
             />
           ))}
-        </section>
+        </section> : null}
       </PageContainer>
     </PageShell>
   );
