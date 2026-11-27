@@ -53,6 +53,11 @@ accessible link names, and complete start and end times in the calendar feed.
 It also checks that a note unique to one night remains visible when the
 shared series summary is shown only once.
 
+The public Person profile flow verifies that a sparse record keeps identity
+and ownership actions together at 320 px and on desktop. A separate
+multi-stream fixture checks the exact clipboard destinations and accessible
+control names for both playback devices.
+
 PowerShell data-flow run with video:
 
 ```powershell

@@ -446,9 +446,18 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
     logoCount: mediaKit.logos.length,
   });
   const profileBasePath = `/${profile.slug}`;
-  const secondaryOrder = normalizeProfileSectionOrder(profile.appearance?.sectionOrder).filter((section) =>
-    ["events", "media_kit", "worlds"].includes(section),
-  );
+  const sectionOrder = normalizeProfileSectionOrder(profile.appearance?.sectionOrder);
+  const secondaryOrder = sectionOrder.filter((section) => ["events", "media_kit", "worlds"].includes(section));
+  const hasDefaultAppearance = mediaKit.compactDisplay === "profile_image"
+    && Object.entries(defaultAvatarAppearance).every(([key, value]) => avatarAppearance[key as keyof AvatarAppearance] === value)
+    && sectionOrder.every((section, index) => section === defaultProfileSectionOrder[index]);
+  const useCompactIdentity = !embedded && isPerson && canClaim && hasDefaultAppearance
+    && !avatarImageUrl && !bannerStyle && !mediaKit.profileImage && !mediaKit.banner
+    && !profile.headline?.trim() && !profile.about?.trim() && !aboutCopy && !profile.timezone?.trim()
+    && aliases.length === 0 && focusItems.length === 0 && metadata.length === 0 && profile.genres.length === 0
+    && visibleLinks.length === 0 && !profile.verifiedConnections?.length
+    && !hasMediaKit && !mediaKit.featuredAsset && mediaKit.assets.length === 0 && galleryAssets.length === 0
+    && eventPreviews.length === 0 && profile.worldCredits.length === 0;
   const secondarySections: Partial<Record<ProfilePublicSectionKey, ReactNode>> = {
     events: eventPreviews.length > 0 || !isPerson ? (
       <section className="border-t border-border py-8">
@@ -529,97 +538,109 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
     <Shell>
       <PageContainer>
 
-        <section
-          aria-labelledby={`profile-title-${profile.slug}`}
-          className="overflow-hidden rounded-card border border-border bg-media shadow-panel"
-        >
-          <div
-            className="relative bg-media bg-cover bg-center p-5 text-white sm:p-6"
-            style={bannerStyle}
+        <div className={useCompactIdentity ? "mx-auto w-full max-w-2xl rounded-panel border border-border-strong bg-surface-strong shadow-panel" : "contents"}>
+          <section
+            aria-labelledby={`profile-title-${profile.slug}`}
+            className={useCompactIdentity ? undefined : "overflow-hidden rounded-card border border-border bg-media shadow-panel"}
           >
-            {bannerStyle ? <span aria-hidden="true" className="absolute inset-0 bg-black/60" /> : null}
             <div
-              className={cn(
-                "relative grid gap-7",
-                aboutCopy ? "lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)] lg:items-center" : undefined,
-              )}
+              className={useCompactIdentity ? "p-4 sm:p-6" : "relative bg-media bg-cover bg-center p-5 text-white sm:p-6"}
+              style={bannerStyle}
             >
-              <div className="flex min-w-0 flex-col gap-6 sm:flex-row sm:items-center">
-                <div className="relative w-fit shrink-0">
-                  <div
-                    className="relative flex size-24 items-center justify-center overflow-hidden bg-white/20 text-3xl font-semibold shadow-panel"
-                    style={avatarStyle}
-                  >
-                    <ProfileAvatarImage
-                      alt={`${profile.displayName} display image`}
-                      fallback={initialsFor(profile.displayName)}
-                      src={avatarImageUrl}
-                    />
-                  </div>
-                  {profile.trustLabel === "claimed_verified" ? (
-                    <VerifiedTrustMark className="verified-trust-mark--avatar" />
-                  ) : null}
-                </div>
-                <div className="min-w-0">
-                  <h1
-                    className="break-words text-4xl leading-none font-semibold sm:text-5xl"
-                    id={`profile-title-${profile.slug}`}
-                  >
-                    {profile.displayName}
-                  </h1>
-                  {aliases.length > 0 ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-white/75">
-                      <span>AKA {aliases.join(", ")}</span>
-                      {remainingAliases.length > 0 ? (
-                        <details>
-                          <summary className="cursor-pointer">+{remainingAliases.length} more</summary>
-                          <span className="mt-1 block">{remainingAliases.join(", ")}</span>
-                        </details>
-                      ) : null}
+              {bannerStyle ? <span aria-hidden="true" className="absolute inset-0 bg-black/60" /> : null}
+              <div
+                className={cn(
+                  "relative grid gap-7",
+                  aboutCopy ? "lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)] lg:items-center" : undefined,
+                )}
+              >
+                <div className={cn("flex min-w-0", useCompactIdentity ? "items-center gap-3 sm:gap-4" : "flex-col gap-6 sm:flex-row sm:items-center")}>
+                  <div className="relative w-fit shrink-0">
+                    <div
+                      className={cn(
+                        "relative flex items-center justify-center overflow-hidden font-semibold",
+                        useCompactIdentity
+                          ? "size-14 rounded-control border border-border-strong bg-surface-elevated text-xl text-foreground sm:size-16"
+                          : "size-24 bg-white/20 text-3xl shadow-panel",
+                      )}
+                      style={useCompactIdentity ? undefined : avatarStyle}
+                    >
+                      <ProfileAvatarImage
+                        alt={`${profile.displayName} display image`}
+                        fallback={initialsFor(profile.displayName)}
+                        src={avatarImageUrl}
+                      />
                     </div>
-                  ) : null}
-                  {profile.headline ? <p className="mt-3 max-w-2xl text-base leading-7 text-white/85">{profile.headline}</p> : null}
-                  {metadata.length > 0 ? <p className="mt-2 text-sm text-white/70">{metadata.join(" / ")}</p> : null}
+                    {profile.trustLabel === "claimed_verified" ? (
+                      <VerifiedTrustMark className="verified-trust-mark--avatar" />
+                    ) : null}
+                  </div>
+                  <div className="min-w-0">
+                    <h1
+                      className={cn("break-words font-semibold", useCompactIdentity ? "text-3xl leading-tight sm:text-4xl" : "text-4xl leading-none sm:text-5xl")}
+                      id={`profile-title-${profile.slug}`}
+                    >
+                      {profile.displayName}
+                    </h1>
+                    {aliases.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-white/75">
+                        <span>AKA {aliases.join(", ")}</span>
+                        {remainingAliases.length > 0 ? (
+                          <details>
+                            <summary className="cursor-pointer">+{remainingAliases.length} more</summary>
+                            <span className="mt-1 block">{remainingAliases.join(", ")}</span>
+                          </details>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {profile.headline ? <p className="mt-3 max-w-2xl text-base leading-7 text-white/85">{profile.headline}</p> : null}
+                    {metadata.length > 0 ? <p className="mt-2 text-sm text-white/70">{metadata.join(" / ")}</p> : null}
+                  </div>
                 </div>
+                {aboutCopy ? (
+                  <div className="border-white/20 lg:border-l lg:pl-7">
+                    <h2 className="text-sm font-semibold text-white/70">About</h2>
+                    <p className="mt-2 max-w-xl text-base leading-7 text-white/88">{aboutCopy}</p>
+                  </div>
+                ) : null}
               </div>
-              {aboutCopy ? (
-                <div className="border-white/20 lg:border-l lg:pl-7">
-                  <h2 className="text-sm font-semibold text-white/70">About</h2>
-                  <p className="mt-2 max-w-xl text-base leading-7 text-white/88">{aboutCopy}</p>
+            </div>
+          </section>
+
+          {canClaim ? (
+            <aside
+              aria-label="Profile ownership"
+              className={useCompactIdentity
+                ? "grid gap-2 border-t border-border px-4 py-4 sm:px-6"
+                : "flex flex-wrap items-center justify-between gap-x-6 gap-y-3 py-2"}
+            >
+              <p className={useCompactIdentity ? "text-sm font-medium text-foreground" : "text-sm text-muted"}>Unclaimed</p>
+
+              {canClaim ? (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                  <p className={cn("text-sm text-muted", useCompactIdentity && "basis-full sm:basis-auto")}>
+                    {profile.profileType === "person" ? "Is this your profile?" : "Manage this community?"}
+                  </p>
+                  <Link
+                    className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "shrink-0 whitespace-nowrap")}
+                    href={profileClaimPath(profile.slug, "profile")}
+                  >
+                    Claim profile
+                  </Link>
+                  {/* Offered to every reader of an unclaimed profile rather than
+                      only to those who could act on it: this page is server
+                      rendered with no viewer, and the editor handles sign-in. */}
+                  <Link
+                    className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "shrink-0 whitespace-nowrap")}
+                    href={`${profileBasePath}/edit`}
+                  >
+                    Suggest an edit
+                  </Link>
                 </div>
               ) : null}
-            </div>
-          </div>
-        </section>
-
-        {canClaim ? (
-          <aside aria-label="Profile ownership" className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 py-2">
-            <p className="text-sm text-muted">Unclaimed</p>
-
-            {canClaim ? (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <p className="text-sm text-muted">
-                  {profile.profileType === "person" ? "Is this your profile?" : "Manage this community?"}
-                </p>
-                <Link
-                  className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "shrink-0 whitespace-nowrap")}
-                  href={profileClaimPath(profile.slug, "profile")}
-                >
-                  Claim profile
-                </Link>
-                {/* Offered to every reader of an unclaimed profile rather than
-                    only to those who could act on it: this page is server
-                    rendered with no viewer, and the editor handles sign-in. */}
-                <Link
-                  className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "shrink-0 whitespace-nowrap")}
-                  href={`${profileBasePath}/edit`}
-                >
-                  Suggest an edit
-                </Link>
-              </div>
-            ) : null}
-          </aside>
-        ) : null}
+            </aside>
+          ) : null}
+        </div>
 
         {profile.profileType === "person" && <HomeLiveNow key={profile.slug} performerSlug={profile.slug} />}
         <ProfileVrcdnStreams
