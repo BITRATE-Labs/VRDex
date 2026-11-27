@@ -7,8 +7,11 @@ import {
 } from "../_components/search-view-state";
 import { fetchDiscoverySearch, fetchProfileLookup } from "@/convex/server";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 export const dynamic = "force-dynamic";
+
+const getSearchReferenceTime = cache(Date.now);
 
 type SearchPageProps = {
   searchParams: Promise<{
@@ -44,6 +47,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     );
   }
 
+  const referenceTime = getSearchReferenceTime();
   const search = query
     ? await fetchDiscoverySearch(query, filter)
     : { kind: "live" as const, results: [] };
@@ -52,6 +56,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     <SearchResultsPage
       activeFilter={filter}
       query={query}
+      referenceTime={referenceTime}
       results={search.results}
       status={search.kind}
     />

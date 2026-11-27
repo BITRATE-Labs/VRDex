@@ -304,6 +304,39 @@ function publicResultRow(page: Page, path: string) {
   return page.getByRole("region", { name: "Search results" }).locator(`a[href="${path}"]`).locator("..");
 }
 
+test("Search distinguishes known timed event states and preserves historical links @flow @fixture", async ({ page }) => {
+  const query = "/search?q=Afterglow+event+schedule";
+  const historicalPath = "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions";
+  const results = page.getByRole("region", { name: "Search results" });
+  const expectedEvents = [
+    ["Afterglow Summer Signal", "Upcoming"],
+    ["Afterglow Harbor Sessions", "Ended"],
+    ["Afterglow Watch Room", "Ended"],
+    ["Afterglow Live Session", "In progress"],
+    ["Afterglow Late Shift", null],
+    ["Afterglow Open Decks", null],
+    ["Afterglow Studio Session", null],
+  ] as const;
+
+  for (const route of [query, `${query}&type=event`]) {
+    await page.goto(route);
+    const eventLinks = results.locator('a[href*="/events/"]');
+    await expect(eventLinks).toHaveCount(expectedEvents.length);
+    await expect(results.getByText("Ended", { exact: true })).toHaveCount(2);
+    for (const [index, [title, status]] of expectedEvents.entries()) {
+      const event = eventLinks.nth(index);
+      await expect(event.getByText(title, { exact: true })).toBeVisible();
+      const label = event.getByText(/^(Ended|In progress|Upcoming)$/);
+      if (status === null) await expect(label).toHaveCount(0);
+      else await expect(label).toHaveText(status);
+    }
+    await expect(eventLinks.nth(1)).toHaveAttribute("href", historicalPath);
+  }
+  await results.locator(`a[href="${historicalPath}"]`).click();
+  await expect(page).toHaveURL(historicalPath);
+  await expect(page.getByRole("heading", { level: 1, name: "Afterglow Harbor Sessions" })).toBeVisible();
+});
+
 test("mobile Search keeps event initials visible until artwork loads @flow @fixture", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 740 });
   const poster = "**/events/afterglow-harbor-poster.png";
