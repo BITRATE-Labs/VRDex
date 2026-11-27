@@ -550,7 +550,7 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
                         {hasMetadata ? (
                           <div className="flow-root" id={metadataId}>
                             {row.roleLabel ? <div className="mt-1 text-sm text-muted">{row.roleLabel}</div> : null}
-                            {row.startAt !== undefined ? <ViewerLocalEventTimeRange className="mt-1 block text-sm text-muted" endAt={row.endAt} startAt={row.startAt} /> : null}
+                            {row.startAt !== undefined ? <ViewerLocalEventTimeRange className="mt-1 block text-sm text-muted" disambiguateOffset endAt={row.endAt} startAt={row.startAt} /> : null}
                           </div>
                         ) : null}
                       </div>

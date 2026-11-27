@@ -27,10 +27,9 @@ function formatDateTimeLocalParts(parts: DateTimeLocalParts): string {
   return `${parts.year}-${padDatePart(parts.month)}-${padDatePart(parts.day)}T${padDatePart(parts.hour)}:${padDatePart(parts.minute)}`;
 }
 
-function getZonedDateTimeParts(timestamp: number, timeZone: string): DateTimeLocalParts {
-  let parts: Intl.DateTimeFormatPart[];
+function zonedDateTimeFormatter(timeZone: string): Intl.DateTimeFormat {
   try {
-    parts = new Intl.DateTimeFormat("en-US", {
+    return new Intl.DateTimeFormat("en-US", {
       timeZone,
       year: "numeric",
       month: "2-digit",
@@ -38,7 +37,16 @@ function getZonedDateTimeParts(timestamp: number, timeZone: string): DateTimeLoc
       hour: "2-digit",
       minute: "2-digit",
       hourCycle: "h23",
-    }).formatToParts(new Date(timestamp));
+    });
+  } catch {
+    throw new Error("Time zone must be a valid IANA time zone.");
+  }
+}
+
+function getZonedDateTimeParts(timestamp: number, formatter: Intl.DateTimeFormat): DateTimeLocalParts {
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = formatter.formatToParts(timestamp);
   } catch {
     throw new Error("Time zone must be a valid IANA time zone.");
   }
@@ -66,22 +74,17 @@ export function formatZonedDateTimeInput(
   timeZone: string | undefined,
 ): string {
   if (timestamp === undefined) return "";
-  return formatDateTimeLocalParts(getZonedDateTimeParts(timestamp, timeZone ?? browserTimeZone()));
+  return formatDateTimeLocalParts(getZonedDateTimeParts(timestamp, zonedDateTimeFormatter(timeZone ?? browserTimeZone())));
 }
 
-export function parseZonedDateTimeInput(
-  value: string,
-  timeZone: string,
-  fieldName: string,
-): number {
-  const parts = parseDateTimeLocalParts(value, fieldName);
+function matchingZonedInstants(parts: DateTimeLocalParts, formatter: Intl.DateTimeFormat): number[] {
   const wallTimeUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute);
   const target = formatDateTimeLocalParts(parts);
   const offsets = new Set<number>();
   const hour = 60 * 60 * 1_000;
   for (const sampleHours of [-36, -24, -12, 0, 12, 24, 36]) {
     const sample = wallTimeUtc + sampleHours * hour;
-    const zonedParts = getZonedDateTimeParts(sample, timeZone);
+    const zonedParts = getZonedDateTimeParts(sample, formatter);
     const zonedWallTimeUtc = Date.UTC(
       zonedParts.year,
       zonedParts.month - 1,
@@ -92,14 +95,29 @@ export function parseZonedDateTimeInput(
     offsets.add(zonedWallTimeUtc - sample);
   }
 
-  const matches = [...offsets]
+  return [...offsets]
     .map((offset) => wallTimeUtc - offset)
     .filter(
       (timestamp) =>
         Number.isFinite(timestamp) &&
-        formatDateTimeLocalParts(getZonedDateTimeParts(timestamp, timeZone)) === target,
+        formatDateTimeLocalParts(getZonedDateTimeParts(timestamp, formatter)) === target,
     );
+}
 
+export function getOtherZonedTimeOccurrence(timestamp: number, timeZone: string): number | undefined {
+  const formatter = zonedDateTimeFormatter(timeZone);
+  const minute = Math.floor(timestamp / 60_000) * 60_000;
+  return matchingZonedInstants(getZonedDateTimeParts(minute, formatter), formatter)
+    .find(instant => instant !== minute);
+}
+
+export function parseZonedDateTimeInput(
+  value: string,
+  timeZone: string,
+  fieldName: string,
+): number {
+  const parts = parseDateTimeLocalParts(value, fieldName);
+  const matches = matchingZonedInstants(parts, zonedDateTimeFormatter(timeZone));
   if (matches.length === 0) {
     throw new Error(`${fieldName} must be a valid local time in ${timeZone}.`);
   }

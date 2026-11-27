@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 
 import { cn } from "@/lib/cn";
-import { formatCalendarDate } from "@/lib/calendar/zoned-date-time";
+import { formatCalendarDate, getOtherZonedTimeOccurrence } from "@/lib/calendar/zoned-date-time";
 
 type ViewerLocalEventTimesProps = {
   timestamp: number;
@@ -16,6 +16,7 @@ type ViewerLocalEventTimesProps = {
 
 type ViewerLocalEventTimeRangeProps = {
   className?: string;
+  disambiguateOffset?: boolean;
   endAt?: number;
   startAt: number;
   timeZone?: string;
@@ -172,48 +173,81 @@ export function ViewerLocalEventTime({
   const timeZone = useViewerTimeZone(explicitTimeZone);
 
   return (
+    <EventTime
+      className={className}
+      timestamp={timestamp}
+      timeZone={timeZone}
+      hour12={hour12}
+      zoneName={showOffset && showTimeZone ? "shortOffset" : undefined}
+    />
+  );
+}
+
+type ZoneName = "short" | "shortOffset";
+
+function EventTime({ className, timestamp, timeZone, hour12, zoneName }: {
+  className?: string;
+  timestamp: number;
+  timeZone: string;
+  hour12?: boolean;
+  zoneName?: ZoneName;
+}) {
+  return (
     <time className={className} dateTime={new Date(timestamp).toISOString()}>
-      {formatTimestamp(
-        timestamp,
-        timeZone,
-        {
-          ...timeOptions,
-          hour12,
-          timeZoneName: showOffset && showTimeZone ? "shortOffset" : undefined,
-        },
-      )}
+      {formatTimestamp(timestamp, timeZone, { ...timeOptions, hour12, timeZoneName: zoneName })}
     </time>
   );
 }
 
+function zoneLabel(formatter: Intl.DateTimeFormat, timestamp: number): string | undefined {
+  return formatter.formatToParts(timestamp).find(part => part.type === "timeZoneName")?.value;
+}
+
+function rangeZoneNames(startAt: number, endAt: number | undefined, timeZone: string): {
+  start?: ZoneName;
+  end?: ZoneName;
+} {
+  const offsets = timestampFormatter(timeZone, { timeZoneName: "shortOffset" });
+  const zone = offsets.resolvedOptions().timeZone;
+  if (endAt !== undefined && zoneLabel(offsets, startAt) !== zoneLabel(offsets, endAt)) {
+    const names = timestampFormatter(zone, { timeZoneName: "short" });
+    const name = zoneLabel(names, startAt) === zoneLabel(names, endAt) ? "shortOffset" : "short";
+    return { start: name, end: name };
+  }
+
+  const alternateStart = getOtherZonedTimeOccurrence(startAt, zone);
+  const alternateEnd = endAt === undefined ? undefined : getOtherZonedTimeOccurrence(endAt, zone);
+  if (alternateStart === undefined && alternateEnd === undefined) return {};
+  const names = timestampFormatter(zone, { timeZoneName: "short" });
+  const genericName = (alternateStart !== undefined && zoneLabel(names, startAt) === zoneLabel(names, alternateStart))
+    || (endAt !== undefined && alternateEnd !== undefined && zoneLabel(names, endAt) === zoneLabel(names, alternateEnd));
+  const name = genericName ? "shortOffset" : "short";
+  return endAt === undefined ? { start: name } : { end: name };
+}
+
 export function ViewerLocalEventTimeRange({
   className,
+  disambiguateOffset = false,
   endAt,
   startAt,
-  timeZone,
-  showOffset,
-  showTimeZone,
+  timeZone: explicitTimeZone,
+  showOffset = false,
+  showTimeZone = true,
   hour12,
 }: ViewerLocalEventTimeRangeProps) {
+  const timeZone = useViewerTimeZone(explicitTimeZone);
+  const { start, end } = showTimeZone && disambiguateOffset
+    ? rangeZoneNames(startAt, endAt, timeZone)
+    : {};
+  const offset = showOffset && showTimeZone ? "shortOffset" : undefined;
+  const qualifiedTimeClass = start || end ? "whitespace-nowrap" : undefined;
   return (
     <span className={cn(className)}>
-      <ViewerLocalEventTime
-        timestamp={startAt}
-        timeZone={timeZone}
-        showOffset={showOffset}
-        showTimeZone={showTimeZone}
-        hour12={hour12}
-      />
+      <EventTime className={qualifiedTimeClass} timestamp={startAt} timeZone={timeZone} zoneName={offset ?? start} hour12={hour12} />
       {endAt === undefined ? null : (
         <>
           {" - "}
-          <ViewerLocalEventTime
-            timestamp={endAt}
-            timeZone={timeZone}
-            showOffset={showOffset}
-            showTimeZone={showTimeZone}
-            hour12={hour12}
-          />
+          <EventTime className={qualifiedTimeClass} timestamp={endAt} timeZone={timeZone} zoneName={offset ?? end} hour12={hour12} />
         </>
       )}
     </span>
