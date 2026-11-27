@@ -19,6 +19,11 @@ See `docs/testing/playwright-image-diffing.md` for the committed-baseline image 
 Local smoke also checks that an event URL with the wrong community returns 404 and gives visitors Search and Discovery links in both themes.
 The watchable-event fixture checks that the labeled Play control precedes the
 poster on phones and that the page attaches no video before the viewer presses Play.
+The event layout flow checks guest and Host schedules at 320, 360, and 412 px
+in UTC and America/Los_Angeles. The guest fixtures verify that Host routes
+reject guests without changing the authorized fixture. A date-only fixture
+without outgoing links has no Links card, and a watchable fixture without a
+poster has one capped media column on desktop.
 
 PowerShell data-flow run with video:
 

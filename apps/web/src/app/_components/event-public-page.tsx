@@ -3,7 +3,6 @@ import { inferLineupEnds } from "@vrdex/api-contracts";
 import { useQuery } from "convex/react";
 import Link from "next/link";
 import { useState } from "react";
-import { CalendarDays, Flag, ListMusic } from "lucide-react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@convex-generated-api";
 import { EventContributionControls } from "../events/event-contribution-controls";
@@ -18,6 +17,7 @@ import { safeImageBackground } from "@/lib/safe-image";
 import { publicEventPath } from "@/lib/event-path";
 import { avatarFrameStyle, type AvatarAppearance } from "@/lib/avatar-appearance";
 import { EventWatchForEvent } from "./event-live-watch";
+import { EventPublicHero } from "./event-public-hero";
 import styles from "./event-public-page.module.css";
 import { parseVrcdnStreamLinks } from "../../../../../convex/_vrcdnLinks";
 import { ViewerLocalEventDateTime, ViewerLocalEventTime, ViewerLocalEventTimeRange } from "./viewer-local-event-times";
@@ -324,6 +324,8 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
   const lineup = eventLineupForDisplay(event);
   const bannerStyle = safeImageBackground(event.bannerImageUrl, eventPosterOverlay);
   const sourceUrl = safeHttpsUrl(event.source.url);
+  const seriesPath = event.seriesId && event.communitySlug ? `/${event.communitySlug}/series/${event.seriesId}` : null;
+  const publicLinks = event.mediaLinks.filter((link) => parseVrcdnStreamLinks(link.url) === null);
   const eventPath = publicEventPath(event);
 
   return (
@@ -331,63 +333,26 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
       <PageContainer className="gap-5">
 
 
-        <section className="overflow-hidden rounded-hero border border-border bg-media shadow-hero">
-          <div
-            className="relative min-h-56 bg-[linear-gradient(135deg,var(--media),var(--surface-raised))] bg-cover bg-center p-5 text-white sm:p-6 lg:p-8"
-            style={bannerStyle}
-          >
-            <nav aria-label="Event actions" className="absolute right-4 top-4 flex gap-2">
-              {eventPath && canHost ? <span className="group relative inline-flex">
-                <Link aria-label="Host view" className={cn(buttonVariants({ variant: "secondary" }), "size-9 p-0")} href={`${eventPath}/host`}>
-                  <ListMusic aria-hidden="true" className="size-4" />
-                </Link>
-                <span role="tooltip" className="pointer-events-none absolute right-0 top-full z-20 mt-2 hidden whitespace-nowrap rounded-control border border-border bg-surface px-2 py-1 text-xs text-foreground shadow-lg group-hover:block group-focus-within:block">Host view</span>
-              </span> : null}
-              {eventPath ? <span className="group relative inline-flex">
-                <a aria-label="Add to calendar" className={cn(buttonVariants({ variant: "secondary" }), "size-9 p-0")} href={`${eventPath}/calendar.ics`}>
-                  <CalendarDays aria-hidden="true" className="size-4" />
-                </a>
-                <span role="tooltip" className="pointer-events-none absolute right-0 top-full z-20 mt-2 hidden whitespace-nowrap rounded-control border border-border bg-surface px-2 py-1 text-xs text-foreground shadow-lg group-hover:block group-focus-within:block">Add to calendar</span>
-              </span> : null}
-              <span className="group relative inline-flex">
-                <button type="button" aria-label="Report event" aria-haspopup="dialog" className={cn(buttonVariants({ variant: "secondary" }), "size-9 p-0")} onClick={() => setReportOpen(true)}>
-                  <Flag aria-hidden="true" className="size-4" />
-                </button>
-                <span role="tooltip" className="pointer-events-none absolute right-0 top-full z-20 mt-2 hidden whitespace-nowrap rounded-control border border-border bg-surface px-2 py-1 text-xs text-foreground shadow-lg group-hover:block group-focus-within:block">Report event</span>
-              </span>
-            </nav>
-            <div className="flex min-h-44 flex-col justify-end">
-              <div className="max-w-4xl">
-                {event.status === "cancelled" ? (
-                  <p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-white">Cancelled</p>
-                ) : null}
-                <ViewerLocalEventDateTime className={cn("block text-sm uppercase tracking-[0.24em] text-white/70", canHost ? "pr-36" : "pr-24")} timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />
-                {event.scheduleKind !== "date_only" && (event.doorsOpenAt !== undefined || event.endAt !== undefined) ? <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-white/80">
-                  {event.doorsOpenAt !== undefined ? <span><span>Doors open</span>{" "}<ViewerLocalEventDateTime timestamp={event.doorsOpenAt} /></span> : null}
-                  {event.endAt !== undefined ? <span><span>End</span>{" "}<ViewerLocalEventDateTime timestamp={event.endAt} /></span> : null}
-                </div> : null}
-                <h1 className="mt-4 text-5xl leading-none font-semibold tracking-[-0.05em] sm:text-7xl">
-                  {event.title}
-                </h1>
-                {event.summary ? <p className="mt-4 max-w-2xl text-base leading-7 text-white/82 sm:text-lg">{event.summary}</p> : null}
-                {event.venueLabel ? <p className="mt-3 text-sm text-white/80">{event.venueLabel}</p> : null}
-              </div>
-            </div>
-          </div>
-        </section>
+        <EventPublicHero
+          bannerStyle={bannerStyle}
+          canHost={canHost === true}
+          event={event}
+          eventPath={eventPath}
+          onReport={() => setReportOpen(true)}
+        />
 
         {event.source.sourceType === "contributor" ? <p className="text-sm text-muted">{event.source.label}</p> : null}
         <EventContributionControls eventId={event.id} reportOpen={reportOpen} onReportClose={() => setReportOpen(false)} />
-        <section className={cn(styles.media, "grid items-start gap-4 lg:grid-cols-[0.9fr_1.1fr]")}>
+        <section className={cn(styles.media, "grid grid-cols-[minmax(0,1fr)] items-start gap-4")}>
           <div className={styles.watch}><EventWatchForEvent event={event} /></div>
-          <div className={cn(styles.poster, "lg:sticky lg:top-6")}>
-            {event.posterImageUrl ? (
+          {event.posterImageUrl ? (
+            <div className={cn(styles.poster, "lg:sticky lg:top-6")}>
               <a href={event.posterImageUrl} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-card border border-border bg-surface">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={event.posterImageUrl} alt={event.title + " poster"} className="h-auto w-full object-contain" />
               </a>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
 
           <Card className={styles.details} surface="white">
             <div className="grid gap-3 text-sm">
@@ -444,10 +409,11 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
           </Card>
         ) : null}
 
-        <Card surface="white">
-          <Eyebrow>Links</Eyebrow>
-          <div className="mt-4 grid gap-3">
-              {event.seriesId && event.communitySlug ? <Link className={actionCardVariants({ variant: "accent" })} href={`/${event.communitySlug}/series/${event.seriesId}`}>
+        {seriesPath || sourceUrl || publicLinks.length > 0 ? (
+          <Card surface="white">
+            <Eyebrow>Links</Eyebrow>
+            <div className="mt-4 grid gap-3">
+              {seriesPath ? <Link className={actionCardVariants({ variant: "accent" })} href={seriesPath}>
                 <span className={actionLabelClassName}>Upcoming nights</span>
               </Link> : null}
               {sourceUrl ? (
@@ -458,7 +424,7 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
                   <span className={actionMetaClassName}>Reference link</span>
                 </a>
               ) : null}
-              {event.mediaLinks.filter(link => parseVrcdnStreamLinks(link.url) === null).map((link) => link.presentation === "copy" ? (
+              {publicLinks.map((link) => link.presentation === "copy" ? (
                 <CopyValueRow compact key={`${link.type}-${link.url}`} label={link.label} value={link.url} />
               ) : (
                 <a className={actionCardVariants({ variant: "accent" })} href={link.url} key={`${link.type}-${link.url}`} rel="noreferrer" target="_blank">
@@ -470,8 +436,9 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
                   </span>
                 </a>
               ))}
-          </div>
-        </Card>
+            </div>
+          </Card>
+        ) : null}
       </PageContainer>
     </PageShell>
   );
