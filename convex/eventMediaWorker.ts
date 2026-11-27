@@ -5,7 +5,7 @@ import { recordResourceSnapshot, computeRuntimeValidator, trustedComputeRuntime 
 import {assertWorkerProtocol,beginControlPreparation,promoteControlOperation,completeControlOperation,controlFence,coherentEvidence,writeControlObservation,broadcastModeForIntent,isCut,isControl,settleControl,supersedePending} from "./_eventBroadcastControl";
 import {controlTargetValidator,controlResultValidator,controlFailureValidator} from "./_eventMediaControl";
 import { parseMediaSettings, resolveDestinationProfile } from "../workers/restream/broadcast-profiles.mjs";
-import { eventProfileBroadcastInputChoices, resolveBroadcastInput, broadcastInputPublicUrl, eventMediaSourceWorkerDescriptor } from "./_eventBroadcastSources";
+import { assignedEventMediaSource, eventProfileBroadcastInputChoices, resolveBroadcastInput, broadcastInputPublicUrl, eventMediaSourceWorkerDescriptor } from "./_eventBroadcastSources";
 import { outputHealthValidator, eventOutputIsAuthorized } from './_eventOutputSetup';
 import { canReadProfile } from "./_profilePermissions";
 import { v } from "convex/values";
@@ -385,10 +385,11 @@ async function configuration(ctx: MutationCtx, { session, program, event }: NonN
         throw new Error("Event schedule exceeds worker limits.");
     const slots = [];
     for (const slot of authored) {
+        const assigned = await assignedEventMediaSource(ctx.db, program._id, slot);
         let source = await ctx.db.query("eventMediaSources").withIndex("by_programId_key", q => q.eq("programId", program._id).eq("key", `slot-${slot._id}`)).first();
         if (slot.personProfileId) {
             const profile = await ctx.db.get(slot.personProfileId);
-            const input = profile && canReadProfile("public", profile) ? resolveBroadcastInput({ choices: eventProfileBroadcastInputChoices(profile), explicitInput: slot.broadcastInput, legacySelectedStreamId: slot.selectedStreamId }) : undefined;
+            const input = !assigned && profile && canReadProfile("public", profile) ? resolveBroadcastInput({ choices: eventProfileBroadcastInputChoices(profile), explicitInput: slot.broadcastInput, legacySelectedStreamId: slot.selectedStreamId }) : undefined;
             const publicUrl = input ? broadcastInputPublicUrl(input) : undefined;
             if (input && !source) {
                 const id = await ctx.db.insert("eventMediaSources", { programId: program._id, eventId: event._id, key: `slot-${slot._id}`, position: slot.position, type: input.kind === "vrcdn" ? "vrcdn_link" : "twitch_watch", input, revision: 1, purpose: "program", state: "ready", label: slot.displayLabel, eventSlotId: slot._id, sourceProfileId: slot.personProfileId, profileProjection: true, projectionAvailable: true, publicUrl, createdAt: Date.now(), updatedAt: Date.now() });
@@ -405,7 +406,8 @@ async function configuration(ctx: MutationCtx, { session, program, event }: NonN
             source = null;
         }
         if (!source && !slot.personProfileId)
-            source = (await ctx.db.query("eventMediaSources").withIndex("by_programId_eventSlotId", q => q.eq("programId", program._id).eq("eventSlotId", slot._id)).take(EVENT_BROADCAST_MAX_SOURCES + 1)).find(s => s.eventSlotId === slot._id && !s.profileProjection && !(s.sourceProfileId && s.key === `slot-${slot._id}`)) ?? null;
+            source = (await ctx.db.query("eventMediaSources").withIndex("by_programId_eventSlotId", q => q.eq("programId", program._id).eq("eventSlotId", slot._id)).take(EVENT_BROADCAST_MAX_SOURCES + 1)).find(s => s.eventSlotId === slot._id && !s.profileProjection && s.state !== "disabled" && s.projectionAvailable !== false && !(s.sourceProfileId && s.key === `slot-${slot._id}`)) ?? null;
+        source = assigned ?? source;
         slots.push({ slotKey: slot._id, sourceId: source?._id, startAt: slot.startAt, endAt: slot.endAt, available: source !== null && source.state !== "disabled" && source.projectionAvailable !== false && eventMediaSourceWorkerDescriptor(source) !== undefined });
     }
     // Index each current slot plus unbound manual sources. Detached projections

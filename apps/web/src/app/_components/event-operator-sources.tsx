@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FunctionArgs } from "convex/server";
 import type { api } from "@convex-generated-api";
 import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/field";
+import { Field, Input, Select } from "@/components/ui/field";
 import { CopyValueRow } from "@/components/ui/copy-value-row";
 import {
   operatorStatusWindow,
@@ -21,6 +21,7 @@ export type SourceAuthoring = Omit<
   FunctionArgs<typeof api.eventMediaSources.create>,
   "currentSlug"
 >;
+export type LineupAssignment = Omit<FunctionArgs<typeof api.eventMediaSources.assignToSlot>, "currentSlug">;
 export type SourcesControl = {
   status: OperatorStatus;
   canTake: boolean;
@@ -37,6 +38,7 @@ export function EventOperatorSources({
   onCancel,
   onRemove,
   onCreate,
+  onAssign,
   onReplace,
 }: {
   sources: OperatorStatus["sources"];
@@ -46,6 +48,7 @@ export function EventOperatorSources({
   onCancel: () => void;
   onRemove: (source: OperatorSource) => Promise<unknown>;
   onCreate: (input: SourceAuthoring) => Promise<unknown>;
+  onAssign?: (input: LineupAssignment) => Promise<unknown>;
   onReplace: (
     source: OperatorSource,
     input: SourceAuthoring,
@@ -58,6 +61,10 @@ export function EventOperatorSources({
     [url, setUrl] = useState(""),
     [busy, setBusy] = useState(false),
     [failed, setFailed] = useState(false);
+  const [slotId, setSlotId] = useState<LineupAssignment["slotId"]>();
+  const [lineupInput, setLineupInput] = useState<LineupAssignment["sourceId"]>();
+  const assigned = sources.find(source => source.eventSlotId === slotId && source.key.startsWith("override-"));
+  const assignable = sources.filter(source => source.assignable);
   const lock = useRef(false);
   const [observations, setObservations] = useState<
     Record<string, SourceObservation>
@@ -312,6 +319,40 @@ export function EventOperatorSources({
           </div>
         </fieldset>
       </details>
+      {onAssign && control.status.lineupSlots?.length > 0 && (assignable.length > 0 || sources.some(source => source.key.startsWith("override-"))) ? (
+        <details>
+          <summary className="cursor-pointer text-sm">Assign lineup input</summary>
+          <fieldset disabled={!canControl || busy || control.status.outputConfigurationLocked} className="mt-4 grid gap-3 sm:grid-cols-2">
+            <Field>
+              Lineup slot
+              <Select value={slotId ?? ""} onChange={(event) => {
+                setSlotId(control.status.lineupSlots.find(slot => slot.id === event.target.value)?.id);
+                setLineupInput(undefined);
+              }}>
+                <option value="">Choose a slot</option>
+                {control.status.lineupSlots.map(slot => <option key={slot.id} value={slot.id}>{slot.label} · {new Date(slot.startAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</option>)}
+              </Select>
+            </Field>
+            <Field>
+              Saved input
+              <Select disabled={!slotId} value={lineupInput === null ? "automatic" : lineupInput ?? ""} onChange={(event) => setLineupInput(event.target.value === "automatic" ? null : assignable.find(source => source.sourceId === event.target.value)?.sourceId)}>
+                <option value="">Choose an input</option>
+                <option value="automatic">Automatic</option>
+                {assignable.map(source => <option key={source.sourceId} value={source.sourceId}>{source.label}</option>)}
+              </Select>
+            </Field>
+            {assigned?.publicUrl ? <a className="text-sm text-accent" href={assigned.publicUrl}>{assigned.publicUrl}</a> : null}
+            <div>
+              <Button variant="secondary" disabled={!slotId || lineupInput === undefined || (lineupInput === null && !assigned)} onClick={() => {
+                if (slotId && lineupInput !== undefined) void save(async () => {
+                  await onAssign({ slotId, sourceId: lineupInput });
+                  setLineupInput(undefined);
+                });
+              }}>Save assignment</Button>
+            </div>
+          </fieldset>
+        </details>
+      ) : null}
       {failed ? <p role="status">Save failed</p> : null}
     </section>
   );

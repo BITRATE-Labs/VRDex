@@ -4,9 +4,9 @@ import { internalMutation, mutation, type MutationCtx } from "./_generated/serve
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { requireActiveBrowserSessionSubject } from "./_browserSessionAuthority";
-import { getMediaManageableEventBySlug, getOrCreateEventMediaProgram, recordEventMediaAuditEvent } from "./events";
+import { eventOutputConfigurationLocked, getLatestEventMediaProgram, getMediaManageableEventBySlug, getOrCreateEventMediaProgram, recordEventMediaAuditEvent } from "./events";
 import { EVENT_BROADCAST_MAX_SOURCES } from "./_eventBroadcastInputs";
-import { parseBroadcastInputUrl, broadcastInputPublicUrl, listUsableEventMediaSources } from "./_eventBroadcastSources";
+import { eventMediaSourceBroadcastInput, parseBroadcastInputUrl, broadcastInputPublicUrl, listUsableEventMediaSources } from "./_eventBroadcastSources";
 import { normalizeProfileInlineText } from "./_profileSubmissions";
 
 function sourceLabel(value: string): string {
@@ -68,6 +68,56 @@ async function insertSource(ctx: MutationCtx, args: { currentSlug: string; label
 }
 
 export const create = mutation({ args: { currentSlug: v.string(), label: v.string(), url: v.string(), idempotencyKey:v.optional(v.string()), temporary:v.optional(v.boolean()) }, handler: insertSource });
+export const assignToSlot = mutation({
+  args: {
+    currentSlug: v.string(),
+    slotId: v.id("eventSlots"),
+    sourceId: v.union(v.id("eventMediaSources"), v.null()),
+  },
+  handler: async (ctx, { currentSlug, slotId, sourceId }) => {
+    const { subject: actor } = await requireActiveBrowserSessionSubject(ctx);
+    const { event } = await getMediaManageableEventBySlug(ctx, currentSlug, actor);
+    const program = await getLatestEventMediaProgram(ctx.db, event._id);
+    const slot = await ctx.db.get(slotId);
+    if (!program || slot?.eventId !== event._id) throw Error("Lineup slot was not found.");
+    if (await eventOutputConfigurationLocked(ctx.db, program)) throw Error("Stop the broadcast before assigning a lineup input.");
+
+    const key = `override-${slotId}`;
+    const existing = await ctx.db.query("eventMediaSources")
+      .withIndex("by_programId_key", q => q.eq("programId", program._id).eq("key", key)).unique();
+    const now = Date.now();
+    if (sourceId === null) {
+      if (!existing || existing.state === "disabled") return;
+      await ctx.db.patch(existing._id, { state: "disabled", updatedAt: now });
+      await recordEventMediaAuditEvent(ctx.db, { programId: program._id, eventId: event._id, sourceId: existing._id, actor, action: "lineup_input_cleared", createdAt: now });
+      return;
+    }
+
+    const source = await ctx.db.get(sourceId);
+    const input = source && eventMediaSourceBroadcastInput(source);
+    if (!source || !input || source.eventId !== event._id || source.programId !== program._id ||
+        source.state === "disabled" || source.temporaryExpiresAt !== undefined || source.eventSlotId !== undefined ||
+        source.profileProjection || source.sourceProfileId !== undefined) {
+      throw Error("Choose a saved input for this event.");
+    }
+    if ((!existing || existing.state === "disabled") &&
+        (await listUsableEventMediaSources(ctx.db, program._id, EVENT_BROADCAST_MAX_SOURCES)).length >= EVENT_BROADCAST_MAX_SOURCES) {
+      throw Error("Event broadcast source limit reached.");
+    }
+    const assignment = {
+      eventSlotId: slotId, position: slot.position, label: slot.displayLabel,
+      type: source.type, purpose: "program" as const, state: "ready" as const,
+      input, publicUrl: broadcastInputPublicUrl(input), updatedAt: now,
+      revision: existing ? (existing.revision ?? 1) + 1 : 1,
+    };
+    if (existing) await ctx.db.patch(existing._id, assignment);
+    const assignedId = existing?._id ?? await ctx.db.insert("eventMediaSources", {
+      ...assignment, key, eventId: event._id, programId: program._id, createdAt: now,
+    });
+    await recordEventMediaAuditEvent(ctx.db, { programId: program._id, eventId: event._id, sourceId: assignedId, actor, action: "lineup_input_assigned", createdAt: now });
+  },
+});
+
 export const expireTemporary = internalMutation({
   args: { sourceId: v.id("eventMediaSources") },
   handler: async (ctx, { sourceId }) => {

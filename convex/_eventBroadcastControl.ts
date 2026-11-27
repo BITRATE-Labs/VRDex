@@ -9,7 +9,7 @@ import type {
 } from "./_eventMediaControl";
 import { allocateSessionCommandSequence } from "./_eventBroadcastInputs";
 import { canManageEventMedia } from "./_eventBroadcastAuthority";
-import { eventMediaSourceWorkerDescriptor, eventMediaSourceProjectionAvailable } from "./_eventBroadcastSources";
+import { assignedEventMediaSource, eventMediaSourceWorkerDescriptor, eventMediaSourceProjectionAvailable } from "./_eventBroadcastSources";
 import { eventOutputIsAuthorized } from "./_eventOutputSetup";
 
 type Session = Doc<"eventMediaSessions">;
@@ -115,7 +115,7 @@ async function sourceForSlot(
 ) {
   // Match configuration's projection/manual distinction. A detached profile
   // projection must not hide the separate, authored manual source for a slot.
-  const source = slot.personProfileId
+  const source = (await assignedEventMediaSource(db, session.programId, slot)) ?? (slot.personProfileId
     ? await db
         .query("eventMediaSources")
         .withIndex("by_programId_key", (q) =>
@@ -135,7 +135,7 @@ async function sourceForSlot(
           !(s.sourceProfileId && s.key === `slot-${slot._id}`) &&
           s.state !== "disabled" &&
           s.projectionAvailable !== false,
-      );
+      ));
   return source &&
     (await availableSource(db, session, sourceTarget(source, "automatic")))
     ? source

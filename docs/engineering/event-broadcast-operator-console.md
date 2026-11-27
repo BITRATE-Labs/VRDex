@@ -103,6 +103,8 @@ new programs default to 320 and legacy programs remain 160. Twitch is always
 160-kbps stereo/48-kHz AAC. Active session settings remain immutable while saved
 settings apply on the next start.
 
+In Broadcast controls, **Assign lineup input** sets a timed slot to a saved event input while the broadcast is stopped. The assignment takes precedence over the performer's profile input and works for unlinked performers. The same feed can be assigned to multiple slots. Each assignment keeps the URL selected when it was saved. Choose **Automatic** to clear it and restore the profile fallback.
+
 The editor's Broadcast input field is separate from performer-sequence Stream.
 It uses `getPersonBroadcastInputChoices({personSlug})`, preserves unavailable
 explicit inputs, and emits null only for an explicit reset. Untimed conversion,

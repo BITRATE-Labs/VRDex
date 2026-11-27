@@ -213,6 +213,54 @@ test("worker configuration derives canonical inputs, positive revisions and publ
   assert.equal(again.configuration.sources.find((source: { id: string }) => source.id === projected.id).revision, 1);
 });
 
+test("a saved event feed can drive multiple timed slots and override the performer profile", async () => {
+  const { t, owner, event } = await fixture();
+  const currentSlug = event.slug;
+  await owner.mutation(api.events.updateCommunityEvent, {
+    currentSlug, communitySlug: "club", lineup: [
+      { clientKey: "guest", position: 0, performerLabel: "Guest", personSlug: "guest", startAt, endAt: startAt + 3600000, broadcastInput: input },
+      { clientKey: "manual", position: 1, performerLabel: "Manual guest", startAt: startAt + 3600000, endAt: startAt + 7200000 },
+    ],
+  });
+  const shared = await owner.mutation(api.eventMediaSources.create, { currentSlug, label: "Shared", url: "vrcdn:bean" });
+  const status = await owner.query(api.events.getEventMediaControlStatus, { currentSlug });
+  const [guest, manual] = status.lineupSlots;
+  const assign = (slotId: typeof guest.id, sourceId: typeof shared.sourceId | null) =>
+    owner.mutation(api.eventMediaSources.assignToSlot, { currentSlug, slotId, sourceId });
+  const outsider = t.withIdentity({ subject: newClerkUserId(), issuer: "test", emailVerified: true });
+  await assert.rejects(outsider.mutation(api.eventMediaSources.assignToSlot, { currentSlug, slotId: guest.id, sourceId: shared.sourceId }));
+  await assign(guest.id, shared.sourceId);
+  await assign(manual.id, shared.sourceId);
+  await assign(guest.id, null);
+  const cleared = await owner.query(api.events.getEventMediaControlStatus, { currentSlug });
+  assert.equal(cleared.sources.some(source => source.eventSlotId === guest.id), false);
+  await assign(guest.id, shared.sourceId);
+
+  const club = await t.run(ctx => ctx.db.query("profiles").withIndex("by_slug", q => q.eq("slug", "club")).unique());
+  bindVrcdnTestAccount(club!._id, "event-media/vrcdn/main");
+  await owner.mutation(api.events.configureVrcdnOutput, {
+    currentSlug, key: "main", label: "Main", credentialRef: "event-media/vrcdn/main",
+    sourceConsentAccepted: true, destinationAuthorityAccepted: true, providerRulesAccepted: true,
+    rightsClearedMediaAccepted: true, playbackLinks: [{ platform: "browser", url: "https://example.test/watch" }],
+  });
+  const scheduled = await owner.mutation(api.events.scheduleEventMediaWorker, { currentSlug });
+  await assert.rejects(assign(guest.id, null), /Stop the broadcast/);
+  await t.run(ctx => ctx.db.patch(scheduled.sessionId, { scheduledStartAt: Date.now() - 1000 }));
+  process.env.VRDEX_EVENT_MEDIA_BRIDGE_TOKEN = "sources-test-bridge";
+  const lease = await t.mutation(makeFunctionReference<"mutation">("eventMediaWorker:acquireSession"), {
+    protocolVersion: 2, bridgeToken: "sources-test-bridge", eventId: event.eventId,
+    sessionId: scheduled.sessionId, workerId: "sources-worker", epoch: 0,
+  });
+  assert.equal(lease.granted, true);
+  for (const slotId of [guest.id, manual.id]) {
+    const slot = lease.configuration.slots.find((entry: { slotKey: string }) => entry.slotKey === slotId);
+    assert.equal(slot.available, true);
+    const source = lease.configuration.sources.find((entry: { id: string }) => entry.id === slot.sourceId);
+    assert.equal(source.eventSlotId, slotId);
+    assert.deepEqual(source.input, { kind: "vrcdn", streamId: "bean" });
+  }
+});
+
 test("legacy API slot writes preserve omitted broadcast choices without browser snapshot IDs", async () => {
   const { t, owner, event } = await fixture();
   const row = { displayLabel: "Guest", personSlug: "guest", startAt };

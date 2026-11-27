@@ -2507,7 +2507,10 @@ export const getEventMediaControlStatus = query({
       .query("eventSlots")
       .withIndex("by_eventId_startAt", (query) => query.eq("eventId", event._id))
       .take(100);
-    const slotState = findEventOperationSlots(slots, args.now ?? Date.now());
+    const slotState = {
+      ...findEventOperationSlots(slots, args.now ?? Date.now()),
+      lineupSlots: slots.map(slot => ({ id: slot._id, label: slot.displayLabel, startAt: slot.startAt })),
+    };
 
     if (program === null) {
       return {
@@ -2589,6 +2592,7 @@ export const getEventMediaControlStatus = query({
             type: source.type,
             input,
             revision: source.revision ?? 1,
+            assignable: !source.profileProjection && !source.sourceProfileId && !source.eventSlotId && source.temporaryExpiresAt === undefined && input !== undefined,
             editable: !source.profileProjection && !source.sourceProfileId && !source.eventSlotId && source.state !== "disabled",
             publicUrl: input ? broadcastInputPublicUrl(input) : undefined,
             purpose: source.purpose,
