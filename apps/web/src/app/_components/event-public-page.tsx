@@ -268,7 +268,7 @@ export function EventPreviewCard({
               </span>
             ) : dateTime}
             {event.startAt !== undefined && event.doorsOpenAt !== undefined && event.doorsOpenAt < event.startAt ? (
-              <span className={compactWithoutArtwork ? "border-s border-border-strong ps-3" : undefined}>
+              <span className={compactWithoutArtwork ? "sm:border-s sm:border-border-strong sm:ps-3" : undefined}>
                 Doors <ViewerLocalEventTime timestamp={event.doorsOpenAt} />
               </span>
             ) : null}
