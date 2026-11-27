@@ -295,6 +295,39 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
     && !hasPlatforms && world.media.length === 0;
   const hasLaunchDetails = hasPlatforms && Boolean(canonicalWorldUrl);
   const heroMetaClassName = heroImageUrl ? "text-white/76" : "text-muted";
+  const platformDetails = (
+    <div>
+      <dt className={cn(
+        isSparse ? "font-medium" : heroMetaClassName,
+        hasLaunchDetails && "max-sm:font-medium max-sm:text-inherit",
+      )}>Platforms</dt>
+      <dd className={cn("mt-1", isSparse ? "font-semibold" : "font-medium")}>
+        {hasPlatforms ? <PillList items={world.platformCompatibility.map(platformLabel)} onArtwork={Boolean(heroImageUrl)} /> : "Unknown"}
+      </dd>
+    </div>
+  );
+  const visibilityDetails = (
+    <div className={cn(isSparse && "flex flex-wrap items-baseline gap-x-3 gap-y-1 sm:block")}>
+      <dt className={heroMetaClassName}>{isSparse ? "World visibility" : "Visibility"}</dt>
+      <dd className={cn("font-medium", isSparse ? "sm:mt-1" : "mt-1")}>{visibilityLabel(world.visibilityStatus)}</dd>
+    </div>
+  );
+  const launchAction = canonicalWorldUrl ? (
+    <a
+      className={cn(
+        buttonVariants({ variant: "primary" }),
+        hasLaunchDetails ? "mt-3 max-sm:min-h-11 sm:col-span-2 sm:row-start-4 sm:mt-5 sm:justify-self-start" : "mt-5",
+        heroImageUrl
+          ? "focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-media"
+          : "focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-strong",
+      )}
+      href={canonicalWorldUrl}
+      rel="noreferrer"
+      target="_blank"
+    >
+      Open VRChat world
+    </a>
+  ) : null;
 
   return (
     <PageShell tone="world">
@@ -309,59 +342,47 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
             heroImageUrl && "grid items-center gap-6 lg:grid-cols-[1.1fr_1fr] lg:p-10",
             hasLaunchDetails && "max-sm:p-4",
           )}>
-            <div className="min-w-0">
+            <div className={cn("min-w-0", hasLaunchDetails && "sm:grid sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-x-6")}>
               <h1 className={cn(
                 "font-semibold leading-none tracking-[-0.05em] [overflow-wrap:anywhere]",
                 heroImageUrl ? "text-5xl sm:text-7xl" : "text-4xl sm:text-5xl",
+                hasLaunchDetails && "sm:col-span-2 sm:row-start-1",
+                hasLaunchDetails && heroImageUrl && "max-sm:text-[2.625rem]",
               )}>{world.displayName}</h1>
+              {hasLaunchDetails ? (
+                <div className="mt-4 sm:contents">
+                  <dl className="text-sm sm:col-start-2 sm:row-start-3 sm:mt-5">{platformDetails}</dl>
+                  {launchAction}
+                </div>
+              ) : null}
               {!isSparse && world.summary ? <p className={cn(
                 "mt-4 max-w-2xl text-base leading-7 sm:text-lg",
-                hasLaunchDetails && "max-sm:mt-3 max-sm:leading-6",
+                hasLaunchDetails && "max-sm:leading-6 sm:col-span-2 sm:row-start-2",
                 heroImageUrl ? "text-white/82" : "text-muted",
               )}>{world.summary}</p> : null}
-              <dl className={cn(
-                "mt-5 flex flex-wrap items-start gap-x-6 gap-y-3 text-sm",
-                isSparse && "grid grid-cols-2 border-t border-border-strong pt-4 sm:mt-7 sm:grid-cols-3 sm:pt-5",
-                hasLaunchDetails && "max-sm:mt-4 max-sm:gap-x-3",
-              )}>
-                {hasPlatforms || isSparse ? (
-                  <div>
-                    <dt className={hasLaunchDetails ? cn(heroMetaClassName, "max-sm:font-medium max-sm:text-inherit") : heroMetaClassName}>Platforms</dt>
-                    <dd className="mt-1 font-medium">
-                      {hasPlatforms ? (
-                        <PillList items={world.platformCompatibility.map(platformLabel)} onArtwork={Boolean(heroImageUrl)} />
-                      ) : "Unknown"}
-                    </dd>
-                  </div>
-                ) : null}
-                {isSparse ? (
-                  <div>
-                    <dt className={heroMetaClassName}>VRChat link</dt>
-                    <dd className="mt-1 font-medium">Not listed</dd>
-                  </div>
-                ) : null}
-                <div className={cn(!isSparse && (hasLaunchDetails ? "sm:-order-1" : "-order-1"))}>
-                  <dt className={heroMetaClassName}>{isSparse ? "World visibility" : "Visibility"}</dt>
-                  <dd className="mt-1 font-medium">{visibilityLabel(world.visibilityStatus)}</dd>
+              {isSparse ? (
+                <div className="mt-5 text-sm sm:mt-7 sm:grid sm:grid-cols-[2fr_1fr] sm:items-center sm:gap-6">
+                  <dl className="grid grid-cols-2 gap-3 rounded-card border border-border bg-surface px-3 py-3 sm:px-4">
+                    {platformDetails}
+                    <div>
+                      <dt className="font-medium">VRChat link</dt>
+                      <dd className="mt-1 font-semibold">Not listed</dd>
+                    </div>
+                  </dl>
+                  <dl className="mt-3 border-t border-border pt-3 sm:mt-0 sm:border-t-0 sm:pt-0">
+                    {visibilityDetails}
+                  </dl>
                 </div>
-              </dl>
-              {canonicalWorldUrl ? (
-                <a
-                  className={cn(
-                    buttonVariants({ variant: "primary" }),
-                    "mt-5",
-                    hasLaunchDetails && "max-sm:mt-4 max-sm:min-h-11",
-                    heroImageUrl
-                      ? "focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-media"
-                      : "focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-strong",
-                  )}
-                  href={canonicalWorldUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Open VRChat world
-                </a>
-              ) : null}
+              ) : (
+                <dl className={cn(
+                  "flex flex-wrap items-start gap-x-6 gap-y-3 text-sm",
+                  hasLaunchDetails ? "mt-3 sm:col-start-1 sm:row-start-3 sm:mt-5" : "mt-5",
+                )}>
+                  {visibilityDetails}
+                  {hasPlatforms && !hasLaunchDetails ? platformDetails : null}
+                </dl>
+              )}
+              {hasLaunchDetails ? null : launchAction}
             </div>
             {heroImageUrl ? (
               <EntityImage label={world.displayName} src={heroImageUrl} className="aspect-video w-full rounded-card border border-white/20 text-4xl" sizes="(min-width: 1024px) 45vw, 100vw" priority />

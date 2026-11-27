@@ -35,7 +35,11 @@ test("world puts the single VRChat destination before hero artwork on phones", a
   expect(response?.status()).toBe(200);
 
   const main = page.getByRole("main");
+  const title = main.getByRole("heading", { name: "Neon Harbor", exact: true });
   const openWorld = main.getByRole("link", { name: "Open VRChat world", exact: true });
+  const platforms = main.getByText("Platforms", { exact: true });
+  const summary = main.getByText(/Cyberpunk harbor club world/);
+  const visibility = main.getByText("Visibility", { exact: true });
   const artwork = main.getByRole("img", { name: "Neon Harbor", exact: true });
   await expect(openWorld).toHaveAttribute("href", neonHarborWorldUrl);
   await expect(openWorld).toHaveAttribute("target", "_blank");
@@ -46,15 +50,31 @@ test("world puts the single VRChat destination before hero artwork on phones", a
   for (const width of [320, 412]) {
     await page.setViewportSize({ width, height: 720 });
     await expect(openWorld).toBeInViewport({ ratio: 1 });
-    const [action, image] = await Promise.all([openWorld.boundingBox(), artwork.boundingBox()]);
-    const platform = await main.getByText("Android / Quest", { exact: true }).boundingBox();
-    if (!action || !image || !platform) throw new Error("Missing world hero bounds");
+    const [heading, label, platform, action, intro, status, image] = await Promise.all([
+      title.boundingBox(), platforms.boundingBox(), main.getByText("Android / Quest", { exact: true }).boundingBox(),
+      openWorld.boundingBox(), summary.boundingBox(), visibility.boundingBox(), artwork.boundingBox(),
+    ]);
+    if (!heading || !label || !platform || !action || !intro || !status || !image) throw new Error("Missing world hero bounds");
+    const titleGap = label.y - heading.y - heading.height;
+    expect(titleGap).toBeGreaterThanOrEqual(0);
+    expect(titleGap).toBeLessThanOrEqual(20);
+    expect(action.y + action.height).toBeLessThan(intro.y);
+    expect(intro.y + intro.height).toBeLessThan(status.y);
     expect(action.y + action.height).toBeLessThan(image.y);
     const platformGap = action.y - platform.y - platform.height;
     expect(platformGap).toBeGreaterThanOrEqual(0);
     expect(platformGap).toBeLessThanOrEqual(20);
     expect(action.height).toBeGreaterThanOrEqual(44);
   }
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const [intro, label, status, action] = await Promise.all([
+    summary.boundingBox(), platforms.boundingBox(), visibility.boundingBox(), openWorld.boundingBox(),
+  ]);
+  if (!intro || !label || !status || !action) throw new Error("Missing desktop world hero bounds");
+  expect(intro.y + intro.height).toBeLessThan(label.y);
+  expect(status.y).toBeCloseTo(label.y, 0);
+  expect(label.y + label.height).toBeLessThan(action.y);
 });
 
 test("world retains a reference destination when it differs or stands alone", async ({ page }) => {
@@ -84,6 +104,8 @@ test("sparse world renders real identity without fabricating a destination", asy
   await expect(main.getByText("VRChat link", { exact: true })).toBeVisible();
   await expect(main.getByText("Not listed", { exact: true })).toBeVisible();
   const platforms = main.locator("dl > div").filter({ has: page.getByText("Platforms", { exact: true }) });
+  const destination = main.locator("dl > div").filter({ has: page.getByText("VRChat link", { exact: true }) });
+  const visibility = main.locator("dl > div").filter({ has: page.getByText("World visibility", { exact: true }) });
   await expect(platforms.getByText("Unknown", { exact: true })).toBeVisible();
   const record = main.locator("section");
   for (const width of [320, 1280]) {
@@ -93,6 +115,18 @@ test("sparse world renders real identity without fabricating a destination", asy
     if (!shell || !card) throw new Error("Missing sparse world bounds");
     expect(card.y - shell.y).toBeGreaterThanOrEqual(24);
     expect(card.y - shell.y).toBeLessThanOrEqual(40);
+
+    const [platform, link, status] = await Promise.all([
+      platforms.boundingBox(), destination.boundingBox(), visibility.boundingBox(),
+    ]);
+    if (!platform || !link || !status) throw new Error("Missing sparse world metadata bounds");
+    expect(link.y).toBeCloseTo(platform.y, 0);
+    expect(link.x).toBeGreaterThan(platform.x);
+    if (width === 320) {
+      expect(status.y).toBeGreaterThan(Math.max(platform.y + platform.height, link.y + link.height));
+    } else {
+      expect(status.x).toBeGreaterThan(link.x + link.width);
+    }
   }
   await expect(main.getByText("Public", { exact: true })).toBeVisible();
   await expect(main.getByRole("img", { name: "Lantern Cove", exact: true })).toHaveCount(0);
