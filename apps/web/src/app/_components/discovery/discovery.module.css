@@ -44,6 +44,30 @@
     grid-template-columns: minmax(0, calc(512px + var(--card-gap)));
     justify-content: center;
   }
+  .groups[data-single-event-with-clubs] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: min(100%, 728px);
+    margin-inline: auto;
+  }
+  .groups[data-single-event-with-clubs] > div:last-child {
+    grid-column: span 2;
+  }
+  .groups[data-single-event-with-clubs] .cards:not(.clubRail) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .groups[data-single-event-with-clubs] .eventMetadata {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .groups[data-single-event-with-clubs] .eventMetadata > .name {
+    grid-column: 1 / -1;
+  }
+  .groups[data-single-event-with-clubs] .eventMetadata > .save {
+    grid-area: 3 / 1;
+    justify-self: start;
+  }
+  .groups[data-single-event-with-clubs] .favoriteSummary {
+    grid-area: 3 / 2;
+  }
 }
 @media (width > 880px) {
   .groups[data-empty-group="events"] {
