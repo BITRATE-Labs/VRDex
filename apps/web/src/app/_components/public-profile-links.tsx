@@ -217,7 +217,7 @@ function CopyableUrlBar({
           {value.split(/(?<=[^:/]\/)(?=[^/])/).map((part, index) => (
             <Fragment key={index}>
               {index > 0 && <wbr />}
-              {part}
+              <span>{part}</span>
             </Fragment>
           ))}
         </code>

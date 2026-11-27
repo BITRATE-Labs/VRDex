@@ -104,6 +104,12 @@
     grid-area: value;
   }
 
+  .linksPanel :global(.lookup-primary-url-value--wrapped > span) {
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: top;
+  }
+
   .linksPanel :global(.lookup-vrcdn-group .lookup-primary-url-copy) {
     grid-area: copy;
     width: 100%;
