@@ -143,6 +143,9 @@ test("an artless occurrence on a sparse profile uses its theme colors @fixture",
 });
 
 test("populated person profiles give visitors keyboard shortcuts before ownership actions @fixture", async ({ page }) => {
+  await page.route("**/api/profile-live/playwright-dj-aurora/vrcdn*", route => route.fulfill({
+    json: { states: { "dj-aurora": "live", "suggested-aurora": "offline" } },
+  }));
   await page.setViewportSize({ width: 320, height: 760 });
   expect((await page.goto("/playwright-dj-aurora"))?.status()).toBe(200);
 
@@ -197,6 +200,23 @@ test("populated person profiles give visitors keyboard shortcuts before ownershi
     document.getElementById("profile-worlds")!.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING,
   ))).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const links = page.getByRole("heading", { name: "Links", exact: true }).locator("xpath=ancestor::section[1]");
+  const streams = page.getByRole("complementary", { name: "VRCDN", exact: true });
+  const events = page.getByRole("heading", { name: "Upcoming events", exact: true });
+  await expect(events).toHaveCount(1);
+  const [linkBounds, streamBounds, eventBounds] = await Promise.all([
+    links.boundingBox(), streams.boundingBox(), events.boundingBox(),
+  ]);
+  if (!linkBounds || !streamBounds || !eventBounds) throw new Error("Missing desktop profile section bounds");
+  expect(eventBounds.x).toBe(linkBounds.x);
+  expect(eventBounds.x + eventBounds.width).toBeLessThan(streamBounds.x);
+  expect(eventBounds.y).toBeGreaterThanOrEqual(linkBounds.y + linkBounds.height);
+  expect(eventBounds.y).toBeLessThan(streamBounds.y + streamBounds.height);
+  expect(await streams.evaluate((element) => Boolean(
+    element.compareDocumentPosition(document.getElementById("profile-events")!) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ))).toBe(true);
 });
 
 test("a sparse person profile puts its identity and ownership together @fixture", async ({ page }) => {
