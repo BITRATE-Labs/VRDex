@@ -3,7 +3,7 @@ import { inferLineupEnds } from "@vrdex/api-contracts";
 import { useQuery } from "convex/react";
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
-import { useId, useState } from "react";
+import { type CSSProperties, useId, useState } from "react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@convex-generated-api";
 import { EventContributionControls } from "../events/event-contribution-controls";
@@ -168,6 +168,7 @@ export type PublicEvent = Omit<PublicEventPreview, "worlds"> & {
 };
 
 const eventPosterOverlay = "linear-gradient(135deg, color-mix(in srgb, var(--media) 72%, transparent), color-mix(in srgb, var(--accent) 12%, transparent))";
+const watchArtScrim = "linear-gradient(180deg, rgb(0 0 0 / 36%), rgb(0 0 0 / 68%))";
 
 function safeHttpsUrl(url: string | undefined): string | null {
   if (!url) {
@@ -391,6 +392,8 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
   const canHost = useQuery(api.events.getHostAccess, event.communitySlug ? { slug: event.slug, communitySlug: event.communitySlug } : "skip");
   const lineup = eventLineupForDisplay(event);
   const bannerStyle = safeImageBackground(event.bannerImageUrl, eventPosterOverlay);
+  const watchArt = safeImageBackground(event.bannerImageUrl, watchArtScrim)
+    ?? safeImageBackground(event.posterImageUrl, watchArtScrim);
   const sourceUrl = safeHttpsUrl(event.source.url);
   const seriesPath = event.seriesId && event.communitySlug ? `/${event.communitySlug}/series/${event.seriesId}` : null;
   const publicLinks = event.mediaLinks.filter((link) => parseVrcdnStreamLinks(link.url) === null);
@@ -449,7 +452,12 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
         <div className={styles.eventBody}>
           <section className={cn(styles.media, "grid grid-cols-[minmax(0,1fr)] items-start gap-4")}>
             <div className={styles.lead}>
-              <div className={styles.watch}><EventWatchForEvent event={event} /></div>
+              <div
+                className={styles.watch}
+                style={watchArt ? { "--event-watch-art": watchArt.backgroundImage } as CSSProperties : undefined}
+              >
+                <EventWatchForEvent event={event} />
+              </div>
               {event.worlds.length > 0 || sourceUrl ? (
                 <div className={cn(styles.locationLinks, "flex flex-wrap gap-2")}>
                   {event.worlds.map((world) => (

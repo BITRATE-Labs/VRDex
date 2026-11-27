@@ -179,6 +179,10 @@ for (const timezoneId of ["UTC", "America/Los_Angeles"]) {
           const play = main.getByRole("button", { name: /^Play / });
           await expect(play.getByText("Play", { exact: true })).toBeVisible();
           await page.setViewportSize({ width: 320, height: 740 });
+          await expect(play.locator("[data-watch-play-poster]")).toHaveCSS(
+            "background-image",
+            /url\(.*fixture-afterglow-event-banner/,
+          );
           if (slug === watchSlug) {
             await actions.getByRole("link", { name: "Host view" }).hover();
             await expect(actions.getByRole("tooltip", { name: "Host view" })).toBeHidden();
@@ -264,6 +268,7 @@ test("desktop watch shares the media row with event details @flow @fixture", asy
   const host = main.getByRole("link", { name: /Afterglow Social.*Host/ });
   const lineup = main.getByRole("heading", { name: "Lineup", exact: true });
   await expect(stage).toBeVisible();
+  await expect(stage.locator("[data-watch-play-poster]")).not.toHaveCSS("background-image", /url\(/);
   await expect(host).toBeVisible();
   await poster.evaluate((image: HTMLImageElement) => image.decode());
   const [posterBox, stageBox, hostBox, lineupBox] = await Promise.all([
