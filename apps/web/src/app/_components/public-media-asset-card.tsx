@@ -72,10 +72,12 @@ export function PublicMediaAssetCardView({ asset, label, featured = false, compa
   const byteSize = asset.downloadByteSize ?? asset.byteSize;
   const size = byteSize === undefined ? null : byteSize >= 1024 * 1024 ? `${(byteSize / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(byteSize / 1024))} KB`;
   const hasHistory = publicDetailsSlug(asset) !== null;
-  const compact = compactOnMobile && !featured;
+  const tiled = !featured;
+  const compact = compactOnMobile && tiled;
   return <article id={`media-${asset.assetId}`} className={cn(
     "group grid min-w-0 scroll-mt-6 overflow-hidden rounded-card border border-border bg-surface-strong text-sm transition hover:-translate-y-0.5 hover:shadow-panel",
     featured && "lg:grid-cols-[18rem_minmax(0,1fr)]",
+    tiled && "sm:row-span-4 sm:grid-rows-subgrid sm:gap-y-0 sm:pb-4",
     compact && "max-sm:grid-cols-[8.5rem_minmax(0,1fr)] max-sm:items-start",
   )}>
     <div className={cn(
@@ -89,14 +91,17 @@ export function PublicMediaAssetCardView({ asset, label, featured = false, compa
         src={asset.imageUrl ?? ""}
       />
     </div>
-    <div className={cn("grid min-w-0 content-start p-4", compact && "max-sm:contents")}>
-      <div className={cn("grid min-w-0 gap-2", compact && "max-sm:py-3 max-sm:pr-3")}>
-        <h3 className={cn("break-words font-medium", featured && "text-xl")}>{title}</h3>
-        {asset.caption ? <p className="break-words leading-6 text-muted">{asset.caption}</p> : null}
-        <a aria-label={`Download ${title}`} className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "mt-2 w-fit")} download href={asset.downloadUrl}>Download</a>
+    <div className={cn("grid min-w-0 content-start p-4", tiled && "sm:contents", compact && "max-sm:contents")}>
+      <div className={cn("grid min-w-0 gap-2", tiled && "sm:contents", compact && "max-sm:py-3 max-sm:pr-3")}>
+        <div className={cn("contents", tiled && "sm:row-start-2 sm:grid sm:min-w-0 sm:content-start sm:gap-2 sm:px-4 sm:pt-4")}>
+          <h3 className={cn("break-words font-medium", featured && "text-xl")}>{title}</h3>
+          {asset.caption ? <p className="break-words leading-6 text-muted">{asset.caption}</p> : null}
+        </div>
+        <a aria-label={`Download ${title}`} className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "mt-2 w-fit", tiled && "sm:row-start-3 sm:mx-4 sm:mt-4 sm:self-start")} download href={asset.downloadUrl}>Download</a>
       </div>
       {hasHistory || mimeType || size || creditUrl ? <details className={cn(
         "mt-5 min-w-0 border-t border-border pt-3",
+        tiled && "sm:row-start-4 sm:mx-4 sm:self-start",
         compact && "max-sm:col-span-full max-sm:mx-3 max-sm:mt-0 max-sm:mb-3 max-sm:pt-2",
       )} open={open}>
         <summary onClick={onOpenChange ? event => { event.preventDefault(); onOpenChange(!open); } : undefined} className="cursor-pointer rounded-sm py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent">Details &amp; history</summary>

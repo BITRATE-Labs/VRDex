@@ -765,9 +765,30 @@ test("public profile media kit @visual @fixture", async ({ page }, testInfo) => 
   await expect(mediaKit.getByRole("img", { name: "Aurora wordmark" })).toHaveCount(1);
   const portrait = mediaKit.getByRole("heading", { name: "Aurora press portrait" }).locator("xpath=ancestor::article");
   const logo = mediaKit.getByRole("heading", { name: "Primary logo" }).locator("xpath=ancestor::article");
+  const desktopTiles = (page.viewportSize()?.width ?? 0) >= 1024;
+  const tileMetrics = () => mediaKit.locator("article").filter({
+    has: page.getByRole("heading", { name: /^(Primary logo|Square mark|Uncredited mark)$/ }),
+  }).evaluateAll(tiles => tiles.map(tile => {
+    const top = tile.getBoundingClientRect().top;
+    return {
+      preview: tile.firstElementChild?.getBoundingClientRect().height,
+      heading: (tile.querySelector("h3")?.getBoundingClientRect().top ?? NaN) - top,
+      download: (tile.querySelector("a[download]")?.getBoundingClientRect().top ?? NaN) - top,
+      history: (tile.querySelector("summary")?.getBoundingClientRect().top ?? NaN) - top,
+    };
+  }));
+  if (desktopTiles) {
+    const [first, ...others] = await tileMetrics();
+    expect(others).toHaveLength(2);
+    for (const tile of others) expect(tile).toEqual(first);
+  }
   await expect(portrait.getByRole("link", { name: "View source" })).toHaveCount(0);
   await portrait.locator("summary").click();
-  await logo.locator("summary").click();
+  const peerMetrics = desktopTiles ? (await tileMetrics()).slice(1) : null;
+  const logoSummary = logo.locator("summary");
+  await logoSummary.focus();
+  await logoSummary.press("Enter");
+  await expect(logo.locator("details")).toHaveAttribute("open", "");
   await expect(
     mediaKit.locator('a[href="https://example.invalid/afterglow-studio"]'),
   ).toHaveAttribute("href", "https://example.invalid/afterglow-studio");
@@ -775,6 +796,8 @@ test("public profile media kit @visual @fixture", async ({ page }, testInfo) => 
     mediaKit.locator('a[href="https://example.invalid/aurora-source"]'),
   ).toHaveAttribute("href", "https://example.invalid/aurora-source");
   await expect(portrait.getByText("PNG / 180 KB", { exact: true })).toBeVisible();
+  if (peerMetrics) expect((await tileMetrics()).slice(1)).toEqual(peerMetrics);
+  await expect(logoSummary).toBeFocused();
   await portrait.locator("summary").click();
   await logo.locator("summary").click();
   for (const title of [
