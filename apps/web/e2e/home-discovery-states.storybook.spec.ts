@@ -131,13 +131,10 @@ for (const state of [
       const artwork = (await event.getByRole("link", { name: /^Open / }).boundingBox())!;
       const action = (await interest.boundingBox())!;
       const caption = (await event.locator("p").first().boundingBox())!;
-      if (isMobile) {
-        expect(caption.y + caption.height).toBeLessThanOrEqual(artwork.y);
-        const nextArtwork = (await page.getByTestId("discovery-event-card").nth(1).getByRole("link", { name: /^Open / }).boundingBox())!;
-        expect(artwork.y).toBeCloseTo(nextArtwork.y);
-      } else {
-        expect(action.y).toBeGreaterThanOrEqual(artwork.y + artwork.height);
-      }
+      expect(caption.y + caption.height).toBeLessThanOrEqual(artwork.y);
+      expect(action.y + action.height).toBeLessThanOrEqual(artwork.y);
+      const nextArtwork = (await page.getByTestId("discovery-event-card").nth(1).getByRole("link", { name: /^Open / }).boundingBox())!;
+      expect(artwork.y).toBeCloseTo(nextArtwork.y);
       expect(caption.width).toBeCloseTo(artwork.width + 2);
     }
     if (state.includes("-no-")) {
