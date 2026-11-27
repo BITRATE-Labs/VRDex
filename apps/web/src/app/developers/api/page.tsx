@@ -1,22 +1,14 @@
+import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { getOpenApiDocument } from "@vrdex/api-contracts";
 import { buttonVariants } from "@/components/ui/button";
-import { Card, cardVariants } from "@/components/ui/card";
-import { PageContainer, PageActions, PageShell } from "@/components/ui/page-shell";
+import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { cn } from "@/lib/cn";
+import { EndpointDirectory, type ApiOperation } from "./endpoint-directory";
 
 export const dynamic = "force-static";
 
 const httpMethods = ["get", "post", "put", "patch", "delete"] as const;
-
-type ApiOperation = {
-  method: string;
-  operationId: string;
-  path: string;
-  responseCodes: string[];
-  summary: string;
-  tags: string[];
-};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -64,100 +56,60 @@ function collectOperations(): ApiOperation[] {
     .sort((first, second) => first.path.localeCompare(second.path) || first.method.localeCompare(second.method));
 }
 
-function methodTone(method: string) {
-  return method === "GET"
-    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-    : "border-accent/25 bg-accent/10 text-accent-strong";
-}
+const summaryClass = cn(
+  buttonVariants({ variant: "surface", size: "sm" }),
+  "min-h-11 list-none gap-1.5 [&::-webkit-details-marker]:hidden",
+);
+const panelClass = "absolute inset-x-0 top-full z-10 mt-2 max-h-[min(24rem,55dvh)] overflow-y-auto rounded-panel border border-border-strong bg-surface-strong p-2 shadow-lg sm:start-auto sm:w-80";
 
 export default function ApiReferencePage() {
   const document = getOpenApiDocument();
   const operations = collectOperations();
   const tags = document.tags ?? [];
+  const utilityLink = cn(buttonVariants({ variant: "ghost", size: "sm" }), "min-h-11 justify-start");
 
   return (
-    <PageShell className="py-6 sm:py-10">
-      <PageContainer className="gap-4 sm:gap-6" max="7xl">
-        <header className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
-          <div>
-            <h1 className="text-3xl font-semibold sm:text-4xl">{document.info.title}</h1>
-            <p className="mt-2 font-mono text-xs uppercase tracking-[0.22em] text-muted">
-              OpenAPI {document.openapi} / {document.info.version}
-            </p>
-          </div>
-          <span className="font-mono text-xs text-muted">{operations.length} operations</span>
+    <PageShell className="py-5 sm:py-8">
+      <PageContainer className="gap-3 sm:gap-4" max="5xl">
+        <header>
+          <h1 className="text-3xl font-semibold sm:text-4xl">{document.info.title}</h1>
+          <p className="mt-1.5 font-mono text-xs text-muted">
+            OpenAPI {document.openapi} / {document.info.version}
+          </p>
         </header>
 
-        <PageActions className="gap-2">
-          <a className={buttonVariants({ variant: "secondary" })} href="/api/v0/openapi.json">
-            OpenAPI JSON
-          </a>
-          <a className={buttonVariants({ variant: "secondary" })} href="/api/v0/openapi.yaml">
-            OpenAPI YAML
-          </a>
-          <Link className={buttonVariants({ variant: "secondary" })} href="/developers/tokens">
-            Developer tokens
-          </Link>
-          <Link className={buttonVariants({ variant: "secondary" })} href="/developers/apps">
-            OAuth apps
-          </Link>
-          <Link className={buttonVariants({ variant: "ghost" })} href="/">
-            Home
-          </Link>
-        </PageActions>
-
-        <section className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)] lg:gap-6">
-          <details className={cn(cardVariants({ padding: "none" }), "self-start")}>
-            <summary className="min-h-11 cursor-pointer rounded-panel px-4 py-3 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring">
-              Tags
-            </summary>
-            <div className="grid gap-3 border-t border-border px-4 py-4">
-              {tags.map((tag) => (
-                <div className="border-b border-border pb-3 last:border-0 last:pb-0" key={tag.name}>
-                  <div className="font-medium">{tag.name}</div>
-                  {"description" in tag && typeof tag.description === "string" ? (
-                    <p className="mt-1 text-sm leading-6 text-muted">{tag.description}</p>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          </details>
-
-          <section className="grid gap-3">
-            {operations.map((operation) => (
-              <Card className="grid gap-4 sm:grid-cols-[7.5rem_1fr]" key={operation.operationId} padding="sm">
-                <div>
-                  <span
-                    className={cn(
-                      "inline-flex min-w-16 justify-center rounded-control border px-2.5 py-1.5 font-mono text-xs font-semibold",
-                      methodTone(operation.method),
-                    )}
-                  >
-                    {operation.method}
-                  </span>
-                </div>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <code className="break-all font-mono text-sm text-foreground">{operation.path}</code>
-                    {operation.tags.map((tag) => (
-                      <span className="font-mono text-xs text-muted" key={tag}>
-                        {tag}
-                      </span>
-                    ))}
+        <EndpointDirectory operations={operations}>
+          <div className="flex items-center gap-2">
+            <details className="group" name="api-reference-menu">
+              <summary className={summaryClass}>
+                Tags
+                <ChevronDown aria-hidden="true" className="size-3.5 group-open:rotate-180" />
+              </summary>
+              <dl aria-label="Tags" tabIndex={0} className={cn(panelClass, "grid gap-2 px-4 py-3 focus-visible:outline-2 focus-visible:outline-focus-ring")}>
+                {tags.map((tag) => (
+                  <div className="border-b border-border pb-2 last:border-0 last:pb-0" key={tag.name}>
+                    <dt className="text-sm font-medium">{tag.name}</dt>
+                    {"description" in tag && typeof tag.description === "string" ? (
+                      <dd className="mt-1 text-xs leading-5 text-muted">{tag.description}</dd>
+                    ) : null}
                   </div>
-                  <p className="mt-2 text-sm leading-6 text-muted">{operation.summary}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {operation.responseCodes.map((code) => (
-                      <span className="rounded-control border border-border bg-surface-strong px-2 py-1 font-mono text-xs" key={code}>
-                        {code}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </section>
-        </section>
+                ))}
+              </dl>
+            </details>
+            <details className="group" name="api-reference-menu">
+              <summary className={summaryClass}>
+                API tools
+                <ChevronDown aria-hidden="true" className="size-3.5 group-open:rotate-180" />
+              </summary>
+              <nav aria-label="API tools" className={cn(panelClass, "grid")}>
+                <a className={utilityLink} href="/api/v0/openapi.json">OpenAPI JSON</a>
+                <a className={utilityLink} href="/api/v0/openapi.yaml">OpenAPI YAML</a>
+                <Link className={utilityLink} href="/developers/tokens">Developer tokens</Link>
+                <Link className={utilityLink} href="/developers/apps">OAuth apps</Link>
+              </nav>
+            </details>
+          </div>
+        </EndpointDirectory>
       </PageContainer>
     </PageShell>
   );

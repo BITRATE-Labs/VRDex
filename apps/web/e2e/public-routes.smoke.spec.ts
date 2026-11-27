@@ -1225,27 +1225,88 @@ test("public API reference puts endpoints in the first phone viewport", async ({
   await page.setViewportSize({ width: 320, height: 760 });
   expect((await page.goto("/developers/api"))?.status()).toBe(200);
   const main = page.getByRole("main");
-  const title = main.getByRole("heading", { name: "VRDex Public API", exact: true, level: 1 });
-  const actions = main.getByRole("navigation", { name: "Page", exact: true });
-  await expect(title).toBeVisible();
-  await expect(actions.getByRole("link", { name: "OpenAPI JSON", exact: true })).toHaveAttribute("href", "/api/v0/openapi.json");
-  await expect(actions.getByRole("link", { name: "OpenAPI YAML", exact: true })).toHaveAttribute("href", "/api/v0/openapi.yaml");
-  const [titleBox, actionsBox] = await Promise.all([title.boundingBox(), actions.boundingBox()]);
-  if (!titleBox || !actionsBox) throw new Error("Expected public API title and actions");
-  expect(titleBox.y + titleBox.height).toBeLessThanOrEqual(actionsBox.y);
-  const tags = main.locator("details").filter({ has: page.locator("summary", { hasText: "Tags" }) });
-  const summary = tags.locator("summary");
-  const firstEndpoint = main.locator("code").first();
-  for (const width of [320, 390]) {
-    await page.setViewportSize({ width, height: width === 320 ? 760 : 844 });
-    await expect(tags).not.toHaveAttribute("open", "");
+  const directory = main.getByRole("region", { name: "Endpoints" });
+  const filter = directory.getByRole("searchbox", { name: "Filter endpoints" });
+  const operations = directory.getByRole("list", { name: "Operations" });
+  const rows = operations.locator(":scope > li");
+  const firstEndpoint = rows.first().locator("code");
+  const tags = directory.locator("summary").filter({ hasText: /^Tags$/ });
+  const tools = directory.locator("summary").filter({ hasText: /^API tools$/ });
+  await expect(main.getByRole("heading", { name: "VRDex Public API", exact: true, level: 1 })).toBeVisible();
+  await expect(filter).toBeVisible();
+  const total = await rows.count();
+  expect(total).toBeGreaterThan(1);
+  await expect(directory.getByRole("status")).toHaveText(`${total} operations`);
+
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: width === 320 ? 760 : 900 });
     await expect(firstEndpoint).toBeInViewport();
+    const box = await firstEndpoint.boundingBox();
+    if (!box) throw new Error("Expected a visible endpoint");
+    expect(box.y).toBeLessThan(width === 320 ? 350 : 330);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
   }
-  await summary.focus();
-  await summary.press("Enter");
-  await expect(tags).toHaveAttribute("open", "");
-  await expect(tags.getByText("Events", { exact: true })).toBeVisible();
-  await summary.press("Enter");
-  await expect(tags).not.toHaveAttribute("open", "");
+
+  const endpointBeforeOpening = await firstEndpoint.boundingBox();
+  await tags.press("Enter");
+  await expect(tags.locator("..")).toHaveAttribute("open", "");
+  await expect(tags.locator("..").getByText("Events", { exact: true })).toBeVisible();
+  expect((await firstEndpoint.boundingBox())?.y).toBe(endpointBeforeOpening?.y);
+
+  await tools.press("Enter");
+  await expect(tags.locator("..")).not.toHaveAttribute("open", "");
+  const actions = directory.getByRole("navigation", { name: "API tools" });
+  for (const [name, href] of [
+    ["OpenAPI JSON", "/api/v0/openapi.json"],
+    ["OpenAPI YAML", "/api/v0/openapi.yaml"],
+    ["Developer tokens", "/developers/tokens"],
+    ["OAuth apps", "/developers/apps"],
+  ]) {
+    const link = actions.getByRole("link", { name, exact: true });
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute("href", href);
+    expect((await link.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  }
+  await tools.press("Enter");
+  await expect(actions).toBeHidden();
+
+  for (const [value, path] of [
+    ["gET   cLaImS", "/api/v0/claims/{slug}/status"],
+    ["public claim and trust", "/api/v0/claims/{slug}/status"],
+    ["eVenTs", "/api/v0/worlds/{slug}/events"],
+  ]) {
+    await filter.fill(value);
+    await expect(operations.getByText(path, { exact: true })).toBeVisible();
+    await expect.poll(() => rows.count()).toBeLessThan(total);
+    const count = await rows.count();
+    await expect(directory.getByRole("status")).toHaveText(`${count} ${count === 1 ? "operation" : "operations"}`);
+  }
+
+  await filter.fill("no-endpoint-should-match");
+  await expect(rows).toHaveCount(0);
+  await expect(directory.getByRole("status")).toHaveText("0 operations");
+  await expect(directory.getByText("No results", { exact: true })).toBeVisible();
+  await directory.getByRole("button", { name: "Reset", exact: true }).press("Enter");
+  await expect(filter).toBeFocused();
+  await expect(filter).toHaveValue("");
+  await expect(rows).toHaveCount(total);
+});
+
+test("public API reference and exports remain available without JavaScript", async ({ browser, baseURL }) => {
+  const context = await browser.newContext({ baseURL, javaScriptEnabled: false, viewport: { width: 320, height: 760 } });
+  try {
+    const page = await context.newPage();
+    await page.goto("/developers/api");
+    const main = page.getByRole("main");
+    const rows = main.getByRole("list", { name: "Operations" }).locator(":scope > li");
+    await expect(main.getByRole("searchbox", { name: "Filter endpoints" })).toBeHidden();
+    expect(await rows.count()).toBeGreaterThan(1);
+    await expect(main.getByRole("status")).toHaveText(`${await rows.count()} operations`);
+    await expect(rows.first().locator("code")).toBeInViewport();
+    await main.locator("summary").filter({ hasText: /^API tools$/ }).press("Enter");
+    await expect(main.getByRole("link", { name: "OpenAPI JSON" })).toHaveAttribute("href", "/api/v0/openapi.json");
+    await expect(main.getByRole("link", { name: "OpenAPI YAML" })).toHaveAttribute("href", "/api/v0/openapi.yaml");
+  } finally {
+    await context.close();
+  }
 });
