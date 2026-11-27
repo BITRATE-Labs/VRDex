@@ -5,6 +5,9 @@ for (const state of [
   "cold-start",
   "sparse",
   "empty",
+  "one-club-no-events",
+  "two-clubs-no-events",
+  "two-events-no-clubs",
   "partial",
   "failed",
   "loading",
@@ -14,6 +17,7 @@ for (const state of [
 ]) {
   test(`discovery ${state} presentation @storybook-snapshot`, async ({
     page,
+    isMobile,
   }) => {
     await prepareVisualPage(page);
     await page.goto(`/iframe.html?id=home-discovery--${state}&viewMode=story`);
@@ -21,6 +25,20 @@ for (const state of [
       page.getByRole("heading", { name: "Discover", exact: true }),
     ).toBeVisible();
     await waitForVisualReady(page);
+    if (state.includes("-no-")) {
+      const emptyName = state.endsWith("-no-events") ? "Events" : "Clubs";
+      const populatedName = emptyName === "Events" ? "Clubs" : "Events";
+      const empty = page.getByRole("group", { name: emptyName, exact: true });
+      const populated = page.getByRole("group", { name: populatedName, exact: true });
+      await expect(empty.getByText(`No ${emptyName.toLowerCase()}`, { exact: true })).toBeVisible();
+      const emptyBounds = (await empty.boundingBox())!;
+      const populatedBounds = (await populated.boundingBox())!;
+      if (isMobile) {
+        expect(emptyBounds.width).toBe(populatedBounds.width);
+      } else {
+        expect(emptyBounds.width).toBeLessThan(populatedBounds.width);
+      }
+    }
     await page.locator("img").evaluateAll(async (images) => {
       await Promise.all(
         images.map(async (image) => {
