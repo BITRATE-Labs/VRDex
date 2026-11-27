@@ -59,6 +59,9 @@ multi-stream fixture checks the exact clipboard destinations and accessible
 control names for both playback devices. The media-kit flow covers keyboard
 disclosure, missing history, and a failed thumbnail on a 320 px layout.
 It verifies that Retry fits and that the asset keeps its download link.
+Profile event-card fixtures cover a date-only record with no artwork, host, or
+summary, plus a long title and earlier Doors in the viewer's timezone. They
+check natural card height, canonical and external links, and layout at 320 px.
 The event-only profile fixture checks that an occurrence with no artwork
 keeps its link and date legible in both themes.
 

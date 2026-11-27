@@ -1044,6 +1044,68 @@ const publicEvent: PublicEvent = {
   ],
 };
 
+const sparseDateEvent: PublicEvent = {
+  ...publicEvent,
+  id: "event-" + playwrightGuestEventSlugs.sparseDate,
+  slug: playwrightGuestEventSlugs.sparseDate,
+  title: "July Fourth Sessions",
+  scheduleKind: "date_only",
+  eventDate: "2026-07-04",
+  startAt: undefined,
+  doorsOpenAt: undefined,
+  endAt: undefined,
+  posterImageUrl: undefined,
+  bannerImageUrl: undefined,
+  thumbnailImageUrl: undefined,
+  authoredBannerImageUrl: undefined,
+  authoredThumbnailImageUrl: undefined,
+  source: { sourceType: publicEvent.source.sourceType, label: publicEvent.source.label },
+  worlds: [],
+  lineup: [],
+  participants: [],
+  participantCount: 0,
+  slots: [],
+  slotCount: 0,
+  nextSlots: [],
+  watchSurfaceEnabled: false,
+  authoredMediaLinks: [],
+  mediaLinks: [],
+};
+
+const artlessDateExternalSlug = "playwright-artless-date-external";
+const artlessTimedLongSlug = "playwright-artless-timed-long";
+const artlessEventCardVariants: PublicEvent[] = [
+  {
+    ...sparseDateEvent,
+    id: "event-" + artlessDateExternalSlug,
+    slug: artlessDateExternalSlug,
+    title: "Independence Day Guest Sessions",
+    communityName: undefined,
+    communityImageUrl: undefined,
+    communityAvatarAppearance: undefined,
+    summary: undefined,
+    source: {
+      sourceType: "manual",
+      label: "Guest event listing",
+      url: "https://example.invalid/events/independence-day-guest-sessions",
+    },
+  },
+  {
+    ...sparseDateEvent,
+    id: "event-" + artlessTimedLongSlug,
+    slug: artlessTimedLongSlug,
+    title: "Harbor Sound System Presents the Late Night Interstellar Bassline Sessions",
+    scheduleKind: "timed",
+    eventDate: undefined,
+    startAt: eventStartAt,
+    doorsOpenAt: eventDoorsOpenAt,
+    endAt: eventEndAt,
+    communityName: "Afterglow Social and the Interstellar Sound System Collective",
+    communityImageUrl: undefined,
+    communityAvatarAppearance: undefined,
+  },
+];
+
 const publicWatchEvent: PublicEvent = {
   ...publicEvent,
   id: "event-playwright-afterglow-watch-room",
@@ -1338,6 +1400,14 @@ export function getPlaywrightPublicProfileFixture(
         slug,
         displayName: "Sparse Profile with Event",
         upcomingEvents: [event],
+      };
+    }
+    if (slug === "playwright-event-card-variants") {
+      return {
+        ...toPublicFixturePersonProfile(sparseImportedProfile),
+        slug,
+        displayName: "Event Card Variants",
+        upcomingEvents: artlessEventCardVariants,
       };
     }
     const profile = personProfiles.find((entry) => entry.slug === slug);
@@ -1744,36 +1814,10 @@ export function getPlaywrightPublicEventFixture(slug: string): PublicEvent | nul
   }
 
   if (slug === playwrightGuestEventSlugs.sparseDate) {
-    return {
-      ...publicEvent,
-      id: "event-" + slug,
-      slug,
-      title: "July Fourth Sessions",
-      scheduleKind: "date_only",
-      eventDate: "2026-07-04",
-      startAt: undefined,
-      doorsOpenAt: undefined,
-      endAt: undefined,
-      posterImageUrl: undefined,
-      bannerImageUrl: undefined,
-      thumbnailImageUrl: undefined,
-      authoredBannerImageUrl: undefined,
-      authoredThumbnailImageUrl: undefined,
-      source: { sourceType: publicEvent.source.sourceType, label: publicEvent.source.label },
-      worlds: [],
-      lineup: [],
-      participants: [],
-      participantCount: 0,
-      slots: [],
-      slotCount: 0,
-      nextSlots: [],
-      watchSurfaceEnabled: false,
-      authoredMediaLinks: [],
-      mediaLinks: [],
-    };
+    return sparseDateEvent;
   }
 
-  return null;
+  return artlessEventCardVariants.find((event) => event.slug === slug) ?? null;
 }
 
 export function getPlaywrightPublicShortLinkFixture(

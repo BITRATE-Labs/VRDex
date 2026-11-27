@@ -234,45 +234,62 @@ export function EventPreviewCard({
   const details = event.worlds.map((world) => world.displayName);
   const eventPath = publicEventPath(event);
   const isSeries = variant === "series";
-  const hasSeriesDate = isSeries && (
-    event.startAt !== undefined || (event.scheduleKind === "date_only" && event.eventDate !== undefined)
-  );
+  const hasDate = event.startAt !== undefined || (event.scheduleKind === "date_only" && event.eventDate !== undefined);
+  const hasSeriesDate = isSeries && hasDate;
   const hasDatedTitle = hasSeriesDate && Boolean(eventPath);
   const summary = isSeries && event.summary === seriesSummary ? undefined : event.summary;
   const dateTime = <ViewerLocalEventDateTime timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />;
   const useThemeColors = !thumbnailStyle;
+  const compactWithoutArtwork = !isSeries && useThemeColors;
 
   return (
-    <article className="group overflow-hidden rounded-card border border-border bg-surface-strong text-sm transition hover:-translate-y-0.5">
+    <article className={cn(
+      "group overflow-hidden rounded-card border border-border bg-surface-strong text-sm transition hover:-translate-y-0.5",
+      compactWithoutArtwork && "self-start",
+    )}>
       <div
         className={cn(
-          "bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] bg-cover bg-center px-4",
-          isSeries ? "py-3" : "min-h-28 py-4",
+          "px-4",
+          !compactWithoutArtwork && "bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] bg-cover bg-center",
+          isSeries ? "py-3" : compactWithoutArtwork ? "pt-4" : "min-h-28 py-4",
           useThemeColors ? "text-foreground" : "text-white",
         )}
         style={thumbnailStyle}
       >
-        <div className={cn(
-          "flex flex-wrap items-center text-sm font-medium",
-          isSeries ? "gap-x-3 gap-y-1" : "gap-2",
-          useThemeColors ? "text-muted" : "text-white/84",
-        )}>
-          {hasSeriesDate ? (
-            <span className={cn("text-lg font-semibold leading-tight", useThemeColors ? "text-foreground" : "text-white")} id={hasDatedTitle ? dateId : undefined}>
-              {dateTime}
-            </span>
-          ) : dateTime}
-          {event.startAt !== undefined && event.doorsOpenAt !== undefined && event.doorsOpenAt < event.startAt ? <span>Doors <ViewerLocalEventTime timestamp={event.doorsOpenAt} /></span> : null}
-          {event.communityName ? <span>{isSeries ? null : "/ "}{event.communityName}</span> : null}
-        </div>
+        {(!compactWithoutArtwork || hasDate) ? (
+          <div className={cn(
+            "flex flex-wrap items-center text-sm font-medium",
+            isSeries || compactWithoutArtwork ? "gap-x-3 gap-y-1" : "gap-2",
+            useThemeColors ? "text-muted" : "text-white/84",
+          )}>
+            {hasSeriesDate ? (
+              <span className={cn("text-lg font-semibold leading-tight", useThemeColors ? "text-foreground" : "text-white")} id={hasDatedTitle ? dateId : undefined}>
+                {dateTime}
+              </span>
+            ) : dateTime}
+            {event.startAt !== undefined && event.doorsOpenAt !== undefined && event.doorsOpenAt < event.startAt ? (
+              <span className={compactWithoutArtwork ? "border-s border-border-strong ps-3" : undefined}>
+                Doors <ViewerLocalEventTime timestamp={event.doorsOpenAt} />
+              </span>
+            ) : null}
+            {!compactWithoutArtwork && event.communityName ? <span>{isSeries ? null : "/ "}{event.communityName}</span> : null}
+          </div>
+        ) : null}
         <h3 className={cn(
           isSeries
             ? "mt-2 text-base font-medium [overflow-wrap:anywhere]"
-            : "mt-4 text-2xl font-semibold tracking-[-0.04em]",
+            : "font-semibold tracking-[-0.04em]",
+          !isSeries && (compactWithoutArtwork ? "text-xl sm:text-2xl" : "text-2xl"),
+          compactWithoutArtwork && "break-words",
+          compactWithoutArtwork && hasDate && "mt-2",
+          !isSeries && !compactWithoutArtwork && "mt-4",
         )}>
           {eventPath ? (
             <Link
-              className="rounded-sm underline decoration-1 underline-offset-4 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current"
+              className={cn(
+                "rounded-sm underline decoration-1 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current",
+                compactWithoutArtwork ? "underline-offset-[6px]" : "underline-offset-4",
+              )}
               href={eventPath}
               id={hasDatedTitle ? titleId : undefined}
               aria-labelledby={hasDatedTitle ? titleId + " " + dateId : undefined}
@@ -281,8 +298,12 @@ export function EventPreviewCard({
             </Link>
           ) : event.title}
         </h3>
+        {compactWithoutArtwork && event.communityName ? <p className="mt-2 break-words text-sm font-medium text-muted">{event.communityName}</p> : null}
       </div>
-      <div className={cn("grid px-4", isSeries ? "gap-2 py-2.5" : "gap-3 py-4")}>
+      <div className={cn(
+        "grid px-4",
+        isSeries ? "gap-2 py-2.5" : compactWithoutArtwork ? "gap-2 pb-4 pt-3" : "gap-3 py-4",
+      )}>
         {summary ? <p className="leading-6 text-muted">{summary}</p> : null}
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
           {details.map((detail) => (
@@ -290,7 +311,10 @@ export function EventPreviewCard({
           ))}
           {sourceUrl ? (
             <a
-              className="inline-flex min-w-0 items-center gap-1 font-medium text-accent-strong underline decoration-accent/35 underline-offset-4 [overflow-wrap:anywhere]"
+              className={cn(
+                "inline-flex min-w-0 items-center gap-1 font-medium text-accent-strong underline decoration-accent/35 underline-offset-4 [overflow-wrap:anywhere]",
+                compactWithoutArtwork && "min-h-6 text-sm",
+              )}
               href={sourceUrl}
               rel="noreferrer"
               target="_blank"
