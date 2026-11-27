@@ -490,12 +490,10 @@ export function SearchResultsPage({
       activeView="standard"
       searchControl={<DiscoverySearchForm className="max-w-3xl" defaultQuery={query} filter={activeFilter} surface="search" tone="default" />}
     >
-        {status === "live" ? null : <Card surface="dashed">{status === "missing-url" ? "Search data is not available in this environment yet." : "Search data is temporarily unavailable."}</Card>}
-
         {activeFilter === "event" ? <Link className={buttonVariants({ variant: "primary" })} href="/events/new">Add event</Link> : null}
         {hasQuery ? (
           <section aria-label="Search results" className="space-y-5">
-            <h2 className="text-2xl font-semibold tracking-[-0.03em] [overflow-wrap:anywhere]">Results for {query}</h2>
+            <h2 className="line-clamp-2 text-2xl font-semibold tracking-[-0.03em] [overflow-wrap:anywhere]">Results for {query}</h2>
             <div className="flex flex-wrap items-center gap-3">
               <nav aria-label="Entity type" className="flex flex-wrap gap-x-0.5 gap-y-2 sm:gap-x-2">
                 {filters.map((filter) => {
@@ -518,15 +516,23 @@ export function SearchResultsPage({
               </nav>
             </div>
 
-            {results.length === 0 ? (
-              status === "live" && (
-                <Card surface="dashed">
-                  <p className="text-pretty font-medium">No public results matched that search yet.</p>
-                  <p className="mt-2 text-pretty text-sm leading-6 text-muted">
-                    Try a community name, DJ alias, world name, event title, genre, or scene term.
-                  </p>
-                </Card>
-              )
+            {status !== "live" ? (
+              <Card className="flex flex-wrap items-center justify-between gap-3" surface="dashed">
+                <p className="text-pretty font-medium" role="status">
+                  {status === "missing-url" ? "Search data is not available in this environment yet." : "Search data is temporarily unavailable."}
+                </p>
+                {status === "error" ? (
+                  // Retry needs a fresh request for the same URL.
+                  <a className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "min-h-11")} href={searchHref({ filter: activeFilter, query })}>Retry</a>
+                ) : null}
+              </Card>
+            ) : results.length === 0 ? (
+              <Card surface="dashed">
+                <p className="text-pretty font-medium">No public results matched that search yet.</p>
+                <p className="mt-2 text-pretty text-sm leading-6 text-muted">
+                  Try a community name, DJ alias, world name, event title, genre, or scene term.
+                </p>
+              </Card>
             ) : (
               <div className="grid gap-4">
                 {results.map((result) => <SearchResultCard key={`${result.entityType}-${result.slug}`} result={result} />)}

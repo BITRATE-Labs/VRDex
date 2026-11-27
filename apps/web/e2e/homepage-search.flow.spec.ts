@@ -107,7 +107,10 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     const heading = page.getByRole("heading", { level: 2, name: `Results for ${query}`, exact: true });
     await expect(heading).toBeVisible();
-    await expect(heading).toHaveCSS("overflow-wrap", "anywhere");
+    await expect.poll(() => heading.evaluate((element) =>
+      element.getBoundingClientRect().height / Number.parseFloat(getComputedStyle(element).lineHeight)
+    )).toBeLessThanOrEqual(2);
+    await expect(page.getByRole("combobox", { name: /Search/i })).toHaveValue(query);
     await expect(page.getByText("No public results matched that search yet.", { exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
   });
@@ -116,12 +119,24 @@ for (const theme of ["light", "dark"] as const) {
 test("Search reports a failed fetch without claiming there were no matches @flow @fixture", async ({ page }) => {
   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), "Uses the local Search outage fixture.");
   const query = "playwright-search-unavailable";
-  await page.goto(`/search?q=${query}`);
+  const path = `/search?q=${query}&type=community`;
+  await page.goto(path);
 
-  await expect(page.getByText("Search data is temporarily unavailable.", { exact: true })).toBeVisible();
-  await expect(page.getByText("No public results matched that search yet.", { exact: true })).toHaveCount(0);
+  const results = page.getByRole("region", { name: "Search results" });
+  const outage = results.getByRole("status").filter({ hasText: "Search data is temporarily unavailable." });
+  await expect(outage).toBeVisible();
+  await expect(results.getByText("No public results matched that search yet.", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("combobox", { name: /Search/i })).toHaveValue(query);
-  await expect(page.getByRole("navigation", { name: "Entity type" }).getByRole("link")).toHaveCount(5);
+  const filters = results.getByRole("navigation", { name: "Entity type" });
+  await expect(filters.getByRole("link")).toHaveCount(5);
+  await expect(filters.getByRole("link", { name: "Communities" })).toHaveAttribute("aria-current", "page");
+  const retry = results.getByRole("link", { name: "Retry", exact: true });
+  await expect(retry).toHaveAttribute("href", path);
+  await Promise.all([
+    page.waitForRequest((request) => request.isNavigationRequest() && request.url() === new URL(path, page.url()).href),
+    retry.click(),
+  ]);
+  await expect(outage).toBeVisible();
 });
 
 for (const destination of [
