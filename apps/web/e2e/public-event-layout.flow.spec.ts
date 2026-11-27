@@ -127,6 +127,21 @@ test("listed events order visitor links on mobile and group context beside the p
   await expect(lineup.locator("..").getByRole("link").first()).toBeFocused();
 });
 
+test.describe("public event across the viewer's midnight", () => {
+  test.use({ timezoneId: "America/Indianapolis" });
+
+  test("schedule only shortens secondary times on the same local date @flow @fixture", async ({ page }) => {
+    await page.goto(path + listedSlug);
+    const schedule = page.getByRole("main").locator("section").first();
+    const doors = schedule.locator('time[datetime="2026-06-15T01:30:00.000Z"]');
+    const end = schedule.locator('time[datetime="2026-06-15T05:00:00.000Z"]');
+
+    await expect(doors.locator('[aria-hidden="true"]')).toHaveText("9:30 PM");
+    await expect(doors.locator(".sr-only")).toHaveText("Jun 14, 9:30 PM EDT");
+    await expect(end).toHaveText("Jun 15, 1:00 AM EDT");
+  });
+});
+
 for (const timezoneId of ["UTC", "America/Los_Angeles"]) {
   test.describe(`public event in ${timezoneId}`, () => {
     test.use({ timezoneId });
@@ -140,6 +155,15 @@ for (const timezoneId of ["UTC", "America/Los_Angeles"]) {
         const main = page.getByRole("main");
         const time = main.locator("section").first().locator("time").first();
         await expect(time).toContainText(slug === sparseSlug ? "Jul 4, 2026 · Time TBA" : expectedZone);
+        if (slug !== sparseSlug) {
+          const schedule = main.locator("section").first();
+          const doors = schedule.locator('time[datetime="2025-01-01T11:30:00.000Z"]');
+          const end = schedule.locator('time[datetime="2025-01-01T15:00:00.000Z"]');
+          await expect(doors).toHaveAttribute("title", new RegExp(expectedZone));
+          await expect(doors.locator('[aria-hidden="true"]')).toHaveText(timezoneId === "UTC" ? "11:30 AM" : "3:30 AM");
+          await expect(end.locator('[aria-hidden="true"]')).toHaveText(timezoneId === "UTC" ? "3:00 PM" : "7:00 AM");
+          await expect(end.locator(".sr-only")).toContainText(expectedZone);
+        }
         const actions = main.getByRole("navigation", { name: "Event actions" });
         await expect(actions.getByRole("link", { name: "Host view" })).toHaveCount(slug === watchSlug ? 1 : 0);
         await expect(actions.getByRole("link", { name: "Add to calendar" })).toHaveAttribute("href", path + slug + "/calendar.ics");

@@ -33,8 +33,8 @@ export function EventPublicHero({
   const detailTextClassName = bannerStyle ? "text-white/80" : "text-muted";
   const startTime = (
     <ViewerLocalEventDateTime className={cn(
-      "block text-base leading-snug font-semibold sm:text-sm sm:leading-5 sm:font-normal sm:tracking-[0.24em] sm:uppercase",
-      bannerStyle ? "text-white sm:text-white/70" : "text-foreground sm:text-muted",
+      "block text-base leading-snug font-semibold tabular-nums sm:text-lg",
+      bannerStyle ? "text-white" : "text-foreground",
     )} timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />
   );
 
@@ -63,9 +63,9 @@ export function EventPublicHero({
                 </a>
               </div>
             ) : startTime}
-            {event.scheduleKind !== "date_only" && (event.doorsOpenAt !== undefined || event.endAt !== undefined) ? <div className={cn("mt-1.5 flex flex-wrap gap-x-5 gap-y-1 text-sm sm:mt-2", detailTextClassName)}>
-              {event.doorsOpenAt !== undefined ? <span><span>Doors open</span>{" "}<ViewerLocalEventDateTime timestamp={event.doorsOpenAt} /></span> : null}
-              {event.endAt !== undefined ? <span><span>End</span>{" "}<ViewerLocalEventDateTime timestamp={event.endAt} /></span> : null}
+            {event.scheduleKind !== "date_only" && (event.doorsOpenAt !== undefined || event.endAt !== undefined) ? <div className={cn("mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-sm tabular-nums sm:mt-2 sm:gap-x-5", detailTextClassName)}>
+              {event.doorsOpenAt !== undefined ? <span><span>Doors open</span>{" "}<ViewerLocalEventDateTime timestamp={event.doorsOpenAt} compactRelativeTo={event.startAt} /></span> : null}
+              {event.endAt !== undefined ? <span><span>End</span>{" "}<ViewerLocalEventDateTime timestamp={event.endAt} compactRelativeTo={event.startAt} /></span> : null}
             </div> : null}
             <h1 className="mt-3 text-4xl leading-[1.05] font-semibold tracking-[-0.05em] [overflow-wrap:anywhere] sm:mt-4 sm:text-7xl sm:leading-none">
               {event.title}
