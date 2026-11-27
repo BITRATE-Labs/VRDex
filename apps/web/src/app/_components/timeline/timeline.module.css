@@ -536,31 +536,64 @@
     gap: 0.5rem;
   }
   .toolbar h2 {
-    flex: 1;
+    flex: 1 0 auto;
+    order: -2;
   }
   .navigation {
     width: 100%;
-    justify-content: space-between;
-    flex-wrap: wrap;
+    gap: 0.5rem;
   }
   .navigation > div {
-    margin-left: auto;
+    flex-shrink: 0;
+  }
+  .navigation input {
+    flex: 1 1 auto;
+    min-height: 44px;
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--surface-strong);
   }
   .status {
-    flex: 1 1 auto;
+    flex: 1 1 7rem;
     flex-wrap: wrap;
-    min-height: 40px;
+    min-height: 0;
   }
   .metadata {
-    width: 100%;
+    order: -1;
     margin-left: 0;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.25rem 0.5rem;
+  }
+  .metadata span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .metadata svg {
+    flex-shrink: 0;
   }
   .toolbar button {
-    min-height: 40px;
+    min-width: 44px;
+    min-height: 44px;
   }
-  .navigation input,
   .savedList button {
     min-height: 44px;
+  }
+  .emptyState {
+    gap: 0.75rem;
+  }
+  .emptyState p {
+    flex: 1 1 8rem;
+  }
+}
+@media (max-width: 420px) {
+  .navigation > div button[aria-label] {
+    padding-inline: 0.5rem;
+  }
+  .navigation > div button[aria-label] span {
+    display: none;
   }
 }
 @media (hover: none) {
