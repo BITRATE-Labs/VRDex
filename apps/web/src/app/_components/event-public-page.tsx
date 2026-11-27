@@ -519,14 +519,14 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
             <Card className={styles.lineup} surface="white">
               <div className="flex items-center justify-between gap-2 sm:justify-start sm:gap-4">
                 <h2
-                  className="scroll-mt-24 text-xl font-semibold tracking-tight focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent"
+                  className="scroll-mt-24 text-xl font-semibold tracking-tight focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
                   id="event-lineup"
                   tabIndex={-1}
                 >
                   Lineup
                 </h2>
                 <a
-                  className={cn(styles.watchReturn, "min-h-11 min-w-11 shrink-0 items-center gap-1.5 rounded-control text-sm font-medium underline decoration-current/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-accent sm:min-h-7")}
+                  className={cn(styles.watchReturn, buttonVariants({ variant: "secondary", size: "sm" }), "min-h-11 min-w-11 shrink-0 gap-1.5 border-border-strong py-0 sm:min-h-7")}
                   href="#event-watch"
                 >
                   <ArrowUp aria-hidden="true" className="size-3.5" />
