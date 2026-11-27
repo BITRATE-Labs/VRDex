@@ -425,7 +425,8 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
   const eventPath = publicEventPath(event);
   const hasWorlds = event.worlds.length > 0;
   const hasLocationLinks = hasWorlds || Boolean(sourceUrl);
-  const hasCompactHost = hasLocationLinks && Boolean(event.communitySlug || event.communityName);
+  const showHostBeforePoster = !hasLocationLinks && !event.watchSurfaceEnabled && Boolean(event.posterImageUrl && event.communitySlug);
+  const hasCompactHost = showHostBeforePoster || (hasLocationLinks && Boolean(event.communitySlug || event.communityName));
   const standaloneHost = Boolean(event.communitySlug || event.communityName)
     && !bannerStyle && !event.posterImageUrl && !event.watchSurfaceEnabled
     && event.worlds.length === 0 && lineup.length === 0 && event.slots.length === 0
@@ -440,6 +441,7 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
       className={cn(
         actionCardVariants({ variant: standaloneHost ? "surface" : "accent" }),
         "flex items-center gap-3",
+        showHostBeforePoster && "max-sm:border-accent/50",
         standaloneHost && "max-w-full justify-self-start focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
       )}
       href={`/${event.communitySlug}`}
@@ -451,6 +453,7 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
         </span>
         <span className={actionMetaClassName}>Host</span>
       </span>
+      {showHostBeforePoster ? <ChevronRight aria-hidden="true" className="ml-auto size-4 shrink-0 text-accent-strong sm:hidden" /> : null}
     </Link>
   ) : event.communityName ? (
     <div className={cn(
