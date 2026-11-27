@@ -78,22 +78,6 @@ export function DiscoveryEventCard({
   };
   return (
     <article className={`${styles.card} ${styles.eventCard}`} data-testid="discovery-event-card">
-      <div className={styles.artwork}>
-        <a
-          className={styles.artworkLink}
-          href={event.href}
-          aria-label={`Open ${event.title}`}
-          onClick={open}
-        >
-          <EntityImage
-            className={styles.poster}
-            label={event.title}
-            alt=""
-            src={event.posterImageUrl}
-            sizes="(max-width: 760px) 78vw, 23vw"
-          />
-        </a>
-      </div>
       <div className={styles.eventMetadata}>
         <h4 className={styles.name}>
           <a href={event.href} onClick={open}>
@@ -132,6 +116,23 @@ export function DiscoveryEventCard({
             </ul>
           )}
         </div>
+      </div>
+      <div className={styles.artwork}>
+        <a
+          className={styles.artworkLink}
+          href={event.href}
+          aria-label={`Open ${event.title}`}
+          tabIndex={-1}
+          onClick={open}
+        >
+          <EntityImage
+            className={styles.poster}
+            label={event.title}
+            alt=""
+            src={event.posterImageUrl}
+            sizes="(max-width: 760px) 78vw, 23vw"
+          />
+        </a>
       </div>
     </article>
   );

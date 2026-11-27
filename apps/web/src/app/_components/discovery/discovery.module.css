@@ -40,6 +40,12 @@
   gap: var(--group-gap);
 }
 @media (width > 760px) {
+  .eventCard {
+    display: grid;
+  }
+  .eventCard > .artwork {
+    grid-row: 1;
+  }
   .groups[data-empty-group="events"] {
     grid-template-columns: clamp(7rem, 16%, 12rem) minmax(0, 40rem);
   }
@@ -448,6 +454,25 @@
   }
   .cards > div {
     scroll-snap-align: start;
+  }
+  .cards:has(> div > .eventCard) {
+    grid-template-rows: auto auto;
+    row-gap: 0;
+  }
+  .cards > div:has(> .eventCard),
+  .eventCard {
+    display: grid;
+    grid-row: span 2;
+    grid-template-rows: subgrid;
+  }
+  .cards > div:has(> .eventCard) {
+    align-self: stretch;
+  }
+  .eventCard {
+    container-type: normal;
+  }
+  .eventCard > .eventMetadata {
+    padding-bottom: 0.5rem;
   }
   /* Before hydration, two 340px cards and the gap determine where a peek fits. */
   @container (width < calc(680px + 0.8rem)) {
