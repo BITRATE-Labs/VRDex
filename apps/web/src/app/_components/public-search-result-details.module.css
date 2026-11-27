@@ -1,0 +1,14 @@
+/* Keep native disclosures while laying their open panels below the summary row. */
+@supports selector(::details-content) {
+  .disclosure {
+    display: contents;
+  }
+
+  .disclosure[open]::details-content {
+    display: contents;
+  }
+
+  .disclosure:not([open])::details-content {
+    display: none;
+  }
+}
