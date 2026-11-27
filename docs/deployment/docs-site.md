@@ -9,7 +9,8 @@ The Docusaurus docs app builds and the hosted docs site has been confirmed live 
 ## Current State
 
 - `apps/docs` is the Docusaurus shell.
-- Canonical markdown stays under `docs/`.
+- The public site builds only the files listed in `include` in `apps/docs/docusaurus.config.js`. Add reviewed guides under `docs/wiki/`.
+- The rest of `docs/` stays available in the public Git repository. Keep private operator notes in an access-controlled workspace.
 - `pnpm verify:docs` runs `markdownlint-cli2` and `docusaurus build`.
 - `apps/docs/docusaurus.config.js` uses `url: "https://docs.vrdex.net"` and `baseUrl: "/"`.
 - `infra/terraform/docs-site` owns the Vercel docs project, Vercel domain binding, and Route 53 DNS record.
@@ -86,9 +87,8 @@ After provider setup:
 
 - `Docs Deploy` workflow succeeds on `main`
 - `https://docs.vrdex.net/` loads the Docusaurus landing page
-- `https://docs.vrdex.net/docs/` loads the canonical docs index
-- `https://docs.vrdex.net/docs/developers/` loads the developer docs
-- `https://docs.vrdex.net/docs/engineering/` loads the engineering docs
+- `https://docs.vrdex.net/docs/` loads the public guides index
+- The deployed sitemap contains only public guide URLs. Check that a former operator URL, such as `/docs/deployment/vercel-preview`, returns 404 when signed out.
 
 ## Safety Rules
 

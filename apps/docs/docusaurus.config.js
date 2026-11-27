@@ -4,15 +4,14 @@ const darkCodeTheme = require("prism-react-renderer").themes.dracula;
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: "VRDex Docs",
-  tagline: "Public, self-hostable VRChat scene identity docs for humans and agents.",
   url: "https://docs.vrdex.net",
   baseUrl: "/",
-  organizationName: "BASIC-BIT",
+  organizationName: "BITRATE-Labs",
   projectName: "VRDex",
   onBrokenLinks: "throw",
   markdown: {
     hooks: {
-      onBrokenMarkdownLinks: "warn",
+      onBrokenMarkdownLinks: "throw",
     },
   },
   i18n: {
@@ -24,10 +23,11 @@ const config = {
       "classic",
       {
         docs: {
-          path: "../../docs",
+          path: "../../docs/wiki",
+          include: ["index.md", "find-events.md", "claim-a-profile.md"],
           routeBasePath: "docs",
           sidebarPath: require.resolve("./sidebars.js"),
-          editUrl: ({ docPath }) => `https://github.com/BASIC-BIT/VRDex/edit/main/docs/${docPath}`,
+          editUrl: ({ docPath }) => `https://github.com/BITRATE-Labs/VRDex/edit/main/docs/wiki/${docPath}`,
           showLastUpdateAuthor: true,
           showLastUpdateTime: true,
         },
@@ -42,31 +42,9 @@ const config = {
     navbar: {
       title: "VRDex Docs",
       items: [
-        { to: "/docs/", label: "Docs", position: "left" },
-        { to: "/docs/public/", label: "Public", position: "left" },
-        { to: "/docs/developers/", label: "Developers", position: "left" },
-        { to: "/docs/engineering/", label: "Engineering", position: "left" },
-        { href: "https://github.com/BASIC-BIT/VRDex", label: "GitHub", position: "right" },
+        { to: "/docs/", label: "Guides", position: "left" },
+        { href: "https://vrdex.net", label: "VRDex", position: "right" },
       ],
-    },
-    footer: {
-      style: "dark",
-      links: [
-        {
-          title: "Start",
-          items: [
-            { label: "Docs Home", to: "/docs/" },
-            { label: "Public Docs", to: "/docs/public/" },
-            { label: "Developer Docs", to: "/docs/developers/" },
-            { label: "Engineering Docs", to: "/docs/engineering/" },
-          ],
-        },
-        {
-          title: "Project",
-          items: [{ label: "GitHub", href: "https://github.com/BASIC-BIT/VRDex" }],
-        },
-      ],
-      copyright: `Copyright ${new Date().getFullYear()} BASIC BIT LLC.`,
     },
     prism: {
       theme: lightCodeTheme,
