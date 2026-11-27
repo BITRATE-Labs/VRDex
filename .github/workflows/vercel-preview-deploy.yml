@@ -473,7 +473,7 @@ jobs:
           CONVEX_PREVIEW_URL: ${{ steps.convex-preview.outputs.convex_url }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_PROJECT_ID: ${{ github.event_name == 'push' && steps.pr.outputs.sandbox == 'true' && secrets.VERCEL_SANDBOX_PROJECT_ID || secrets.VERCEL_PROJECT_ID }}
         run: |
           set -euo pipefail
           : "${CONVEX_PREVIEW_URL:?The sandbox requires its own Convex preview}"
