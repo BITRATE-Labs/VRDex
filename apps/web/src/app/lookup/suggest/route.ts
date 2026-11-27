@@ -32,6 +32,6 @@ export async function GET(request: Request) {
       results: lookup.results,
       viewerAccess: lookup.viewerAccess,
     },
-    { headers: SUGGEST_CACHE_HEADERS },
+    { headers: SUGGEST_CACHE_HEADERS, status: lookup.kind === "live" ? 200 : 503 },
   );
 }
