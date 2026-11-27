@@ -1,3 +1,4 @@
+import { closeSiteMenu, openSiteMenu } from "./flow-navigation";
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
@@ -226,8 +227,10 @@ export async function expectHomePage(page: Page) {
   await expect(page.getByLabel("DJ name")).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Search view" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "DJ links", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Discovery", exact: true })).toHaveAttribute("href", "/discovery");
-  await expect(page.getByRole("button", { name: "Toggle color theme" })).toBeVisible();
+  await openSiteMenu(page);
+  await expect(page.getByRole("banner").getByRole("link", { name: "Discovery", exact: true })).toHaveAttribute("href", "/discovery");
+  await expect(page.getByRole("banner").getByRole("button", { name: "Toggle color theme" })).toBeVisible();
+  await closeSiteMenu(page);
   await expect(page.getByText(/Start with a name, scene, world, genre, or event/i)).toHaveCount(0);
   await expect(page.getByText("Start with a name or genre.", { exact: true })).toHaveCount(0);
   // Checked on the busiest route, because the footer is the only thing that
@@ -239,7 +242,9 @@ export async function expectHomePage(page: Page) {
 export async function expectDiscoveryPage(page: Page) {
   await expect(page.getByRole("heading", { name: /Discover VR/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /Search VRDex/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Toggle color theme" })).toBeVisible();
+  await openSiteMenu(page);
+  await expect(page.getByRole("banner").getByRole("button", { name: "Toggle color theme" })).toBeVisible();
+  await closeSiteMenu(page);
   await expect(page.getByRole("heading", { name: /Upcoming events/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Featured worlds" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Neon Harbor", exact: true })).toBeVisible();
@@ -265,7 +270,9 @@ export async function expectLookupPage(page: Page) {
   await expect(page.getByRole("link", { name: "Search results", exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Search view" })).toHaveCount(0);
   await expect(page.getByLabel("DJ name")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Toggle color theme" })).toBeVisible();
+  await openSiteMenu(page);
+  await expect(page.getByRole("banner").getByRole("button", { name: "Toggle color theme" })).toBeVisible();
+  await closeSiteMenu(page);
   await expect(page.getByRole("link", { name: "BASICBIT", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Princess Starlight Interstellar Bassline Orchestra", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Velvet Circuit", exact: true })).toBeVisible();

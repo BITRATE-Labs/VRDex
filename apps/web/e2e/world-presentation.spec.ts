@@ -47,9 +47,13 @@ test("world puts the single VRChat destination before hero artwork on phones", a
     await page.setViewportSize({ width, height: 720 });
     await expect(openWorld).toBeInViewport({ ratio: 1 });
     const [action, image] = await Promise.all([openWorld.boundingBox(), artwork.boundingBox()]);
-    expect(action && image && action.y + action.height < image.y).toBe(true);
     const platform = await main.getByText("Android / Quest", { exact: true }).boundingBox();
-    expect(platform && action && platform.y + platform.height <= action.y).toBe(true);
+    if (!action || !image || !platform) throw new Error("Missing world hero bounds");
+    expect(action.y + action.height).toBeLessThan(image.y);
+    const platformGap = action.y - platform.y - platform.height;
+    expect(platformGap).toBeGreaterThanOrEqual(0);
+    expect(platformGap).toBeLessThanOrEqual(20);
+    expect(action.height).toBeGreaterThanOrEqual(44);
   }
 });
 
@@ -79,11 +83,17 @@ test("sparse world renders real identity without fabricating a destination", asy
   await expect(main.getByText("World visibility", { exact: true })).toBeVisible();
   await expect(main.getByText("VRChat link", { exact: true })).toBeVisible();
   await expect(main.getByText("Not listed", { exact: true })).toBeVisible();
-  await page.setViewportSize({ width: 320, height: 720 });
+  const platforms = main.locator("dl > div").filter({ has: page.getByText("Platforms", { exact: true }) });
+  await expect(platforms.getByText("Unknown", { exact: true })).toBeVisible();
   const record = main.locator("section");
-  await expect(record).toBeInViewport({ ratio: 1 });
-  const [shell, card] = await Promise.all([main.boundingBox(), record.boundingBox()]);
-  expect(shell && card && Math.abs(shell.y + shell.height / 2 - card.y - card.height / 2)).toBeLessThanOrEqual(2);
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 720 });
+    await expect(record).toBeInViewport({ ratio: 1 });
+    const [shell, card] = await Promise.all([main.boundingBox(), record.boundingBox()]);
+    if (!shell || !card) throw new Error("Missing sparse world bounds");
+    expect(card.y - shell.y).toBeGreaterThanOrEqual(24);
+    expect(card.y - shell.y).toBeLessThanOrEqual(40);
+  }
   await expect(main.getByText("Public", { exact: true })).toBeVisible();
   await expect(main.getByRole("img", { name: "Lantern Cove", exact: true })).toHaveCount(0);
   await expect(main.getByRole("heading", { name: "About this world", exact: true })).toHaveCount(0);
