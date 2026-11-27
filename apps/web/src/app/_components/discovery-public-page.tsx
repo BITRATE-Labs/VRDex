@@ -299,7 +299,7 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
     <div className="rounded-panel border border-border bg-surface transition-colors hover:border-border-strong">
       <TrackedDiscoveryLink
         className={cn(
-          "group relative flex min-h-11 items-start gap-3 rounded-panel p-3 transition-colors hover:bg-surface-strong focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-strong sm:p-4",
+          "group flex min-h-11 items-start gap-3 rounded-panel p-3 transition-colors hover:bg-surface-strong focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-strong sm:p-4",
           (result.person?.genres.length || result.person?.outboundLinks.length) && "pb-1 sm:pb-2",
           result.claimEntryPath && "pb-2 sm:pb-2",
         )}
@@ -313,7 +313,7 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
       >
         <SearchResultImage result={result} />
         <span className="flex min-w-0 flex-1 flex-col gap-1 [overflow-wrap:anywhere]">
-          <span className="pe-5 text-xl leading-tight font-semibold text-accent-strong underline decoration-accent/55 underline-offset-4 group-hover:decoration-current">
+          <span className="text-xl leading-tight font-semibold text-accent-strong underline decoration-accent/55 underline-offset-4 group-hover:decoration-current">
             {result.title}
           </span>
           <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0 text-xs text-muted sm:text-sm">
@@ -325,13 +325,12 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
           {result.summary ? <span className="line-clamp-2 text-sm leading-5 text-muted">{result.summary}</span> : null}
           {roleLabels.length > 0 ? <span className="text-xs font-semibold text-foreground">{roleLabels.join(" · ")}</span> : null}
         </span>
-        <ChevronRight aria-hidden="true" className="absolute end-3 top-4 size-4 text-accent-strong sm:end-4 sm:top-5" />
       </TrackedDiscoveryLink>
       {result.person ? <PublicSearchResultDetails person={result.person} /> : null}
       {result.claimEntryPath ? (
         <div className="ml-16 w-fit pb-3 pr-3 sm:ml-[5.25rem] sm:pr-4">
           <Link
-            className="inline-flex min-h-11 items-center rounded-control border border-border px-3 text-sm font-medium text-muted transition-colors hover:border-border-strong hover:bg-surface-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-strong"
+            className="inline-flex min-h-11 items-center rounded-control pr-3 text-sm font-medium text-muted underline decoration-current/50 underline-offset-4 hover:text-foreground hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
             href={result.claimEntryPath}
           >
             Claim this profile
