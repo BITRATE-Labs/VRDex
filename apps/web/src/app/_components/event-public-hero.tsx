@@ -24,10 +24,10 @@ export function EventPublicHero({
 }) {
   const actionClassName = cn(
     buttonVariants({ variant: bannerStyle ? "secondary" : "surface" }),
-    "h-9 min-w-9 gap-1 whitespace-nowrap px-1.5 py-0 text-xs sm:px-3 [&_svg]:hidden [&_svg]:size-3.5 [&_svg]:shrink-0 min-[360px]:[&_svg]:block",
+    "h-11 min-w-11 gap-1 whitespace-nowrap px-1.5 py-0 text-xs sm:h-9 sm:min-w-9 sm:px-3 [&_svg]:hidden [&_svg]:size-3.5 [&_svg]:shrink-0 min-[360px]:[&_svg]:block",
     !bannerStyle && "focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-strong",
   );
-  const tooltipClassName = "pointer-events-none absolute right-0 bottom-full z-20 mb-2 hidden whitespace-nowrap rounded-control border border-border bg-surface px-2 py-1 text-xs text-foreground shadow-lg group-focus-within:block sm:top-full sm:bottom-auto sm:mt-2 sm:mb-0";
+  const tooltipClassName = "pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden whitespace-nowrap rounded-control border border-border bg-surface px-2 py-1 text-xs text-foreground shadow-lg group-focus-within:block sm:top-full sm:right-0 sm:bottom-auto sm:left-auto sm:mt-2 sm:mb-0";
   const actionTooltipClassName = cn(tooltipClassName, "group-hover:block");
 
   const detailTextClassName = bannerStyle ? "text-white/80" : "text-muted";
@@ -56,7 +56,7 @@ export function EventPublicHero({
               <div className="flex flex-wrap items-center gap-x-4">
                 {startTime}
                 <a
-                  className="inline-flex min-h-8 items-center rounded-control text-sm font-medium underline decoration-current/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-current"
+                  className="inline-flex min-h-11 min-w-11 items-center rounded-control text-sm font-medium underline decoration-current/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-current sm:min-h-8"
                   href="#event-lineup"
                 >
                   Lineup
@@ -74,7 +74,7 @@ export function EventPublicHero({
             {event.venueLabel ? <p className={cn("mt-3 text-sm", detailTextClassName)}>{event.venueLabel}</p> : null}
           </div>
         </div>
-        <nav aria-label="Event actions" className="mt-4 flex shrink-0 flex-wrap justify-end gap-1.5 sm:order-first sm:mt-0">
+        <nav aria-label="Event actions" className="mt-3 flex shrink-0 flex-wrap gap-1.5 sm:order-first sm:mt-0 sm:justify-end">
           {eventPath && canHost ? <span className="group relative inline-flex">
             <Link aria-label="Host view" className={actionClassName} href={`${eventPath}/host`}>
               <ListMusic aria-hidden="true" />
@@ -90,7 +90,13 @@ export function EventPublicHero({
             <span role="tooltip" className={actionTooltipClassName}>Add to calendar</span>
           </span> : null}
           <span className="group relative inline-flex">
-            <button type="button" aria-label="Report event" aria-haspopup="dialog" className={actionClassName} onClick={onReport}>
+            <button
+              type="button"
+              aria-label="Report event"
+              aria-haspopup="dialog"
+              className={cn(actionClassName, "max-sm:border-transparent max-sm:bg-transparent max-sm:text-inherit! max-sm:hover:bg-current/10")}
+              onClick={onReport}
+            >
               <Flag aria-hidden="true" />
               Report
             </button>

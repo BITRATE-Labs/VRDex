@@ -293,8 +293,10 @@ test("populated Search aligns titles and keeps media and role details available 
   await expect(basicbit.getByText("Software Dev | 3D Designer | VRDJ", { exact: true })).toBeVisible();
   await expect(basicbit.getByText("Software Dev · 3D Designer · VRDJ", { exact: true })).toHaveCount(0);
   const mothRoles = moth.getByText("DJ · VRDJ · Fixture lineup", { exact: true });
-  await expect(mothRoles).toBeInViewport({ ratio: 1 });
-  await expect(moth.getByText("Techno · Hardgroove · Electro", { exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(mothRoles).toBeVisible();
+  await expect(moth.getByText("Techno · Hardgroove · Electro", { exact: true })).toBeVisible();
+  await expect(moth.getByRole("link", { name: "Claim this profile", exact: true })).toBeVisible();
+  await expect(moth.getByText("Community submitted", { exact: true })).toHaveCSS("border-inline-start-width", "0px");
 
   const genrePreview = basicbit.getByText("DnB · House · Techno", { exact: true });
   const moreGenres = basicbit.getByText("+8", { exact: true });
@@ -305,8 +307,15 @@ test("populated Search aligns titles and keeps media and role details available 
     links.boundingBox(),
   ]);
   expect(previewBounds!.x).toBe(titles[1]!.x);
-  expect(moreBounds!.x).toBeGreaterThan(previewBounds!.x);
+  expect(moreBounds!.x).toBe(previewBounds!.x);
+  expect(moreBounds!.y).toBeGreaterThanOrEqual(previewBounds!.y + previewBounds!.height);
+  expect(linksBounds!.y).toBe(moreBounds!.y);
   expect(linksBounds!.x).toBeGreaterThan(moreBounds!.x);
+  const mothLinksBounds = await moth.getByText("Links", { exact: true }).boundingBox();
+  for (const bounds of [moreBounds!, linksBounds!, mothLinksBounds!]) {
+    expect(bounds.width).toBeGreaterThanOrEqual(44);
+    expect(bounds.height).toBeGreaterThanOrEqual(44);
+  }
 
   await moreGenres.focus();
   await moreGenres.press("Enter");
@@ -327,6 +336,12 @@ test("populated Search aligns titles and keeps media and role details available 
   expect(linksPanel!.x).toBe(genresPanel!.x);
   expect(linksPanel!.width).toBe(genresPanel!.width);
   expect(linksPanel!.y).toBeGreaterThanOrEqual(genresPanel!.y + genresPanel!.height);
+  await links.press("Space");
+  await expect(links).toBeFocused();
+  await expect(expandedLinks).toBeHidden();
+  await moreGenres.press("Space");
+  await expect(moreGenres).toBeFocused();
+  await expect(expandedGenres).toBeHidden();
 
   const avatarRoute = "**/api/e2e/fixture-assets/fixture-aurora-profile-image";
   await page.route(avatarRoute, (route) => route.abort());
@@ -388,6 +403,7 @@ test("sparse public results omit empty disclosure controls @flow @fixture", asyn
   await expect(profile.getByText("Unclaimed", { exact: true })).toBeVisible();
   const claim = row.getByRole("link", { name: "Claim this profile", exact: true });
   await expect(claim).toHaveAttribute("href", "/claim/playwright-sparse-import?source=search");
+  await expect(row.getByRole("link")).toHaveCount(2);
   await expect(row.getByText("Links", { exact: true })).toHaveCount(0);
   await expect(row.locator("summary")).toHaveCount(0);
   await expect(row.getByText("No public links", { exact: true })).toHaveCount(0);
@@ -415,6 +431,8 @@ test("sparse public results omit empty disclosure controls @flow @fixture", asyn
   await profile.focus();
   await page.keyboard.press("Tab");
   await expect(claim).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(profile).toBeFocused();
 });
 
 test("long public names and link destinations fit narrow results @flow @fixture", async ({ page, isMobile, createSearchProfiles }, info) => {

@@ -184,12 +184,12 @@ function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[];
             ].filter(Boolean).join(" · ") || undefined}
             key={event.slug ?? `${event.title}:${event.startAt}`}
             metadata={event.nextSlots && event.nextSlots.length > 0 ? (
-              <ul className="grid gap-1.5 text-sm text-muted">
+              <ul className="grid text-sm text-muted sm:gap-1.5">
                 {event.nextSlots.map((slot) => (
-                  <li className="flex flex-wrap items-baseline gap-x-2" key={`${slot.startAt}:${slot.displayLabel}`}>
+                  <li className="flex flex-wrap items-center gap-x-2 sm:items-baseline" key={`${slot.startAt}:${slot.displayLabel}`}>
                     <ViewerLocalEventTime className="font-mono text-xs text-foreground" timestamp={slot.startAt} />
                     {slot.performer ? (
-                      <Link className="font-medium text-foreground underline decoration-border-strong underline-offset-4 hover:decoration-current" href={`/${slot.performer.slug}`}>
+                      <Link className="rounded-control font-medium text-foreground underline decoration-border-strong underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-accent-strong max-sm:inline-flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center" href={`/${slot.performer.slug}`}>
                         {slot.performer.displayName}
                       </Link>
                     ) : (
@@ -205,12 +205,13 @@ function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[];
             time={<ViewerLocalEventDateTime timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />}
             title={publicEventPath(event) ? (
               <TrackedDiscoveryLink
-                className="rounded-control text-section text-accent-strong underline decoration-accent/55 underline-offset-4 transition hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                className="rounded-control text-section text-accent-strong underline decoration-accent/55 underline-offset-4 transition hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring max-sm:flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center max-sm:gap-2"
                 eventName="event_card_clicked"
                 href={publicEventPath(event)!}
                 properties={{ entity_type: "event", surface: "upcoming_events" }}
               >
-                {event.title}
+                <span>{event.title}</span>
+                <ChevronRight aria-hidden="true" className="size-4 shrink-0 sm:hidden" />
               </TrackedDiscoveryLink>
             ) : event.title}
           />
@@ -299,7 +300,7 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
     <div className="rounded-panel border border-border bg-surface transition-colors hover:border-border-strong">
       <TrackedDiscoveryLink
         className={cn(
-          "group relative flex min-h-11 items-start gap-3 rounded-panel p-3 transition-colors hover:bg-surface-strong focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-strong sm:p-4",
+          "group flex min-h-11 items-start gap-3 rounded-panel p-3 transition-colors hover:bg-surface-strong focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-strong sm:p-4",
           (result.person?.genres.length || result.person?.outboundLinks.length) && "pb-1 sm:pb-2",
           result.claimEntryPath && "pb-2 sm:pb-2",
         )}
@@ -313,25 +314,24 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
       >
         <SearchResultImage result={result} />
         <span className="flex min-w-0 flex-1 flex-col gap-1 [overflow-wrap:anywhere]">
-          <span className="pe-5 text-xl leading-tight font-semibold text-accent-strong underline decoration-accent/55 underline-offset-4 group-hover:decoration-current">
+          <span className="text-xl leading-tight font-semibold text-accent-strong underline decoration-accent/55 underline-offset-4 group-hover:decoration-current">
             {result.title}
           </span>
           <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0 text-xs text-muted sm:text-sm">
             <span className="font-medium text-foreground">{entityLabel(result)}</span>
-            {trustLabel ? <span className="border-s border-border ps-2 text-xs">{trustLabel}</span> : null}
+            {trustLabel ? <span className="text-xs sm:border-s sm:border-border sm:ps-2">{trustLabel}</span> : null}
             {subtitle ? <span>{subtitle}</span> : null}
             {result.startsAt === undefined && result.eventDate === undefined ? null : <ViewerLocalEventDateTime className="text-sm text-accent-strong" timestamp={result.startsAt} eventDate={result.eventDate} scheduleKind={result.scheduleKind} />}
           </span>
           {result.summary ? <span className="line-clamp-2 text-sm leading-5 text-muted">{result.summary}</span> : null}
           {roleLabels.length > 0 ? <span className="text-xs font-semibold text-foreground">{roleLabels.join(" · ")}</span> : null}
         </span>
-        <ChevronRight aria-hidden="true" className="absolute end-3 top-4 size-4 text-accent-strong sm:end-4 sm:top-5" />
       </TrackedDiscoveryLink>
       {result.person ? <PublicSearchResultDetails person={result.person} /> : null}
       {result.claimEntryPath ? (
         <div className="ml-16 w-fit pb-3 pr-3 sm:ml-[5.25rem] sm:pr-4">
           <Link
-            className="inline-flex min-h-11 items-center rounded-control border border-border px-3 text-sm font-medium text-muted transition-colors hover:border-border-strong hover:bg-surface-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-strong"
+            className="inline-flex min-h-11 items-center rounded-control pr-3 text-sm font-medium text-muted underline decoration-current/50 underline-offset-4 hover:text-foreground hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
             href={result.claimEntryPath}
           >
             Claim this profile
@@ -506,7 +506,10 @@ export function DiscoveryLandingPage({
         {status === "live" ? <p className="text-sm leading-5 text-muted">No events</p> : null}
       </div>
       <Link
-        className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "min-h-11 underline decoration-border-strong underline-offset-4 hover:decoration-current")}
+        className={cn(
+          buttonVariants({ size: "sm", variant: "ghost" }),
+          "min-h-11 whitespace-nowrap !text-muted underline decoration-border-strong underline-offset-4 hover:decoration-current max-sm:self-start max-sm:items-start max-sm:py-0",
+        )}
         href="/events/new"
       >
         Add event

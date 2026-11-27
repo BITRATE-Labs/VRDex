@@ -53,6 +53,7 @@ export function TimelineChart({
     endAt: origin + 144 * HOUR,
     timeZone: range.timeZone,
   };
+  const markCurrentTime = now >= origin && now < canvasRange.endAt;
   const visibleSaved = saved.filter((item) => {
     if (item.kind !== "available" || item.status === "cancelled") return false;
     const schedule = item.slot?.schedule ?? item.event.schedule;
@@ -100,9 +101,9 @@ export function TimelineChart({
         entry.target.toggleAttribute("data-axis-label-visible", entry.intersectionRatio === 1);
       }
     }, { root, threshold: 1 });
-    root.querySelectorAll("[data-axis-label]").forEach((label) => observer.observe(label));
+    root.querySelectorAll("[data-axis-label], [data-current-time-label]").forEach((label) => observer.observe(label));
     return () => observer.disconnect();
-  }, [origin, range.timeZone, showEmptyState]);
+  }, [origin, range.timeZone, showEmptyState, markCurrentTime]);
   if (showEmptyState) {
     return <div ref={scroller} className={styles.scroller} data-testid="favorites-empty-state">{emptyState}</div>;
   }
@@ -241,7 +242,7 @@ export function TimelineChart({
             })}
           </div>
           <TimelineDateMarkers records={records} range={range} origin={origin} {...actions} />
-          {now >= origin && now < canvasRange.endAt && (
+          {markCurrentTime && (
             <div
               className={styles.now}
               aria-label="Current time"
@@ -249,7 +250,7 @@ export function TimelineChart({
                 left: timeToX({ instant: now, origin, pixelsPerHour: 100 }),
               }}
             >
-              <span>
+              <span data-current-time-label>
                 {new Intl.DateTimeFormat(undefined, {
                   timeZone: range.timeZone,
                   hour: "numeric",

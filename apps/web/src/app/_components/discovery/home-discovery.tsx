@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, LoaderCircle } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, LoaderCircle } from "lucide-react";
 import {
   Children,
   useEffect,
@@ -59,38 +59,133 @@ function retainFocused<T extends { id: string }>(
   return result.slice(0, 2);
 }
 
-function updateRailEdges(rail: HTMLDivElement) {
-  const { clientWidth, scrollLeft, scrollWidth } = rail;
-  // Snap can advance through the 3px focus gutter at rest.
-  const edgeTolerance = 4;
-  rail.toggleAttribute("data-scroll-left", scrollLeft > edgeTolerance);
-  rail.toggleAttribute(
-    "data-scroll-right",
-    scrollWidth - clientWidth - scrollLeft > edgeTolerance,
-  );
-}
-
-function CardRail({ children }: { children: ReactNode }) {
+function CardRail({
+  children,
+  title,
+  placeholder = false,
+}: {
+  children: ReactNode;
+  title: "Events" | "Clubs";
+  placeholder?: boolean;
+}) {
   const ref = useRef<HTMLDivElement>(null);
+  const controlsRef = useRef<HTMLDivElement>(null);
   const count = Children.count(children);
+  const [edges, setEdges] = useState<{ left: boolean; right: boolean }>();
+  const group = title.toLowerCase();
+  const headingId = `discovery-${group}-heading`;
+  const railId = `discovery-${group}-rail`;
+  function updateEdges(rail: HTMLDivElement) {
+    const { clientWidth, scrollLeft, scrollWidth } = rail;
+    // Snap can advance through the 3px focus gutter at rest.
+    const edgeTolerance = 4;
+    const left = scrollLeft > edgeTolerance;
+    const right = scrollWidth - clientWidth - scrollLeft > edgeTolerance;
+    if (!left && !right && controlsRef.current?.contains(document.activeElement)) {
+      const wasAtEnd =
+        rail.hasAttribute("data-scroll-left") &&
+        !rail.hasAttribute("data-scroll-right");
+      const card = wasAtEnd ? rail.lastElementChild : rail.firstElementChild;
+      card?.querySelector<HTMLAnchorElement>("a[href]")?.focus({
+        preventScroll: true,
+      });
+    }
+    setEdges((previous) =>
+      previous?.left === left && previous.right === right
+        ? previous
+        : { left, right },
+    );
+  }
+
   useEffect(() => {
     const rail = ref.current;
     if (!rail) return;
-    updateRailEdges(rail);
-    const observer = new ResizeObserver(() => updateRailEdges(rail));
+    const observer = new ResizeObserver(() => updateEdges(rail));
     observer.observe(rail);
     return () => observer.disconnect();
   }, [count]);
 
+  function move(direction: -1 | 1) {
+    const rail = ref.current;
+    if (!rail || !edges?.[direction === -1 ? "left" : "right"]) return;
+    rail.scrollBy({ left: direction * rail.clientWidth });
+  }
+
+  function settleClubRail(rail: HTMLDivElement) {
+    if (
+      title !== "Clubs" ||
+      getComputedStyle(rail).scrollSnapType !== "x mandatory"
+    ) return;
+    const end = rail.scrollWidth - rail.clientWidth;
+    const stop = rail.scrollLeft > end / 2 ? end : 0;
+    if (Math.abs(rail.scrollLeft - stop) > 1) rail.scrollTo({ left: stop });
+  }
+
   return (
-    <div
-      className={styles.cards}
-      data-scroll-right={count > 1 ? "" : undefined}
-      ref={ref}
-      onScroll={(event) => updateRailEdges(event.currentTarget)}
-    >
-      {children}
-    </div>
+    <>
+      <div className={styles.railHeading}>
+        <h3 id={headingId} className={styles.groupHeading}>
+          {title}
+        </h3>
+        {!placeholder && count > 1 && (edges?.left || edges?.right) && (
+          <div
+            className={styles.railControls}
+            ref={controlsRef}
+            onKeyDown={(event) => {
+              if (event.key !== "Tab" || event.shiftKey || edges.right) return;
+              const link = ref.current?.lastElementChild
+                ?.querySelector<HTMLAnchorElement>("a[href]");
+              if (!link) return;
+              event.preventDefault();
+              link.focus({ preventScroll: true });
+            }}
+          >
+            <button
+              type="button"
+              aria-label={`Previous ${group}`}
+              aria-controls={railId}
+              aria-disabled={!edges.left}
+              tabIndex={edges.left ? 0 : -1}
+              onClick={() => move(-1)}
+            >
+              <ChevronLeft size={18} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              aria-label={`Next ${group}`}
+              aria-controls={railId}
+              aria-disabled={!edges.right}
+              tabIndex={edges.right ? 0 : -1}
+              onClick={() => move(1)}
+            >
+              <ChevronRight size={18} aria-hidden="true" />
+            </button>
+          </div>
+        )}
+      </div>
+      <div
+        id={railId}
+        className={
+          title === "Clubs" ? `${styles.cards} ${styles.clubRail}` : styles.cards
+        }
+        data-scroll-left={edges?.left ? "" : undefined}
+        data-scroll-right={(edges?.right ?? count > 1) ? "" : undefined}
+        ref={ref}
+        onScroll={(event) => updateEdges(event.currentTarget)}
+        onScrollEnd={(event) => settleClubRail(event.currentTarget)}
+        onTouchEnd={(event) => {
+          if (title !== "Clubs" || event.touches.length > 0) return;
+          const rail = event.currentTarget;
+          const offset = rail.scrollLeft;
+          // Some touch releases end between snaps without a scrollend event.
+          requestAnimationFrame(() => {
+            if (rail.scrollLeft === offset) settleClubRail(rail);
+          });
+        }}
+      >
+        {children}
+      </div>
+    </>
   );
 }
 
@@ -115,7 +210,7 @@ function EventCards({
   ...props
 }: EventCardsProps) {
   return (
-    <CardRail>
+    <CardRail title="Events">
       {events.map((event, index) => (
         <div
           key={event.id}
@@ -208,9 +303,6 @@ function AvailableDiscovery({
   return (
     <div className={styles.groups} data-empty-group={emptyGroup}>
       <div role="group" aria-labelledby="discovery-events-heading">
-        <h3 id="discovery-events-heading" className={styles.groupHeading}>
-          Events
-        </h3>
         <Cards
           {...props}
           events={events}
@@ -231,10 +323,7 @@ function AvailableDiscovery({
           ))}
       </div>
       <div role="group" aria-labelledby="discovery-clubs-heading">
-        <h3 id="discovery-clubs-heading" className={styles.groupHeading}>
-          Clubs
-        </h3>
-        <CardRail>
+        <CardRail title="Clubs">
           {clubs.map((club, index) =>
             club.profileType === "community" ? (
               <div
@@ -270,10 +359,9 @@ function AvailableDiscovery({
 function DiscoveryFrames() {
   return (
     <div className={styles.groups} aria-hidden="true">
-      {["Events", "Clubs"].map((group, index) => (
+      {(["Events", "Clubs"] as const).map((group, index) => (
         <div key={group}>
-          <h3 className={styles.groupHeading}>{group}</h3>
-          <CardRail>
+          <CardRail title={group} placeholder>
             {[0, 1].map((slot) => (
               <div
                 key={slot}
