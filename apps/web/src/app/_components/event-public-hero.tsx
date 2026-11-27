@@ -25,7 +25,8 @@ export function EventPublicHero({
     "h-9 min-w-9 gap-1 whitespace-nowrap px-1.5 py-0 text-xs sm:px-3 [&_svg]:hidden [&_svg]:size-3.5 [&_svg]:shrink-0 min-[360px]:[&_svg]:block",
     !bannerStyle && "focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-strong",
   );
-  const actionTooltipClassName = "pointer-events-none absolute right-0 bottom-full z-20 mb-2 hidden whitespace-nowrap rounded-control border border-border bg-surface px-2 py-1 text-xs text-foreground shadow-lg group-hover:block group-focus-within:block sm:top-full sm:bottom-auto sm:mt-2 sm:mb-0";
+  const tooltipClassName = "pointer-events-none absolute right-0 bottom-full z-20 mb-2 hidden whitespace-nowrap rounded-control border border-border bg-surface px-2 py-1 text-xs text-foreground shadow-lg group-focus-within:block sm:top-full sm:bottom-auto sm:mt-2 sm:mb-0";
+  const actionTooltipClassName = cn(tooltipClassName, "group-hover:block");
 
   const detailTextClassName = bannerStyle ? "text-white/80" : "text-muted";
 
@@ -64,7 +65,7 @@ export function EventPublicHero({
               <ListMusic aria-hidden="true" />
               Host view
             </Link>
-            <span role="tooltip" className={actionTooltipClassName}>Host view</span>
+            <span role="tooltip" className={cn(tooltipClassName, "sm:group-hover:block")}>Host view</span>
           </span> : null}
           {eventPath ? <span className="group relative inline-flex">
             <a aria-label="Add to calendar" className={actionClassName} href={`${eventPath}/calendar.ics`}>

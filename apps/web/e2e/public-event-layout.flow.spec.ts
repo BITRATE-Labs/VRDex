@@ -114,6 +114,10 @@ for (const timezoneId of ["UTC", "America/Los_Angeles"]) {
           const play = main.getByRole("button", { name: /^Play / });
           await expect(play.getByText("Play", { exact: true })).toBeVisible();
           await page.setViewportSize({ width: 320, height: 740 });
+          if (slug === watchSlug) {
+            await actions.getByRole("link", { name: "Host view" }).hover();
+            await expect(actions.getByRole("tooltip", { name: "Host view" })).toBeHidden();
+          }
           const control = await play.locator("[data-watch-play-control]").boundingBox();
           expect(control && control.y + control.height).toBeLessThanOrEqual(620);
         }
@@ -143,6 +147,7 @@ test("sparse guest events preserve real content and deny Host routes @flow @fixt
   const sparseHost = main.getByRole("link", { name: /Afterglow Social.*Host/ });
   await expect(sparseHost).toBeVisible();
   await expect(sparseHost).toHaveAttribute("href", "/playwright-afterglow-social");
+  await expect.poll(() => sparseHost.locator("img").evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
   await page.setViewportSize({ width: 1280, height: 900 });
   expect((await sparseHost.boundingBox())?.width).toBeLessThan(576);
   const calendar = await request.get(path + sparseSlug + "/calendar.ics");
@@ -162,6 +167,12 @@ test("sparse guest events preserve real content and deny Host routes @flow @fixt
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
   await expect(report).toBeFocused();
+
+  const hostAvatarRoute = "**/api/e2e/fixture-assets/fixture-afterglow-event-poster";
+  await page.route(hostAvatarRoute, (route) => route.abort());
+  await page.reload();
+  await expect(sparseHost.getByText("AS", { exact: true })).toBeVisible();
+  await page.unroute(hostAvatarRoute);
 
   await page.goto(path + posterlessSlug);
   await expect(main.getByAltText(/ poster$/)).toHaveCount(0);
