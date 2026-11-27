@@ -51,6 +51,7 @@ type ProfileVrcdnLink = {
   platform?: string;
   kind?: "vrchat_user" | "vrchat_group" | "discord_guild";
   artworkUrl?: string;
+  hideCaption?: boolean;
 };
 
 type ProfileDiscordHandle = {
@@ -59,6 +60,7 @@ type ProfileDiscordHandle = {
 };
 
 type ProfileVrcdnStreamsProps = {
+  compactLinks?: boolean;
   discordHandles: ProfileDiscordHandle[];
   initialLiveStates?: VrcdnLiveStates;
   links: ProfileVrcdnLink[];
@@ -77,6 +79,7 @@ function responseStates(value: unknown): VrcdnLiveStates | null {
 }
 
 export function ProfileVrcdnStreams({
+  compactLinks = false,
   discordHandles,
   initialLiveStates,
   links,
@@ -204,21 +207,21 @@ export function ProfileVrcdnStreams({
     <div className={cn("grid min-w-0 grid-cols-1 gap-x-10", hasWatchSurface ? "lg:grid-cols-[minmax(0,1fr)_24rem]" : undefined)}>
       <div>
         {hasLinks ? (
-          <section className="py-8">
-            <SectionHeading>Links</SectionHeading>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <section aria-label={compactLinks ? "Links" : undefined} className={compactLinks ? "px-4 pb-4 sm:px-6" : "py-8"}>
+            {!compactLinks ? <SectionHeading>Links</SectionHeading> : null}
+            <div className={compactLinks ? "grid" : "mt-5 grid gap-3 sm:grid-cols-2"}>
               {links.map((link) => {
                 const vrchat = link.kind === "vrchat_user" || link.kind === "vrchat_group" || link.type === "vrchat_profile";
                 const service = vrchat ? link.platform ?? "VRChat" : link.type === "twitch" ? "Twitch" : null;
                 const label = vrchat ? link.label.replace(/^VRChat\s*:\s*/i, "").trim() || link.label : link.label;
                 return (
-                  <a className={cn(buttonVariants({ variant: "secondary" }), profileLinkCardClassName)} href={link.href} key={link.key} rel="noreferrer" target="_blank">
-                    <span aria-hidden="true" className={cn(profileLinkIconClassName, vrchat ? "[&>svg]:size-10" : "[&>svg]:size-6")}>
+                  <a className={cn(buttonVariants({ variant: "secondary" }), profileLinkCardClassName, compactLinks && "min-h-12 px-3 py-2")} href={link.href} key={link.key} rel="noreferrer" target="_blank">
+                    <span aria-hidden="true" className={cn(profileLinkIconClassName, vrchat ? "[&>svg]:size-10" : "[&>svg]:size-6", compactLinks && "size-8 [&>svg]:size-8")}>
                       {link.kind && link.artworkUrl ? <ProfileDestinationArtwork kind={link.kind} src={link.artworkUrl} /> : <LinkTypeIcon type={link.kind === "discord_guild" ? "discord" : vrchat ? "vrchat_profile" : link.type ?? "website"} />}
                     </span>
                     <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
                       <span className="block font-medium">{service ?? label}</span>
-                      {service ? <span className="mt-0.5 block text-xs font-normal text-muted">{label}</span> : null}
+                      {service && !link.hideCaption ? <span className="mt-0.5 block text-xs font-normal text-muted">{label}</span> : null}
                       {link.live ? <span className="mt-0.5 block text-xs font-normal text-success">Live now</span> : null}
                       {link.verifiedAt !== undefined ? <ConnectionVerification at={link.verifiedAt} group={link.kind === "vrchat_group"} /> : !service ? <span className="mt-0.5 block text-xs font-normal text-muted">{link.platform ?? hostLabel(link.href)}</span> : null}
                     </span>

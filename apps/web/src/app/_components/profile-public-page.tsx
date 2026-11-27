@@ -18,7 +18,7 @@ import { CommunityPopulationHistory } from "./public-group-population-chart";
 import { CommunityActivityDetails, CommunityActivitySection, CommunityActivitySummary } from "./community-activity-layout";
 import type { PopulationSeries } from "@/lib/public-group-statistics";
 import { buttonVariants } from "@/components/ui/button";
-import { Card, Eyebrow, SectionHeading } from "@/components/ui/card";
+import { Card, Eyebrow, SectionHeading, SectionTitle } from "@/components/ui/card";
 import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { VerifiedTrustMark } from "@/components/ui/verified-trust-mark";
 import { avatarFrameStyle, defaultAvatarAppearance, type AvatarAppearance } from "@/lib/avatar-appearance";
@@ -425,25 +425,33 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
   const hasDefaultAppearance = mediaKit.compactDisplay === "profile_image"
     && Object.entries(defaultAvatarAppearance).every(([key, value]) => avatarAppearance[key as keyof AvatarAppearance] === value)
     && sectionOrder.every((section, index) => section === defaultProfileSectionOrder[index]);
-  const useCompactIdentity = !embedded && isPerson && canClaim && hasDefaultAppearance
+  const hasSparseIdentity = !embedded && canClaim && hasDefaultAppearance
     && !avatarImageUrl && !bannerStyle && !mediaKit.profileImage && !mediaKit.banner
     && !profile.headline?.trim() && !profile.about?.trim() && !aboutCopy && !profile.timezone?.trim()
     && aliases.length === 0 && focusItems.length === 0 && metadata.length === 0 && profile.genres.length === 0
-    && visibleLinks.length === 0 && !profile.verifiedConnections?.length
+    && !profile.verifiedConnections?.length
     && !hasMediaKit && !mediaKit.featuredAsset && mediaKit.assets.length === 0 && galleryAssets.length === 0
     && eventPreviews.length === 0 && profile.worldCredits.length === 0;
+  const groupDestination = creatorLinks.length === 1 ? parseProfileLinkDestination(creatorLinks[0].link) : null;
+  const useCompactCommunity = !isPerson && hasSparseIdentity && !profile.telemetry && !profile.groupMembership
+    && (visibleLinks.length === 0 || (visibleLinks.length === 1 && groupDestination?.kind === "vrchat_group"));
+  const useCompactIdentity = useCompactCommunity || (isPerson && hasSparseIdentity && visibleLinks.length === 0);
   const secondarySections: Partial<Record<ProfilePublicSectionKey, ReactNode>> = {
     events: eventPreviews.length > 0 || !isPerson ? (
-      <section className="border-t border-border py-8">
+      <section className={cn("border-t border-border", useCompactCommunity ? "pb-4 pt-5" : "py-8")}>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <SectionHeading>{isPerson ? "Upcoming events" : "Hosted events"}</SectionHeading>
+          {useCompactCommunity
+            ? <SectionTitle className="text-xl">Hosted events</SectionTitle>
+            : <SectionHeading>{isPerson ? "Upcoming events" : "Hosted events"}</SectionHeading>}
           {!isPerson ? <Link className={buttonVariants({ variant: "secondary", size: "sm" })} href={`/events/new?community=${encodeURIComponent(profile.slug)}`}>Add event</Link> : null}
         </div>
-        <div className="mt-5 grid gap-3 lg:grid-cols-2">
-          {eventPreviews.map((event) => (
-            <EventPreviewCard event={event} key={`${event.slug ?? event.title}-${event.startAt}`} />
-          ))}
-        </div>
+        {eventPreviews.length > 0 ? (
+          <div className="mt-5 grid gap-3 lg:grid-cols-2">
+            {eventPreviews.map((event) => (
+              <EventPreviewCard event={event} key={`${event.slug ?? event.title}-${event.startAt}`} />
+            ))}
+          </div>
+        ) : useCompactCommunity ? <p className="mt-2 text-sm text-muted">No events</p> : null}
       </section>
     ) : null,
     media_kit: hasMediaKit ? (
@@ -507,11 +515,50 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
     ) : null,
   };
 
+  const profileLinks = (
+    <ProfileVrcdnStreams
+      compactLinks={useCompactCommunity}
+      discordHandles={discordHandles.map(({ handle, item }) => ({
+        handle,
+        key: item.link.url,
+      }))}
+      initialLiveStates={profile.vrcdnLive}
+      links={creatorLinks.map(({ link, href }) => {
+        const connection = link.verifiedAt === undefined ? undefined : profile.verifiedConnections?.find(connection =>
+          isVerifiedVrchatLink(link.url, [{ ...connection, verified: true }]));
+        const display = profileLinkPresentation(link, connection?.assetExternalId);
+        const hideCaption = useCompactCommunity && !profileLinkHasCustomLabel(link)
+          && (display.label === profile.displayName || (groupDestination?.locator.startsWith("grp_")
+            && display.label === profileLinkPresentation({ type: link.type, url: link.url }).label));
+        return {
+          href, type: link.type, key: `${link.type}-${link.url}`, ...display,
+          hideCaption,
+          platform: link.type === "twitch" ? "Twitch" : display.platform,
+          label: link.type === "twitch" ? twitchLoginFromUrl(link.url) ?? display.label : connection && !profileLinkHasCustomLabel(link)
+            ? connection.displayName || display.label : display.label,
+          live: link === twitchLink?.link && profile.twitchLive?.status === "live",
+          verifiedAt: link.verifiedAt,
+        };
+      })}
+      profileSlug={profile.slug}
+      profileId={profile.id}
+      displayName={profile.displayName}
+      streams={vrcdnStreams.map(({ item, label, stream }) => ({
+        claimable: true,
+        key: `${item.link.type}-${item.link.url}`,
+        label,
+        pcUrl: stream.pcUrl,
+        questUrl: stream.questUrl,
+        directVideoUrl: stream.directVideoUrl,
+        streamId: stream.streamId,
+      }))}
+    />
+  );
   const stackOwnershipPrompt = !embedded && isPerson && !useCompactIdentity;
   const Shell = embedded ? Fragment : PageShell;
   return (
     <Shell>
-      <PageContainer>
+      <PageContainer className={useCompactCommunity ? "max-w-2xl" : undefined}>
 
         <div className={useCompactIdentity ? "mx-auto w-full max-w-2xl rounded-panel border border-border-strong bg-surface-strong shadow-panel" : "contents"}>
           <section
@@ -557,6 +604,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                     >
                       {profile.displayName}
                     </h1>
+                    {useCompactCommunity ? <p className="mt-1 text-sm font-medium text-muted">Unclaimed</p> : null}
                     {aliases.length > 0 ? (
                       <div className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-white/75">
                         <span>AKA {aliases.join(", ")}</span>
@@ -580,6 +628,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                 ) : null}
               </div>
             </div>
+            {useCompactCommunity && creatorLinks.length > 0 ? profileLinks : null}
           </section>
 
           {canClaim ? (
@@ -589,7 +638,9 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                 ? "grid gap-2 border-t border-border px-4 py-4 sm:px-6"
                 : "flex flex-wrap items-center justify-between gap-x-6 gap-y-3 py-2"}
             >
-              <p className={useCompactIdentity ? "text-sm font-medium text-foreground" : "text-sm text-muted"}>Unclaimed</p>
+              {!useCompactCommunity
+                ? <p className={useCompactIdentity ? "text-sm font-medium text-foreground" : "text-sm text-muted"}>Unclaimed</p>
+                : null}
 
               {canClaim ? (
                 <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-2", stackOwnershipPrompt && "basis-full sm:basis-auto")}>
@@ -618,39 +669,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
         </div>
 
         {profile.profileType === "person" && <HomeLiveNow key={profile.slug} performerSlug={profile.slug} />}
-        <ProfileVrcdnStreams
-          discordHandles={discordHandles.map(({ handle, item }) => ({
-            handle,
-            key: item.link.url,
-          }))}
-          initialLiveStates={profile.vrcdnLive}
-          links={creatorLinks.map(({ link, href }) => {
-            const connection = link.verifiedAt === undefined ? undefined : profile.verifiedConnections?.find(connection =>
-              isVerifiedVrchatLink(link.url, [{ ...connection, verified: true }]));
-            const display = profileLinkPresentation(link, connection?.assetExternalId);
-            return {
-              href, type: link.type, key: `${link.type}-${link.url}`, ...display,
-              platform: link.type === "twitch" ? "Twitch" : display.platform,
-              label: link.type === "twitch" ? twitchLoginFromUrl(link.url) ?? display.label : connection && !profileLinkHasCustomLabel(link)
-                ? connection.displayName || display.label : display.label,
-              live: link === twitchLink?.link && profile.twitchLive?.status === "live",
-              verifiedAt: link.verifiedAt,
-            };
-          })}
-          profileSlug={profile.slug}
-          profileId={profile.id}
-          displayName={profile.displayName}
-          streams={vrcdnStreams.map(({ item, label, stream }) => ({
-            claimable: true,
-            key: `${item.link.type}-${item.link.url}`,
-            label,
-            pcUrl: stream.pcUrl,
-            questUrl: stream.questUrl,
-            directVideoUrl: stream.directVideoUrl,
-            streamId: stream.streamId,
-          }))}
-
-        />
+        {!useCompactCommunity ? profileLinks : null}
 
         {!isPerson ? <CommunityActivity profile={profile} /> : null}
 

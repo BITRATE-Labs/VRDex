@@ -151,6 +151,40 @@ test("a sparse person profile puts its identity and ownership together @fixture"
   }
 });
 
+test("a sparse community highlights its group and confirms empty hosted events @fixture", async ({ page }) => {
+  const slug = "playwright-sparse-community";
+  const groupUrl = "https://vrchat.com/home/group/grp_12345678-1234-1234-1234-123456789abc";
+  await page.setViewportSize({ width: 320, height: 720 });
+  expect((await page.goto(`/${slug}`))?.status()).toBe(200);
+
+  const identity = page.getByRole("region", { name: "Sparse Community", exact: true });
+  const status = identity.getByText("Unclaimed", { exact: true });
+  await expect(status).toBeVisible();
+  await expect(page.getByText("Unclaimed", { exact: true })).toHaveCount(1);
+  const group = identity.getByRole("link", { name: "VRChat group", exact: true });
+  await expect(group).toHaveAttribute("href", groupUrl);
+  await expect(group).toBeInViewport({ ratio: 1 });
+  const ownership = page.getByRole("complementary", { name: "Profile ownership" });
+  const claim = ownership.getByRole("link", { name: "Claim profile", exact: true });
+  await expect(claim).toHaveAttribute("href", `/claim/${slug}?source=profile`);
+  await expect(ownership.getByRole("link", { name: "Suggest an edit", exact: true })).toHaveAttribute("href", `/${slug}/edit`);
+  const [groupBounds, claimBounds] = await Promise.all([group.boundingBox(), claim.boundingBox()]);
+  if (!groupBounds || !claimBounds) throw new Error("Missing community group link or claim action bounds");
+  expect(groupBounds.y + groupBounds.height).toBeLessThan(claimBounds.y);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+
+  const events = page.getByRole("heading", { name: "Hosted events", exact: true }).locator("xpath=ancestor::section[1]");
+  await expect(events.getByText("No events", { exact: true })).toBeVisible();
+  await expect(events.getByRole("link", { name: "Add event", exact: true })).toHaveAttribute("href", `/events/new?community=${slug}`);
+
+  expect((await page.goto(`/${slug}-custom`))?.status()).toBe(200);
+  await expect(page.getByRole("link", { name: "VRChat group Official meetup group", exact: true })).toHaveAttribute("href", groupUrl);
+
+  expect((await page.goto("/playwright-afterglow-social"))?.status()).toBe(200);
+  await expect(page.getByRole("heading", { name: "Hosted events", exact: true })).toBeVisible();
+  await expect(page.getByText("No events", { exact: true })).toHaveCount(0);
+});
+
 test.describe("artless card variants", () => {
   test.use({ timezoneId: "America/Los_Angeles" });
 
