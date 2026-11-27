@@ -1,6 +1,7 @@
 "use client";
 
 import { Moon, Sun } from "lucide-react";
+import { useLayoutEffect } from "react";
 
 import { Button } from "@/components/ui/button";
 
@@ -17,9 +18,13 @@ function currentTheme(): ColorTheme {
   return document.documentElement.dataset.theme === "light" ? "light" : "dark";
 }
 
-function applyTheme(theme: ColorTheme) {
+function setDocumentTheme(theme: ColorTheme) {
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.colorScheme = theme;
+}
+
+function applyTheme(theme: ColorTheme) {
+  setDocumentTheme(theme);
   window.localStorage.setItem(storageKey, theme);
 }
 
@@ -40,6 +45,24 @@ function transitionToTheme(theme: ColorTheme) {
 }
 
 export function ThemeToggle({ className }: { className?: string }) {
+  useLayoutEffect(() => {
+    // A recovered Next.js 404 mounts the shell without executing its head script.
+    const theme = document.documentElement.dataset.theme;
+    if (theme === "light" || theme === "dark") return;
+
+    let storedTheme: string | null = null;
+    try {
+      storedTheme = window.localStorage.getItem(storageKey);
+    } catch {
+      // The document can still follow the browser when storage is unavailable.
+    }
+    setDocumentTheme(
+      storedTheme === "light" || storedTheme === "dark"
+        ? storedTheme
+        : window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark",
+    );
+  }, []);
+
   return (
     <Button
       aria-label="Toggle color theme"

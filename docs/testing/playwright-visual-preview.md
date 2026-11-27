@@ -16,6 +16,8 @@ See `docs/testing/playwright-image-diffing.md` for the committed-baseline image 
 - Run the mutation-backed flow against a hosted dev/staging target: set `PLAYWRIGHT_BASE_URL` and `VRDEX_E2E_BROWSER_TOKEN`, then run `pnpm test:e2e:hosted`
 - Run read-only smoke against a hosted production target: set `PLAYWRIGHT_BASE_URL`, then run `pnpm test:e2e:hosted:smoke`. Hosted smoke covers production-safe public routes only; fixture-backed profile/search expectations stay local because Vercel must not expose Playwright fixtures.
 
+Local smoke also checks that an event URL with the wrong community returns 404 and gives visitors Search and Discovery links in both themes.
+
 PowerShell data-flow run with video:
 
 ```powershell

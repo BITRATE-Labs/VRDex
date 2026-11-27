@@ -107,6 +107,38 @@ test("legacy root query and lookup URL keep the DJ lookup destination", async ({
   }
 });
 
+test("missing public event offers themed recovery", async ({ page }) => {
+  test.skip(isHostedRun, "The invalid canonical route uses a local public event fixture.");
+
+  const wrongCommunityPath = visualProfilePaths.eventPath.replace(
+    "/playwright-afterglow-social/",
+    "/playwright-wrong-community/",
+  );
+  const response = await page.goto(wrongCommunityPath);
+  expect(response?.status()).toBe(404);
+
+  const main = page.getByRole("main");
+  await expect(main.getByRole("heading", { name: "404", exact: true })).toBeVisible();
+  await expect(main.getByText("This page could not be found.", { exact: true })).toBeVisible();
+  await expect(main.getByRole("link", { name: "Search", exact: true })).toHaveAttribute("href", "/search");
+  const discovery = main.getByRole("link", { name: "Discovery", exact: true });
+  await expect(discovery).toHaveAttribute("href", "/discovery");
+
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  const lightBackground = await page.locator("body").evaluate((body) => getComputedStyle(body).backgroundColor);
+  await expect(main).toHaveCSS("background-color", lightBackground);
+
+  await page.getByRole("button", { name: "Toggle color theme" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  const darkBackground = await page.locator("body").evaluate((body) => getComputedStyle(body).backgroundColor);
+  expect(darkBackground).not.toBe(lightBackground);
+  await expect(main).toHaveCSS("background-color", darkBackground);
+
+  await discovery.click();
+  await expect(page).toHaveURL("/discovery");
+});
+
+
 test("legacy media contribution route rejects claimed profiles", async ({ page }) => {
   test.skip(isHostedRun, "The Playwright-only media contribution flag is local-only.");
 
