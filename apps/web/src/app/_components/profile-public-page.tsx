@@ -591,6 +591,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
       displayName={profile.displayName}
       streams={vrcdnStreams.map(({ item, label, stream }) => ({
         claimable: true,
+        communitySubmitted: item.link.source === "community_submitted",
         key: `${item.link.type}-${item.link.url}`,
         label,
         pcUrl: stream.pcUrl,

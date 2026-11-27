@@ -6,5 +6,8 @@ test("community stream can show live without changing its provenance @fixture", 
   );
   await page.goto("/playwright-dj-aurora");
   await expect(page.getByRole("button", { name: "Play Suggested VRCDN suggested-aurora", exact: true })).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "Profile ownership" })).toContainText("Unclaimed");
+  const stream = page.getByRole("region", { name: "Suggested VRCDN suggested-aurora", exact: true });
+  await expect(stream.getByText("Community-submitted", { exact: true })).toBeVisible();
+  const identity = page.getByRole("region", { name: "DJ Aurora", exact: true });
+  await expect(identity.getByText("Unclaimed", { exact: true })).toBeVisible();
 });

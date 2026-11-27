@@ -52,12 +52,21 @@ test("multiple profile streams expose distinct copy actions and keep exact desti
     ["dj-aurora", "VRCDN dj-aurora"],
     ["suggested-aurora", "Suggested VRCDN suggested-aurora"],
   ]) {
+    const card = page.getByRole("region", { name: context, exact: true });
+    await expect(card.getByText("Community-submitted", { exact: true })).toHaveCount(stream === "suggested-aurora" ? 1 : 0);
     for (const [device, value] of [
       ["Quest", `https://stream.vrcdn.live/live/${stream}.live.ts`],
       ["PC", `rtspt://stream.vrcdn.live/live/${stream}`],
     ]) {
+      const endpoint = card.locator("code").filter({ hasText: value });
+      await expect(endpoint).toHaveText(value);
+      await expect(endpoint.locator("span")).toHaveText([
+        device === "Quest" ? "https://stream.vrcdn.live/" : "rtspt://stream.vrcdn.live/",
+        "live/",
+        device === "Quest" ? `${stream}.live.ts` : stream,
+      ]);
       const copyName = `Copy ${device} for ${context}`;
-      const copy = page.getByRole("button", { name: copyName, exact: true });
+      const copy = card.getByRole("button", { name: copyName, exact: true });
       await expect(copy).toHaveAttribute("title", copyName);
       await copy.click();
       await expect(page.getByRole("button", { name: `${device} copied for ${context}`, exact: true })).toBeVisible();
