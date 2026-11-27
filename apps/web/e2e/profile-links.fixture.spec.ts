@@ -176,12 +176,32 @@ test("a sparse community highlights its group and confirms empty hosted events @
   const events = page.getByRole("heading", { name: "Hosted events", exact: true }).locator("xpath=ancestor::section[1]");
   await expect(events.getByText("No events", { exact: true })).toBeVisible();
   await expect(events.getByRole("link", { name: "Add event", exact: true })).toHaveAttribute("href", `/events/new?community=${slug}`);
+  const eventsBounds = await events.boundingBox();
+  if (!eventsBounds) throw new Error("Missing hosted events bounds");
+  expect(eventsBounds.y + eventsBounds.height).toBeLessThanOrEqual(claimBounds.y);
 
   expect((await page.goto(`/${slug}-custom`))?.status()).toBe(200);
   await expect(page.getByRole("link", { name: "VRChat group Official meetup group", exact: true })).toHaveAttribute("href", groupUrl);
 
   expect((await page.goto("/playwright-afterglow-social"))?.status()).toBe(200);
-  await expect(page.getByRole("heading", { name: "Hosted events", exact: true })).toBeVisible();
+  const richIdentity = page.getByRole("region", { name: "Afterglow Social", exact: true });
+  await expect(richIdentity.getByText("Unclaimed", { exact: true })).toBeVisible();
+  await expect(page.getByText("Unclaimed", { exact: true })).toHaveCount(1);
+  await expect(claim).toHaveAttribute("href", "/claim/playwright-afterglow-social?source=profile");
+  await expect(ownership.getByRole("link", { name: "Suggest an edit", exact: true })).toHaveAttribute("href", "/playwright-afterglow-social/edit");
+  const visitorContent = [
+    page.getByText("Afterglow event archive", { exact: true }),
+    page.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true }),
+    page.getByRole("heading", { name: "Worlds", exact: true }),
+  ];
+  const richClaims = await claim.boundingBox();
+  if (!richClaims) throw new Error("Missing populated community claim bounds");
+  for (const content of visitorContent) {
+    await expect(content).toBeVisible();
+    const bounds = await content.boundingBox();
+    if (!bounds) throw new Error("Missing populated community content bounds");
+    expect(bounds.y + bounds.height).toBeLessThan(richClaims.y);
+  }
   await expect(page.getByText("No events", { exact: true })).toHaveCount(0);
 });
 
