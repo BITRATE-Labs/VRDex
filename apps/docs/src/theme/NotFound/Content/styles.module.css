@@ -103,14 +103,24 @@
   border: 1px solid var(--recovery-rule);
   border-radius: var(--ifm-button-border-radius);
   color: var(--recovery-accent);
-  text-decoration: underline;
+  text-decoration: none;
   text-underline-offset: 0.2em;
+}
+
+.sections li:first-child a {
+  background: color-mix(in srgb, var(--recovery-accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--recovery-accent) 55%, transparent);
+  font-weight: 700;
 }
 
 .sections a:hover {
   background: color-mix(in srgb, var(--recovery-accent) 7%, transparent);
   color: var(--recovery-accent);
-  text-decoration-thickness: 2px;
+  text-decoration: underline;
+}
+
+.sections li:first-child a:hover {
+  background: color-mix(in srgb, var(--recovery-accent) 20%, transparent);
 }
 
 .recovery :is(a, input, button):focus-visible {

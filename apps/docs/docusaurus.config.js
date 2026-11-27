@@ -18,6 +18,8 @@ const config = {
   i18n: {
     defaultLocale: "en",
     locales: ["en"],
+    // This site uses English UI label overrides without translating docs or sidebars.
+    localeConfigs: { en: { translate: false } },
   },
   presets: [
     [

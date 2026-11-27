@@ -315,3 +315,62 @@ html[data-theme="dark"] .navbar-sidebar {
 [data-theme="dark"] .docs-lane a {
   color: #c9b8ff;
 }
+
+/* The SearchPage theme owns ranking and result structure. Apply Docs tokens to its route. */
+html[class~="plugin-@easyops-cn/docusaurus-search-local"] .main-wrapper {
+  --vrdex-docs-search-link: var(--ifm-color-primary-darkest);
+}
+
+html[data-theme="dark"][class~="plugin-@easyops-cn/docusaurus-search-local"] .main-wrapper {
+  --vrdex-docs-search-link: var(--ifm-link-color);
+}
+
+html[class~="plugin-@easyops-cn/docusaurus-search-local"] .main-wrapper .container {
+  max-width: 52rem;
+}
+
+html[class~="plugin-@easyops-cn/docusaurus-search-local"] .main-wrapper h1 {
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  line-height: 1.15;
+}
+
+html[class~="plugin-@easyops-cn/docusaurus-search-local"] .main-wrapper input[type="search"] {
+  min-height: 44px;
+}
+
+html[class~="plugin-@easyops-cn/docusaurus-search-local"] .main-wrapper :is(a, input):focus-visible {
+  outline: 2px solid var(--vrdex-docs-search-link);
+  outline-offset: 2px;
+}
+
+html[class~="plugin-@easyops-cn/docusaurus-search-local"] .main-wrapper article {
+  border-color: var(--ifm-color-emphasis-300);
+}
+
+html[class~="plugin-@easyops-cn/docusaurus-search-local"] .main-wrapper article h2 {
+  font-size: clamp(1.1875rem, 2.5vw, 1.375rem);
+  line-height: 1.35;
+}
+
+html[class~="plugin-@easyops-cn/docusaurus-search-local"] .main-wrapper article h2 a {
+  color: var(--vrdex-docs-search-link);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--vrdex-docs-search-link) 55%, transparent);
+  text-underline-offset: 0.2em;
+}
+
+html[class~="plugin-@easyops-cn/docusaurus-search-local"] .main-wrapper article mark {
+  background: color-mix(in srgb, var(--vrdex-docs-search-link) 16%, transparent);
+  border-radius: 0.14em;
+  color: inherit;
+}
+
+html[class~="plugin-@easyops-cn/docusaurus-search-local"] .main-wrapper [class^="searchResultItemPath_"] {
+  color: color-mix(in srgb, var(--ifm-color-content-secondary) 75%, var(--ifm-color-content));
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+html[class~="plugin-@easyops-cn/docusaurus-search-local"] .main-wrapper [class^="searchResultItemSummary_"] {
+  font-style: normal;
+}
