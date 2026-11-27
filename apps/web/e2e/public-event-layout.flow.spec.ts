@@ -36,7 +36,41 @@ async function renderedTimeLines(time: Locator) {
 
 test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), "Public event layout fixtures run locally.");
 
-test("listed events show the world and original listing before the poster on mobile @flow @fixture", async ({ page }) => {
+test("published lineups are directly reachable from the event hero @flow @fixture", async ({ page }) => {
+  await page.clock.setFixedTime(watchTime);
+
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: width === 320 ? 740 : 900 });
+    for (const slug of [listedSlug, guestWatchSlug]) {
+      await page.goto(path + slug);
+      const main = page.getByRole("main");
+      const shortcut = main.getByRole("link", { name: "Lineup", exact: true });
+      const heading = main.getByRole("heading", { name: "Lineup", exact: true });
+      const firstPerformer = heading.locator("..").getByRole("link").first();
+
+      await expect(shortcut).toHaveAttribute("href", "#event-lineup");
+      await expect(shortcut).toBeInViewport({ ratio: 1 });
+      await shortcut.focus();
+      await page.keyboard.press("Enter");
+      await expect(page).toHaveURL(/#event-lineup$/);
+      await expect(heading).toBeFocused();
+      await expect(heading).toBeInViewport({ ratio: 1 });
+
+      const [headingBox, headerBox] = await Promise.all([
+        heading.boundingBox(),
+        page.getByRole("banner").boundingBox(),
+      ]);
+      if (!headingBox || !headerBox) throw new Error("Missing event header or lineup");
+      expect(headingBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height);
+
+      await page.keyboard.press("Tab");
+      await expect(firstPerformer).toBeFocused();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+    }
+  }
+});
+
+test("listed events order visitor links on mobile and group context beside the poster on desktop @flow @fixture", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 740 });
   await page.goto(path + listedSlug);
 
@@ -60,6 +94,37 @@ test("listed events show the world and original listing before the poster on mob
   await expect(reference).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(poster).toBeFocused();
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await poster.locator("img").evaluate((image: HTMLImageElement) => image.decode());
+
+  const host = main.getByRole("link", { name: "Afterglow Social Host", exact: true });
+  const lineup = main.getByRole("heading", { name: "Lineup", exact: true });
+  const [desktopPoster, desktopReference, desktopHost, desktopLineup] = await Promise.all([
+    poster.boundingBox(),
+    reference.boundingBox(),
+    host.boundingBox(),
+    lineup.boundingBox(),
+  ]);
+  if (!desktopPoster || !desktopReference || !desktopHost || !desktopLineup) {
+    throw new Error("Missing desktop listed event layout");
+  }
+  for (const box of [desktopReference, desktopHost, desktopLineup]) {
+    expect(box.x).toBeGreaterThan(desktopPoster.x + desktopPoster.width);
+  }
+  expect(Math.abs(desktopReference.y - desktopPoster.y)).toBeLessThanOrEqual(2);
+  expect(desktopReference.y + desktopReference.height).toBeLessThan(desktopHost.y);
+  expect(desktopHost.y + desktopHost.height).toBeLessThan(desktopLineup.y);
+  expect(desktopLineup.y).toBeLessThan(desktopPoster.y + desktopPoster.height);
+
+  await reference.focus();
+  await page.keyboard.press("Tab");
+  await expect(poster).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(host).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(lineup.locator("..").getByRole("link").first()).toBeFocused();
 });
 
 for (const timezoneId of ["UTC", "America/Los_Angeles"]) {
@@ -114,6 +179,10 @@ for (const timezoneId of ["UTC", "America/Los_Angeles"]) {
           const play = main.getByRole("button", { name: /^Play / });
           await expect(play.getByText("Play", { exact: true })).toBeVisible();
           await page.setViewportSize({ width: 320, height: 740 });
+          await expect(play.locator("[data-watch-play-poster]")).toHaveCSS(
+            "background-image",
+            /url\(.*fixture-afterglow-event-banner/,
+          );
           if (slug === watchSlug) {
             await actions.getByRole("link", { name: "Host view" }).hover();
             await expect(actions.getByRole("tooltip", { name: "Host view" })).toBeHidden();
@@ -143,6 +212,7 @@ test("sparse guest events preserve real content and deny Host routes @flow @fixt
   await expect(main.getByRole("heading", { name: "July Fourth Sessions" })).toBeVisible();
   await expect(main.getByAltText(/ poster$/)).toHaveCount(0);
   await expect(main.getByRole("heading", { name: "Lineup", exact: true })).toHaveCount(0);
+  await expect(main.getByRole("link", { name: "Lineup", exact: true })).toHaveCount(0);
   await expect(main.getByText("Links", { exact: true })).toHaveCount(0);
   const sparseHost = main.getByRole("link", { name: /Afterglow Social.*Host/ });
   await expect(sparseHost).toBeVisible();
@@ -198,6 +268,7 @@ test("desktop watch shares the media row with event details @flow @fixture", asy
   const host = main.getByRole("link", { name: /Afterglow Social.*Host/ });
   const lineup = main.getByRole("heading", { name: "Lineup", exact: true });
   await expect(stage).toBeVisible();
+  await expect(stage.locator("[data-watch-play-poster]")).not.toHaveCSS("background-image", /url\(/);
   await expect(host).toBeVisible();
   await poster.evaluate((image: HTMLImageElement) => image.decode());
   const [posterBox, stageBox, hostBox, lineupBox] = await Promise.all([

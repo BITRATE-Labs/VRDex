@@ -14,6 +14,7 @@ export function CopyValueRow({
   context,
   label,
   value,
+  wrapUrlPath = false,
 }: {
   className?: string;
   compact?: boolean;
@@ -22,6 +23,7 @@ export function CopyValueRow({
   context?: string;
   label: string;
   value: string;
+  wrapUrlPath?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const copyLabel = copied ? `${label} copied` : `Copy ${label}`;
@@ -69,7 +71,9 @@ export function CopyValueRow({
           )}
           title={value}
         >
-          {value}
+          {wrapUrlPath ? value.split(/(?<=[^/]\/)(?!\/)/).map((part, index) => (
+            <span className="inline-block max-w-full align-top" key={index}>{part}</span>
+          )) : value}
         </code>
         <button
           aria-label={actionLabel}

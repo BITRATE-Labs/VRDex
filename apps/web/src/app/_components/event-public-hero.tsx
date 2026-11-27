@@ -12,12 +12,14 @@ export function EventPublicHero({
   canHost,
   event,
   eventPath,
+  hasLineup,
   onReport,
 }: {
   bannerStyle?: CSSProperties;
   canHost: boolean;
   event: PublicEvent;
   eventPath: string | undefined;
+  hasLineup: boolean;
   onReport: () => void;
 }) {
   const actionClassName = cn(
@@ -29,6 +31,12 @@ export function EventPublicHero({
   const actionTooltipClassName = cn(tooltipClassName, "group-hover:block");
 
   const detailTextClassName = bannerStyle ? "text-white/80" : "text-muted";
+  const startTime = (
+    <ViewerLocalEventDateTime className={cn(
+      "block text-base leading-snug font-semibold sm:text-sm sm:leading-5 sm:font-normal sm:tracking-[0.24em] sm:uppercase",
+      bannerStyle ? "text-white sm:text-white/70" : "text-foreground sm:text-muted",
+    )} timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />
+  );
 
   return (
     <section className={cn("overflow-hidden rounded-hero border border-border", bannerStyle ? "bg-media shadow-hero" : "bg-surface-strong shadow-sm")}>
@@ -44,10 +52,17 @@ export function EventPublicHero({
             {event.status === "cancelled" ? (
               <p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em]">Cancelled</p>
             ) : null}
-            <ViewerLocalEventDateTime className={cn(
-              "block text-base leading-snug font-semibold sm:text-sm sm:leading-5 sm:font-normal sm:tracking-[0.24em] sm:uppercase",
-              bannerStyle ? "text-white sm:text-white/70" : "text-foreground sm:text-muted",
-            )} timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />
+            {hasLineup ? (
+              <div className="flex flex-wrap items-center gap-x-4">
+                {startTime}
+                <a
+                  className="inline-flex min-h-8 items-center rounded-control text-sm font-medium underline decoration-current/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-current"
+                  href="#event-lineup"
+                >
+                  Lineup
+                </a>
+              </div>
+            ) : startTime}
             {event.scheduleKind !== "date_only" && (event.doorsOpenAt !== undefined || event.endAt !== undefined) ? <div className={cn("mt-1.5 flex flex-wrap gap-x-5 gap-y-1 text-sm sm:mt-2", detailTextClassName)}>
               {event.doorsOpenAt !== undefined ? <span><span>Doors open</span>{" "}<ViewerLocalEventDateTime timestamp={event.doorsOpenAt} /></span> : null}
               {event.endAt !== undefined ? <span><span>End</span>{" "}<ViewerLocalEventDateTime timestamp={event.endAt} /></span> : null}

@@ -2,7 +2,7 @@
 
 import type { PlaybackStatus } from "@/lib/event-playback-owner";
 import { ExternalLink } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePostHog } from "posthog-js/react";
 
 import { PlaybackInlinePlaceholder } from "./playback-inline-placeholder";
@@ -30,6 +30,7 @@ import { captureProductEvent } from "@/lib/posthog";
 
 export type ProfileVrcdnStream = {
   claimable: boolean;
+  communitySubmitted?: boolean;
   key: string;
   label: string;
   pcUrl: string;
@@ -62,7 +63,9 @@ type ProfileDiscordHandle = {
 type ProfileVrcdnStreamsProps = {
   compactLinks?: boolean;
   compactMobileSpacing?: boolean;
+  linksColumnContent?: ReactNode;
   linksHeadingId?: string;
+  streamsSectionId?: string;
   discordHandles: ProfileDiscordHandle[];
   initialLiveStates?: VrcdnLiveStates;
   links: ProfileVrcdnLink[];
@@ -83,7 +86,9 @@ function responseStates(value: unknown): VrcdnLiveStates | null {
 export function ProfileVrcdnStreams({
   compactLinks = false,
   compactMobileSpacing = false,
+  linksColumnContent,
   linksHeadingId,
+  streamsSectionId,
   discordHandles,
   initialLiveStates,
   links,
@@ -208,7 +213,11 @@ export function ProfileVrcdnStreams({
   const hasWatchSurface = streams.length > 0;
 
   return (
-    <div className={cn("grid min-w-0 grid-cols-1 gap-x-10", hasWatchSurface ? "lg:grid-cols-[minmax(0,1fr)_24rem]" : undefined)}>
+    <div className={cn(
+      "grid min-w-0 grid-cols-1 gap-x-10",
+      hasWatchSurface && "lg:grid-cols-[minmax(0,1fr)_24rem]",
+      linksColumnContent && "lg:grid-rows-[min-content_1fr]",
+    )}>
       <div>
         {hasLinks ? (
           <section
@@ -267,8 +276,17 @@ export function ProfileVrcdnStreams({
       </div>
 
       {hasWatchSurface ? (
-        <aside className="min-w-0 space-y-3 py-8">
-          {streams.map(({ claimable, key, label, pcUrl, questUrl, directVideoUrl, streamId }) => {
+        <aside
+          aria-label={streamsSectionId ? "VRCDN" : undefined}
+          className={cn(
+            "min-w-0 space-y-3 py-8",
+            streamsSectionId && "scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent",
+            linksColumnContent && "lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start",
+          )}
+          id={streamsSectionId}
+          tabIndex={streamsSectionId ? -1 : undefined}
+        >
+          {streams.map(({ claimable, communitySubmitted, key, label, pcUrl, questUrl, directVideoUrl, streamId }) => {
             const lifecycle = lifecycles[streamId];
             const live = claimable && lifecycle?.presentation === "live";
             const playbackActive = activePlaybackStreamIds.has(streamId);
@@ -279,15 +297,16 @@ export function ProfileVrcdnStreams({
             const copyContext = streams.length > 1 ? title : undefined;
 
             return (
-              <Card className="min-w-0" padding="sm" aria-label={title} key={key}>
-                <div className="flex items-center gap-3 pb-2">
+              <Card className="min-w-0 max-sm:px-3" surface={communitySubmitted ? "dashed" : undefined} padding="sm" aria-label={title} key={key}>
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pb-2">
                   <p className="font-medium">{label}</p>
+                  {communitySubmitted ? <span className="text-xs text-muted">Community-submitted</span> : null}
                   {live ? <span className="text-sm font-medium text-success">Live now</span> : null}
                 </div>
 
                 <div>
-                  <CopyValueRow className={cn("grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-0 py-1", styles.copyRow)} context={copyContext} label="Quest" value={questUrl} />
-                  <CopyValueRow className={cn("grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-0 py-1", styles.copyRow)} context={copyContext} label="PC" value={pcUrl} />
+                  <CopyValueRow className={styles.copyRow} context={copyContext} wrapUrlPath label="Quest" value={questUrl} />
+                  <CopyValueRow className={styles.copyRow} context={copyContext} wrapUrlPath label="PC" value={pcUrl} />
                 </div>
                 {showPlayer ? (
                   <div className={cn("mt-3 overflow-hidden rounded-control border border-border", styles.playerFrame)}>
@@ -302,6 +321,7 @@ export function ProfileVrcdnStreams({
           })}
         </aside>
       ) : null}
+      {linksColumnContent ? <div className="min-w-0 max-lg:mt-6 lg:col-start-1 lg:row-start-2">{linksColumnContent}</div> : null}
     </div>
   );
 }

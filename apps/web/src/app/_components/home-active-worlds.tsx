@@ -5,6 +5,7 @@ import { SectionHeading } from "@/components/ui/card";
 import { EntityImage } from "@/components/ui/entity-image";
 import { Notice } from "@/components/ui/notice";
 import { cn } from "@/lib/cn";
+import { publicEventPath } from "@/lib/event-path";
 import { safeImageUrl } from "@/lib/safe-image";
 import { ViewerLocalEventDateTime } from "./viewer-local-event-times";
 
@@ -37,7 +38,7 @@ export type PublicActiveWorld = {
   };
 };
 
-function ActiveWorldCard({ world }: { world: PublicActiveWorld }) {
+function ActiveWorldCard({ world, compactNextEvent }: { world: PublicActiveWorld; compactNextEvent: boolean }) {
   const titleId = `featured-world-${world.slug}`;
   const imageUrl = safeImageUrl(world.heroImageUrl);
   const secondaryText = imageUrl ? "text-white/72" : "text-muted";
@@ -79,7 +80,7 @@ function ActiveWorldCard({ world }: { world: PublicActiveWorld }) {
         <div className={cn("mt-4 border-t pt-3", imageUrl ? "border-white/20" : "border-border")}>
           <p className={cn("text-xs font-medium", secondaryText)}>Next event</p>
           <p className="mt-1 text-sm font-medium">{world.nextEvent.title}</p>
-          <p className={cn("mt-1 text-sm", secondaryText)}>
+          <p className={cn("mt-1 text-sm", secondaryText, compactNextEvent && "hidden sm:block")}>
             <ViewerLocalEventDateTime timestamp={world.nextEvent.startAt} eventDate={world.nextEvent.eventDate} scheduleKind={world.nextEvent.scheduleKind} />
             {world.nextEvent.communityName ? ` by ${world.nextEvent.communityName}` : ""}
           </p>
@@ -91,21 +92,27 @@ function ActiveWorldCard({ world }: { world: PublicActiveWorld }) {
 
 export function HomeActiveWorldsSection({
   paired = false,
+  singleUpcomingEventPath,
   status,
   worlds,
 }: {
   paired?: boolean;
+  singleUpcomingEventPath?: string;
   status: "live" | "missing-url" | "error";
   worlds: PublicActiveWorld[];
 }) {
   return (
-    <section className="min-w-0 border-t border-border pt-6">
+    <section className="min-w-0 border-t border-border pt-4 sm:pt-6">
       <SectionHeading>Featured worlds</SectionHeading>
 
       {worlds.length > 0 ? (
-        <div className={cn("mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3", paired && "xl:grid-cols-1")}>
+        <div className={cn("mt-4 grid grid-cols-1 gap-4 sm:mt-6 lg:grid-cols-3", paired && "xl:grid-cols-1")}>
           {worlds.map((world) => (
-            <ActiveWorldCard key={world.slug} world={world} />
+            <ActiveWorldCard
+              compactNextEvent={singleUpcomingEventPath !== undefined && publicEventPath(world.nextEvent) === singleUpcomingEventPath}
+              key={world.slug}
+              world={world}
+            />
           ))}
         </div>
       ) : (

@@ -1,3 +1,7 @@
+.eventBody {
+  display: contents;
+}
+
 .watch:empty,
 .lead:has(> .watch:only-child:empty) {
   display: none;
@@ -16,7 +20,8 @@
 }
 
 .watch button [data-watch-play-poster] {
-  background: linear-gradient(135deg, var(--media-raised), var(--media));
+  --event-watch-fallback: linear-gradient(135deg, var(--media-raised), var(--media));
+  background: var(--event-watch-fallback);
 }
 
 .watch button [data-watch-play-control] {
@@ -47,6 +52,10 @@
 @media (width < 40rem) {
   .watch button [data-watch-play-poster] {
     min-height: 12rem;
+    background-image: var(--event-watch-art, var(--event-watch-fallback));
+    background-color: var(--media);
+    background-position: center;
+    background-size: cover;
   }
 }
 
@@ -90,5 +99,33 @@
 
   .lead:has(> .watch:not(:empty)) + .poster img {
     max-height: 17rem;
+  }
+}
+
+@media (width >= 64rem) {
+  .eventBody:has(> .media > .poster):has(.locationLinks, > .lineup):not(:has(.watch:not(:empty))) {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "poster details" "poster lineup";
+    align-items: start;
+    gap: 1rem;
+  }
+
+  .eventBody:has(> .media > .poster):has(.locationLinks):not(:has(.watch:not(:empty))) {
+    grid-template-areas: "poster lead" "poster details";
+  }
+
+  .eventBody:has(> .media > .poster):has(.locationLinks):has(> .lineup):not(:has(.watch:not(:empty))) {
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas: "poster lead" "poster details" "poster lineup";
+  }
+
+  .eventBody:has(> .media > .poster):has(.locationLinks, > .lineup):not(:has(.watch:not(:empty))) > .media {
+    display: contents;
+  }
+
+  .eventBody:has(> .media > .poster):not(:has(.watch:not(:empty))) > .lineup {
+    grid-area: lineup;
   }
 }

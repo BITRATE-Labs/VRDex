@@ -80,11 +80,19 @@ test("featured world fits the narrow discovery viewport", async ({ page }) => {
     has: page.getByRole("heading", { name: "Neon Harbor", exact: true }),
   });
   await expect(card).toHaveAttribute("href", "/playwright-neon-harbor");
+  await expect(card.getByText("Next event", { exact: true })).toBeVisible();
   await expect(card.getByText("Afterglow Harbor Sessions", { exact: true })).toBeVisible();
+  await expect(card.locator("time")).toBeHidden();
+  await expect(page.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true }))
+    .toHaveAttribute("href", "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions");
   expect(await card.evaluate((link) => link.getBoundingClientRect().right)).toBeLessThanOrEqual(320);
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
     .toBe(320);
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(card.locator("time")).toBeVisible();
+  await expect(card.getByText(/by Afterglow Social/)).toBeVisible();
 });
 
 test("mobile discovery keeps Add event alongside the populated upcoming heading", async ({ page }) => {
@@ -134,6 +142,24 @@ test("mobile discovery jumps to the directory without hiding the heading", async
 
   await page.setViewportSize({ width: 1280, height: 900 });
   await expect(shortcuts).toBeHidden();
+});
+
+test("mobile discovery aligns directory titles while showing both artwork assets", async ({ page }) => {
+  test.skip(isHostedRun, "The populated discovery directory uses a local fixture.");
+
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.goto("/discovery");
+
+  const people = page.getByRole("heading", { name: "People", exact: true }).locator("xpath=ancestor::section[1]");
+  const aurora = people.getByText("DJ Aurora", { exact: true });
+  const card = aurora.locator("xpath=ancestor::a[1]");
+  await expect(card).toHaveAttribute("href", "/playwright-dj-aurora");
+  await expect(card.getByRole("img", { name: "DJ Aurora", exact: true })).toBeVisible();
+  await expect(card.getByRole("img", { name: "DJ Aurora logo", exact: true })).toBeVisible();
+
+  const titles = [aurora, ...["BASICBIT", "Moth"].map((name) => people.getByText(name, { exact: true }))];
+  const leftEdges = await Promise.all(titles.map((title) => title.evaluate((node) => node.getBoundingClientRect().left)));
+  expect(new Set(leftEdges).size).toBe(1);
 });
 
 test("discovery puts a single event and featured world beside each other at xl", async ({ page }) => {
@@ -716,9 +742,7 @@ test.describe("fixture lookup smoke", () => {
     });
 
     await page.goto("/playwright-dj-aurora");
-    const vrcdnBlock = page
-      .getByText("VRCDN", { exact: true })
-      .locator("xpath=ancestor::section[1]");
+    const vrcdnBlock = page.getByRole("region", { name: "VRCDN dj-aurora", exact: true });
     const player = page.getByRole("button", { name: "Play VRCDN" });
     const preview = page.getByRole("link", { name: "Open preview" });
     await expect(player).toBeVisible();
@@ -807,9 +831,7 @@ test.describe("fixture lookup smoke", () => {
     });
 
     await page.goto("/playwright-dj-aurora");
-    const vrcdnBlock = page
-      .getByText("VRCDN", { exact: true })
-      .locator("xpath=ancestor::section[1]");
+    const vrcdnBlock = page.getByRole("region", { name: "VRCDN dj-aurora", exact: true });
     const player = page.getByRole("button", { name: "Play VRCDN" });
     await expect(player).toBeVisible();
     await player.click();
@@ -858,9 +880,7 @@ test.describe("fixture lookup smoke", () => {
     });
 
     await page.goto("/playwright-dj-aurora");
-    const vrcdnBlock = page
-      .getByText("VRCDN", { exact: true })
-      .locator("xpath=ancestor::section[1]");
+    const vrcdnBlock = page.getByRole("region", { name: "VRCDN dj-aurora", exact: true });
     await expect.poll(() => attempts).toBe(1);
     const player = page.getByRole("button", { name: "Play VRCDN" });
     await player.click();

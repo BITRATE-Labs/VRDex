@@ -65,7 +65,8 @@ function resultSubtitle(result: PublicSearchResult): string | undefined {
 }
 
 function ResultImage({ result, quietFallback = false }: { result: PublicSearchResult; quietFallback?: boolean }) {
-  const size = "size-14";
+  const size = "size-10 sm:size-14";
+  const sizes = "(min-width: 640px) 56px, 40px";
   const primaryImageUrl = result.entityType === "profile"
     ? result.profileImageUrl ?? result.imageUrl
     : result.imageUrl;
@@ -79,7 +80,7 @@ function ResultImage({ result, quietFallback = false }: { result: PublicSearchRe
       <EntityImage
         className={cn(size, "rounded-card bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] text-lg text-foreground")}
         label={result.title}
-        sizes="56px"
+        sizes={sizes}
         src={primaryImageUrl}
       />
     );
@@ -100,13 +101,13 @@ function ResultImage({ result, quietFallback = false }: { result: PublicSearchRe
             fallback="Logo"
             imageClassName="!object-contain p-1"
             label={`${result.title} logo`}
-            sizes="56px"
+            sizes={sizes}
             src={primaryImageUrl}
           />
         ) : useQuietFallback ? (
           <EntityImage
             alt=""
-            className="size-10 rounded-card border border-border bg-surface-strong font-semibold text-foreground sm:size-14"
+            className={cn(size, "rounded-card border border-border bg-surface-strong font-semibold text-foreground")}
             label={result.title}
           />
         ) : (
@@ -114,7 +115,7 @@ function ResultImage({ result, quietFallback = false }: { result: PublicSearchRe
             appearance={result.avatarAppearance}
             className={cn(size, "rounded-card bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] text-lg text-foreground")}
             label={result.title}
-            sizes="56px"
+            sizes={sizes}
             src={primaryImageUrl}
           />
         )}
@@ -126,13 +127,13 @@ function ResultImage({ result, quietFallback = false }: { result: PublicSearchRe
   }
 
   return (
-    <span className="grid shrink-0 grid-cols-2 gap-1">
+    <span className="relative grid shrink-0 grid-cols-1 sm:grid-cols-2 sm:gap-1">
       <span className="relative">
         <ProfileAvatarImage
           appearance={result.avatarAppearance}
           className={cn(size, "rounded-card bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] text-lg text-foreground")}
           label={result.title}
-          sizes="56px"
+          sizes={sizes}
           src={result.profileImageUrl}
         />
         {result.trustLabel === "claimed_verified" ? (
@@ -140,11 +141,11 @@ function ResultImage({ result, quietFallback = false }: { result: PublicSearchRe
         ) : null}
       </span>
       <EntityImage
-        className={cn(size, "rounded-card border border-border bg-surface-strong text-xs")}
+        className="size-5 rounded-control border border-border bg-surface-strong text-xs max-sm:absolute max-sm:-bottom-1 max-sm:-left-1 max-sm:text-[0.45rem] sm:size-14 sm:rounded-card"
         fallback="Logo"
-        imageClassName="!object-contain p-1"
+        imageClassName="!object-contain p-0.5 sm:p-1"
         label={`${result.title} logo`}
-        sizes="56px"
+        sizes="(min-width: 640px) 56px, 20px"
         src={result.logoImageUrl}
         title="Logo"
       />
@@ -171,9 +172,9 @@ function DiscoveryUpcomingEventsHeading({ title }: { title: string }) {
 
 function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[]; now: number }) {
   return (
-    <section className="min-w-0 border-t border-border pt-6">
+    <section className="min-w-0 border-t border-border pt-4 sm:pt-6">
       <DiscoveryUpcomingEventsHeading title="Upcoming events" />
-      <EventSchedule className="mt-5" empty="No events">
+      <EventSchedule className="mt-3 sm:mt-5" empty="No events">
         {events.map((event) => (
           <EventScheduleRow
             className="[overflow-wrap:anywhere]"
@@ -423,7 +424,7 @@ function DiscoverySection({
   surface: DiscoveryAnalyticsSurface;
 }) {
   return (
-    <section className="min-w-0 border-t border-border pt-6">
+    <section className="min-w-0 border-t border-border pt-4 sm:pt-6">
       {surface === "upcoming_events" ? (
         <DiscoveryUpcomingEventsHeading title={title} />
       ) : (
@@ -436,7 +437,7 @@ function DiscoverySection({
         </SectionTitle>
       )}
       <div className={cn(
-        "mt-5 grid gap-4",
+        "mt-3 grid gap-4 sm:mt-5",
         columns !== "single" && "lg:grid-cols-2",
         columns === "single-xl" && "xl:grid-cols-1",
       )}>
@@ -493,6 +494,9 @@ export function DiscoveryLandingPage({
   const upcomingCount = eventSchedule?.length ?? data.upcomingEvents.length;
   const pairUpcomingAndWorld = status === "live" && activeWorldStatus === "live"
     && upcomingCount === 1 && activeWorlds.length === 1;
+  const singleUpcomingEventPath = status === "live" && upcomingCount === 1
+    ? eventSchedule ? publicEventPath(eventSchedule[0]) : data.upcomingEvents[0].routePath
+    : undefined;
   const upcoming = eventSchedule ? (
     <DiscoveryEventSchedule events={eventSchedule} now={now} />
   ) : upcomingCount === 0 ? (
@@ -518,7 +522,12 @@ export function DiscoveryLandingPage({
     />
   );
   const featuredWorlds = activeWorlds.length > 0 || activeWorldStatus !== "live" ? (
-    <HomeActiveWorldsSection paired={pairUpcomingAndWorld} status={activeWorldStatus} worlds={activeWorlds} />
+    <HomeActiveWorldsSection
+      paired={pairUpcomingAndWorld}
+      singleUpcomingEventPath={singleUpcomingEventPath}
+      status={activeWorldStatus}
+      worlds={activeWorlds}
+    />
   ) : null;
 
   return (
@@ -573,7 +582,7 @@ export function DiscoveryLandingPage({
           </DiscoveryFeatureGate>
         ) : null}
 
-        <section className={cn("grid gap-5", directorySections.length === 3 ? "xl:grid-cols-3" : directorySections.length === 2 ? "xl:grid-cols-2" : undefined)}>
+        <section className={cn("grid gap-4 sm:gap-5", directorySections.length === 3 ? "xl:grid-cols-3" : directorySections.length === 2 ? "xl:grid-cols-2" : undefined)}>
           {directorySections.map(({ headingId, title, results, empty }) => (
             <DiscoverySection
               key={headingId}
