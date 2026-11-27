@@ -62,7 +62,15 @@ function ActiveWorldCard({ world }: { world: PublicActiveWorld }) {
 
       <div className="relative col-start-1 row-start-1 p-5 [overflow-wrap:anywhere]">
         <div className="flex items-start justify-between gap-3">
-          <h3 id={titleId} className="min-w-0 text-3xl font-semibold">{world.displayName}</h3>
+          <h3
+            id={titleId}
+            className={cn(
+              "min-w-0 text-3xl font-semibold underline underline-offset-4 group-hover:decoration-current",
+              imageUrl ? "decoration-white/55" : "decoration-border-strong",
+            )}
+          >
+            {world.displayName}
+          </h3>
           <ChevronRight aria-hidden="true" className={cn("mt-2 size-4 shrink-0", imageUrl ? "text-white/75 group-hover:text-white" : "text-muted group-hover:text-foreground")} />
         </div>
         <p className={cn("mt-3 line-clamp-2 text-sm leading-6", imageUrl ? "text-white/76" : "text-muted")}>
@@ -82,9 +90,11 @@ function ActiveWorldCard({ world }: { world: PublicActiveWorld }) {
 }
 
 export function HomeActiveWorldsSection({
+  paired = false,
   status,
   worlds,
 }: {
+  paired?: boolean;
   status: "live" | "missing-url" | "error";
   worlds: PublicActiveWorld[];
 }) {
@@ -93,7 +103,7 @@ export function HomeActiveWorldsSection({
       <SectionHeading>Featured worlds</SectionHeading>
 
       {worlds.length > 0 ? (
-        <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className={cn("mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3", paired && "xl:grid-cols-1")}>
           {worlds.map((world) => (
             <ActiveWorldCard key={world.slug} world={world} />
           ))}

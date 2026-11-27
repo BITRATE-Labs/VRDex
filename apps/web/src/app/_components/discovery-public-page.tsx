@@ -176,6 +176,7 @@ function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[];
       <EventSchedule className="mt-5" empty="No events">
         {events.map((event) => (
           <EventScheduleRow
+            className="[overflow-wrap:anywhere]"
             details={[
               event.communityName,
               event.worlds[0]?.displayName,
@@ -187,7 +188,7 @@ function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[];
                   <li className="flex flex-wrap items-baseline gap-x-2" key={`${slot.startAt}:${slot.displayLabel}`}>
                     <ViewerLocalEventTime className="font-mono text-xs text-foreground" timestamp={slot.startAt} />
                     {slot.performer ? (
-                      <Link className="font-medium text-foreground underline-offset-4 hover:underline" href={`/${slot.performer.slug}`}>
+                      <Link className="font-medium text-foreground underline decoration-border-strong underline-offset-4 hover:decoration-current" href={`/${slot.performer.slug}`}>
                         {slot.performer.displayName}
                       </Link>
                     ) : (
@@ -417,7 +418,7 @@ function DiscoverySection({
   title: string;
   headingId?: string;
   empty: string;
-  columns?: "responsive" | "single";
+  columns?: "responsive" | "single" | "single-xl";
   results: PublicSearchResult[];
   surface: DiscoveryAnalyticsSurface;
 }) {
@@ -434,7 +435,11 @@ function DiscoverySection({
           {title}
         </SectionTitle>
       )}
-      <div className={cn("mt-5 grid gap-4", columns === "responsive" ? "lg:grid-cols-2" : undefined)}>
+      <div className={cn(
+        "mt-5 grid gap-4",
+        columns !== "single" && "lg:grid-cols-2",
+        columns === "single-xl" && "xl:grid-cols-1",
+      )}>
         {results.length === 0 ? (
           <p className="text-sm leading-6 text-muted">{empty}</p>
         ) : (
@@ -484,6 +489,38 @@ export function DiscoveryLandingPage({
     && !data.eventSchedule?.length && data.upcomingEvents.length === 0
     && activeWorlds.length === 0 && directorySections.length === 1;
 
+  const eventSchedule = data.eventSchedule?.length ? data.eventSchedule : undefined;
+  const upcomingCount = eventSchedule?.length ?? data.upcomingEvents.length;
+  const pairUpcomingAndWorld = status === "live" && activeWorldStatus === "live"
+    && upcomingCount === 1 && activeWorlds.length === 1;
+  const upcoming = eventSchedule ? (
+    <DiscoveryEventSchedule events={eventSchedule} now={now} />
+  ) : upcomingCount === 0 ? (
+    <section className="flex flex-wrap items-center justify-between gap-x-3 sm:justify-start sm:gap-x-5">
+      <div className="sm:flex sm:items-baseline sm:gap-3">
+        <SectionTitle className="text-base tracking-tight">Upcoming events</SectionTitle>
+        {status === "live" ? <p className="text-sm leading-5 text-muted">No events</p> : null}
+      </div>
+      <Link
+        className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "min-h-11 underline decoration-border-strong underline-offset-4 hover:decoration-current")}
+        href="/events/new"
+      >
+        Add event
+      </Link>
+    </section>
+  ) : (
+    <DiscoverySection
+      columns={pairUpcomingAndWorld ? "single-xl" : undefined}
+      empty="No events"
+      results={data.upcomingEvents}
+      surface="upcoming_events"
+      title="Upcoming events"
+    />
+  );
+  const featuredWorlds = activeWorlds.length > 0 || activeWorldStatus !== "live" ? (
+    <HomeActiveWorldsSection paired={pairUpcomingAndWorld} status={activeWorldStatus} worlds={activeWorlds} />
+  ) : null;
+
   return (
     <PageShell className="max-sm:py-5">
       <PageContainer className="gap-4 sm:gap-6" max={singleDirectory ? "3xl" : "7xl"}>
@@ -513,33 +550,17 @@ export function DiscoveryLandingPage({
 
         {status === "live" ? null : <DiscoveryBackendNotice kind={status} />}
 
-        {data.eventSchedule && data.eventSchedule.length > 0 ? (
-          <DiscoveryEventSchedule events={data.eventSchedule} now={now} />
-        ) : data.upcomingEvents.length === 0 ? (
-          <section className="flex flex-wrap items-center justify-between gap-x-3 sm:justify-start sm:gap-x-5">
-            <div className="sm:flex sm:items-baseline sm:gap-3">
-              <SectionTitle className="text-base tracking-tight">Upcoming events</SectionTitle>
-              {status === "live" ? <p className="text-sm leading-5 text-muted">No events</p> : null}
-            </div>
-            <Link
-              className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "min-h-11 underline decoration-border-strong underline-offset-4 hover:decoration-current")}
-              href="/events/new"
-            >
-              Add event
-            </Link>
-          </section>
+        {pairUpcomingAndWorld ? (
+          <div className="contents xl:grid xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] xl:items-start xl:gap-6">
+            {upcoming}
+            {featuredWorlds}
+          </div>
         ) : (
-          <DiscoverySection
-            empty="No events"
-            results={data.upcomingEvents}
-            surface="upcoming_events"
-            title="Upcoming events"
-          />
+          <>
+            {upcoming}
+            {featuredWorlds}
+          </>
         )}
-
-        {activeWorlds.length > 0 || activeWorldStatus !== "live" ? (
-          <HomeActiveWorldsSection status={activeWorldStatus} worlds={activeWorlds} />
-        ) : null}
 
         {data.featured.length > 0 ? (
           <DiscoveryFeatureGate flag={FEATURED_DISCOVERY_UI_FLAG}>
