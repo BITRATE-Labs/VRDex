@@ -243,6 +243,11 @@ test.describe("Home discovery @flow @fixture", () => {
     ).toBeFocused();
     await discover.scrollIntoViewIfNeeded();
     await expect(discover.locator("img")).toHaveCount(4);
+    await discover.locator("img").evaluateAll((images) => {
+      for (const image of images) {
+        if (image instanceof HTMLImageElement) image.loading = "eager";
+      }
+    });
     await expect
       .poll(() =>
         discover

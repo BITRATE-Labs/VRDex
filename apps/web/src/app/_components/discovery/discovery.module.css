@@ -465,18 +465,43 @@
 .contained {
   object-fit: contain;
 }
-.clubTypography {
-  display: block;
-  width: 100%;
+.clubCard:has(.clubArtworkFallback) .clubName .name {
+  position: absolute;
+  z-index: 2;
+  inset: 0 0 auto;
+  display: grid;
+  place-items: center;
+  aspect-ratio: var(--club-artwork-ratio);
   padding: 10%;
   text-align: center;
-  font-size: clamp(1.25rem, 12cqi, 2.7rem);
+  font-size: var(--club-artwork-name-size);
   font-weight: 650;
   line-height: 1.12;
   letter-spacing: -0.04em;
-  color: var(--foreground);
-  overflow-wrap: anywhere;
 }
+.clubCard:has(.clubArtworkFallback) .clubLink {
+  text-wrap: balance;
+  text-decoration-thickness: 2px;
+}
+.clubCard:has(.clubArtworkFallback) .clubMetadata {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-content: start;
+  align-items: center;
+  gap: 0.4rem;
+}
+.clubCard:has(.clubArtworkFallback) .clubName {
+  display: contents;
+}
+.clubCard:has(.clubArtworkFallback) .clubFooter {
+  display: flex;
+  grid-area: 1 / 1;
+  margin-top: 0;
+}
+.clubCard:has(.clubArtworkFallback) .favorite {
+  grid-area: 1 / 2;
+}
+
 .clubName {
   display: flex;
   align-items: center;
@@ -665,6 +690,7 @@
   }
 }
 
-.clubArtwork { aspect-ratio: 4 / 3; background: var(--surface); }
+.clubCard { --club-artwork-ratio: 4 / 3; }
+.clubArtwork { aspect-ratio: var(--club-artwork-ratio); background: var(--surface); }
 .clubArtwork::after { display: none; }
 .clubLogo:has(img) { width: 76%; height: 68%; }

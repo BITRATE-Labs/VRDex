@@ -1,5 +1,7 @@
 "use client";
 
+import type { CSSProperties } from "react";
+
 import { FavoriteButton } from "@/components/ui/favorite-button";
 import { publicSearchGenreLabel } from "@/lib/public-search-genres";
 import { EntityImage } from "@/components/ui/entity-image";
@@ -42,23 +44,19 @@ export function DiscoveryClubCard({
           alt=""
           src={club.logoImageUrl ?? club.imageUrl}
           className={styles.clubLogo}
-          fallback={
-            <span
-              className={styles.clubTypography}
-              style={{
-                fontSize: `clamp(1rem, ${Math.min(12, 70 / Math.sqrt(club.displayName.length))}cqi, 2.7rem)`,
-              }}
-            >
-              {club.displayName}
-            </span>
-          }
+          fallback={<span className={styles.clubArtworkFallback} />}
           imageClassName={styles.contained}
           sizes={clubImageSizes}
         />
       </span>
       <div className={styles.clubMetadata}>
         <div className={styles.clubName}>
-          <h4 className={styles.name}>
+          <h4
+            className={styles.name}
+            style={{
+              "--club-artwork-name-size": `clamp(1rem, ${Math.min(12, 70 / Math.sqrt(club.displayName.length))}cqi, 2.7rem)`,
+            } as CSSProperties}
+          >
             <a href={`/${club.slug}`} className={styles.clubLink}>
               {club.displayName}
             </a>
