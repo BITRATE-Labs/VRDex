@@ -742,9 +742,7 @@ test.describe("fixture lookup smoke", () => {
     });
 
     await page.goto("/playwright-dj-aurora");
-    const vrcdnBlock = page
-      .getByText("VRCDN", { exact: true })
-      .locator("xpath=ancestor::section[1]");
+    const vrcdnBlock = page.getByRole("region", { name: "VRCDN dj-aurora", exact: true });
     const player = page.getByRole("button", { name: "Play VRCDN" });
     const preview = page.getByRole("link", { name: "Open preview" });
     await expect(player).toBeVisible();
@@ -833,9 +831,7 @@ test.describe("fixture lookup smoke", () => {
     });
 
     await page.goto("/playwright-dj-aurora");
-    const vrcdnBlock = page
-      .getByText("VRCDN", { exact: true })
-      .locator("xpath=ancestor::section[1]");
+    const vrcdnBlock = page.getByRole("region", { name: "VRCDN dj-aurora", exact: true });
     const player = page.getByRole("button", { name: "Play VRCDN" });
     await expect(player).toBeVisible();
     await player.click();
@@ -884,9 +880,7 @@ test.describe("fixture lookup smoke", () => {
     });
 
     await page.goto("/playwright-dj-aurora");
-    const vrcdnBlock = page
-      .getByText("VRCDN", { exact: true })
-      .locator("xpath=ancestor::section[1]");
+    const vrcdnBlock = page.getByRole("region", { name: "VRCDN dj-aurora", exact: true });
     await expect.poll(() => attempts).toBe(1);
     const player = page.getByRole("button", { name: "Play VRCDN" });
     await player.click();

@@ -30,6 +30,7 @@ import { captureProductEvent } from "@/lib/posthog";
 
 export type ProfileVrcdnStream = {
   claimable: boolean;
+  communitySubmitted?: boolean;
   key: string;
   label: string;
   pcUrl: string;
@@ -275,7 +276,7 @@ export function ProfileVrcdnStreams({
           id={streamsSectionId}
           tabIndex={streamsSectionId ? -1 : undefined}
         >
-          {streams.map(({ claimable, key, label, pcUrl, questUrl, directVideoUrl, streamId }) => {
+          {streams.map(({ claimable, communitySubmitted, key, label, pcUrl, questUrl, directVideoUrl, streamId }) => {
             const lifecycle = lifecycles[streamId];
             const live = claimable && lifecycle?.presentation === "live";
             const playbackActive = activePlaybackStreamIds.has(streamId);
@@ -286,15 +287,16 @@ export function ProfileVrcdnStreams({
             const copyContext = streams.length > 1 ? title : undefined;
 
             return (
-              <Card className="min-w-0" padding="sm" aria-label={title} key={key}>
-                <div className="flex items-center gap-3 pb-2">
+              <Card className="min-w-0 max-sm:px-3" surface={communitySubmitted ? "dashed" : undefined} padding="sm" aria-label={title} key={key}>
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pb-2">
                   <p className="font-medium">{label}</p>
+                  {communitySubmitted ? <span className="text-xs text-muted">Community-submitted</span> : null}
                   {live ? <span className="text-sm font-medium text-success">Live now</span> : null}
                 </div>
 
                 <div>
-                  <CopyValueRow className={cn("grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-0 py-1", styles.copyRow)} context={copyContext} label="Quest" value={questUrl} />
-                  <CopyValueRow className={cn("grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-0 py-1", styles.copyRow)} context={copyContext} label="PC" value={pcUrl} />
+                  <CopyValueRow className={styles.copyRow} context={copyContext} wrapUrlPath label="Quest" value={questUrl} />
+                  <CopyValueRow className={styles.copyRow} context={copyContext} wrapUrlPath label="PC" value={pcUrl} />
                 </div>
                 {showPlayer ? (
                   <div className={cn("mt-3 overflow-hidden rounded-control border border-border", styles.playerFrame)}>
