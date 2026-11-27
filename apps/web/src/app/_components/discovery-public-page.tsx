@@ -172,9 +172,9 @@ function DiscoveryUpcomingEventsHeading({ title }: { title: string }) {
 
 function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[]; now: number }) {
   return (
-    <section className="min-w-0 border-t border-border pt-6">
+    <section className="min-w-0 border-t border-border pt-4 sm:pt-6">
       <DiscoveryUpcomingEventsHeading title="Upcoming events" />
-      <EventSchedule className="mt-5" empty="No events">
+      <EventSchedule className="mt-3 sm:mt-5" empty="No events">
         {events.map((event) => (
           <EventScheduleRow
             className="[overflow-wrap:anywhere]"
@@ -424,7 +424,7 @@ function DiscoverySection({
   surface: DiscoveryAnalyticsSurface;
 }) {
   return (
-    <section className="min-w-0 border-t border-border pt-6">
+    <section className="min-w-0 border-t border-border pt-4 sm:pt-6">
       {surface === "upcoming_events" ? (
         <DiscoveryUpcomingEventsHeading title={title} />
       ) : (
@@ -437,7 +437,7 @@ function DiscoverySection({
         </SectionTitle>
       )}
       <div className={cn(
-        "mt-5 grid gap-4",
+        "mt-3 grid gap-4 sm:mt-5",
         columns !== "single" && "lg:grid-cols-2",
         columns === "single-xl" && "xl:grid-cols-1",
       )}>
@@ -494,6 +494,9 @@ export function DiscoveryLandingPage({
   const upcomingCount = eventSchedule?.length ?? data.upcomingEvents.length;
   const pairUpcomingAndWorld = status === "live" && activeWorldStatus === "live"
     && upcomingCount === 1 && activeWorlds.length === 1;
+  const singleUpcomingEventPath = status === "live" && upcomingCount === 1
+    ? eventSchedule ? publicEventPath(eventSchedule[0]) : data.upcomingEvents[0].routePath
+    : undefined;
   const upcoming = eventSchedule ? (
     <DiscoveryEventSchedule events={eventSchedule} now={now} />
   ) : upcomingCount === 0 ? (
@@ -519,7 +522,12 @@ export function DiscoveryLandingPage({
     />
   );
   const featuredWorlds = activeWorlds.length > 0 || activeWorldStatus !== "live" ? (
-    <HomeActiveWorldsSection paired={pairUpcomingAndWorld} status={activeWorldStatus} worlds={activeWorlds} />
+    <HomeActiveWorldsSection
+      paired={pairUpcomingAndWorld}
+      singleUpcomingEventPath={singleUpcomingEventPath}
+      status={activeWorldStatus}
+      worlds={activeWorlds}
+    />
   ) : null;
 
   return (
@@ -574,7 +582,7 @@ export function DiscoveryLandingPage({
           </DiscoveryFeatureGate>
         ) : null}
 
-        <section className={cn("grid gap-5", directorySections.length === 3 ? "xl:grid-cols-3" : directorySections.length === 2 ? "xl:grid-cols-2" : undefined)}>
+        <section className={cn("grid gap-4 sm:gap-5", directorySections.length === 3 ? "xl:grid-cols-3" : directorySections.length === 2 ? "xl:grid-cols-2" : undefined)}>
           {directorySections.map(({ headingId, title, results, empty }) => (
             <DiscoverySection
               key={headingId}

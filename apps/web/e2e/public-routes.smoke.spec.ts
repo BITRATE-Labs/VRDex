@@ -80,11 +80,19 @@ test("featured world fits the narrow discovery viewport", async ({ page }) => {
     has: page.getByRole("heading", { name: "Neon Harbor", exact: true }),
   });
   await expect(card).toHaveAttribute("href", "/playwright-neon-harbor");
+  await expect(card.getByText("Next event", { exact: true })).toBeVisible();
   await expect(card.getByText("Afterglow Harbor Sessions", { exact: true })).toBeVisible();
+  await expect(card.locator("time")).toBeHidden();
+  await expect(page.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true }))
+    .toHaveAttribute("href", "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions");
   expect(await card.evaluate((link) => link.getBoundingClientRect().right)).toBeLessThanOrEqual(320);
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
     .toBe(320);
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(card.locator("time")).toBeVisible();
+  await expect(card.getByText(/by Afterglow Social/)).toBeVisible();
 });
 
 test("mobile discovery keeps Add event alongside the populated upcoming heading", async ({ page }) => {
