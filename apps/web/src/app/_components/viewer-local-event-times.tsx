@@ -51,6 +51,21 @@ function formatTimestamp(
   }
 }
 
+function shareLocalDateAndOffset(timestamp: number, reference: number, timeZone: string): boolean {
+  try {
+    const format = new Intl.DateTimeFormat("en", {
+      timeZone,
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      timeZoneName: "shortOffset",
+    });
+    return format.format(timestamp) === format.format(reference);
+  } catch {
+    return false;
+  }
+}
+
 function subscribeToTimeZone(onStoreChange: () => void): () => void {
   void onStoreChange;
   return () => undefined;
@@ -83,6 +98,7 @@ export function ViewerLocalEventDateTime({
   timestamp,
   eventDate,
   scheduleKind,
+  compactRelativeTo,
   timeZone: explicitTimeZone,
   showTimeZone = true,
   hour12,
@@ -91,6 +107,7 @@ export function ViewerLocalEventDateTime({
   timestamp?: number;
   eventDate?: string;
   scheduleKind?: "timed" | "date_only";
+  compactRelativeTo?: number;
   timeZone?: string;
   hour12?: boolean;
   showTimeZone?: boolean;
@@ -105,6 +122,15 @@ export function ViewerLocalEventDateTime({
     );
   }
   if (timestamp === undefined) return null;
+  if (compactRelativeTo !== undefined && shareLocalDateAndOffset(timestamp, compactRelativeTo, timeZone)) {
+    const fullTime = formatTimestamp(timestamp, timeZone, { ...dateTimeOptions, hour12 });
+    return (
+      <time className={className} dateTime={new Date(timestamp).toISOString()} title={fullTime}>
+        <span aria-hidden="true">{formatTimestamp(timestamp, timeZone, { ...timeOptions, hour12 })}</span>
+        <span className="sr-only">{fullTime}</span>
+      </time>
+    );
+  }
 
   return (
     <time className={className} dateTime={new Date(timestamp).toISOString()}>
