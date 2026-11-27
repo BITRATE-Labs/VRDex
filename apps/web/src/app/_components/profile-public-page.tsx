@@ -421,7 +421,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
   });
   const profileBasePath = `/${profile.slug}`;
   const sectionOrder = normalizeProfileSectionOrder(profile.appearance?.sectionOrder);
-  const secondaryOrder = sectionOrder.filter((section) => ["events", "media_kit", "worlds"].includes(section));
+  const secondaryOrder = sectionOrder.filter((section) => section === "events" || section === "media_kit" || section === "worlds");
   const hasDefaultAppearance = mediaKit.compactDisplay === "profile_image"
     && Object.entries(defaultAvatarAppearance).every(([key, value]) => avatarAppearance[key as keyof AvatarAppearance] === value)
     && sectionOrder.every((section, index) => section === defaultProfileSectionOrder[index]);
@@ -438,6 +438,27 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
   const useCompactIdentity = useCompactCommunity || (isPerson && hasSparseIdentity && visibleLinks.length === 0);
   const isRichPublicCommunity = !isPerson && !embedded && !useCompactIdentity;
   const hasSingleCommunityEvent = isRichPublicCommunity && eventPreviews.length === 1;
+  const isRichPublicPerson = isPerson && !embedded && !useCompactIdentity;
+  const moveOwnershipBelowContent = !embedded && (!isPerson || isRichPublicPerson);
+  const visitorDestinations = {
+    links: { id: "profile-links", label: "Links", available: creatorLinks.length > 0 || discordHandles.length > 0 },
+    events: { id: "profile-events", label: "Upcoming events", available: eventPreviews.length > 0 },
+    media_kit: { id: "profile-media-kit", label: "Media kit", available: hasMediaKit },
+    worlds: { id: "profile-worlds", label: "Worlds", available: profile.worldCredits.length > 0 },
+  };
+  const visitorLinks = isRichPublicPerson
+    ? (["links", ...secondaryOrder] as const)
+      .map((section) => visitorDestinations[section])
+      .filter(({ available }) => available)
+    : [];
+  function visitorHeading(section: "events" | "media_kit" | "worlds") {
+    const { id, label } = visitorDestinations[section];
+    return isRichPublicPerson ? (
+      <SectionTitle className="scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent" id={id} tabIndex={-1}>
+        {label}
+      </SectionTitle>
+    ) : <SectionHeading>{label}</SectionHeading>;
+  }
   const quietContributionStyle = "!text-muted underline decoration-border-strong underline-offset-4 hover:decoration-current";
   const compactContributionStyle = useCompactCommunity && quietContributionStyle;
   const secondarySections: Partial<Record<ProfilePublicSectionKey, ReactNode>> = {
@@ -450,7 +471,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
       )}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           {isPerson
-            ? <SectionHeading>Upcoming events</SectionHeading>
+            ? visitorHeading("events")
             : <SectionTitle className={useCompactCommunity ? "text-xl" : "max-sm:text-xl"}>Hosted events</SectionTitle>}
           {!isPerson ? (
             <Link
@@ -477,7 +498,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
     media_kit: hasMediaKit ? (
       <section className="border-t border-border py-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <SectionHeading>Media kit</SectionHeading>
+          {visitorHeading("media_kit")}
           {mediaKit.logoZipUrl ? (
             <a className={buttonVariants({ size: "sm", variant: "secondary" })} download href={mediaKit.logoZipUrl}>
               Download logos
@@ -514,7 +535,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
     ) : null,
     worlds: profile.worldCredits.length > 0 ? (
       <section className="border-t border-border py-8">
-        <SectionHeading>Worlds</SectionHeading>
+        {visitorHeading("worlds")}
         <div className="mt-5 grid gap-3 lg:grid-cols-2">
           {profile.worldCredits.map((world) => (
             <Link
@@ -539,6 +560,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
     <ProfileVrcdnStreams
       compactLinks={useCompactCommunity}
       compactMobileSpacing={isRichPublicCommunity}
+      linksHeadingId={isRichPublicPerson ? visitorDestinations.links.id : undefined}
       discordHandles={discordHandles.map(({ handle, item }) => ({
         handle,
         key: item.link.url,
@@ -576,15 +598,14 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
     />
   );
   const stackOwnershipPrompt = !embedded && isPerson && !useCompactIdentity;
-  const useCommunityOwnershipFooter = !isPerson && !embedded;
   const profileOwnership = canClaim ? (
     <aside
       aria-label="Profile ownership"
       className={useCompactIdentity
         ? cn("grid gap-2 border-t border-border py-4", useCompactCommunity ? "lg:py-2" : "px-4 sm:px-6")
-        : cn("flex flex-wrap items-center justify-between gap-x-6 gap-y-3 py-2", useCommunityOwnershipFooter && "border-t border-border pt-4")}
+        : cn("flex flex-wrap items-center justify-between gap-x-6 gap-y-3 py-2", moveOwnershipBelowContent && "border-t border-border pt-4")}
     >
-      {!useCommunityOwnershipFooter
+      {!moveOwnershipBelowContent
         ? <p className={useCompactIdentity ? "text-sm font-medium text-foreground" : "text-sm text-muted"}>Unclaimed</p>
         : null}
       <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-2", stackOwnershipPrompt && "basis-full sm:basis-auto")}>
@@ -630,7 +651,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
               <div
                 className={cn(
                   "relative grid gap-7",
-                  isRichPublicCommunity && "max-sm:gap-4",
+                  (isRichPublicCommunity || visitorLinks.length > 0) && "max-sm:gap-4",
                   aboutCopy ? "lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)] lg:items-center" : undefined,
                 )}
               >
@@ -672,7 +693,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                       >
                         {profile.displayName}
                       </h1>
-                      {canClaim && useCommunityOwnershipFooter ? (
+                      {canClaim && moveOwnershipBelowContent ? (
                         <p className={cn("mt-1 text-sm font-semibold", useCompactCommunity ? "text-foreground" : "text-white/75")}>Unclaimed</p>
                       ) : null}
                     </div>
@@ -693,6 +714,22 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
                     </div>
                   </div>
                 </div>
+                {visitorLinks.length > 0 ? (
+                  <nav
+                    aria-label="Profile sections"
+                    className={cn("flex flex-wrap gap-x-1", aboutCopy && "lg:col-span-2 lg:row-start-2")}
+                  >
+                    {visitorLinks.map(({ id, label }) => (
+                      <a
+                        className="inline-flex min-h-11 items-center rounded-control px-2 text-sm font-medium text-white underline decoration-white/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-white"
+                        href={"#" + id}
+                        key={id}
+                      >
+                        {label}
+                      </a>
+                    ))}
+                  </nav>
+                ) : null}
                 {aboutCopy ? (
                   <div className="border-white/20 lg:border-l lg:pl-7">
                     <h2 className="text-sm font-semibold text-white/70">About</h2>
@@ -704,7 +741,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
             {useCompactCommunity && creatorLinks.length > 0 ? profileLinks : null}
           </section>
 
-          {!useCommunityOwnershipFooter ? profileOwnership : null}
+          {!moveOwnershipBelowContent ? profileOwnership : null}
         </div>
 
         {profile.profileType === "person" && <HomeLiveNow key={profile.slug} performerSlug={profile.slug} />}
@@ -717,7 +754,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
           return content ? <Fragment key={section}>{content}</Fragment> : null;
         })}
 
-        {useCommunityOwnershipFooter ? profileOwnership : null}
+        {moveOwnershipBelowContent ? profileOwnership : null}
 
         {!embedded ? <ProfilePrivateRecord profilePath={profileBasePath} slug={profile.slug} community={!isPerson} profileId={profile.id as Id<"profiles"> | undefined} /> : null}
       </PageContainer>
