@@ -5,13 +5,13 @@ const sidebars = {
     {
       type: "category",
       label: "Public Docs",
-      items: ["public/README"],
+      items: [{ type: "doc", id: "public/README", label: "Overview" }],
     },
     {
       type: "category",
       label: "Developer Docs",
       items: [
-        "developers/README",
+        { type: "doc", id: "developers/README", label: "Overview" },
         "developers/partner-agent-skill",
         "developers/opencode-skill-adapter",
         "developers/public-api",
@@ -35,7 +35,7 @@ const sidebars = {
       type: "category",
       label: "Engineering Docs",
       items: [
-        "engineering/README",
+        { type: "doc", id: "engineering/README", label: "Overview" },
         "engineering/local-development",
         "engineering/service-map",
         {
