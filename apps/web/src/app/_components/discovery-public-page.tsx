@@ -187,7 +187,7 @@ function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[];
             time={<ViewerLocalEventDateTime timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />}
             title={publicEventPath(event) ? (
               <TrackedDiscoveryLink
-                className="rounded-control text-section text-foreground underline decoration-transparent underline-offset-4 transition hover:text-accent-strong hover:decoration-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                className="rounded-control text-section text-accent-strong underline decoration-accent/55 underline-offset-4 transition hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                 eventName="event_card_clicked"
                 href={publicEventPath(event)!}
                 properties={{ entity_type: "event", surface: "upcoming_events" }}
