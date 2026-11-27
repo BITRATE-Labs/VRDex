@@ -57,30 +57,32 @@ export function EndpointDirectory({ operations, children }: { operations: ApiOpe
           ) : null}
         </div>
 
-        <p role="status" className="text-xs text-muted tabular-nums sm:me-auto sm:whitespace-nowrap">
+        <p role="status" className="text-xs font-medium text-foreground tabular-nums sm:me-auto sm:whitespace-nowrap">
           {matches.length} {matches.length === 1 ? "operation" : "operations"}
         </p>
         {children}
       </div>
 
-      <ul role="list" aria-label="Operations" className="grid gap-2.5" id="api-endpoints">
+      <ul role="list" aria-label="Operations" className="grid gap-1.5 sm:gap-2.5" id="api-endpoints">
         {matches.map((operation) => (
           <li className="min-w-0" key={operation.operationId}>
-            <Card className="grid gap-y-1 px-3.5 py-2.5 sm:grid-cols-[3.5rem_minmax(0,1fr)] sm:gap-x-2.5 sm:px-4" padding="none">
-              <span className={cn(
-                "inline-flex min-w-12 items-center justify-center justify-self-start self-start rounded-control border px-1.5 py-0.5 font-mono text-xs font-semibold",
-                operation.method === "GET"
-                  ? "border-success/30 bg-success/10 text-success"
-                  : "border-accent/25 bg-accent/10 text-accent-strong",
-              )}>{operation.method}</span>
-              <code className="min-w-0 self-center font-mono text-sm text-foreground [overflow-wrap:anywhere]">
-                {operation.path.split(/(?=\/)/).map((segment, index) => (
-                  <Fragment key={index}>
-                    {index > 0 ? <wbr /> : null}
-                    {segment}
-                  </Fragment>
-                ))}
-              </code>
+            <Card className="grid gap-y-0.5 px-2.5 py-2 sm:grid-cols-[3.5rem_minmax(0,1fr)] sm:gap-x-2.5 sm:gap-y-1 sm:px-4 sm:py-2.5" padding="none">
+              <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 sm:contents">
+                <span className={cn(
+                  "font-mono text-xs font-semibold sm:inline-flex sm:min-w-12 sm:items-center sm:justify-center sm:justify-self-start sm:self-start sm:rounded-control sm:border sm:px-1.5 sm:py-0.5",
+                  operation.method === "GET"
+                    ? "text-success sm:border-success/30 sm:bg-success/10"
+                    : "text-accent-strong sm:border-accent/25 sm:bg-accent/10",
+                )}>{operation.method}</span>
+                <code className="min-w-0 max-w-full flex-none font-mono text-sm text-foreground [overflow-wrap:anywhere] sm:self-center">
+                  {operation.path.split(/(?=\/)/).map((segment, index) => (
+                    <Fragment key={index}>
+                      {index > 0 ? <wbr /> : null}
+                      {segment}
+                    </Fragment>
+                  ))}
+                </code>
+              </div>
               <p className="text-sm leading-5 text-foreground sm:col-start-2">{operation.summary}</p>
               <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs text-muted sm:col-start-2">
                 {operation.tags.length ? (

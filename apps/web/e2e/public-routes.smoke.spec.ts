@@ -1234,6 +1234,7 @@ test("public API reference puts endpoints in the first phone viewport", async ({
   const tools = directory.locator("summary").filter({ hasText: /^API tools$/ });
   await expect(main.getByRole("heading", { name: "VRDex Public API", exact: true, level: 1 })).toBeVisible();
   await expect(filter).toBeVisible();
+  await expect(rows.nth(3)).toBeInViewport({ ratio: 1 });
   const total = await rows.count();
   expect(total).toBeGreaterThan(1);
   await expect(directory.getByRole("status")).toHaveText(`${total} operations`);
