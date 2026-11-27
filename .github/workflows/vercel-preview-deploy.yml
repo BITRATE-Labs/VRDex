@@ -1,6 +1,8 @@
 name: On-Demand Vercel Preview
 
 on:
+  # Keep GitHub branch protection limited to BASIC-BIT, including admins.
+  # Pushes run the branch's workflow with deployment credentials.
   push:
     branches: [codex/sandbox]
   workflow_dispatch:
@@ -454,7 +456,7 @@ jobs:
           VERCEL_PROJECT_ID: ${{ github.event_name == 'push' && steps.pr.outputs.sandbox == 'true' && secrets.VERCEL_SANDBOX_PROJECT_ID || secrets.VERCEL_PROJECT_ID }}
         run: |
           set -euo pipefail
-          deploy_args=(deploy --prebuilt --target=preview --token "$VERCEL_TOKEN")
+          deploy_args=(deploy --prebuilt --archive=tgz --target=preview --token "$VERCEL_TOKEN")
           if [ -n "$CONVEX_PREVIEW_URL" ]; then
             : "${VRDEX_PREVIEW_PERSISTENCE_SECRET:?Preview persistence secret was not configured.}"
             deploy_args+=(

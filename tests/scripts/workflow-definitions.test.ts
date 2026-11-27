@@ -176,6 +176,12 @@ describe("fork-aware preview workflows", () => {
     assert.ok(deployScript.includes('--env "VRDEX_ENABLE_E2E_AUTH_HELPERS=false"'));
   });
 
+  it("archives the prebuilt preview before uploading it to Vercel", () => {
+    const upload = deploySteps.find(step => step.name === "Deploy Vercel preview output");
+    assert.match(upload?.run ?? "", /deploy_args=\(deploy --prebuilt --archive=tgz --target=preview /);
+    assert.match(upload?.run ?? "", /vercel@[^\s]+ "\$\{deploy_args\[@\]\}"/);
+  });
+
   it("fails closed on the dedicated project and confines its credentials to the intended steps", () => {
     const check = deploySteps.find(step => step.name === "Check Vercel deployment secrets")?.run ?? "";
     assert.match(check, /shared sandbox push requires VERCEL_SANDBOX_PROJECT_ID/);
