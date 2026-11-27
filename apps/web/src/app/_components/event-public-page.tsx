@@ -240,7 +240,7 @@ export function EventPreviewCard({
   const hasDatedTitle = hasSeriesDate && Boolean(eventPath);
   const summary = isSeries && event.summary === seriesSummary ? undefined : event.summary;
   const dateTime = <ViewerLocalEventDateTime timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />;
-  const useThemeColors = isSeries && !thumbnailStyle;
+  const useThemeColors = !thumbnailStyle;
 
   return (
     <article className="group overflow-hidden rounded-card border border-border bg-surface-strong text-sm transition hover:-translate-y-0.5">
