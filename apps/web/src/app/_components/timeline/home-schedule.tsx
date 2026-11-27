@@ -275,15 +275,16 @@ function ScheduleContent({
   const loadingWithoutContent = data.kind === "loading" && !retainedRefresh &&
     data.records.length === 0 && actions.plan.length === 0;
   const showFavoritesEmptyState = navigation.favoritesOnly && compactEmpty;
+  const showInlineFavoritesRecovery =
+    noFavorites && data.savedState === "ready" && actions.plan.length > 0;
   const clearFilterFocused = useRef(false);
   useLayoutEffect(() => {
-    if (showFavoritesEmptyState || !clearFilterFocused.current) return;
-    clearFilterFocused.current = false;
     // The browser moves focus to the body when a focused control is removed.
-    if (document.activeElement === document.body) {
+    if (clearFilterFocused.current && document.activeElement === document.body) {
+      clearFilterFocused.current = false;
       document.getElementById("schedule-favorites")?.focus();
     }
-  }, [showFavoritesEmptyState]);
+  }, [showFavoritesEmptyState, showInlineFavoritesRecovery]);
   const nextEvent = empty ? data.records.flatMap((event) => {
     const schedule = event.schedule;
     if (schedule.kind === "date_only") {
@@ -294,6 +295,23 @@ function ScheduleContent({
     }
     return schedule.startAt >= range.endAt ? [schedule.startAt] : [];
   }).sort((a, b) => a - b)[0] : undefined;
+  const clearFavoritesFilter = (
+    <Button
+      size="sm"
+      type="button"
+      variant="primary"
+      onFocus={() => { clearFilterFocused.current = true; }}
+      onBlur={() => { clearFilterFocused.current = false; }}
+      onClick={(event) => {
+        if (event.currentTarget === document.activeElement) {
+          document.getElementById("schedule-favorites")?.focus();
+        }
+        navigate({ favoritesOnly: false });
+      }}
+    >
+      Clear filter
+    </Button>
+  );
   return (
     <section
       data-home-schedule
@@ -332,6 +350,7 @@ function ScheduleContent({
           role="status"
           aria-label="Schedule data state"
           data-state={data.kind}
+          data-favorites-recovery={showInlineFavoritesRecovery || undefined}
         >
           {data.kind === "loading" && !retainedRefresh && !loadingWithoutContent && (
             <ScheduleLoadingMessage />
@@ -352,7 +371,10 @@ function ScheduleContent({
               </Button>
             </>
           )}
-          {noFavorites && !showFavoritesEmptyState && "No favorites in this range"}
+          {noFavorites && !showFavoritesEmptyState && (
+            <span className={styles.favoritesSummary}>No events from favorite communities or performers</span>
+          )}
+          {showInlineFavoritesRecovery && clearFavoritesFilter}
           {nextEvent !== undefined && (
             <Button size="sm" onClick={() => navigate({ anchor: nextEvent })}>Next event</Button>
           )}
@@ -390,26 +412,13 @@ function ScheduleContent({
         records={data.records}
         lanes={data.eventLanes}
         saved={data.saved}
-        compactEmpty={compactEmpty}
+        compactEmpty={compactEmpty || showInlineFavoritesRecovery}
+        hour12={runtime.hour12}
         loadingStatus={loadingWithoutContent ? <ScheduleChartLoading /> : undefined}
         emptyState={showFavoritesEmptyState ? (
           <div className={styles.emptyState}>
-            <p role="status">No favorites in this range</p>
-            <Button
-              size="sm"
-              type="button"
-              variant="primary"
-              onFocus={() => { clearFilterFocused.current = true; }}
-              onBlur={() => { clearFilterFocused.current = false; }}
-              onClick={(event) => {
-                if (event.currentTarget === document.activeElement) {
-                  document.getElementById("schedule-favorites")?.focus();
-                }
-                navigate({ favoritesOnly: false });
-              }}
-            >
-              Clear filter
-            </Button>
+            <p role="status">No events from favorite communities or performers</p>
+            {clearFavoritesFilter}
           </div>
         ) : null}
         range={range}

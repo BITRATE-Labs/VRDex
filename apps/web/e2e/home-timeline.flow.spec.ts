@@ -151,7 +151,7 @@ test.describe("continuous schedule @flow @fixture", () => {
     const quietAnchor = Date.UTC(2026, 9, 26) - (4 + width / 100) * 3600000;
     await page.goto(`/?at=${quietAnchor}&tz=America%2FNew_York&favorites=1&tag=keep`);
     await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready");
-    await expect(page.getByText("No favorites in this range", { exact: true })).toBeVisible();
+    await expect(page.getByText("No events from favorite communities or performers", { exact: true })).toBeVisible();
     await expect(page.getByTestId("public-timeline-lanes")).toHaveCount(0);
     await page.getByRole("button", { name: "Next event", exact: true }).click();
     const params = new URL(page.url()).searchParams;
@@ -171,7 +171,7 @@ test.describe("continuous schedule @flow @fixture", () => {
     const later = schedule.getByRole("button", { name: "Later", exact: true });
     const favorites = schedule.getByRole("button", { name: "Favorites only", exact: true });
     const star = favorites.locator("svg");
-    const empty = schedule.getByText("No favorites in this range", { exact: true });
+    const empty = schedule.getByText("No events from favorite communities or performers", { exact: true });
     const clear = schedule.getByRole("button", { name: "Clear filter", exact: true });
     const chart = schedule.getByRole("region", { name: "Timeline chart", exact: true });
     await expect(empty).toBeVisible();
@@ -255,6 +255,52 @@ test.describe("continuous schedule @flow @fixture", () => {
     await expect(favorites).toHaveAttribute("aria-pressed", "false");
     await expect(chart).toBeVisible();
   });
+  test("empty Favorites can be cleared while keeping a saved event in My night", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/?at=${TIMELINE_NOW - 3600000}&tz=America%2FNew_York&tag=keep`);
+    const title = "Low Tide";
+    await saveInInspector(page, title);
+    await page.goto(`/?at=${TIMELINE_NOW + 60000}&tz=America%2FNew_York&tag=keep`);
+    await loadCompleteSchedule(page);
+    const schedule = page.locator("[data-home-schedule]");
+    const favorites = schedule.getByRole("button", { name: "Favorites only", exact: true });
+    const clear = schedule.getByRole("button", { name: "Clear filter", exact: true });
+    const chart = schedule.getByRole("region", { name: "Timeline chart", exact: true });
+    const lanes = chart.getByTestId("public-timeline-lanes");
+    const night = chart.getByTestId("night-lanes");
+    const saved = night.getByRole("button", { name: `Open ${title}`, exact: true });
+
+    await expect(saved).toBeVisible();
+    await expect(saved.locator("time")).toHaveText("5:30 PM");
+    await expect(saved).toHaveAccessibleDescription(/5:30 PM/);
+    const originalLanesHeight = await lanes.evaluate((el) => el.clientHeight);
+    await favorites.press("Space");
+    await expect(favorites).toHaveAttribute("aria-pressed", "true");
+    await expect(schedule.getByText("No events from favorite communities or performers", { exact: true })).toBeVisible();
+    await expect(clear).toHaveCount(1);
+    await expect(clear).toBeVisible();
+    const clearedParams = new URL(page.url()).searchParams;
+    clearedParams.delete("favorites");
+    await expect(saved).toBeVisible();
+    expect(await lanes.evaluate((el) => el.clientHeight)).toBeLessThan(originalLanesHeight);
+    await favorites.press("Tab");
+    await expect(clear).toBeFocused();
+    await clear.press("Enter");
+    await expect(favorites).toBeFocused();
+    await expect(favorites).toHaveAttribute("aria-pressed", "false");
+    await expect(clear).toHaveCount(0);
+    await expect(saved).toBeVisible();
+    await expect.poll(() => lanes.evaluate((el) => el.clientHeight)).toBe(originalLanesHeight);
+    expect(new URL(page.url()).searchParams.toString()).toBe(clearedParams.toString());
+
+    await page.goBack();
+    await expect(clear).toBeVisible();
+    await clear.focus();
+    await page.goForward();
+    await expect(clear).toHaveCount(0);
+    await expect(favorites).toBeFocused();
+    await expect(saved).toBeVisible();
+  });
   test("empty Favorites keeps its focused recovery action through refresh", async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     let hold = false;
@@ -286,7 +332,7 @@ test.describe("continuous schedule @flow @fixture", () => {
       await expect(page.locator("[data-home-schedule] [data-loading-placeholder]")).toHaveCount(0);
       expect(await discoverTop()).toBe(initialDiscoverTop);
       await expect(clear).toBeFocused();
-      await expect(page.getByText("No favorites in this range", { exact: true })).toBeVisible();
+      await expect(page.getByText("No events from favorite communities or performers", { exact: true })).toBeVisible();
     } finally {
       hold = false;
       buffered.splice(0).forEach((send) => send());

@@ -146,7 +146,7 @@ test.describe("timeline time regressions @flow @fixture", () => {
             return rect.width > 0 && rect.right > bounds.left + 1 && rect.left < bounds.right - 1 && rect.bottom > bounds.top && rect.top < bounds.bottom;
           });
           const text = status.textContent ?? "";
-          const empty = /No favorites in this range/.test(text);
+          const empty = /No events from favorite communities or performers/.test(text);
           audit.sawVisibleContent ||= Boolean(visible);
           audit.sawEmpty ||= status.getAttribute("data-state") === "ready" && !visible;
           if (empty && visible && audit.contradictions.length < 40) audit.contradictions.push({ text, date: document.querySelector<HTMLInputElement>('[aria-label="Schedule date"]')?.value ?? null, anchor: new URL(location.href).searchParams.get("at"), content: visible.getAttribute("data-testid") });
