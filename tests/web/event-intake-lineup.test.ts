@@ -72,6 +72,21 @@ it("does not let a stalled public lookup stall extraction", { timeout: 8000 }, a
   assert.ok(result.questions.some(q => q.reason === "identity_lookup_unavailable"));
 });
 
+it("shares one deadline across exact and prefix lookups", async context => {
+  const startedAt = Date.now();
+  context.mock.timers.enable({ apis: ["Date"], now: startedAt });
+  const queries: string[] = [];
+  const result = await extract(["Nyakumma", "Another DJ"], async query => {
+    queries.push(query);
+    context.mock.timers.setTime(startedAt + 5_000);
+    return [];
+  });
+  assert.deepEqual(queries, ["Nyakumma"]);
+  assert.deepEqual(result.questions.map(item => item.reason), [
+    "identity_lookup_unavailable", "identity_lookup_unavailable",
+  ]);
+});
+
 it("preserves an alias link already grounded by the model's public lookup", async () => {
   const value = candidate(["Nyakuma"]);
   value.lineup[0]!.personSlug = "akuma-person";
