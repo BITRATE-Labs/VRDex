@@ -250,6 +250,16 @@
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
+.eventMetadata > .name {
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+@media (width > 760px) {
+  .eventMetadata > .name {
+    font-size: 1.125rem;
+  }
+}
 .name a:hover,
 .host:hover,
 .performers a:hover,
@@ -267,6 +277,7 @@
 }
 .eventTime {
   color: var(--foreground);
+  font-size: 0.8125rem;
   font-weight: 600;
 }
 .host {
