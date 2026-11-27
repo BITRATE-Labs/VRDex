@@ -56,6 +56,32 @@ test("first offer is nonblocking; dismiss stays unset and footer reopens the cho
   await expect(panel).toHaveCount(0);
 });
 
+test("the mobile first offer leaves Home controls tappable and can become focused settings", async ({ page, isMobile }) => {
+  test.skip(!isMobile, "The desktop first offer continues to float.");
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto("/");
+  const panel = page.getByRole("region", { name: "Usage & privacy", exact: true });
+  const main = page.getByRole("main");
+  const search = main.getByRole("button", { name: "Search VRDex", exact: true });
+  const now = main.getByRole("button", { name: "Now", exact: true });
+  await expect(panel).toBeInViewport({ ratio: 1 });
+  await expect(panel).toHaveCSS("position", "static");
+  await expect(search).toBeInViewport({ ratio: 1 });
+  await search.tap({ trial: true });
+  await now.tap({ trial: true });
+  await expect(panel).toHaveCount(1);
+
+  const opener = page.getByRole("button", { name: "Usage & privacy", exact: true });
+  await opener.tap();
+  await expect(panel).toHaveCount(1);
+  await expect(panel).toHaveCSS("position", "fixed");
+  await expect(panel).toBeFocused();
+  await panel.press("Escape");
+  await expect(opener).toBeFocused();
+  await expect(panel).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem("vrdex-analytics-choice"))).toBeNull();
+});
+
 test("Limited envelopes are independent and Off sends no optional requests", async ({ page }) => {
   const events: Array<{ event: string; properties: Record<string, unknown> }> = [];
   let off = false;
