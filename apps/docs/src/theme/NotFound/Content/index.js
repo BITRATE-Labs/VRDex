@@ -5,6 +5,12 @@ import Heading from "@theme/Heading";
 
 import styles from "./styles.module.css";
 
+const sections = [
+  { label: "Public Docs", to: "/docs/public/" },
+  { label: "Developer Docs", to: "/docs/developers/" },
+  { label: "Engineering Docs", to: "/docs/engineering/" },
+];
+
 export default function NotFoundContent({ className }) {
   return (
     <main className={clsx(styles.main, className)}>
@@ -14,14 +20,18 @@ export default function NotFoundContent({ className }) {
             Page Not Found
           </Translate>
         </Heading>
-        <div className={styles.actions}>
-          <Link className={clsx("button button--primary", styles.primary)} to="/docs/">
-            Browse docs
-          </Link>
-          <Link className={styles.secondary} to="/docs/developers/">
-            Developer docs
-          </Link>
-        </div>
+        <Link className={clsx("button button--primary", styles.primary)} to="/docs/">
+          Browse docs
+        </Link>
+        <nav aria-label="Docs" className={styles.sections}>
+          <ul>
+            {sections.map(({ label, to }) => (
+              <li key={to}>
+                <Link to={to}>{label}</Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
       </div>
     </main>
   );
