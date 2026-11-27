@@ -441,6 +441,9 @@ async function configuration(ctx: MutationCtx, { session, program, event }: NonN
         await ctx.db.patch(session._id, { runtimeDeadlineAt: deadline });
     return {
         connectionTest: session.connectionTest,
+        posterImageUrl: event.posterImageUrl?.startsWith(`/api/v0/events/${event._id}/artwork/`)
+            ? new URL(event.posterImageUrl, process.env.SITE_URL ?? "https://vrdex.net").href
+            : event.posterImageUrl,
         programId: program._id, eventId: event._id, outputId: session.outputId,
         committedIntent:session.committedIntent,intentSequence:session.intentSequence,
         lineupCursor:session.lineupCursor,

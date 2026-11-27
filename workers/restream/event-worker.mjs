@@ -284,6 +284,7 @@ export function createEventWorker({
           audioBitrateKbps: config.mediaSettings?.audioBitrateKbps,
           silenceThresholdDb,
           connectionTest:config.connectionTest,
+          posterImageUrl: config.posterImageUrl,
         });
         if (!config.connectionTest) operator = createOperatorControl({
           control: request,

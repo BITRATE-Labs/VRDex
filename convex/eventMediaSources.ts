@@ -112,6 +112,9 @@ export const assignToSlot = mutation({
             (pending?.controlTarget?.kind === "source" && pending.controlTarget.source.sourceId === existing._id)) {
           throw new ConvexError("Switch away from this input before clearing it.");
         }
+        if (session.resumeSource?.sourceId === existing._id) {
+          await ctx.db.patch(session._id, { resumeSource: undefined });
+        }
       }
       if (!clearing) {
         const profile = slot.personProfileId ? await ctx.db.get(slot.personProfileId) : null;

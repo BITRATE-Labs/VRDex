@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { performance } from "node:perf_hooks";
 import { createInterface } from "node:readline";
 import { createInputSupervisor } from "./input-supervisor.mjs";
+import { loadPosterHoldFrame } from "./poster-hold-frame.mjs";
 export { VIDEO_PROFILES as QUALITY_PROFILES } from "./broadcast-profiles.mjs";
 import {
   VIDEO_PROFILES as QUALITY_PROFILES,
@@ -112,6 +113,7 @@ export function createProgramRenderer({
   silenceThresholdDb,
   clock = () => performance.now(),
   createInput = createInputSupervisor,
+  posterImageUrl,
 } = {}) {
   const settings = parseMediaSettings({
     videoPreset: quality,
@@ -171,6 +173,8 @@ export function createProgramRenderer({
     outputMs = 0;
   const frameBytes = (profile.width * profile.height * 3) / 2;
   const holdFrame = Buffer.alloc(frameBytes, H.chromaFill);
+  const posterLoad = new AbortController();
+  let posterFrame;
   holdFrame.fill(H.backgroundLuma, 0, profile.width * profile.height);
   // Visible neutral slate with a brighter central rectangle; no product copy invented.
   for (let y = (profile.height / H.rectangleStartDivisor) | 0; y < (profile.height * H.rectangleEndMultiplier) / H.rectangleEndDivisor; y++)
@@ -221,7 +225,7 @@ export function createProgramRenderer({
         submittedSourceId = actualSourceId;
         submittedSlotKey = actualSlotKey;
       }
-      child.stdio[3].write(ready ? input.buffer.frame : holdFrame);
+      child.stdio[3].write(ready ? input.buffer.frame : posterFrame ?? holdFrame);
       child.stdio[4].write(
         ready ? input.buffer.takeAudio(silence.length) : silence,
       );
@@ -321,10 +325,16 @@ export function createProgramRenderer({
       });
       for (const input of inputs.values()) input.start();
       tick();
+      if (posterImageUrl) {
+        void loadPosterHoldFrame(posterImageUrl, { ffmpeg, profile, signal: posterLoad.signal })
+          .then(frame => { if (running) posterFrame = frame; })
+          .catch(() => {}); // An unavailable poster leaves the neutral slate on air.
+      }
     },
     stop() {
       if (stopPromise) return stopPromise;
       stopped = true;
+      posterLoad.abort();
       desired = [];
       selected = undefined;
       running = false;

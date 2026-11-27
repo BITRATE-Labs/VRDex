@@ -17,6 +17,7 @@ import {
   type SourceObservation,
 } from "@/lib/event-source-observations";
 import { EventOperatorPreview } from "./event-operator-preview";
+import { useViewerTimeZone } from "./viewer-local-event-times";
 import type { OperatorStatus } from "./event-operator-view";
 export type SourceAuthoring = Omit<
   FunctionArgs<typeof api.eventMediaSources.create>,
@@ -62,6 +63,10 @@ export function EventOperatorSources({
     [url, setUrl] = useState(""),
     [busy, setBusy] = useState(false),
     [failure, setFailure] = useState<string>();
+  const timeZone = useViewerTimeZone();
+  const formatSlotTime = new Intl.DateTimeFormat("en", {
+    timeZone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short",
+  });
   const [slotId, setSlotId] = useState<LineupAssignment["slotId"]>();
   const [lineupInput, setLineupInput] = useState<LineupAssignment["sourceId"] | "paste">();
   const [slotUrl, setSlotUrl] = useState("");
@@ -342,7 +347,7 @@ export function EventOperatorSources({
                 setSlotUrl("");
               }}>
                 <option value="">Choose a slot</option>
-                {control.status.lineupSlots.map(slot => <option key={slot.id} value={slot.id}>{slot.label} · {slot.timeLabel}</option>)}
+                {control.status.lineupSlots.map(slot => <option key={slot.id} value={slot.id}>{slot.label} · {formatSlotTime.format(slot.startAt)}</option>)}
               </Select>
             </Field>
             <Field>

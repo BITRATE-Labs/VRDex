@@ -289,8 +289,12 @@ test("a saved event feed can drive multiple timed slots and override the perform
   if (automatic.kind === "source") assert.equal(automatic.source.sourceId, lateSlot.sourceId);
   await t.run(ctx => ctx.db.patch(scheduled.sessionId, { currentSourceId: lateSlot.sourceId }));
   await assert.rejects(assign(late.id, null), /Switch away from this input/);
-  await t.run(ctx => ctx.db.patch(scheduled.sessionId, { currentSourceId: profileSource.id }));
+  await t.run(ctx => ctx.db.patch(scheduled.sessionId, {
+    currentSourceId: profileSource.id,
+    resumeSource: { sourceId: lateSlot.sourceId, revision: 1, slotKey: late.id },
+  }));
   await assign(late.id, null);
+  assert.equal(await t.run(async ({ db }) => (await db.get(scheduled.sessionId))?.resumeSource === undefined), true);
   await assign(guest.id, null);
   const afterClearing = await owner.query(api.events.getEventMediaControlStatus, { currentSlug });
   assert.equal(afterClearing.sources.some(source => source.sourceId === projection?._id), true);
