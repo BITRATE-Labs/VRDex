@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { publicScheduleStatus } from "../../../../../convex/_eventRuntime";
 
 import { DiscoveryFeatureGate, DiscoverySearchForm, TrackedDiscoveryLink } from "./discovery-analytics";
@@ -17,6 +18,7 @@ import { ProfileAvatarImage } from "@/components/ui/profile-avatar-image";
 import type { PublicSearchResult } from "@/lib/public-search";
 import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { VerifiedTrustMark } from "@/components/ui/verified-trust-mark";
+import { defaultAvatarAppearance, type AvatarAppearance } from "@/lib/avatar-appearance";
 import { cn } from "@/lib/cn";
 import { publicEventPath } from "@/lib/event-path";
 import { FEATURED_DISCOVERY_UI_FLAG, type DiscoveryAnalyticsSurface } from "@/lib/posthog";
@@ -62,10 +64,14 @@ function resultSubtitle(result: PublicSearchResult): string | undefined {
   return redundantLabels.includes(subtitle.toLowerCase()) ? undefined : subtitle;
 }
 
-function ResultImage({ result }: { result: PublicSearchResult }) {
+function ResultImage({ result, quietFallback = false }: { result: PublicSearchResult; quietFallback?: boolean }) {
   const primaryImageUrl = result.entityType === "profile"
     ? result.profileImageUrl ?? result.imageUrl
     : result.imageUrl;
+  const appearance = result.avatarAppearance;
+  const useQuietFallback = quietFallback && !primaryImageUrl && (
+    !appearance || Object.entries(defaultAvatarAppearance).every(([key, value]) => appearance[key as keyof AvatarAppearance] === value)
+  );
 
   if (result.entityType !== "profile") {
     return (
@@ -95,6 +101,12 @@ function ResultImage({ result }: { result: PublicSearchResult }) {
             label={`${result.title} logo`}
             sizes="56px"
             src={primaryImageUrl}
+          />
+        ) : useQuietFallback ? (
+          <EntityImage
+            alt=""
+            className="size-14 rounded-card border border-border bg-surface-strong font-semibold text-foreground"
+            label={result.title}
           />
         ) : (
           <ProfileAvatarImage
@@ -229,11 +241,11 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
     : [];
 
   return (
-    <div className="rounded-panel border border-border bg-surface transition hover:-translate-y-0.5 hover:border-border-strong hover:bg-surface-strong hover:shadow-panel">
+    <div className="rounded-panel border border-border bg-surface transition-colors hover:border-border-strong">
       <TrackedDiscoveryLink
         className={cn(
-          "group flex gap-4 rounded-panel p-4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-strong",
-          result.claimEntryPath && "pb-2",
+          "group flex items-start gap-3 rounded-panel p-4 transition-colors hover:bg-surface-strong focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-strong",
+          result.claimEntryPath && "pb-1",
         )}
         eventName={result.entityType === "event" ? "event_card_clicked" : "search_result_clicked"}
         href={result.routePath}
@@ -243,10 +255,10 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
           surface: "search_results",
         }}
       >
-        <ResultImage result={result} />
+        <ResultImage result={result} quietFallback />
         <span className="flex min-w-0 flex-1 flex-col gap-2">
           <span className="flex flex-col gap-1">
-            <span className="text-xl font-semibold text-accent-strong underline decoration-accent/50 underline-offset-4 group-hover:decoration-current [overflow-wrap:anywhere]">
+            <span className="text-xl font-semibold text-foreground underline-offset-4 group-hover:text-accent-strong group-hover:underline [overflow-wrap:anywhere]">
               {result.title}
             </span>
             <span className="text-sm text-muted">{entityLabel(result)}</span>
@@ -256,10 +268,11 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
           {result.summary ? <span className="line-clamp-2 text-sm leading-6 text-muted">{result.summary}</span> : null}
           {roleLabels.length > 0 ? <span className="text-xs text-muted">{roleLabels.join(" · ")}</span> : null}
         </span>
+        <ChevronRight aria-hidden="true" className="mt-1 size-4 shrink-0 text-muted group-hover:text-accent-strong" />
       </TrackedDiscoveryLink>
       {result.person ? <PublicSearchResultDetails person={result.person} /> : null}
       {result.claimEntryPath ? (
-        <div className="w-fit px-4">
+        <div className="ml-[5.25rem] w-fit pr-4">
           <Link
             className="inline-flex min-h-11 items-center rounded-control text-sm font-medium text-muted underline decoration-border-strong underline-offset-4 hover:text-accent-strong hover:decoration-current focus-visible:outline-2 focus-visible:outline-accent-strong"
             href={result.claimEntryPath}
@@ -498,30 +511,28 @@ export function SearchResultsPage({
     >
         {activeFilter === "event" ? <Link className={buttonVariants({ variant: "primary" })} href="/events/new">Add event</Link> : null}
         {hasQuery ? (
-          <section aria-describedby="search-results-query" aria-label="Search results" className="w-full max-w-3xl space-y-4 sm:space-y-5">
+          <section aria-describedby="search-results-query" aria-label="Search results" className="w-full max-w-3xl space-y-3 sm:space-y-5">
             <p className="sr-only" id="search-results-query">Results for {query}</p>
-            <div className="flex flex-wrap items-center gap-3">
-              <nav aria-label="Entity type" className="flex flex-wrap gap-1 sm:gap-2">
-                {filters.map((filter) => {
-                  const active = filter === activeFilter;
+            <nav aria-label="Entity type" className="flex flex-wrap gap-x-0.5 border-b border-border sm:gap-x-2">
+              {filters.map((filter) => {
+                const active = filter === activeFilter;
 
-                  return (
-                    <Link
-                      aria-current={active ? "page" : undefined}
-                      className={cn(
-                        buttonVariants({ size: "sm", variant: active ? "primary" : "secondary" }),
-                        "min-h-11 min-w-11 px-2 sm:px-3",
-                      )}
-                      href={searchHref({ filter, query })}
-                      key={filter}
-                    >
-                      {filterLabel(filter)}
-                    </Link>
-                  );
-                })}
-              </nav>
-            </div>
-
+                return (
+                  <Link
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      buttonVariants({ size: "sm", variant: "ghost" }),
+                      "min-h-11 min-w-11 rounded-none border-b-2 border-transparent px-1 ring-inset max-sm:text-xs sm:px-3",
+                      active ? "border-accent-strong !text-accent-strong" : "!text-muted hover:!text-foreground",
+                    )}
+                    href={searchHref({ filter, query })}
+                    key={filter}
+                  >
+                    {filterLabel(filter)}
+                  </Link>
+                );
+              })}
+            </nav>
             {status !== "live" ? (
               <Card className="flex flex-wrap items-center justify-between gap-3" surface="dashed">
                 <p className="text-pretty font-medium" role="status">
@@ -533,7 +544,7 @@ export function SearchResultsPage({
                 ) : null}
               </Card>
             ) : results.length === 0 ? (
-              <Card className="flex flex-wrap items-center justify-between gap-4" surface="strong">
+              <Card className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1" surface="strong">
                 <div className="min-w-0 flex-[1_1_16rem]">
                   <p className="text-pretty font-semibold">No public results matched that search yet.</p>
                   <p className="mt-2 text-pretty text-sm leading-6 text-muted">
