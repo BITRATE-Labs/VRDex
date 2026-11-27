@@ -189,9 +189,10 @@ function PillList({ items, onArtwork }: { items: string[]; onArtwork?: boolean }
   );
 }
 
-function EventList({ events }: { events: PublicWorldEventPreview[] }) {
+function WorldEventBucket({ heading, events }: { heading: string; events: PublicWorldEventPreview[] }) {
   return (
-    <div className="grid gap-3">
+    <section className="grid min-w-0 content-start gap-3">
+      <h3 className="text-sm font-semibold text-muted">{heading}</h3>
       {events.map((event) => {
         const sourceUrl = event.source.url ? safeHttpsUrl(event.source.url) : null;
         const eventPath = publicEventPath(event);
@@ -204,22 +205,29 @@ function EventList({ events }: { events: PublicWorldEventPreview[] }) {
             key={`${event.slug ?? event.title}-${event.eventDate ?? event.startAt}`}
           >
             <div
-              className="bg-[linear-gradient(135deg,var(--surface),var(--surface-raised))] bg-cover bg-center px-4 py-4"
+              className={cn(
+                "px-3 pt-3 sm:px-4 sm:pt-4",
+                posterStyle ? "bg-cover bg-center pb-3 sm:pb-4" : "pb-2",
+              )}
               style={posterStyle}
             >
-              <div className={`flex flex-wrap items-center gap-2 text-xs ${posterTextClass}`}>
-                <ViewerLocalEventDateTime timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />
-                <span aria-hidden="true">/</span>
+              <h4 className={cn("break-words text-lg font-semibold leading-snug tracking-[-0.03em]", posterStyle && "text-white")}>
+                {eventPath ? <Link href={eventPath}>{event.title}</Link> : event.title}
+              </h4>
+              <div className={cn("mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs", posterTextClass)}>
+                <ViewerLocalEventDateTime
+                  className="min-w-0 break-words"
+                  timestamp={event.startAt}
+                  eventDate={event.eventDate}
+                  scheduleKind={event.scheduleKind}
+                />
                 <span>Confirmed venue</span>
               </div>
-              <h3 className={`mt-3 text-lg font-semibold tracking-[-0.03em] ${posterStyle ? "text-white" : ""}`}>
-                {eventPath ? <Link href={eventPath}>{event.title}</Link> : event.title}
-              </h3>
               {event.communityName ? <p className={`mt-1 ${posterTextClass}`}>Hosted by {event.communityName}</p> : null}
             </div>
-            <div className="px-4 py-4">
+            <div className={cn("px-3 pb-3 sm:px-4 sm:pb-4", posterStyle && "pt-3 sm:pt-4")}>
               {event.summary ? <p className="leading-6 text-muted">{event.summary}</p> : null}
-              <div className="mt-4 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+              <div className={cn("flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted", event.summary && "mt-2 sm:mt-3")}>
                 {event.mediaLinks.length > 0 ? (
                   <span>
                     {event.mediaLinks.length} media link{event.mediaLinks.length === 1 ? "" : "s"}
@@ -242,7 +250,7 @@ function EventList({ events }: { events: PublicWorldEventPreview[] }) {
           </article>
         );
       })}
-    </div>
+    </section>
   );
 }
 
@@ -369,7 +377,7 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
                       <dd className="mt-1 font-semibold">Not listed</dd>
                     </div>
                   </dl>
-                  <dl className="mt-3 border-t border-border pt-3 sm:mt-0 sm:border-t-0 sm:pt-0">
+                  <dl className="mt-3 border-t border-border pt-3 sm:mt-0 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-4">
                     {visibilityDetails}
                   </dl>
                 </div>
@@ -398,22 +406,14 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
         ) : null}
 
         {upcoming.length > 0 || recent.length > 0 ? (
-          <Card surface="white">
+          <Card surface="white" className="max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:shadow-none">
             <SectionHeading>Events at this world</SectionHeading>
-            <div className={cn("mt-6 grid gap-4", upcoming.length > 0 && recent.length > 0 && "lg:grid-cols-2")}>
+            <div className={cn("mt-4 grid gap-4 sm:mt-6", upcoming.length > 0 && recent.length > 0 && "lg:grid-cols-2")}>
               {upcoming.length > 0 ? (
-                <article>
-                  <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">
-                    Upcoming and active
-                  </h3>
-                  <div className="mt-4"><EventList events={upcoming} /></div>
-                </article>
+                <WorldEventBucket heading="Upcoming and active" events={upcoming} />
               ) : null}
               {recent.length > 0 ? (
-                <article>
-                  <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">Recent</h3>
-                  <div className="mt-4"><EventList events={recent} /></div>
-                </article>
+                <WorldEventBucket heading="Recent" events={recent} />
               ) : null}
             </div>
           </Card>

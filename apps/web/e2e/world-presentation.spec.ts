@@ -16,6 +16,33 @@ test("world shows artwork and linked creator pictures without placeholder copy",
     await expect(credit.getByRole("img")).toBeVisible();
     if (creator === "DJ Aurora") await expect(credit.getByRole("img")).toHaveAttribute("src", /\/api\/e2e\/fixture-assets\/fixture-aurora-profile-image$/);
   }
+
+  const upcoming = page.getByRole("article").filter({
+    has: page.getByRole("heading", { name: "Afterglow Harbor Sessions", exact: true, level: 4 }),
+  });
+  const recent = page.getByRole("article").filter({
+    has: page.getByRole("heading", { name: "Neon Harbor Opening Night", exact: true, level: 4 }),
+  });
+  await page.setViewportSize({ width: 320, height: 800 });
+  await expect(upcoming.locator("time")).toHaveAttribute("datetime", "2026-06-15T02:00:00.000Z");
+  await expect(recent.locator("time")).toHaveAttribute("datetime", "2026-04-18T23:00:00.000Z");
+  for (const event of [upcoming, recent]) {
+    await expect(event.getByText("Confirmed venue", { exact: true })).toBeVisible();
+    await expect(event.getByText("/", { exact: true })).toHaveCount(0);
+  }
+  await expect(upcoming.getByRole("link", { name: "Afterglow event listing", exact: true })).toHaveAttribute(
+    "href", "https://example.invalid/events/afterglow-harbor-sessions",
+  );
+  const [phoneUpcoming, phoneRecent] = await Promise.all([upcoming.boundingBox(), recent.boundingBox()]);
+  if (!phoneUpcoming || !phoneRecent) throw new Error("Missing phone event card bounds");
+  expect(phoneRecent.x).toBeCloseTo(phoneUpcoming.x, 0);
+  expect(phoneRecent.y).toBeGreaterThan(phoneUpcoming.y + phoneUpcoming.height);
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const [desktopUpcoming, desktopRecent] = await Promise.all([upcoming.boundingBox(), recent.boundingBox()]);
+  if (!desktopUpcoming || !desktopRecent) throw new Error("Missing desktop event card bounds");
+  expect(desktopRecent.y).toBeCloseTo(desktopUpcoming.y, 0);
+  expect(desktopRecent.x).toBeGreaterThan(desktopUpcoming.x + desktopUpcoming.width);
 });
 
 
