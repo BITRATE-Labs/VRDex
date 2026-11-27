@@ -17,6 +17,7 @@ import {
   getPlaywrightPublicProfileFixture,
   getPlaywrightPublicShortLinkFixture,
   getPlaywrightPublicWorldFixture,
+  isPlaywrightGuestEventFixture,
   searchPlaywrightDiscoveryFixture,
 } from "./playwright-fixtures";
 import { profileClaimPath } from "@/lib/profile-claim";
@@ -279,7 +280,12 @@ export async function fetchPublicEventSeries(seriesId: string) {
 /** Request-scoped auth; private host content must never enter a shared cache. */
 export async function fetchHostEventBySlug(slug: string, communitySlug: string) {
   const fixture = getPlaywrightPublicEventFixture(slug);
-  if (fixture) return { kind: "live" as const, event: fixture.communitySlug === communitySlug ? fixture : null };
+  if (fixture) {
+    return {
+      kind: "live" as const,
+      event: fixture.communitySlug === communitySlug && !isPlaywrightGuestEventFixture(slug) ? fixture : null,
+    };
+  }
   const token = await convexAuthToken();
   if (!token) return { kind: "live" as const, event: null };
   if (!process.env.NEXT_PUBLIC_CONVEX_URL) return { kind: "missing-url" as const };

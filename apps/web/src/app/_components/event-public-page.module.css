@@ -41,23 +41,26 @@
   }
 }
 
-@media (width < 64rem) {
-  .watch:not(:empty) + .poster:empty {
-    display: none;
-  }
-}
-
 @media (width >= 64rem) {
-  .watch,
-  .details {
+  .media:has(> .poster) {
+    grid-template-columns: 0.9fr 1.1fr;
+  }
+
+  .media:has(> .poster) > :is(.watch, .details) {
     grid-area: 1 / 2;
+  }
+
+  .media:not(:has(> .poster)) > .watch {
+    width: 100%;
+    max-width: 50rem;
+    justify-self: center;
   }
 
   .poster {
     grid-area: 1 / 1;
   }
 
-  .media:has(> .watch:not(:empty)) {
+  .media:has(> .watch:not(:empty) + .poster) {
     grid-template-rows: auto 1fr;
   }
 
@@ -65,7 +68,7 @@
     grid-row-end: span 2;
   }
 
-  .watch:not(:empty) ~ .details {
+  .watch:not(:empty) + .poster + .details {
     grid-row-start: 2;
   }
 }

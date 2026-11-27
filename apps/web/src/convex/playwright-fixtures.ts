@@ -15,6 +15,9 @@ import type { PublicWorld } from "@/app/_components/world-public-page";
 import { buildGroupPopulationSeries } from "../../../../convex/_groupPopulationSeries";
 import type { PublicProfileMediaDetails } from "@vrdex/api-contracts";
 import { PublicCommunityTelemetrySchema } from "@vrdex/api-contracts";
+import { playwrightGuestEventSlugs } from "@/convex/playwright-event-access";
+
+export { isPlaywrightGuestEventFixture } from "@/convex/playwright-event-access";
 
 const personSlug = "playwright-dj-aurora";
 const basicBitSlug = "basicbit";
@@ -1666,6 +1669,45 @@ export function getPlaywrightPublicEventFixture(slug: string): PublicEvent | nul
 
   if (slug === eventWatchSlug) {
     return publicWatchEvent;
+  }
+
+  if (slug === playwrightGuestEventSlugs.watch || slug === playwrightGuestEventSlugs.watchWithoutPoster) {
+    return {
+      ...publicWatchEvent,
+      id: "event-" + slug,
+      slug,
+      posterImageUrl: slug === playwrightGuestEventSlugs.watch ? publicWatchEvent.posterImageUrl : undefined,
+    };
+  }
+
+  if (slug === playwrightGuestEventSlugs.sparseDate) {
+    return {
+      ...publicEvent,
+      id: "event-" + slug,
+      slug,
+      title: "July Fourth Sessions",
+      scheduleKind: "date_only",
+      eventDate: "2026-07-04",
+      startAt: undefined,
+      doorsOpenAt: undefined,
+      endAt: undefined,
+      posterImageUrl: undefined,
+      bannerImageUrl: undefined,
+      thumbnailImageUrl: undefined,
+      authoredBannerImageUrl: undefined,
+      authoredThumbnailImageUrl: undefined,
+      source: { sourceType: publicEvent.source.sourceType, label: publicEvent.source.label },
+      worlds: [],
+      lineup: [],
+      participants: [],
+      participantCount: 0,
+      slots: [],
+      slotCount: 0,
+      nextSlots: [],
+      watchSurfaceEnabled: false,
+      authoredMediaLinks: [],
+      mediaLinks: [],
+    };
   }
 
   return null;
