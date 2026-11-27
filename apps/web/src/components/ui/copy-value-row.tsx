@@ -15,6 +15,7 @@ export function CopyValueRow({
   label,
   value,
   wrapUrlPath = false,
+  showCopyTextOnMobile = false,
 }: {
   className?: string;
   compact?: boolean;
@@ -24,6 +25,7 @@ export function CopyValueRow({
   label: string;
   value: string;
   wrapUrlPath?: boolean;
+  showCopyTextOnMobile?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const copyLabel = copied ? `${label} copied` : `Copy ${label}`;
@@ -82,7 +84,12 @@ export function CopyValueRow({
           type="button"
           onClick={() => void copyValue()}
         >
-          {copied ? <Check aria-hidden="true" className="size-4" /> : <Copy aria-hidden="true" className="size-4" />}
+          {showCopyTextOnMobile ? (
+            <span aria-hidden="true" className="text-xs sm:hidden">{copied ? "Copied" : "Copy"}</span>
+          ) : null}
+          {copied
+            ? <Check aria-hidden="true" className={cn("size-4", showCopyTextOnMobile && "max-sm:hidden")} />
+            : <Copy aria-hidden="true" className={cn("size-4", showCopyTextOnMobile && "max-sm:hidden")} />}
         </button>
       </div>
     </div>

@@ -68,8 +68,20 @@ test("multiple profile streams expose distinct copy actions and keep exact desti
       const copyName = `Copy ${device} for ${context}`;
       const copy = card.getByRole("button", { name: copyName, exact: true });
       await expect(copy).toHaveAttribute("title", copyName);
+      const narrow = (page.viewportSize()?.width ?? 1280) < 640;
+      const visibleLabel = copy.getByText("Copy", { exact: true });
+      if (narrow) {
+        await expect(visibleLabel).toBeVisible();
+        const bounds = await copy.boundingBox();
+        expect(bounds?.width).toBeGreaterThanOrEqual(44);
+        expect(bounds?.height).toBeGreaterThanOrEqual(44);
+      } else {
+        await expect(visibleLabel).toBeHidden();
+      }
       await copy.click();
-      await expect(page.getByRole("button", { name: `${device} copied for ${context}`, exact: true })).toBeVisible();
+      const copied = card.getByRole("button", { name: `${device} copied for ${context}`, exact: true });
+      await expect(copied).toBeVisible();
+      if (narrow) await expect(copied.getByText("Copied", { exact: true })).toBeVisible();
       await expect.poll(() => page.evaluate(() => sessionStorage.getItem("copied-profile-link"))).toBe(value);
     }
   }

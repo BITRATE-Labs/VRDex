@@ -60,6 +60,13 @@
 }
 
 @media (width >= 64rem) {
+  .watch button [data-watch-play-poster] {
+    background-image: var(--event-watch-desktop-art, var(--event-watch-fallback));
+    background-position: center;
+    background-size: cover;
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 24%);
+  }
+
   .media:has(> .poster) {
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
     grid-template-areas: "poster details";

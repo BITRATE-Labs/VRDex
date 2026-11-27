@@ -392,8 +392,12 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
   const canHost = useQuery(api.events.getHostAccess, event.communitySlug ? { slug: event.slug, communitySlug: event.communitySlug } : "skip");
   const lineup = eventLineupForDisplay(event);
   const bannerStyle = safeImageBackground(event.bannerImageUrl, eventPosterOverlay);
-  const watchArt = safeImageBackground(event.bannerImageUrl, watchArtScrim)
-    ?? safeImageBackground(event.posterImageUrl, watchArtScrim);
+  const watchBannerArt = safeImageBackground(event.bannerImageUrl, watchArtScrim);
+  const watchPosterArt = safeImageBackground(event.posterImageUrl, watchArtScrim);
+  const watchArt = watchBannerArt ?? watchPosterArt;
+  const desktopWatchArt = watchBannerArt && watchBannerArt.backgroundImage !== watchPosterArt?.backgroundImage
+    ? watchBannerArt
+    : undefined;
   const sourceUrl = safeHttpsUrl(event.source.url);
   const seriesPath = event.seriesId && event.communitySlug ? `/${event.communitySlug}/series/${event.seriesId}` : null;
   const publicLinks = event.mediaLinks.filter((link) => parseVrcdnStreamLinks(link.url) === null);
@@ -454,7 +458,10 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
             <div className={styles.lead}>
               <div
                 className={styles.watch}
-                style={watchArt ? { "--event-watch-art": watchArt.backgroundImage } as CSSProperties : undefined}
+                style={watchArt ? {
+                  "--event-watch-art": watchArt.backgroundImage,
+                  "--event-watch-desktop-art": desktopWatchArt?.backgroundImage,
+                } as CSSProperties : undefined}
               >
                 <EventWatchForEvent event={event} />
               </div>
