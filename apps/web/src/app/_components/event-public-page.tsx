@@ -22,7 +22,7 @@ import { EventWatchForEvent } from "./event-live-watch";
 import { EventPublicHero } from "./event-public-hero";
 import styles from "./event-public-page.module.css";
 import { parseVrcdnStreamLinks } from "../../../../../convex/_vrcdnLinks";
-import { ViewerLocalEventDateTime, ViewerLocalEventTime, ViewerLocalEventTimeRange } from "./viewer-local-event-times";
+import { ViewerLocalEventDateTime, ViewerLocalEventTimeRange } from "./viewer-local-event-times";
 
 type EventSourceType = "manual" | "community" | "partner" | "import" | "ai_suggested" | "contributor";
 type EventMediaLinkType =
@@ -168,6 +168,7 @@ export type PublicEvent = Omit<PublicEventPreview, "worlds"> & {
 };
 
 const eventPosterOverlay = "linear-gradient(135deg, color-mix(in srgb, var(--media) 72%, transparent), color-mix(in srgb, var(--accent) 12%, transparent))";
+const eventPreviewOverlay = "linear-gradient(135deg, color-mix(in srgb, var(--media) 72%, transparent), color-mix(in srgb, var(--media) 69%, transparent))";
 const watchArtScrim = "linear-gradient(180deg, rgb(0 0 0 / 36%), rgb(0 0 0 / 68%))";
 
 function safeHttpsUrl(url: string | undefined): string | null {
@@ -228,7 +229,7 @@ export function EventPreviewCard({
   const titleId = useId();
   const dateId = titleId + "-date";
   const sourceUrl = safeHttpsUrl(event.source.url);
-  const thumbnailStyle = safeImageBackground(event.thumbnailImageUrl, eventPosterOverlay);
+  const thumbnailStyle = safeImageBackground(event.thumbnailImageUrl, eventPreviewOverlay);
   const details = event.worlds.map((world) => world.displayName);
   const eventPath = publicEventPath(event);
   const isSeries = variant === "series";
@@ -267,7 +268,7 @@ export function EventPreviewCard({
             ) : dateTime}
             {event.startAt !== undefined && event.doorsOpenAt !== undefined && event.doorsOpenAt < event.startAt ? (
               <span className={compactWithoutArtwork ? "sm:border-s sm:border-border-strong sm:ps-3" : undefined}>
-                Doors <ViewerLocalEventTime timestamp={event.doorsOpenAt} />
+                Doors <ViewerLocalEventDateTime timestamp={event.doorsOpenAt} compactRelativeTo={event.startAt} />
               </span>
             ) : null}
             {!compactWithoutArtwork && event.communityName ? (
