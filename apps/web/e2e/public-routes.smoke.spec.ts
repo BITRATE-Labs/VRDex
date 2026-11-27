@@ -86,11 +86,21 @@ test("featured world fits the narrow discovery viewport", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true }))
     .toHaveAttribute("href", "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions");
   expect(await card.evaluate((link) => link.getBoundingClientRect().right)).toBeLessThanOrEqual(320);
+  const synopsis = card.locator("p").first();
+  await expect(synopsis).toBeInViewport();
+  expect(await synopsis.evaluate((element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    return range.getClientRects()[0].bottom;
+  })).toBeLessThanOrEqual(760);
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
     .toBe(320);
 
   await page.setViewportSize({ width: 1280, height: 900 });
+  const search = page.getByRole("main").getByRole("button", { name: "Search VRDex", exact: true });
+  await expect(search.locator("svg")).toBeVisible();
+  expect((await search.boundingBox())?.width).toBe(44);
   await expect(card.locator("time")).toBeVisible();
   await expect(card.getByText(/by Afterglow Social/)).toBeVisible();
 });

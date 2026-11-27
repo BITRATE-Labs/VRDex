@@ -172,12 +172,12 @@ function DiscoveryUpcomingEventsHeading({ title }: { title: string }) {
 
 function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[]; now: number }) {
   return (
-    <section className="min-w-0 border-t border-border pt-4 sm:pt-6">
+    <section className="min-w-0 border-t border-border pt-3 sm:pt-6">
       <DiscoveryUpcomingEventsHeading title="Upcoming events" />
-      <EventSchedule className="mt-3 sm:mt-5" empty="No events">
+      <EventSchedule className="mt-2 sm:mt-5" empty="No events">
         {events.map((event) => (
           <EventScheduleRow
-            className="[overflow-wrap:anywhere]"
+            className="[overflow-wrap:anywhere] max-sm:gap-1 max-sm:p-3"
             details={[
               event.communityName,
               event.worlds[0]?.displayName,
@@ -232,7 +232,10 @@ function DiscoveryCard({
 
   return (
     <TrackedDiscoveryLink
-      className="group flex items-center gap-3 rounded-panel border border-border bg-surface p-3 transition-colors hover:border-border-strong hover:bg-surface-strong focus-visible:outline-2 focus-visible:outline-accent-strong sm:p-4"
+      className={cn(
+        "group flex items-center gap-3 rounded-panel border border-border bg-surface p-3 transition-colors hover:border-border-strong hover:bg-surface-strong focus-visible:outline-2 focus-visible:outline-accent-strong sm:p-4",
+        result.profileType === "community" && "max-sm:items-start",
+      )}
       eventName={result.entityType === "event" ? "event_card_clicked" : "search_result_clicked"}
       href={result.routePath}
       properties={{
@@ -242,7 +245,7 @@ function DiscoveryCard({
       }}
     >
       <ResultImage result={result} quietFallback />
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
+      <span className={cn("flex min-w-0 flex-1 flex-col gap-1", result.profileType === "community" && "max-sm:min-h-10 max-sm:justify-center")}>
         {result.startsAt === undefined && result.eventDate === undefined ? null : <ViewerLocalEventDateTime className="text-sm font-medium text-accent-strong" timestamp={result.startsAt} eventDate={result.eventDate} scheduleKind={result.scheduleKind} />}
         <span className="text-lg font-semibold group-hover:text-accent-strong [overflow-wrap:anywhere]">
           {result.title}
@@ -250,7 +253,7 @@ function DiscoveryCard({
         {subtitle ? <span className="text-sm text-muted">{subtitle}</span> : null}
         {result.summary ? <span className="line-clamp-2 text-sm leading-6 text-muted">{result.summary}</span> : null}
       </span>
-      <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted group-hover:text-accent-strong" />
+      <ChevronRight aria-hidden="true" className="size-4 shrink-0 self-center text-muted group-hover:text-accent-strong" />
     </TrackedDiscoveryLink>
   );
 }
@@ -543,7 +546,7 @@ export function DiscoveryLandingPage({
               Discover VR
             </h1>
           </div>
-          <DiscoverySearchForm className="w-full" compact placeholder="Search VRDex" surface="home" tone="default" />
+          <DiscoverySearchForm className="w-full" compact iconSubmit placeholder="Search VRDex" surface="home" tone="default" />
         </section>
 
         {showDirectoryShortcuts ? (

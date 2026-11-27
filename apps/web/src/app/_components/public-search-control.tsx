@@ -22,6 +22,7 @@ type PublicSearchControlProps = {
   defaultQuery?: string;
   filter?: SearchResultFilter;
   inputId?: string;
+  iconSubmit?: boolean;
   placeholder?: string;
   surface?: "home" | "search";
   tone?: "default" | "inverse";
@@ -52,7 +53,7 @@ export function EditPublicSearchLink({ inputId }: { inputId: string }) {
 }
 
 function SearchControl({
-  action = "/search", className, compact, defaultQuery, filter = "all", inputId, placeholder = "Search people, communities, worlds, events...", surface = "search", tone = "inverse",
+  action = "/search", className, compact, defaultQuery, filter = "all", iconSubmit = false, inputId, placeholder = "Search people, communities, worlds, events...", surface = "search", tone = "inverse",
 }: PublicSearchControlProps) {
   const posthog = usePostHog();
   const router = useRouter();
@@ -213,14 +214,14 @@ function SearchControl({
       <button
         className={cn(
           compact === true
-            ? cn(buttonVariants({ size: "sm", variant: "surface" }), "min-h-11 shrink-0 max-sm:w-11 max-sm:p-0 sm:px-4")
+            ? cn(buttonVariants({ size: "sm", variant: "surface" }), "min-h-11 shrink-0", iconSubmit ? "w-11 p-0" : "max-sm:w-11 max-sm:p-0 sm:px-4")
             : cn(buttonVariants({ size: "lg", variant: isInverse ? "inversePrimary" : "primary" }), "min-h-14 px-6 font-semibold"),
           compact === "mobile" && "max-sm:min-h-11 max-sm:w-11 max-sm:shrink-0 max-sm:p-0",
         )}
         type="submit"
       >
-        {compact ? <Search aria-hidden="true" className="size-5 sm:hidden" /> : null}
-        <span className={compact ? "max-sm:sr-only" : undefined}>Search VRDex</span>
+        {compact || iconSubmit ? <Search aria-hidden="true" className={cn("size-5", !iconSubmit && "sm:hidden")} /> : null}
+        <span className={iconSubmit ? "sr-only" : compact ? "max-sm:sr-only" : undefined}>Search VRDex</span>
       </button>
     </form>
   );
