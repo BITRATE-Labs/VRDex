@@ -13,6 +13,7 @@ test("count and graph switches stay independent @storybook-visual", async ({ pag
     await expect(page.getByRole("heading", { name: "Afterglow Social", level: 1 })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText("Group members", { exact: true })).toHaveCount(count ? 1 : 0);
     await expect(page.getByRole("group", { name: "Total group membership" })).toHaveCount(graph ? 1 : 0);
+    await expect(page.getByText("Group founded · 1 member", { exact: true })).toHaveCount(graph ? 1 : 0);
     if (name === "both") {
       if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
         await testInfo.attach("membership-both", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
@@ -24,7 +25,14 @@ test("count and graph switches stay independent @storybook-visual", async ({ pag
       const card = label.locator("..");
       await expect(label).toBeVisible();
       await expect(activity.getByText("Stale", { exact: true })).toHaveCount(0);
-      expect((await card.boundingBox())?.width).toBeCloseTo((await activity.boundingBox())!.width);
+      const cardWidth = (await card.boundingBox())!.width;
+      const sectionWidth = (await activity.boundingBox())!.width;
+      if (page.viewportSize()!.width >= 640) {
+        expect(cardWidth).toBeGreaterThan(240);
+        expect(cardWidth).toBeLessThan(sectionWidth * 0.7);
+      } else {
+        expect(cardWidth).toBeCloseTo(sectionWidth);
+      }
       if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") {
         await testInfo.attach(`membership-${name}`, { body: await activity.screenshot(), contentType: "image/png" });
       }
