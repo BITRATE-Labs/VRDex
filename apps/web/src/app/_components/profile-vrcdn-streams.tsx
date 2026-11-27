@@ -61,6 +61,7 @@ type ProfileDiscordHandle = {
 
 type ProfileVrcdnStreamsProps = {
   compactLinks?: boolean;
+  compactMobileSpacing?: boolean;
   discordHandles: ProfileDiscordHandle[];
   initialLiveStates?: VrcdnLiveStates;
   links: ProfileVrcdnLink[];
@@ -80,6 +81,7 @@ function responseStates(value: unknown): VrcdnLiveStates | null {
 
 export function ProfileVrcdnStreams({
   compactLinks = false,
+  compactMobileSpacing = false,
   discordHandles,
   initialLiveStates,
   links,
@@ -207,9 +209,12 @@ export function ProfileVrcdnStreams({
     <div className={cn("grid min-w-0 grid-cols-1 gap-x-10", hasWatchSurface ? "lg:grid-cols-[minmax(0,1fr)_24rem]" : undefined)}>
       <div>
         {hasLinks ? (
-          <section aria-label={compactLinks ? "Links" : undefined} className={compactLinks ? "px-4 pb-4 sm:px-6" : "py-8"}>
+          <section
+            aria-label={compactLinks ? "Links" : undefined}
+            className={cn(compactLinks ? "px-4 pb-4 sm:px-6" : "py-8", compactMobileSpacing && "max-sm:py-4")}
+          >
             {!compactLinks ? <SectionHeading>Links</SectionHeading> : null}
-            <div className={compactLinks ? "grid" : "mt-5 grid gap-3 sm:grid-cols-2"}>
+            <div className={cn(compactLinks ? "grid" : "mt-5 grid gap-3 sm:grid-cols-2", compactMobileSpacing && "max-sm:mt-3")}>
               {links.map((link) => {
                 const vrchat = link.kind === "vrchat_user" || link.kind === "vrchat_group" || link.type === "vrchat_profile";
                 const service = vrchat ? link.platform ?? "VRChat" : link.type === "twitch" ? "Twitch" : null;
