@@ -1256,8 +1256,8 @@ test.describe("fixture lookup smoke", () => {
 
     await page.goto("/search?q=BASICBIT");
     const searchRegion = page.getByRole("region", { name: "Search results" });
-    const searchResult = searchRegion.getByRole("link", { name: /BASICBIT Verified profile/ });
-    const searchMark = searchRegion.getByLabel("Verified profile");
+    const searchResult = searchRegion.getByRole("link", { name: /\bBASICBIT\b/ });
+    const searchMark = searchResult.getByLabel("Verified profile");
     await expect(searchMark).toBeVisible();
     await expect(searchResult.getByText("Person", { exact: true })).toBeVisible();
     await expect(searchResult.getByText("BASICBIT", { exact: true })).toHaveCSS("text-decoration-line", "underline");
