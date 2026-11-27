@@ -117,13 +117,16 @@ test("Home search, filters, refresh and history keep URL and results aligned @fl
 });
 
 test("Search recovers from empty Events with the same query and preserves history @flow @fixture", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/search");
   await waitForPublicSearchHydration(page);
   const main = page.getByRole("main");
   const input = main.getByRole("combobox", { name: "Search VRDex", exact: true });
+  await expect(main.getByRole("heading", { level: 1, name: "Search", exact: true })).toBeVisible();
+  await expect(input).toHaveAttribute("placeholder", "Search VRDex");
   await input.fill("DJ");
   await main.getByRole("button", { name: "Search VRDex", exact: true }).click();
   await expect(page).toHaveURL(/\/search\?q=DJ$/);
+  await expect(main.getByRole("heading", { level: 1, name: "Search results", exact: true })).toBeVisible();
   const match = publicResultRow(page, "/basicbit");
   await expect(match).toBeVisible();
 

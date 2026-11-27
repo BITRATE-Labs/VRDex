@@ -36,9 +36,10 @@ turning a useful DJ workflow into the product's permanent taxonomy.
   slice described here is a repository delivery, not evidence of deployment.
 - `BASICBIT` is the canonical rich acceptance record. The repository already
   has a public fixture plus a private seed candidate and deduplication coverage.
-- Standard search uses the `Search results` heading and has no visible view
-  switch. Person rows show up to three readable genres, an independent `+N`
-  disclosure for the rest, and a `Links` disclosure only when public links exist.
+- Standard search shows `Search` without a query and `Search results` with one.
+  It has no visible view switch. Person rows show up to three readable genres,
+  an independent `+N` disclosure for the rest, and a `Links` disclosure only
+  when public links exist.
   Several link panels can stay open. The legacy `/lookup` and `view=dj` URLs
   retain their existing lookup permissions and bulk behavior, with a plain
   query-preserving return link to standard search.

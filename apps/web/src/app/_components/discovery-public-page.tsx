@@ -680,7 +680,8 @@ export function SearchResultsPage({
     <SearchViewShell
       activeView="standard"
       className="max-sm:py-5"
-      searchControl={<DiscoverySearchForm compact defaultQuery={query} filter={activeFilter} inputId={inputId} surface="search" tone="default" />}
+      hasQuery={hasQuery}
+      searchControl={<DiscoverySearchForm compact defaultQuery={query} filter={activeFilter} inputId={inputId} placeholder="Search VRDex" surface="search" tone="default" />}
     >
         {hasQuery ? (
           <section aria-describedby="search-results-query" aria-label="Search results" className="space-y-3 sm:space-y-5">
