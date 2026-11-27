@@ -307,6 +307,36 @@ test.describe("continuous schedule @flow @fixture", () => {
       await page.screenshot({ path: info.outputPath(`default-${size.width}.png`), fullPage: true });
     }
   });
+  test("Timeline exposes the visible range and hides clipped axis labels", async ({ page, timelineFixture }) => {
+    await page.setViewportSize({ width: 320, height: 760 });
+    await page.goto(`/?at=${Date.UTC(2026, 9, 26, 20, 15)}&tz=Asia%2FKolkata`);
+    await loadCompleteSchedule(page);
+    const chart = page.getByRole("region", { name: "Timeline chart", exact: true });
+    await expect(chart).toHaveAccessibleDescription(/Oct 27, 1:45 AM GMT\+5:30 to Oct 27,/);
+    const boundaryLabels = () => chart.evaluate((viewport) => {
+      const { left, right } = viewport.getBoundingClientRect();
+      const labels = [...viewport.querySelectorAll("[data-axis-label]")].map((label) => {
+        const bounds = label.getBoundingClientRect();
+        return { left: bounds.left, right: bounds.right, visible: getComputedStyle(label).visibility === "visible" };
+      });
+      return {
+        hasInteriorLabel: labels.some((label) => label.visible),
+        clipsLeft: labels.some((label) => !label.visible && label.left < left && label.right > left),
+        clipsRight: labels.some((label) => !label.visible && label.left < right && label.right > right),
+        visibleLabelsFit: labels.every((label) => !label.visible || (label.left >= left && label.right <= right)),
+      };
+    });
+    const expectedLabels = { hasInteriorLabel: true, clipsLeft: true, clipsRight: true, visibleLabelsFit: true };
+    await expect.poll(boundaryLabels).toEqual(expectedLabels);
+    const snapshot = await chart.ariaSnapshot();
+    expect(snapshot).not.toContain('text: 3:30 AM');
+    await expect(chart.getByTestId(`event-${timelineFixture.eventIds[0]}`).getByRole("button", { name: "Open Soft Focus", exact: true })).toBeVisible();
+    await chart.focus();
+    await chart.press("ArrowRight");
+    await expect(chart).toBeFocused();
+    await expect(chart).toHaveAccessibleDescription(/Oct 27, 2:45 AM GMT\+5:30 to Oct 27,/);
+    await expect.poll(boundaryLabels).toEqual(expectedLabels);
+  });
   test("settled quiet date shows a single public row", async ({ page }, info) => {
     await page.getByLabel("Schedule date", { exact: true }).fill("2026-11-05");
     await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready");

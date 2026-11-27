@@ -161,6 +161,9 @@
   font-size: 0.65rem;
   color: var(--muted);
 }
+.canvas [data-axis-label]:not([data-axis-label-visible]) {
+  visibility: hidden;
+}
 .dayAxis[data-loading-axis]::after,
 .hourAxis[data-loading-axis]::after {
   content: "";
