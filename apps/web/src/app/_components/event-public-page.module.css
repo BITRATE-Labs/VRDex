@@ -51,8 +51,8 @@
 }
 
 @media (width < 40rem) {
-  .page:has(.watch:not(:empty)) {
-    --event-watch-mobile-space: 0.5rem;
+  .page:has(.watch:not(:empty), .worldLink) {
+    --event-mobile-space: 0.5rem;
   }
 
   .watch:not(:empty) + .locationLinks {
@@ -82,6 +82,11 @@
 }
 
 @media (width >= 64rem) {
+  :global(html[data-theme="dark"]) .watch button [data-watch-play-poster] {
+    border-radius: calc(var(--radius-card) - 1px);
+    box-shadow: inset 0 0 0 2px rgb(255 255 255 / 30%);
+  }
+
   .watch button [data-watch-play-poster] {
     background-image: var(--event-watch-desktop-art, var(--event-watch-fallback));
     background-position: center;
