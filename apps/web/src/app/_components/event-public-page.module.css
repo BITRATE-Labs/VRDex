@@ -19,6 +19,13 @@
   display: inline-flex;
 }
 
+@media (forced-colors: active) {
+  .watchReturn:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}
+
 .lineupTitle:focus-visible {
   position: relative;
   outline: none;
