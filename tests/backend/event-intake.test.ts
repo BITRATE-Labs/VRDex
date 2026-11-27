@@ -275,6 +275,38 @@ it("enforces account publication quota and leaves the over-quota draft resumable
   await assert.rejects(actor.action(publish, { draftId: draft.draftId, expectedVersion: 1, idempotencyKey: "quota-over" }), /ACCOUNT_QUOTA/);
   assert.equal((await actor.query(get, { draftId: draft.draftId })).version, 1);
 });
+for (const withFingerprint of [false, true]) {
+  it(`publishes a replacement for a discarded draft (fingerprint: ${withFingerprint})`, async () => {
+    const { t, actor, communityId } = await fixture();
+    const discardedId = await t.run(({ db }) => db.insert("events", {
+      communityProfileId: communityId,
+      title: complete.title,
+      sortTitle: complete.title.toLowerCase(),
+      slug: "discarded-night-flight",
+      eventDate: complete.eventDate,
+      scheduleKind: "date_only",
+      sortAt: Date.parse(complete.eventDate),
+      publicationState: "draft_private",
+      eventStatus: "scheduled",
+      sourceType: "manual",
+      sourceLabel: "Manual",
+      updatedAt: Date.now(),
+      draftDiscardedAt: Date.now(),
+      ...(withFingerprint ? {
+        contributionFingerprint: eventContributionFingerprint(communityId, complete.eventDate, complete.title),
+      } : {}),
+    }));
+
+    const draft = await actor.mutation(save, { patch: complete });
+    const result = await actor.action(publish, {
+      draftId: draft.draftId, expectedVersion: draft.version, idempotencyKey: "replace-discarded",
+    });
+    assert.notEqual(result.eventId, discardedId);
+    assert.equal((await t.run(({ db }) => db.get(result.eventId)))?.publicationState, "published");
+    assert.ok((await t.run(({ db }) => db.get(discardedId)))?.draftDiscardedAt);
+  });
+}
+
 it("allows unrelated same-day events without a duplicate warning", async () => {
   const { actor } = await fixture();
   const first = await actor.mutation(save, { patch: complete });
