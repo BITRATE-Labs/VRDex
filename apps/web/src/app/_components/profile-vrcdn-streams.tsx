@@ -13,7 +13,7 @@ import { ProfileDestinationArtwork } from "./profile-destination-artwork";
 import styles from "./profile-vrcdn-streams.module.css";
 import { buttonVariants } from "@/components/ui/button";
 import { ConnectionVerification } from "@/components/ui/connection-verification";
-import { Card, SectionHeading } from "@/components/ui/card";
+import { Card, SectionHeading, SectionTitle } from "@/components/ui/card";
 import { CopyValueRow } from "@/components/ui/copy-value-row";
 import { cn } from "@/lib/cn";
 import {
@@ -62,6 +62,7 @@ type ProfileDiscordHandle = {
 type ProfileVrcdnStreamsProps = {
   compactLinks?: boolean;
   compactMobileSpacing?: boolean;
+  linksHeadingId?: string;
   discordHandles: ProfileDiscordHandle[];
   initialLiveStates?: VrcdnLiveStates;
   links: ProfileVrcdnLink[];
@@ -82,6 +83,7 @@ function responseStates(value: unknown): VrcdnLiveStates | null {
 export function ProfileVrcdnStreams({
   compactLinks = false,
   compactMobileSpacing = false,
+  linksHeadingId,
   discordHandles,
   initialLiveStates,
   links,
@@ -213,7 +215,13 @@ export function ProfileVrcdnStreams({
             aria-label={compactLinks ? "Links" : undefined}
             className={cn(compactLinks ? "px-4 pb-4 sm:px-6" : "py-8", compactMobileSpacing && "max-sm:py-4")}
           >
-            {!compactLinks ? <SectionHeading>Links</SectionHeading> : null}
+            {!compactLinks ? (
+              linksHeadingId ? (
+                <SectionTitle className="scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent" id={linksHeadingId} tabIndex={-1}>
+                  Links
+                </SectionTitle>
+              ) : <SectionHeading>Links</SectionHeading>
+            ) : null}
             <div className={cn(compactLinks ? "grid" : "mt-5 grid gap-3 sm:grid-cols-2", compactMobileSpacing && "max-sm:mt-3")}>
               {links.map((link) => {
                 const vrchat = link.kind === "vrchat_user" || link.kind === "vrchat_group" || link.type === "vrchat_profile";
