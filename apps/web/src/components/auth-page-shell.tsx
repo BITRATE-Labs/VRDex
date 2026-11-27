@@ -56,7 +56,11 @@ export function AuthPageShell({
                 {title}
               </h1>
               {subtitle && (
-                <p className={visuallyHiddenTitle ? "text-sm leading-6 text-muted" : "mt-2 text-sm leading-6 text-muted"}>
+                <p className={cn(
+                  "text-sm leading-6 text-muted",
+                  !visuallyHiddenTitle && "mt-2",
+                  integrated && "[overflow-wrap:anywhere]",
+                )}>
                   {subtitle}
                 </p>
               )}
