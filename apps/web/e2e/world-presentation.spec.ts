@@ -220,8 +220,11 @@ test("world event shortcut follows launch and puts keyboard focus on the populat
     await page.keyboard.press("Tab");
     await expect(main.getByRole("link", { name: "Afterglow event listing", exact: true })).toBeFocused();
     await event.focus();
-    await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(afterglowEventPath);
+    await Promise.all([
+      page.waitForURL(afterglowEventPath, { waitUntil: "domcontentloaded" }),
+      page.keyboard.press("Enter"),
+    ]);
+    await expect(main.getByRole("heading", { name: "Afterglow Harbor Sessions", level: 1, exact: true })).toBeVisible();
   }
 
   await page.goto("/playwright-neon-harbor-reference-only", { waitUntil: "domcontentloaded" });
