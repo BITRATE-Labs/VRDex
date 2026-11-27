@@ -231,6 +231,10 @@
 .date {
   overflow-wrap: anywhere;
 }
+.eventTime {
+  color: var(--foreground);
+  font-weight: 600;
+}
 .host {
   display: inline-block;
   max-width: 100%;

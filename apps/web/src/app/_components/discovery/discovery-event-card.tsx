@@ -36,23 +36,32 @@ export function DiscoveryEventCard({
     (reference) => reference.kind === "event" && reference.eventId === event.id,
   );
   const schedule = event.schedule;
-  let date: string | undefined;
+  let date: { label: string; dateTime: string } | undefined;
   if (schedule.kind === "date_only") {
     try {
-      date = formatCalendarDate(schedule.eventDate);
+      date = {
+        label: formatCalendarDate(schedule.eventDate),
+        dateTime: schedule.eventDate,
+      };
     } catch {
       // Keep the host visible if a stored date is invalid.
     }
   } else {
-    date = new Intl.DateTimeFormat(undefined, {
-      timeZone,
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12,
-    }).format(schedule.startAt);
+    const start = new Date(schedule.startAt);
+    if (Number.isFinite(schedule.startAt) && Number.isFinite(start.getTime())) {
+      date = {
+        label: new Intl.DateTimeFormat(undefined, {
+          timeZone,
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          hour12,
+        }).format(start),
+        dateTime: start.toISOString(),
+      };
+    }
   }
   const open = (activation: MouseEvent<HTMLAnchorElement>) => {
     if (
@@ -99,7 +108,12 @@ export function DiscoveryEventCard({
           onToggle={() => onSave({ kind: "event", eventId: event.id })}
         />
         <p className={styles.date}>
-          {date && `${date} · `}
+          {date && (
+            <>
+              <time className={styles.eventTime} dateTime={date.dateTime}>{date.label}</time>
+              {" · "}
+            </>
+          )}
           <a className={styles.host} href={`/${event.host.slug}`}>
             {event.host.displayName}
           </a>
