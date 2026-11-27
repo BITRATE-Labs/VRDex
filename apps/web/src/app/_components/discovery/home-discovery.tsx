@@ -146,9 +146,23 @@ function AvailableDiscovery({
       onFocusedClubChange?.(null);
     }
   };
+  const noEvents =
+    events.length === 0 &&
+    snapshot.coverage.events.length > 0 &&
+    snapshot.coverage.events.every((stream) => stream.complete);
+  const noClubs =
+    clubs.length === 0 &&
+    snapshot.coverage.clubs.length > 0 &&
+    snapshot.coverage.clubs.every((stream) => stream.complete);
+  const emptyGroup =
+    noEvents && clubs.length > 0
+      ? "events"
+      : noClubs && events.length > 0
+        ? "clubs"
+        : undefined;
   const Cards = liveFavoriteLineup ? LiveEventCards : EventCards;
   return (
-    <div className={styles.groups}>
+    <div className={styles.groups} data-empty-group={emptyGroup}>
       <div role="group" aria-labelledby="discovery-events-heading">
         <h3 id="discovery-events-heading" className={styles.groupHeading}>
           Events
@@ -164,8 +178,7 @@ function AvailableDiscovery({
           onBlur={onBlur}
         />
         {events.length === 0 &&
-          (snapshot.coverage.events.length > 0 &&
-          snapshot.coverage.events.every((stream) => stream.complete) ? (
+          (noEvents ? (
             <p className={styles.status}>No events</p>
           ) : (
             <Link className={styles.browse} href="/discovery">
@@ -199,8 +212,7 @@ function AvailableDiscovery({
           )}
         </div>
         {clubs.length === 0 &&
-          (snapshot.coverage.clubs.length > 0 &&
-          snapshot.coverage.clubs.every((stream) => stream.complete) ? (
+          (noClubs ? (
             <p className={styles.status}>No clubs</p>
           ) : (
             <Link className={styles.browse} href="/discovery">

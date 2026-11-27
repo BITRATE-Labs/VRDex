@@ -545,10 +545,11 @@ October 26, 2026. Run-owned IDs feed a test-only session seed that fixes visual
 ties; no production ranking input or whole-card mask is changed. Full-page
 captures start at the top so sticky mobile navigation does not cover Discover.
 
-`home-discovery-states.storybook.spec.ts` captures ten deterministic presentation
-states with the existing Storybook configuration: mixed, cold start, sparse,
-complete empty, partial, failed, loading, missing artwork, missing public genres,
-and long names/custom genre labels. These are explicitly visual-only fixtures,
+`home-discovery-states.storybook.spec.ts` covers mixed, cold-start, sparse,
+complete-empty, partial, failed, loading, missing-artwork, missing-public-genre,
+and long-label states. It also checks one or two clubs with no events, and two
+events with no clubs. On desktop the confirmed-empty group gets a narrower
+column, and on mobile the groups still stack. These are visual-only fixtures,
 not evidence of backend admission, privacy or actions. Live privacy and actions
 are covered by the actual Home flows. Both capture suites preserve threshold
 0.2 and maximum pixel difference ratio 0.002.
