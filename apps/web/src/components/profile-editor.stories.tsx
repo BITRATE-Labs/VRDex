@@ -145,3 +145,35 @@ export const SoleGroup: Story = {render: () => (
     <Button type="submit">Save changes</Button>
   </form>
 )};
+
+export const WikiPublicProfile: Story = {
+  render: () => (
+    <section aria-label="Profile preview" className="mx-auto max-w-[840px] bg-canvas">
+      <ConvexProviderWithAuth client={previewClient} useAuth={usePreviewAuth}>
+        <ProfilePublicPage
+          embedded
+          mediaKitGalleryEnabled={false}
+          profile={{
+            profileType: "person",
+            slug: "aurora",
+            displayName: "Aurora",
+            headline: "Drum & bass DJ",
+            avatarImageUrl: "/seed/fixture-avatar-luma.svg",
+            aliases: [],
+            tags: [],
+            genres: [],
+            trustLabel: "claimed_verified",
+            person: { roleTags: ["DJ"] },
+            outboundLinks: [
+              { type: "soundcloud", url: "https://soundcloud.com/example", label: "SoundCloud", source: "owner_authored" },
+              { type: "twitch", url: "https://www.twitch.tv/example", label: "Twitch", source: "owner_authored" },
+            ],
+            worldCredits: [],
+            upcomingEvents: [],
+            hostedEvents: [],
+          }}
+        />
+      </ConvexProviderWithAuth>
+    </section>
+  ),
+};

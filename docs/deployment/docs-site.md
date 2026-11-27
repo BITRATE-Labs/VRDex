@@ -72,6 +72,10 @@ Expected validation after DNS propagation:
 Resolve-DnsName -Name "docs.vrdex.net"
 ```
 
+## Refresh guide screenshots
+
+Run `pnpm --filter web wiki:screenshots` from a worktree with dependencies and Playwright Chromium installed. Playwright opens the Storybook fixtures and writes the captures to `docs/wiki/images/`. Review and commit the generated images alongside the guide changes. The docs build serves those files directly.
+
 ## Verification
 
 Before provider setup:

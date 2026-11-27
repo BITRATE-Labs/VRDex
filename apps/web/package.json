@@ -41,6 +41,8 @@
     "test:e2e:snapshots:update": "playwright test --grep @snapshot --grep-invert @storybook --update-snapshots",
     "pretest:e2e:visual": "node ../../scripts/guard-main-worktree.mjs",
     "test:e2e:visual": "playwright test --grep @visual",
+    "prewiki:screenshots": "node ../../scripts/guard-main-worktree.mjs",
+    "wiki:screenshots": "playwright test --config playwright.storybook.config.mjs --project=storybook-desktop --grep @wiki-screenshot",
     "pretest:storybook:snapshots": "node ../../scripts/guard-main-worktree.mjs",
     "test:storybook:snapshots": "playwright test --config playwright.storybook.config.mjs --grep @storybook-snapshot",
     "pretest:storybook:snapshots:update": "node ../../scripts/guard-main-worktree.mjs",
