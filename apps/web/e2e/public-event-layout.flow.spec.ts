@@ -36,6 +36,40 @@ async function renderedTimeLines(time: Locator) {
 
 test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), "Public event layout fixtures run locally.");
 
+test("published lineups are directly reachable from the event hero @flow @fixture", async ({ page }) => {
+  await page.clock.setFixedTime(watchTime);
+
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: width === 320 ? 740 : 900 });
+    for (const slug of [listedSlug, guestWatchSlug]) {
+      await page.goto(path + slug);
+      const main = page.getByRole("main");
+      const shortcut = main.getByRole("link", { name: "Lineup", exact: true });
+      const heading = main.getByRole("heading", { name: "Lineup", exact: true });
+      const firstPerformer = heading.locator("..").getByRole("link").first();
+
+      await expect(shortcut).toHaveAttribute("href", "#event-lineup");
+      await expect(shortcut).toBeInViewport({ ratio: 1 });
+      await shortcut.focus();
+      await page.keyboard.press("Enter");
+      await expect(page).toHaveURL(/#event-lineup$/);
+      await expect(heading).toBeFocused();
+      await expect(heading).toBeInViewport({ ratio: 1 });
+
+      const [headingBox, headerBox] = await Promise.all([
+        heading.boundingBox(),
+        page.getByRole("banner").boundingBox(),
+      ]);
+      if (!headingBox || !headerBox) throw new Error("Missing event header or lineup");
+      expect(headingBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height);
+
+      await page.keyboard.press("Tab");
+      await expect(firstPerformer).toBeFocused();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+    }
+  }
+});
+
 test("listed events show the world and original listing before the poster on mobile @flow @fixture", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 740 });
   await page.goto(path + listedSlug);
@@ -143,6 +177,7 @@ test("sparse guest events preserve real content and deny Host routes @flow @fixt
   await expect(main.getByRole("heading", { name: "July Fourth Sessions" })).toBeVisible();
   await expect(main.getByAltText(/ poster$/)).toHaveCount(0);
   await expect(main.getByRole("heading", { name: "Lineup", exact: true })).toHaveCount(0);
+  await expect(main.getByRole("link", { name: "Lineup", exact: true })).toHaveCount(0);
   await expect(main.getByText("Links", { exact: true })).toHaveCount(0);
   const sparseHost = main.getByRole("link", { name: /Afterglow Social.*Host/ });
   await expect(sparseHost).toBeVisible();
