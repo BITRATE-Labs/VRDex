@@ -8,6 +8,8 @@ import type { TimelinePreferences } from "@/lib/timeline/preferences";
 import type { TimelineActions } from "../timeline/timeline-event-bar";
 import styles from "./discovery.module.css";
 
+const clubImageSizes = "(max-width: 420px) 100vw, (max-width: 760px) 78vw, 23vw";
+
 type Available = Extract<DiscoverySnapshot, { kind: "available" }>;
 export type DiscoveryClubCardProps = {
   club: Extract<Available["clubs"][number], { profileType: "community" }>;
@@ -36,7 +38,7 @@ export function DiscoveryClubCard({
               src={club.bannerImageUrl}
               className={styles.clubBackdrop}
               fallback={<></>}
-              sizes="(max-width: 760px) 78vw, 23vw"
+              sizes={clubImageSizes}
             />
           )}
           <EntityImage
@@ -55,7 +57,7 @@ export function DiscoveryClubCard({
               </span>
             }
             imageClassName={styles.contained}
-            sizes="(max-width: 760px) 78vw, 23vw"
+            sizes={clubImageSizes}
           />
         </span>
       </a>

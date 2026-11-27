@@ -1,28 +1,70 @@
 import { test, expect } from "@playwright/test";
 import { prepareVisualPage, waitForVisualReady } from "./public-routes";
 
-test("discovery rail fades the overflow edge and clears the fade on focus @storybook-snapshot", async ({
+test("club rail controls follow overflow and keep keyboard focus at the ends @storybook-snapshot", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 320, height: 800 });
+  await page.setViewportSize({ width: 485, height: 800 });
   await page.goto(
     "/iframe.html?id=home-discovery--two-clubs-no-events&viewMode=story",
   );
   const clubs = page.getByRole("group", { name: "Clubs", exact: true });
-  const rail = clubs.getByTestId("discovery-club-card").first().locator("../..");
-  const firstFavorite = clubs.getByRole("button").first();
+  const cards = clubs.getByTestId("discovery-club-card");
+  const rail = cards.first().locator("../..");
+  const previous = clubs.getByRole("button", { name: "Previous clubs", exact: true });
+  const next = clubs.getByRole("button", { name: "Next clubs", exact: true });
 
+  await expect(next).toBeEnabled();
+  await expect(previous).toBeDisabled();
   await expect(rail).toHaveAttribute("data-scroll-right", "");
-  await expect(rail).not.toHaveAttribute("data-scroll-left", "");
   await expect(rail).toHaveCSS("mask-image", /linear-gradient/);
-  await firstFavorite.focus();
+  await cards.first().getByRole("button").focus();
   await expect(rail).toHaveCSS("mask-image", "none");
 
-  await firstFavorite.blur();
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 800 });
+    await expect(rail).toHaveCSS("mask-image", "none");
+    await expect(cards.first()).toBeInViewport({ ratio: 0.99 });
+    await expect(cards.last()).not.toBeInViewport();
+    await next.press("Enter");
+    await expect(next).toBeDisabled();
+    await expect(next).toBeFocused();
+    await expect(previous).toBeEnabled();
+    await expect(cards.first()).not.toBeInViewport();
+    await expect(cards.last()).toBeInViewport({ ratio: 0.99 });
+    const activeClub = cards.last().getByRole("link").first();
+    await page.keyboard.press("Tab");
+    await expect(activeClub).toBeFocused();
+    await expect(cards.first()).not.toBeInViewport();
+    await next.focus();
+    await page.keyboard.press("Shift+Tab");
+    await expect(previous).toBeFocused();
+    await previous.press("Space");
+    await expect(previous).toBeDisabled();
+    await expect(next).toBeEnabled();
+  }
+
+  // Native scrolling updates the same controls.
   await rail.evaluate((element) => element.scrollTo(element.scrollWidth, 0));
   await expect(rail).toHaveAttribute("data-scroll-left", "");
   await expect(rail).not.toHaveAttribute("data-scroll-right", "");
-  await expect(rail).toHaveCSS("mask-image", /linear-gradient/);
+  await expect(next).toBeDisabled();
+  await expect(rail).toHaveCSS("mask-image", "none");
+
+  await previous.focus();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(next).toHaveCount(0);
+  await expect(previous).toHaveCount(0);
+  await expect(rail).toHaveCSS("mask-image", "none");
+  await expect(cards.last().getByRole("link").first()).toBeFocused();
+
+  await page.setViewportSize({ width: 320, height: 800 });
+  for (const story of ["one-club-no-events", "empty", "loading"]) {
+    await page.goto(`/iframe.html?id=home-discovery--${story}&viewMode=story`);
+    await expect(page.getByRole("heading", { name: "Discover", exact: true })).toBeVisible();
+    await expect(next).toHaveCount(0);
+    await expect(previous).toHaveCount(0);
+  }
 });
 
 for (const state of [

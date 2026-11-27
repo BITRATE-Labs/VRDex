@@ -50,7 +50,43 @@
 .groupHeading {
   font-size: 0.9rem;
   font-weight: 600;
+}
+.railHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 0.85rem;
+}
+.railHeading:has(.railControls) {
+  margin-bottom: 0.45rem;
+}
+.railControls {
+  display: flex;
+  gap: 0.25rem;
+}
+.railControls button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+}
+.railControls button[aria-disabled="true"] {
+  background: transparent;
+  color: var(--muted);
+  cursor: default;
+}
+.railControls button[aria-disabled="false"]:hover,
+.railControls button[aria-disabled="false"]:active {
+  background: var(--surface-elevated);
+}
+.railControls button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .cards {
   display: grid;
@@ -326,6 +362,12 @@
   }
 }
 @media (max-width: 760px) {
+  .heading .browse {
+    min-height: 44px;
+    background: var(--surface-elevated);
+    color: var(--foreground);
+    font-weight: 600;
+  }
   .groups {
     grid-template-columns: minmax(0, 1fr);
     gap: 1.5rem;
@@ -370,6 +412,16 @@
   }
   .name {
     font-size: 0.95rem;
+  }
+}
+@media (width <= 420px) {
+  .clubRail {
+    grid-auto-columns: 100%;
+    scroll-padding-inline: 3px;
+    scroll-snap-type: x mandatory;
+  }
+  .cards.clubRail:is([data-scroll-left], [data-scroll-right]) {
+    mask-image: none;
   }
 }
 @media (width <= 360px) {
