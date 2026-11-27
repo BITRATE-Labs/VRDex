@@ -211,6 +211,7 @@ export function ProfileVrcdnStreams({
 
   const hasLinks = links.length > 0 || discordHandles.length > 0;
   const hasWatchSurface = streams.length > 0;
+  const compactPhoneTransitions = Boolean(streamsSectionId) && hasLinks && hasWatchSurface;
 
   return (
     <div className={cn(
@@ -222,7 +223,11 @@ export function ProfileVrcdnStreams({
         {hasLinks ? (
           <section
             aria-label={compactLinks ? "Links" : undefined}
-            className={cn(compactLinks ? "px-4 pb-4 sm:px-6" : "py-8", compactMobileSpacing && "max-sm:py-4")}
+            className={cn(
+              compactLinks ? "px-4 pb-4 sm:px-6" : "py-8",
+              compactMobileSpacing && "max-sm:py-4",
+              compactPhoneTransitions && "max-sm:pb-4",
+            )}
           >
             {!compactLinks ? (
               linksHeadingId ? (
@@ -282,6 +287,7 @@ export function ProfileVrcdnStreams({
             "min-w-0 space-y-3 py-8",
             streamsSectionId && "scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent",
             linksColumnContent && "lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start",
+            compactPhoneTransitions && "max-sm:py-4",
           )}
           id={streamsSectionId}
           tabIndex={streamsSectionId ? -1 : undefined}
@@ -305,8 +311,8 @@ export function ProfileVrcdnStreams({
                 </div>
 
                 <div>
-                  <CopyValueRow className={styles.copyRow} context={copyContext} wrapUrlPath label="Quest" value={questUrl} />
-                  <CopyValueRow className={styles.copyRow} context={copyContext} wrapUrlPath label="PC" value={pcUrl} />
+                  <CopyValueRow className={styles.copyRow} context={copyContext} showCopyTextOnMobile={Boolean(streamsSectionId)} wrapUrlPath label="Quest" value={questUrl} />
+                  <CopyValueRow className={styles.copyRow} context={copyContext} showCopyTextOnMobile={Boolean(streamsSectionId)} wrapUrlPath label="PC" value={pcUrl} />
                 </div>
                 {showPlayer ? (
                   <div className={cn("mt-3 overflow-hidden rounded-control border border-border", styles.playerFrame)}>
@@ -321,7 +327,7 @@ export function ProfileVrcdnStreams({
           })}
         </aside>
       ) : null}
-      {linksColumnContent ? <div className="min-w-0 max-lg:mt-6 lg:col-start-1 lg:row-start-2">{linksColumnContent}</div> : null}
+      {linksColumnContent ? <div className={cn("min-w-0 max-lg:mt-6 lg:col-start-1 lg:row-start-2", compactPhoneTransitions && "max-sm:mt-3")}>{linksColumnContent}</div> : null}
     </div>
   );
 }
