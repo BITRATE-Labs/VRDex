@@ -94,7 +94,27 @@ test("sparse guest events preserve real content and deny Host routes @flow @fixt
   await expect(main.getByAltText(/ poster$/)).toHaveCount(0);
   await expect(main.getByRole("heading", { name: "Lineup", exact: true })).toHaveCount(0);
   await expect(main.getByText("Links", { exact: true })).toHaveCount(0);
-  await expect(main.getByRole("link", { name: /Afterglow Social/ })).toBeVisible();
+  const sparseHost = main.getByRole("link", { name: /Afterglow Social.*Host/ });
+  await expect(sparseHost).toBeVisible();
+  await expect(sparseHost).toHaveAttribute("href", "/playwright-afterglow-social");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  expect((await sparseHost.boundingBox())?.width).toBeLessThan(576);
+  const calendar = await request.get(path + sparseSlug + "/calendar.ics");
+  expect(calendar.status()).toBe(200);
+  expect(calendar.headers()["content-type"]).toContain("text/calendar");
+  const ics = await calendar.text();
+  expect(ics).toContain("DTSTART;VALUE=DATE:20260704");
+  expect(ics).not.toContain("DTEND");
+
+  const report = main.getByRole("button", { name: "Report event" });
+  await report.focus();
+  await expect(main.getByRole("tooltip", { name: "Report event" })).toBeVisible();
+  await report.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Report event" });
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+  await expect(report).toBeFocused();
 
   await page.goto(path + posterlessSlug);
   await expect(main.getByAltText(/ poster$/)).toHaveCount(0);
@@ -106,4 +126,47 @@ test("sparse guest events preserve real content and deny Host routes @flow @fixt
   const stage = await main.getByRole("button", { name: /^Play / }).boundingBox();
   expect(stage?.width).toBeGreaterThan(400);
   expect(stage?.width).toBeLessThan(1000);
+});
+
+test("desktop watch shares the media row with event details @flow @fixture", async ({ page }) => {
+  await page.route("https://*.vrcdn.live/**", (route) => route.abort());
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.clock.setFixedTime(watchTime);
+
+  await page.goto(path + guestWatchSlug);
+  const main = page.getByRole("main");
+  const poster = main.getByAltText(/ poster$/);
+  const stage = main.getByRole("button", { name: /^Play / });
+  const host = main.getByRole("link", { name: /Afterglow Social.*Host/ });
+  const lineup = main.getByRole("heading", { name: "Lineup", exact: true });
+  await expect(stage).toBeVisible();
+  await expect(host).toBeVisible();
+  await poster.evaluate((image: HTMLImageElement) => image.decode());
+  const [posterBox, stageBox, hostBox, lineupBox] = await Promise.all([
+    poster.boundingBox(),
+    stage.boundingBox(),
+    host.boundingBox(),
+    lineup.boundingBox(),
+  ]);
+  if (!posterBox || !stageBox || !hostBox || !lineupBox) throw new Error("Missing desktop event layout");
+  expect(Math.abs(posterBox.y - stageBox.y)).toBeLessThanOrEqual(2);
+  expect(hostBox.x + hostBox.width).toBeLessThan(stageBox.x);
+  expect(hostBox.y).toBeGreaterThanOrEqual(posterBox.y + posterBox.height);
+  expect(lineupBox.y).toBeGreaterThan(stageBox.y + stageBox.height);
+  expect(lineupBox.y).toBeLessThan(980);
+
+  await poster.evaluate((image: HTMLImageElement) => {
+    image.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='960'%3E%3Crect width='480' height='960' fill='teal'/%3E%3C/svg%3E";
+    return image.decode();
+  });
+  const portrait = await poster.boundingBox();
+  expect(portrait?.height).toBeLessThanOrEqual(272);
+  await expect(poster.locator("..")).toHaveAttribute("target", "_blank");
+
+  await page.clock.setFixedTime(new Date("2025-01-01T11:00:00Z"));
+  await page.reload();
+  await expect(stage).toHaveCount(0);
+  const [idlePoster, idleHost] = await Promise.all([poster.boundingBox(), host.boundingBox()]);
+  if (!idlePoster || !idleHost) throw new Error("Missing pre-doors event layout");
+  expect(idleHost.x).toBeGreaterThan(idlePoster.x + idlePoster.width);
 });

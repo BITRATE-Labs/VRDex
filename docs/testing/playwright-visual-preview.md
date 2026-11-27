@@ -23,7 +23,10 @@ The event layout flow checks guest and Host schedules at 320, 360, and 412 px
 in UTC and America/Los_Angeles. The guest fixtures verify that Host routes
 reject guests without changing the authorized fixture. A date-only fixture
 without outgoing links has no Links card, and a watchable fixture without a
-poster has one capped media column on desktop.
+poster keeps the player and event details aligned in one desktop column. A
+watchable event with a poster pairs the stage with the poster and event
+details. The flow also checks a tall poster, the sparse Host link, the date-only
+calendar attachment, and keyboard dismissal of the Report dialog.
 
 PowerShell data-flow run with video:
 

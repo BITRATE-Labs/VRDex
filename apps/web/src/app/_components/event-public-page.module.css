@@ -2,12 +2,16 @@
   display: none;
 }
 
+.watch > :has([data-watch-play-poster]) {
+  border-color: var(--border-strong);
+}
+
 .watch button:has([data-watch-play-poster]) {
   cursor: pointer;
 }
 
 .watch button [data-watch-play-poster] {
-  background: linear-gradient(135deg, var(--media), color-mix(in srgb, var(--media) 70%, var(--surface-raised)));
+  background: linear-gradient(135deg, var(--media-raised), var(--media));
 }
 
 .watch button [data-watch-play-control] {
@@ -50,10 +54,10 @@
     grid-area: 1 / 2;
   }
 
-  .media:not(:has(> .poster)) > .watch {
+  .media:has(> .watch:not(:empty)):not(:has(> .poster)) {
     width: 100%;
-    max-width: 50rem;
-    justify-self: center;
+    max-width: 56rem;
+    margin-inline: auto;
   }
 
   .poster {
@@ -61,14 +65,23 @@
   }
 
   .media:has(> .watch:not(:empty) + .poster) {
-    grid-template-rows: auto 1fr;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 5fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .media:has(> .watch:not(:empty) + .poster) > .watch {
+    grid-area: 1 / 2 / span 2;
   }
 
   .watch:not(:empty) + .poster {
-    grid-row-end: span 2;
+    position: static;
+  }
+
+  .watch:not(:empty) + .poster img {
+    max-height: 17rem;
   }
 
   .watch:not(:empty) + .poster + .details {
-    grid-row-start: 2;
+    grid-area: 2 / 1;
   }
 }
