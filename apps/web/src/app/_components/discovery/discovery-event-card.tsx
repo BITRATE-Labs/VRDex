@@ -85,19 +85,19 @@ export function DiscoveryEventCard({
           />
         </a>
       </div>
-      <InterestButton
-        label={event.title}
-        state={saved ? "saved" : "unsaved"}
-        className={styles.save}
-        visibleLabelClassName={styles.mobileActionLabel}
-        onToggle={() => onSave({ kind: "event", eventId: event.id })}
-      />
       <div className={styles.eventMetadata}>
         <h4 className={styles.name}>
           <a href={event.href} onClick={open}>
             {event.title}
           </a>
         </h4>
+        <InterestButton
+          label={event.title}
+          state={saved ? "saved" : "unsaved"}
+          className={styles.save}
+          visibleLabelClassName={styles.interestLabel}
+          onToggle={() => onSave({ kind: "event", eventId: event.id })}
+        />
         <p className={styles.date}>
           {date && `${date} · `}
           <a className={styles.host} href={`/${event.host.slug}`}>

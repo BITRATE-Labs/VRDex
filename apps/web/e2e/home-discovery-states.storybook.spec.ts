@@ -16,7 +16,7 @@ test("club rail controls follow overflow and keep keyboard focus at the ends @st
 
   await expect(next).toBeEnabled();
   await expect(previous).toBeDisabled();
-  await expect(previous).toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
+  await expect(previous).not.toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
   await expect(next).not.toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
   await expect(rail).toHaveAttribute("data-scroll-right", "");
   await expect(rail).toHaveCSS("mask-image", /linear-gradient/);
@@ -30,7 +30,7 @@ test("club rail controls follow overflow and keep keyboard focus at the ends @st
     await expect(cards.last()).not.toBeInViewport();
     await next.press("Enter");
     await expect(next).toBeDisabled();
-    await expect(next).toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
+    await expect(next).not.toHaveCSS("border-top-color", "rgba(0, 0, 0, 0)");
     await expect(next).toBeFocused();
     await expect(previous).toBeEnabled();
     await expect(cards.first()).not.toBeInViewport();
@@ -121,20 +121,21 @@ for (const state of [
       for (const [action, label] of [[interest, "Interested"], [favorite, "Favorite"]] as const) {
         const visualLabel = action.getByText(label, { exact: true });
         await expect(visualLabel).toHaveAttribute("aria-hidden", "true");
-        if (isMobile) {
-          await expect(visualLabel).toBeVisible();
-          const bounds = (await action.boundingBox())!;
-          expect(bounds.width).toBeGreaterThanOrEqual(44);
-          expect(bounds.height).toBeGreaterThanOrEqual(44);
-        } else {
+        if (!isMobile && action === favorite) {
           await expect(visualLabel).toBeHidden();
+          continue;
         }
+        await expect(visualLabel).toBeVisible();
+        const bounds = (await action.boundingBox())!;
+        expect(bounds.width).toBeGreaterThanOrEqual(44);
+        expect(bounds.height).toBeGreaterThanOrEqual(44);
       }
-      if (isMobile) {
-        const artwork = (await event.getByRole("link", { name: /^Open / }).boundingBox())!;
-        const action = (await interest.boundingBox())!;
-        expect(action.y).toBeGreaterThanOrEqual(artwork.y + artwork.height);
-      }
+      await expect(interest).toHaveCSS("opacity", "1");
+      const artwork = (await event.getByRole("link", { name: /^Open / }).boundingBox())!;
+      const action = (await interest.boundingBox())!;
+      const caption = (await event.locator("p").first().boundingBox())!;
+      expect(action.y).toBeGreaterThanOrEqual(artwork.y + artwork.height);
+      expect(caption.width).toBeCloseTo(artwork.width + 2);
     }
     if (state.includes("-no-")) {
       const emptyName = state.endsWith("-no-events") ? "Events" : "Clubs";
