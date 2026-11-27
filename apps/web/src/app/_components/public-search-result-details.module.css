@@ -49,11 +49,16 @@
     gap: 0.125rem 0.375rem;
     grid-template-areas: "label copy" "value copy";
     grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: min-content 1fr;
     padding: 0;
   }
 
+  .linksPanel :global(.lookup-vrcdn-group .lookup-primary-url-card + .lookup-primary-url-card) {
+    border-block-start: 1px solid var(--border);
+    padding-block-start: 0.125rem;
+  }
+
   .linksPanel :global(.lookup-vrcdn-group .lookup-primary-url-label) {
-    align-self: end;
     grid-row: 1;
     grid-column: 1;
   }
@@ -64,6 +69,7 @@
   }
 
   .linksPanel :global(.lookup-vrcdn-group .lookup-primary-url-copy) {
+    align-self: start;
     grid-area: copy;
   }
 
