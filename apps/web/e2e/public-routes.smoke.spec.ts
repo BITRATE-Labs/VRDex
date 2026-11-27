@@ -118,6 +118,9 @@ test("mobile discovery keeps Add event alongside the populated upcoming heading"
   const performer = section.getByRole("link", { name: "DJ Aurora", exact: true });
   await expect(addEvent).toHaveAttribute("href", "/events/new");
   await expect(event).toBeVisible();
+  const localStart = event.locator("xpath=ancestor::article[1]").locator("time").first();
+  await expect(localStart).toHaveAttribute("datetime", "2026-06-15T02:00:00.000Z");
+  await expect(localStart.locator("span").last()).toHaveCSS("white-space", "nowrap");
 
   const [headingBounds, actionBounds] = await Promise.all([heading.boundingBox(), addEvent.boundingBox()]);
   if (!headingBounds || !actionBounds) throw new Error("Missing Discovery event header bounds");
