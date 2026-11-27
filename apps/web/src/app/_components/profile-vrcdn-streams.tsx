@@ -10,6 +10,7 @@ import { WatchPlayPoster } from "./vrcdn-stream-player";
 import { useEventPlayback } from "./event-playback-provider";
 import { LinkTypeIcon, hostLabel } from "./public-profile-links";
 import { ProfileDestinationArtwork } from "./profile-destination-artwork";
+import styles from "./profile-vrcdn-streams.module.css";
 import { buttonVariants } from "@/components/ui/button";
 import { ConnectionVerification } from "@/components/ui/connection-verification";
 import { Card, SectionHeading } from "@/components/ui/card";
@@ -259,13 +260,13 @@ export function ProfileVrcdnStreams({
                 </div>
 
                 <div>
-                  <CopyValueRow className="grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-0 py-1" context={copyContext} label="Quest" value={questUrl} />
-                  <CopyValueRow className="grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-0 py-1" context={copyContext} label="PC" value={pcUrl} />
+                  <CopyValueRow className={cn("grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-0 py-1", styles.copyRow)} context={copyContext} label="Quest" value={questUrl} />
+                  <CopyValueRow className={cn("grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-0 py-1", styles.copyRow)} context={copyContext} label="PC" value={pcUrl} />
                 </div>
                 {showPlayer ? (
-                  <div className="mt-3 overflow-hidden rounded-control border border-border">
+                  <div className={cn("mt-3 overflow-hidden rounded-control border border-border", styles.playerFrame)}>
                     <div data-event-playback-inline={`profile:${profileId}:${streamId}`}>
-                      {retained?.streamId === streamId ? <PlaybackInlinePlaceholder /> : <button type="button" aria-label={`Play ${title}`} className="block w-full" disabled={!playback || !profileId}
+                      {retained?.streamId === streamId ? <PlaybackInlinePlaceholder /> : <button type="button" aria-label={`Play ${title}`} className={cn("block w-full", styles.idlePlayer)} disabled={!playback || !profileId}
                         onClick={()=>{if(playback && profileId)void playback.play({kind:"vrcdn",profileId,profileSlug,title:`${displayName ?? profileSlug} - VRDex`,href:`/${profileSlug}`,sourceId:streamId,src:directVideoUrl??questUrl,transport:directVideoUrl?"video":"mpegts"});}}><WatchPlayPoster /></button>}
                     </div>
                   </div>

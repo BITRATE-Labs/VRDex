@@ -272,7 +272,7 @@ export function EventPreviewCard({
         )}>
           {eventPath ? (
             <Link
-              className={isSeries ? "rounded-sm underline decoration-1 underline-offset-4 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current" : undefined}
+              className="rounded-sm underline decoration-1 underline-offset-4 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current"
               href={eventPath}
               id={hasDatedTitle ? titleId : undefined}
               aria-labelledby={hasDatedTitle ? titleId + " " + dateId : undefined}
@@ -290,16 +290,13 @@ export function EventPreviewCard({
           ))}
           {sourceUrl ? (
             <a
-              className={cn(
-                "font-medium text-accent-strong underline decoration-accent/35 underline-offset-4",
-                isSeries && "inline-flex min-w-0 items-center gap-1 [overflow-wrap:anywhere]",
-              )}
+              className="inline-flex min-w-0 items-center gap-1 font-medium text-accent-strong underline decoration-accent/35 underline-offset-4 [overflow-wrap:anywhere]"
               href={sourceUrl}
               rel="noreferrer"
               target="_blank"
             >
               {event.source.label}
-              {isSeries ? <ExternalLink aria-hidden="true" className="size-3 shrink-0" /> : null}
+              <ExternalLink aria-hidden="true" className="size-3 shrink-0" />
             </a>
           ) : (
             <span>{event.source.label}</span>
