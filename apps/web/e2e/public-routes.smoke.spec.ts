@@ -87,6 +87,35 @@ test("featured world fits the narrow discovery viewport", async ({ page }) => {
     .toBe(320);
 });
 
+test("mobile discovery jumps to the directory without hiding the heading", async ({ page }) => {
+  test.skip(isHostedRun, "The populated discovery directory uses a local fixture.");
+
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.goto("/discovery");
+
+  const shortcuts = page.getByRole("navigation", { name: "Discovery categories" });
+  await expect(shortcuts.getByRole("link")).toHaveText(["People", "Communities", "Worlds"]);
+  const communities = shortcuts.getByRole("link", { name: "Communities" });
+  const heading = page.getByRole("heading", { name: "Communities", exact: true });
+  const header = page.getByRole("banner");
+  const firstProfile = heading.locator("..").getByRole("link").first();
+
+  await communities.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#communities$/);
+  await expect(heading).toBeFocused();
+  await expect(heading).toBeInViewport();
+  const [headingBounds, headerBounds] = await Promise.all([heading.boundingBox(), header.boundingBox()]);
+  if (!headingBounds || !headerBounds) throw new Error("Missing discovery heading or header bounds");
+  expect(headingBounds.y).toBeGreaterThanOrEqual(headerBounds.y + headerBounds.height);
+
+  await page.keyboard.press("Tab");
+  await expect(firstProfile).toBeFocused();
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(shortcuts).toBeHidden();
+});
+
 test("sign-in offers a route to create an account", async ({ page }) => {
   await page.goto("/sign-in");
 

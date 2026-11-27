@@ -392,12 +392,14 @@ function PosterCard({ result }: { result: PublicSearchResult }) {
 
 function DiscoverySection({
   title,
+  headingId,
   empty,
   columns = "responsive",
   results,
   surface,
 }: {
   title: string;
+  headingId?: string;
   empty: string;
   columns?: "responsive" | "single";
   results: PublicSearchResult[];
@@ -405,7 +407,13 @@ function DiscoverySection({
 }) {
   return (
     <section className="min-w-0 border-t border-border pt-6">
-      <SectionTitle>{title}</SectionTitle>
+      <SectionTitle
+        className={headingId ? "scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent" : undefined}
+        id={headingId}
+        tabIndex={headingId ? -1 : undefined}
+      >
+        {title}
+      </SectionTitle>
       {surface === "upcoming_events" ? <Link href="/events/new" className="inline-flex min-h-11 items-center rounded-control text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-accent-strong">Add event</Link> : null}
       <div className={cn("mt-5 grid gap-4", columns === "responsive" ? "lg:grid-cols-2" : undefined)}>
         {results.length === 0 ? (
@@ -446,12 +454,13 @@ export function DiscoveryLandingPage({
   status: DiscoveryStatus;
 }) {
   const directory = [
-    { title: "People", results: data.people, empty: "No people are discoverable yet." },
-    { title: "Communities", results: data.communities, empty: "No communities are discoverable yet." },
-    { title: "Worlds", results: data.worlds, empty: "No worlds are discoverable yet." },
+    { headingId: "people", title: "People", results: data.people, empty: "No people are discoverable yet." },
+    { headingId: "communities", title: "Communities", results: data.communities, empty: "No communities are discoverable yet." },
+    { headingId: "worlds", title: "Worlds", results: data.worlds, empty: "No worlds are discoverable yet." },
   ];
   const populatedDirectory = directory.filter(({ results }) => results.length > 0);
   const directorySections = populatedDirectory.length > 0 ? populatedDirectory : directory;
+  const showDirectoryShortcuts = populatedDirectory.length > 1;
   const singleDirectory = status === "live" && activeWorldStatus === "live"
     && !data.eventSchedule?.length && data.upcomingEvents.length === 0
     && activeWorlds.length === 0 && directorySections.length === 1;
@@ -468,6 +477,20 @@ export function DiscoveryLandingPage({
           </div>
           <DiscoverySearchForm className="w-full" compact placeholder="Search VRDex" surface="home" tone="default" />
         </section>
+
+        {showDirectoryShortcuts ? (
+          <nav aria-label="Discovery categories" className="-mt-3 flex flex-wrap gap-x-1 sm:hidden">
+            {populatedDirectory.map(({ headingId, title }) => (
+              <a
+                className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "min-h-11 underline decoration-border-strong underline-offset-4 hover:decoration-current")}
+                href={`#${headingId}`}
+                key={headingId}
+              >
+                {title}
+              </a>
+            ))}
+          </nav>
+        ) : null}
 
         {status === "live" ? null : <DiscoveryBackendNotice kind={status} />}
 
@@ -511,8 +534,16 @@ export function DiscoveryLandingPage({
         ) : null}
 
         <section className={cn("grid gap-5", directorySections.length === 3 ? "xl:grid-cols-3" : directorySections.length === 2 ? "xl:grid-cols-2" : undefined)}>
-          {directorySections.map(({ title, results, empty }) => (
-            <DiscoverySection key={title} columns="single" empty={empty} results={results} surface="home" title={title} />
+          {directorySections.map(({ headingId, title, results, empty }) => (
+            <DiscoverySection
+              key={headingId}
+              columns="single"
+              empty={empty}
+              headingId={showDirectoryShortcuts ? headingId : undefined}
+              results={results}
+              surface="home"
+              title={title}
+            />
           ))}
         </section>
       </PageContainer>
