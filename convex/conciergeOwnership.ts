@@ -6,6 +6,7 @@ import type { DatabaseReader } from "./_generated/server";
 import { internalMutation, query } from "./_generated/server";
 import { getActiveProfileOwner, grantProfileOwner } from "./_profileOwnership";
 import { canReadProfile } from "./_profilePermissions";
+import { requireProfileClaimStateTransition } from "./_profileStates";
 import { getProfileBySlug } from "./_profileSlugs";
 import { createProfileSearchDocument, upsertSearchDocument } from "./_searchDocuments";
 
@@ -98,6 +99,7 @@ export const assignProfile = internalMutation({
       throw assignmentError("Profile or account changed. Review the assignment again.");
     }
 
+    requireProfileClaimStateTransition(profile.claimState, "claimed_unverified");
     const now = Date.now();
     await grantProfileOwner(ctx.db, { profileId: profile._id, userId: recipient._id, now });
     await ctx.db.patch(profile._id, { claimState: "claimed_unverified", claimedAt: now, updatedAt: now });

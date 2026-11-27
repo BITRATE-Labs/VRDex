@@ -425,12 +425,15 @@ jobs:
 
       - name: Build Vercel preview output
         env:
+          SHARED_SANDBOX: ${{ github.event_name == 'push' && steps.pr.outputs.sandbox == 'true' }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ github.event_name == 'push' && steps.pr.outputs.sandbox == 'true' && secrets.VERCEL_SANDBOX_PROJECT_ID || secrets.VERCEL_PROJECT_ID }}
         run: |
           set -euo pipefail
-          sed -i -E '/^CONVEX_ADMIN_TOKEN=/d' .vercel/.env.preview.local
+          if [ "$SHARED_SANDBOX" = "true" ]; then
+            sed -i -E '/^CONVEX_ADMIN_TOKEN=/d' .vercel/.env.preview.local
+          fi
           pnpm dlx vercel@54.4.1 build --target=preview --token "$VERCEL_TOKEN"
 
       - name: Deploy Vercel preview output

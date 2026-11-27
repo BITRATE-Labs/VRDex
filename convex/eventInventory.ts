@@ -4,7 +4,7 @@ import { mutation, query } from "./_generated/server";
 import { resolvePersonalSubmission } from "./_eventIntake";
 import type { Id } from "./_generated/dataModel";
 import { requireActiveBrowserSessionSubject } from "./_browserSessionAuthority";
-import { managedCommunitiesForBrowser, canUpdateEvent, eventOutputConfigurationLocked, getLatestEventMediaProgram, recordEventAuditEvent } from "./events";
+import { managedCommunitiesForBrowser, canUpdateEvent, eventOutputConfigurationLocked, recordEventAuditEvent } from "./events";
 import { dateOnlyEventsEnabled } from "./_eventSchedule";
 import { EventIntakePatchSchema } from "../packages/api-contracts/src/event-intake";
 import { canReadProfile } from "./_profilePermissions";
@@ -92,8 +92,10 @@ export const discardDraft = mutation({
     const event = await ctx.db.get(draft.id);
     if (!event || !canDiscardManagedDraft(event) || draft.version !== event.updatedAt ||
         !await canUpdateEvent(ctx.db, event, subject, userId)) throw new Error("Draft is unavailable or has changed.");
-    const program = await getLatestEventMediaProgram(ctx.db, event._id);
-    if (program && await eventOutputConfigurationLocked(ctx.db, program)) throw new Error("Stop the active broadcast first.");
+    const programs = ctx.db.query("eventMediaPrograms").withIndex("by_eventId", q => q.eq("eventId", event._id));
+    for await (const program of programs) {
+      if (await eventOutputConfigurationLocked(ctx.db, program)) throw new Error("Stop the active broadcast first.");
+    }
     await ctx.db.patch(event._id, { draftDiscardedAt: now, updatedAt: now });
     await recordEventAuditEvent(ctx.db, { eventId: event._id, actor: subject, actorSurface: "browser", action: "draft_discarded", now });
   },

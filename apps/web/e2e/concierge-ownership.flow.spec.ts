@@ -1,6 +1,17 @@
 import { expect, test } from "@playwright/test";
 
-test("concierge owner assignment reviews the exact recipient before assigning @fixture", async ({ page }, info) => {
+test("concierge owner assignment reviews the exact recipient before assigning @flow @fixture", async ({ page }, info) => {
+  await page.route("**/api/account/concierge-ownership", async (route) => {
+    expect(route.request().method()).toBe("POST");
+    expect(route.request().postDataJSON()).toEqual({
+      slug: "afterglow",
+      email: "organizer@example.com",
+      expectedProfileId: "fixture-profile",
+      expectedUserId: "fixture-recipient",
+      reason: "Requested by the organizer",
+    });
+    await route.fulfill({ json: { slug: "afterglow" } });
+  });
   await page.goto("/playwright/concierge-ownership");
   await page.getByRole("combobox", { name: "Profile", exact: true }).fill("Afterglow");
   await page.getByRole("option", { name: /Afterglow/ }).click();
