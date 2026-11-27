@@ -33,7 +33,7 @@ test('the event owner switch opens and closes scoped community access @flow @fix
   await expect(setup).toHaveCount(0);
 });
 
-test('preserves authenticated navigation, search focus and mobile width @fixture', async ({ page }, testInfo) => {
+test('preserves authenticated navigation, search focus and mobile width @flow @fixture', async ({ page }, testInfo) => {
   test.setTimeout(60000);
   await page.route(/\/search\/suggest\?q=aurora$/, (route) => route.fulfill({
     json: { results: [{ entityType: 'profile', profileType: 'person', slug: 'aurora', title: 'Aurora', routePath: '/aurora' }] },

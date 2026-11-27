@@ -12,7 +12,7 @@ community by name and select **Manage as admin**. This enables event setup, edit
 hosting and media controls for that community for up to one hour. Select
 **End admin access** on the same page to exit. The server checks the grant, community and expiry at
 the time of access and when queued media commands are authorized. The operator
-keeps their own audit identity and the community retains its recorded owner.
+keeps their own audit identity and the community retains its recorded owner. Entering, switching, and ending admin access records the operator and community in the profile audit log. The entry records when access expires.
 
 ## Control and observation
 
