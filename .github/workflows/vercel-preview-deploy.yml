@@ -141,8 +141,8 @@ jobs:
             }
             if (context.eventName === "push") {
               if (context.ref !== "refs/heads/codex/sandbox" || context.payload.repository.id !== 1176245711
-                  || !/^[a-f0-9]{40}$/.test(context.sha)) {
-                core.setFailed("Shared sandbox deploys require the trusted codex/sandbox branch and an exact commit.");
+                  || context.payload.sender?.id !== 2165323 || !/^[a-f0-9]{40}$/.test(context.sha)) {
+                core.setFailed("Shared sandbox deploys require the trusted BASIC-BIT push on codex/sandbox and an exact commit.");
                 return;
               }
               core.setOutput("sandbox", "true");

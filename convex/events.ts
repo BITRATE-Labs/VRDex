@@ -34,6 +34,7 @@ import { contributorStaffLock } from "./_eventContributorLock";
 import { replaceEventLineup } from "./_eventLineup";
 import { eventContributionFingerprint, normalizeIntakePublication } from "./_eventContributionPreflight";
 import { activeBrowserSessionSubjectOrNull, requireActiveBrowserSessionSubject } from "./_browserSessionAuthority";
+import { requireVerifiedActiveBrowserSession } from "./_claimSession";
 import {
   apiWriteAuditActorKindValidator,
   recordApiWriteAuditEvent,
@@ -2971,7 +2972,9 @@ export const getEventOwnerMode = query({
 export const setEventOwnerMode = mutation({
   args: { communitySlug: v.union(v.string(), v.null()) },
   handler: async (ctx, { communitySlug }) => {
-    const { user, userId, subject } = await requireActiveBrowserSessionSubject(ctx);
+    const { user, userId, subject } = communitySlug === null
+      ? await requireActiveBrowserSessionSubject(ctx)
+      : await requireVerifiedActiveBrowserSession(ctx);
     if (!(await getAccountFeatureAccess(ctx.db, userId)).superAdmin) {
       throw new Error("Super-admin access is required.");
     }
@@ -3003,8 +3006,19 @@ export const setEventOwnerMode = mutation({
         note: `Expires ${new Date(mode.expiresAt).toISOString()}`,
         createdAt: now,
       });
+      await ctx.scheduler.runAt(mode.expiresAt, internal.events.expireEventOwnerMode, { userId, ...mode });
     }
     await ctx.db.patch(userId, { eventOwnerMode: mode });
+  },
+});
+
+export const expireEventOwnerMode = internalMutation({
+  args: { userId: v.id("users"), communityProfileId: v.id("profiles"), expiresAt: v.number() },
+  handler: async (ctx, { userId, communityProfileId, expiresAt }) => {
+    const mode = (await ctx.db.get(userId))?.eventOwnerMode;
+    if (mode?.communityProfileId === communityProfileId && mode.expiresAt === expiresAt && expiresAt <= Date.now()) {
+      await ctx.db.patch(userId, { eventOwnerMode: undefined });
+    }
   },
 });
 

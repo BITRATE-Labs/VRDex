@@ -39,6 +39,35 @@ it("discards only an authorized, current unpublished draft", async () => {
   const apiEvents = await t.query(internal.events.listCommunityManagedEventsForApiOwner, { ownerUserId: ids.owner });
   assert.deepEqual(apiEvents.map(event => event.id), [publishedId]);
 });
+it("resolves the Discord submission when its personal draft is discarded", async () => {
+  const { t, ids, actor } = await fixture();
+  const now = Date.now();
+  const { draftId, submissionId } = await t.run(async ({ db }) => {
+    const submissionId = await db.insert("discordPersonalIntakeSubmissions", {
+      actorUserId: ids.owner, discordUserId: "discord-user", channelId: "channel", messageId: "message",
+      interactionId: "interaction", fingerprint: "fingerprint", preparationStatus: "ready",
+      attachments: [{ id: "poster", url: "https://example.com/poster.png", contentType: "image/png", byteLength: 10 }],
+      createdAt: now, updatedAt: now, expiresAt: now + 60_000,
+    });
+    const draftId = await db.insert("eventIntakeDrafts", {
+      actorUserId: ids.owner, personalSubmissionId: submissionId, version: 1,
+      fields: { title: "Imported draft", sourceText: "Discord announcement" }, provenance: [],
+      createdAt: now, updatedAt: now, expiresAt: now + 60_000,
+    });
+    await db.patch(submissionId, { draftId });
+    return { draftId, submissionId };
+  });
+  await actor("owner").mutation(api.eventInventory.discardDraft, {
+    draft: { kind: "intake_draft", id: draftId, version: 1 },
+  });
+  const [draft, submission] = await t.run(({ db }) => Promise.all([db.get(draftId), db.get(submissionId)]));
+  assert.ok(draft?.resolvedAt);
+  assert.deepEqual(draft.fields, { title: "Imported draft" });
+  assert.equal(submission?.preparationStatus, "resolved");
+  assert.deepEqual(submission.attachments, []);
+  assert.equal(submission.expiresAt, draft.resolvedAt);
+});
+
 it("blocks discard until an older broadcast program has stopped", async () => {
   const { t, actor, event } = await fixture();
   const eventId = await event({ sourceType: "manual", contributorUserId: undefined, publicationState: "draft_private" });
@@ -55,6 +84,27 @@ it("blocks discard until an older broadcast program has stopped", async () => {
   await assert.rejects(owner.mutation(api.eventInventory.discardDraft, args), /Stop the active broadcast first/);
   await t.run(({ db }) => db.patch(sessionId, { status: "ended", workerTaskStatus: "stopped" }));
   await owner.mutation(api.eventInventory.discardDraft, args);
+});
+
+it("keeps a draft with a saved broadcast connection accessible", async () => {
+  const { t, actor, event, ids } = await fixture();
+  const eventId = await event({ sourceType: "manual", contributorUserId: undefined, publicationState: "draft_private" });
+  const version = await t.run(async ({ db }) => {
+    const programId = await db.insert("eventMediaPrograms", {
+      eventId, state: "draft", publicLinks: [], directFallbackLinks: [], createdAt: 1, updatedAt: 1,
+    });
+    await db.insert("eventMediaOutputs", {
+      programId, eventId, key: "primary", type: "vrcdn", accountModel: "operator_owned", state: "ready",
+      label: "VRCDN", playbackLinks: [], createdAt: 1, updatedAt: 1,
+      managedConnection: { communityProfileId: ids.community, provider: "vrcdn", revision: 1,
+        serverUrl: "rtmp://ingest.vrcdn.live/live", requestId: "fixture", testState: "not_tested" },
+    });
+    return (await db.get(eventId))!.updatedAt;
+  });
+  await assert.rejects(actor("owner").mutation(api.eventInventory.discardDraft, {
+    draft: { kind: "managed_event", id: eventId, version },
+  }), /BROADCAST_CONNECTED/);
+  assert.equal((await t.run(({ db }) => db.get(eventId)))?.draftDiscardedAt, undefined);
 });
 
 async function fixture() {

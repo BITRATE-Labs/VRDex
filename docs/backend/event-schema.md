@@ -35,7 +35,8 @@ community drafts that have never been published. Confirmation checks the latest
 draft version and the caller's authority. Personal Discord drafts also clear
 their import state. Community drafts retain their audit history and cannot be
 reopened, published or used for a broadcast after discard. The owner API
-and MCP event list also omit discarded drafts.
+and MCP event list also omit discarded drafts. An active broadcast or a saved
+managed connection prevents discard so the broadcast controls stay accessible.
 
 ## Event Times
 

@@ -125,18 +125,19 @@ describe("fork-aware preview workflows", () => {
     assert.deepEqual((deployDocument.on as { push: unknown }).push, { branches: ["codex/sandbox"] });
     const resolve = deploySteps.find(step => step.name === "Resolve pull request");
     const execute = new Function("core", "github", "context", "process", `return (async () => { ${resolve?.with?.script} })()`);
-    for (const [ref, repositoryId, sha, accepted] of [
-      ["refs/heads/codex/sandbox", 1176245711, "a".repeat(40), true],
-      ["refs/heads/main", 1176245711, "a".repeat(40), false],
-      ["refs/heads/codex/sandbox", 123, "a".repeat(40), false],
-      ["refs/heads/codex/sandbox", 1176245711, "invalid", false],
+    for (const [ref, repositoryId, senderId, sha, accepted] of [
+      ["refs/heads/codex/sandbox", 1176245711, 2165323, "a".repeat(40), true],
+      ["refs/heads/main", 1176245711, 2165323, "a".repeat(40), false],
+      ["refs/heads/codex/sandbox", 123, 2165323, "a".repeat(40), false],
+      ["refs/heads/codex/sandbox", 1176245711, 123, "a".repeat(40), false],
+      ["refs/heads/codex/sandbox", 1176245711, 2165323, "invalid", false],
     ] as const) {
       let failure = "";
       const outputs: Record<string, unknown> = {};
       await execute(
         { setFailed(message: string) { failure = message; }, setOutput(name: string, value: unknown) { outputs[name] = value; } },
         {},
-        { eventName: "push", ref, sha, payload: { repository: { id: repositoryId } } },
+        { eventName: "push", ref, sha, payload: { repository: { id: repositoryId }, sender: { id: senderId } } },
         { env: {} },
       );
       assert.equal(!failure, accepted);

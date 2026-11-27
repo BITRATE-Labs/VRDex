@@ -545,7 +545,8 @@ for the parent domain. See [Clerk's session token documentation](https://clerk.c
 For shared sandbox iteration, push the reviewed commit to `codex/sandbox`.
 In the BITRATE Labs repository, branch protection restricts direct pushes to
 `BASIC-BIT` and applies to admins. It disables force pushes and deletion. Keep
-this restriction in place while branch builds use deployment credentials.
+this restriction in place while branch builds use deployment credentials. The
+workflow also checks the push sender's GitHub account ID.
 When `VERCEL_SANDBOX_PROJECT_ID` is configured, only this branch can update the
 sandbox alias. Pushes queue and use the existing `sandbox-shared` Convex preview,
 so drafts and OAuth grants survive deploys. Before deployment the workflow
