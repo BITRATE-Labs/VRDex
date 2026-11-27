@@ -84,6 +84,16 @@ const terminalStates = {
   },
 } as const;
 
+function HandoffAccountNavigation() {
+  return (
+    <PageActions className="border-b border-[#182f36]/15 pb-5">
+      <Link className={buttonVariants({ size: "sm", variant: "ghost" })} href="/account">
+        Account
+      </Link>
+    </PageActions>
+  );
+}
+
 function TerminalInvitation({ preview }: { preview: Exclude<HandoffPreview, { state: "ready" }> }) {
   if (preview.state === "accepted") {
     return (
@@ -106,20 +116,36 @@ function TerminalInvitation({ preview }: { preview: Exclude<HandoffPreview, { st
   const content = terminalStates[preview.state];
 
   return (
-    <div className="max-w-xl pb-12 pt-2 sm:pb-16 sm:pt-8">
+    <section
+      aria-labelledby="handoff-terminal-title"
+      className="mx-auto w-full max-w-xl rounded-panel border border-[#182f36]/15 bg-white/70 p-5 sm:mt-12 sm:p-9"
+    >
       <p className="text-sm font-medium text-[#9f3f27]">Handoff unavailable</p>
-      <h1 className="mt-2 text-3xl font-semibold leading-tight text-balance sm:text-5xl">{content.title}</h1>
+      <h1 className="mt-2 text-3xl font-semibold leading-tight text-balance sm:text-4xl" id="handoff-terminal-title">
+        {content.title}
+      </h1>
       <p className="mt-3 text-base leading-7 text-muted">{content.message}</p>
-      <Link
-        className={cn(
-          buttonVariants({ size: "lg" }),
-          "mt-5 border-[#182f36]/30 bg-white hover:border-[#105c58] hover:bg-[#dcefed] focus-visible:ring-[#105c58]",
-        )}
-        href="/"
-      >
-        Return to VRDex
-      </Link>
-    </div>
+      <PageActions className="mt-5">
+        <Link
+          className={cn(
+            buttonVariants({ size: "lg", variant: "primary" }),
+            "bg-[#105c58] [--inverse:#fff] hover:bg-[#0f4b48] focus-visible:ring-[#105c58] focus-visible:ring-offset-2",
+          )}
+          href="/"
+        >
+          Return to VRDex
+        </Link>
+        <Link
+          className={cn(
+            buttonVariants({ size: "lg", variant: "ghost" }),
+            "underline underline-offset-4 hover:bg-[#dcefed] focus-visible:ring-[#105c58]",
+          )}
+          href="/account"
+        >
+          Account
+        </Link>
+      </PageActions>
+    </section>
   );
 }
 
@@ -351,13 +377,23 @@ function ConnectedHandoffInvitation({ fixture, token }: { fixture: HandoffFixtur
   const viewer = useQuery(api.accounts.viewer, fixture ? "skip" : {});
 
   if (fixture?.loading || (!fixture && (previewResult === undefined || viewer === undefined))) {
-    return <LoadingInvitation />;
+    return (
+      <>
+        <HandoffAccountNavigation />
+        <LoadingInvitation />
+      </>
+    );
   }
 
   const preview = normalizeHandoffPreview(fixture ? fixture.preview : previewResult);
 
   if (preview.state !== "ready") {
-    return <TerminalInvitation preview={preview} />;
+    return (
+      <>
+        {preview.state === "accepted" ? <HandoffAccountNavigation /> : null}
+        <TerminalInvitation preview={preview} />
+      </>
+    );
   }
 
   const viewerState: ViewerState = fixture?.viewerState
@@ -369,6 +405,7 @@ function ConnectedHandoffInvitation({ fixture, token }: { fixture: HandoffFixtur
 
   return (
     <>
+      <HandoffAccountNavigation />
       <PreparedIdentity preview={preview} />
       <ReviewInvitation
         key={`${token}:${defaultHandoffSelectionKey(preview.fields)}`}
@@ -391,13 +428,16 @@ class HandoffErrorBoundary extends Component<{ children: ReactNode }, { hasError
   render() {
     if (this.state.hasError) {
       return (
-        <div className="py-16">
-          <p className="text-sm font-medium text-[#9f3f27]">Handoff unavailable</p>
-          <h1 className="mt-3 text-4xl font-semibold leading-tight sm:text-5xl">Invitation could not be opened</h1>
-          <p className="mt-4 max-w-xl text-base leading-7 text-muted">
-            Refresh the page or ask the sender to confirm the invitation.
-          </p>
-        </div>
+        <>
+          <HandoffAccountNavigation />
+          <div className="py-16">
+            <p className="text-sm font-medium text-[#9f3f27]">Handoff unavailable</p>
+            <h1 className="mt-3 text-4xl font-semibold leading-tight sm:text-5xl">Invitation could not be opened</h1>
+            <p className="mt-4 max-w-xl text-base leading-7 text-muted">
+              Refresh the page or ask the sender to confirm the invitation.
+            </p>
+          </div>
+        </>
       );
     }
 
@@ -409,12 +449,6 @@ export function HandoffInvitation({ fixture, token }: { fixture: HandoffFixture 
   return (
     <PageShell className="handoff-shell ph-no-capture py-6 sm:py-8" data-ph-no-capture>
       <PageContainer max="5xl">
-        <PageActions className="border-b border-[#182f36]/15 pb-5">
-
-          <Link className={buttonVariants({ size: "sm", variant: "ghost" })} href="/account">
-            Account
-          </Link>
-        </PageActions>
         <HandoffErrorBoundary>
           <ConnectedHandoffInvitation fixture={fixture} token={token} />
         </HandoffErrorBoundary>

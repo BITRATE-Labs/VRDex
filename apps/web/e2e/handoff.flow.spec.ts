@@ -31,11 +31,15 @@ for (const state of [
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     const main = page.getByRole("main");
     await expect(main.getByRole("heading", { level: 1, name: state.heading, exact: true })).toBeVisible();
-    const recovery = main.getByRole("link", { name: "Return to VRDex", exact: true });
+    const terminal = main.getByRole("region", { name: state.heading, exact: true });
+    const actions = terminal.getByRole("navigation", { name: "Page", exact: true });
+    await expect(actions.getByRole("link")).toHaveText(["Return to VRDex", "Account"]);
+    await expect(actions.getByRole("link", { name: "Account", exact: true })).toHaveAttribute("href", "/account");
+    const recovery = actions.getByRole("link", { name: "Return to VRDex", exact: true });
     await expect(recovery).toBeVisible();
     await expect(recovery).toHaveAttribute("href", "/");
-    await expect(recovery).toHaveCSS("color", "rgb(24, 47, 54)");
-    await expect(recovery).toHaveCSS("background-color", "rgb(255, 255, 255)");
+    await expect(recovery).toHaveCSS("color", "rgb(255, 255, 255)");
+    await expect(recovery).toHaveCSS("background-color", "rgb(16, 92, 88)");
   });
 }
 
