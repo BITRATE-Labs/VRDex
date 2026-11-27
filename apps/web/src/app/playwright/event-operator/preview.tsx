@@ -176,8 +176,12 @@ export function EventOperatorFixture({ legacySettings = false, lineupAssignment 
             })),
           }));
         }}
-        onAssign={async ({ slotId, sourceId }) => {
-          const saved = status.sources.find(source => source.sourceId === sourceId);
+        onAssign={async ({ slotId, sourceId, url }) => {
+          const canonical = url === undefined ? undefined : parseBroadcastInputUrl(url);
+          const saved = canonical ? {
+            ...fixtureSource("pasted", "Pasted"),
+            input: canonical, publicUrl: broadcastInputPublicUrl(canonical),
+          } : status.sources.find(source => source.sourceId === sourceId);
           const slot = status.lineupSlots.find(entry => entry.id === slotId);
           const key = `override-${slotId}`;
           setStatus(value => {

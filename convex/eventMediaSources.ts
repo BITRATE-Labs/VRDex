@@ -4,7 +4,7 @@ import { internalMutation, mutation, type MutationCtx } from "./_generated/serve
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { requireActiveBrowserSessionSubject } from "./_browserSessionAuthority";
-import { eventOutputConfigurationLocked, getLatestEventMediaProgram, getMediaManageableEventBySlug, getOrCreateEventMediaProgram, recordEventMediaAuditEvent } from "./events";
+import { eventOutputConfigurationLocked, getLatestEventMediaProgram, getMediaManageableEventBySlug, getOpenEventMediaSession, getOrCreateEventMediaProgram, recordEventMediaAuditEvent } from "./events";
 import { EVENT_BROADCAST_MAX_SOURCES } from "./_eventBroadcastInputs";
 import { eventMediaSourceBroadcastInput, parseBroadcastInputUrl, broadcastInputPublicUrl, listUsableEventMediaSources } from "./_eventBroadcastSources";
 import { normalizeProfileInlineText } from "./_profileSubmissions";
@@ -13,6 +13,15 @@ function sourceLabel(value: string): string {
   const label = normalizeProfileInlineText(value);
   if (label.length < 1 || label.length > 120) throw new Error("Source label must be 1 to 120 characters.");
   return label;
+}
+
+async function requireUnassignedSource(ctx: MutationCtx, sourceId: Id<"eventMediaSources">) {
+  for await (const row of ctx.db.query("eventMediaSources")
+    .withIndex("by_assignedFromSourceId", q => q.eq("assignedFromSourceId", sourceId))) {
+    if (row.state === "disabled" || !row.eventSlotId) continue;
+    const slot = await ctx.db.get(row.eventSlotId);
+    if (slot?.eventId === row.eventId) throw Error("Clear or reassign the lineup slots using this input first.");
+  }
 }
 
 const sourceExpectationArgs = {expectedSourceRevision:v.optional(v.number()),expectedSessionId:v.optional(v.id("eventMediaSessions")),expectedIntentSequence:v.optional(v.number())};
@@ -42,6 +51,7 @@ async function insertSource(ctx: MutationCtx, args: { currentSlug: string; label
   const label = sourceLabel(args.label);
   const previous = args.sourceId === undefined ? undefined : (await sourceAuthority(ctx, args.currentSlug, args.sourceId, args)).source;
   if (previous?.state === "disabled") throw new Error("Event source is disabled.");
+  if (previous) await requireUnassignedSource(ctx, previous._id);
   const now = Date.now();
   const programId = await getOrCreateEventMediaProgram(ctx.db, event, now);
   if (args.idempotencyKey !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(args.idempotencyKey))
@@ -73,40 +83,54 @@ export const assignToSlot = mutation({
     currentSlug: v.string(),
     slotId: v.id("eventSlots"),
     sourceId: v.union(v.id("eventMediaSources"), v.null()),
+    url: v.optional(v.string()),
   },
-  handler: async (ctx, { currentSlug, slotId, sourceId }) => {
+  handler: async (ctx, { currentSlug, slotId, sourceId, url }) => {
     const { subject: actor } = await requireActiveBrowserSessionSubject(ctx);
     const { event } = await getMediaManageableEventBySlug(ctx, currentSlug, actor);
-    const program = await getLatestEventMediaProgram(ctx.db, event._id);
     const slot = await ctx.db.get(slotId);
-    if (!program || slot?.eventId !== event._id) throw Error("Lineup slot was not found.");
-    if (await eventOutputConfigurationLocked(ctx.db, program)) throw Error("Stop the broadcast before assigning a lineup input.");
+    if (slot?.eventId !== event._id) throw Error("Lineup slot was not found.");
+    const savedProgram = await getLatestEventMediaProgram(ctx.db, event._id);
+    const program = savedProgram ?? (url === undefined ? null :
+      await ctx.db.get(await getOrCreateEventMediaProgram(ctx.db, event, Date.now())));
+    if (!program) throw Error("Broadcast program was not found.");
 
     const key = `override-${slotId}`;
     const existing = await ctx.db.query("eventMediaSources")
       .withIndex("by_programId_key", q => q.eq("programId", program._id).eq("key", key)).unique();
+    const clearing = sourceId === null && url === undefined;
+    if (sourceId !== null && url !== undefined) throw Error("Choose one lineup input.");
+    if (await eventOutputConfigurationLocked(ctx.db, program)) {
+      const session = await getOpenEventMediaSession(ctx.db, program);
+      if (!session || session.status === "stopping" || session.stopRequestedAt !== undefined ||
+          clearing || (existing && existing.state !== "disabled")) {
+        throw Error("Stop the broadcast before changing an assigned lineup input.");
+      }
+    }
     const now = Date.now();
-    if (sourceId === null) {
+    if (clearing) {
       if (!existing || existing.state === "disabled") return;
       await ctx.db.patch(existing._id, { state: "disabled", updatedAt: now });
       await recordEventMediaAuditEvent(ctx.db, { programId: program._id, eventId: event._id, sourceId: existing._id, actor, action: "lineup_input_cleared", createdAt: now });
       return;
     }
 
-    const source = await ctx.db.get(sourceId);
-    const input = source && eventMediaSourceBroadcastInput(source);
-    if (!source || !input || source.eventId !== event._id || source.programId !== program._id ||
+    const source = sourceId ? await ctx.db.get(sourceId) : null;
+    if (sourceId !== null && (!source || source.eventId !== event._id || source.programId !== program._id ||
         source.state === "disabled" || source.temporaryExpiresAt !== undefined || source.eventSlotId !== undefined ||
-        source.profileProjection || source.sourceProfileId !== undefined) {
+        source.profileProjection || source.sourceProfileId !== undefined)) {
       throw Error("Choose a saved input for this event.");
     }
+    const input = url !== undefined ? parseBroadcastInputUrl(url) : source && eventMediaSourceBroadcastInput(source);
+    if (!input) throw Error("Choose a valid lineup input.");
     if ((!existing || existing.state === "disabled") &&
         (await listUsableEventMediaSources(ctx.db, program._id, EVENT_BROADCAST_MAX_SOURCES)).length >= EVENT_BROADCAST_MAX_SOURCES) {
       throw Error("Event broadcast source limit reached.");
     }
     const assignment = {
-      eventSlotId: slotId, position: slot.position, label: slot.displayLabel,
-      type: source.type, purpose: "program" as const, state: "ready" as const,
+      eventSlotId: slotId, assignedFromSourceId: sourceId ?? undefined, position: slot.position, label: slot.displayLabel,
+      type: input.kind === "vrcdn" ? "vrcdn_link" as const : input.kind === "twitch" ? "twitch_watch" as const : "hls_url" as const,
+      purpose: "program" as const, state: "ready" as const,
       input, publicUrl: broadcastInputPublicUrl(input), updatedAt: now,
       revision: existing ? (existing.revision ?? 1) + 1 : 1,
     };
@@ -154,6 +178,7 @@ export const remove = mutation({
   handler: async (ctx, args) => {
     const { actor, event, source, program } = await sourceAuthority(ctx, args.currentSlug, args.sourceId, args);
     if (source.state === "disabled") return;
+    await requireUnassignedSource(ctx, source._id);
     await disableSourceControl(ctx.db,source,program);
     const now = Date.now();
     await ctx.db.patch(source._id, { state: "disabled", updatedAt: now });

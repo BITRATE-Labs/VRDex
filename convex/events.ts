@@ -1658,7 +1658,7 @@ async function getWritableEventMediaSession(
   return session;
 }
 
-async function getOpenEventMediaSession(
+export async function getOpenEventMediaSession(
   db: DatabaseReader,
   program: Doc<"eventMediaPrograms">,
 ): Promise<Doc<"eventMediaSessions"> | null> {

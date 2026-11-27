@@ -1646,6 +1646,7 @@ export default defineSchema({
     .index("by_state_updatedAt", ["state", "updatedAt"]),
   eventMediaSources: defineTable({
     temporaryExpiresAt: v.optional(v.number()),
+    assignedFromSourceId: v.optional(v.id("eventMediaSources")),
     input: v.optional(broadcastInputValidator),
     revision: v.optional(v.number()),
     programId: v.id("eventMediaPrograms"),
@@ -1670,6 +1671,7 @@ export default defineSchema({
     .index("by_programId_position", ["programId", "position"])
     .index("by_programId_state_position", ["programId", "state", "position"])
     .index("by_programId_eventSlotId", ["programId", "eventSlotId"])
+    .index("by_assignedFromSourceId", ["assignedFromSourceId"])
     .index("by_programId_key", ["programId", "key"])
     .index("by_eventId_state", ["eventId", "state"]),
   eventMediaScenes: defineTable({

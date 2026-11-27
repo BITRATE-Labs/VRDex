@@ -384,12 +384,14 @@ async function configuration(ctx: MutationCtx, { session, program, event }: NonN
     if (authored.length > 64)
         throw new Error("Event schedule exceeds worker limits.");
     const slots = [];
+    const assignedSlots = new Set<string>();
     for (const slot of authored) {
         const assigned = await assignedEventMediaSource(ctx.db, program._id, slot);
+        if (assigned) assignedSlots.add(slot._id);
         let source = await ctx.db.query("eventMediaSources").withIndex("by_programId_key", q => q.eq("programId", program._id).eq("key", `slot-${slot._id}`)).first();
         if (slot.personProfileId) {
             const profile = await ctx.db.get(slot.personProfileId);
-            const input = !assigned && profile && canReadProfile("public", profile) ? resolveBroadcastInput({ choices: eventProfileBroadcastInputChoices(profile), explicitInput: slot.broadcastInput, legacySelectedStreamId: slot.selectedStreamId }) : undefined;
+            const input = profile && canReadProfile("public", profile) ? resolveBroadcastInput({ choices: eventProfileBroadcastInputChoices(profile), explicitInput: slot.broadcastInput, legacySelectedStreamId: slot.selectedStreamId }) : undefined;
             const publicUrl = input ? broadcastInputPublicUrl(input) : undefined;
             if (input && !source) {
                 const id = await ctx.db.insert("eventMediaSources", { programId: program._id, eventId: event._id, key: `slot-${slot._id}`, position: slot.position, type: input.kind === "vrcdn" ? "vrcdn_link" : "twitch_watch", input, revision: 1, purpose: "program", state: "ready", label: slot.displayLabel, eventSlotId: slot._id, sourceProfileId: slot.personProfileId, profileProjection: true, projectionAvailable: true, publicUrl, createdAt: Date.now(), updatedAt: Date.now() });
@@ -416,7 +418,12 @@ async function configuration(ctx: MutationCtx, { session, program, event }: NonN
     for (const slotId of [undefined, ...authored.map(slot => slot._id)]) {
         const eligible = await ctx.db.query("eventMediaSources")
             .withIndex("by_programId_eventSlotId", q => q.eq("programId", program._id).eq("eventSlotId", slotId))
-            .filter(q => q.and(q.eq(q.field("eventId"), event._id), q.neq(q.field("state"), "disabled"), q.neq(q.field("projectionAvailable"), false)))
+            .filter(q => q.and(
+                q.eq(q.field("eventId"), event._id),
+                q.neq(q.field("state"), "disabled"),
+                q.neq(q.field("projectionAvailable"), false),
+                q.neq(q.field("key"), slotId && assignedSlots.has(slotId) ? `slot-${slotId}` : null),
+            ))
             .take(EVENT_BROADCAST_MAX_SOURCES + 1 - sources.length);
         sources.push(...eligible);
         if (sources.length > EVENT_BROADCAST_MAX_SOURCES)

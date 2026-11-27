@@ -62,7 +62,8 @@ export function EventOperatorSources({
     [busy, setBusy] = useState(false),
     [failed, setFailed] = useState(false);
   const [slotId, setSlotId] = useState<LineupAssignment["slotId"]>();
-  const [lineupInput, setLineupInput] = useState<LineupAssignment["sourceId"]>();
+  const [lineupInput, setLineupInput] = useState<LineupAssignment["sourceId"] | "paste">();
+  const [slotUrl, setSlotUrl] = useState("");
   const assigned = sources.find(source => source.eventSlotId === slotId && source.key.startsWith("override-"));
   const assignable = sources.filter(source => source.assignable);
   const lock = useRef(false);
@@ -319,15 +320,18 @@ export function EventOperatorSources({
           </div>
         </fieldset>
       </details>
-      {onAssign && control.status.lineupSlots?.length > 0 && (assignable.length > 0 || sources.some(source => source.key.startsWith("override-"))) ? (
-        <details>
+      {onAssign && control.status.lineupSlots?.length > 0 ? (
+        <details onToggle={(event) => {
+          if (event.currentTarget.open && !slotId) setSlotId(control.status.currentSlot?.slotId);
+        }}>
           <summary className="cursor-pointer text-sm">Assign lineup input</summary>
-          <fieldset disabled={!canControl || busy || control.status.outputConfigurationLocked} className="mt-4 grid gap-3 sm:grid-cols-2">
+          <fieldset disabled={!canControl || busy} className="mt-4 grid gap-3 sm:grid-cols-2">
             <Field>
               Lineup slot
               <Select value={slotId ?? ""} onChange={(event) => {
                 setSlotId(control.status.lineupSlots.find(slot => slot.id === event.target.value)?.id);
                 setLineupInput(undefined);
+                setSlotUrl("");
               }}>
                 <option value="">Choose a slot</option>
                 {control.status.lineupSlots.map(slot => <option key={slot.id} value={slot.id}>{slot.label} · {new Date(slot.startAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</option>)}
@@ -335,18 +339,34 @@ export function EventOperatorSources({
             </Field>
             <Field>
               Saved input
-              <Select disabled={!slotId} value={lineupInput === null ? "automatic" : lineupInput ?? ""} onChange={(event) => setLineupInput(event.target.value === "automatic" ? null : assignable.find(source => source.sourceId === event.target.value)?.sourceId)}>
+              <Select disabled={!slotId || (Boolean(assigned) && control.status.outputConfigurationLocked)}
+                value={lineupInput === null ? "automatic" : lineupInput ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setLineupInput(value === "paste" ? value : value === "automatic" ? null : assignable.find(source => source.sourceId === value)?.sourceId);
+                }}>
                 <option value="">Choose an input</option>
-                <option value="automatic">Automatic</option>
+                <option value="automatic" disabled={control.status.outputConfigurationLocked}>Automatic</option>
+                <option value="paste">Paste a link</option>
                 {assignable.map(source => <option key={source.sourceId} value={source.sourceId}>{source.label}</option>)}
               </Select>
             </Field>
-            {assigned?.publicUrl ? <a className="text-sm text-accent" href={assigned.publicUrl}>{assigned.publicUrl}</a> : null}
+            {lineupInput === "paste" ? (
+              <Field>
+                Stream link
+                <Input autoFocus value={slotUrl} onChange={(event) => setSlotUrl(event.target.value)} />
+              </Field>
+            ) : null}
+            {assigned?.publicUrl ? <a className="break-all text-sm text-accent" href={assigned.publicUrl}>{assigned.publicUrl}</a> : null}
             <div>
-              <Button variant="secondary" disabled={!slotId || lineupInput === undefined || (lineupInput === null && !assigned)} onClick={() => {
+              <Button variant="secondary" disabled={!slotId || lineupInput === undefined || (lineupInput === null && !assigned) ||
+                (lineupInput === "paste" && !slotUrl.trim()) || (Boolean(assigned) && control.status.outputConfigurationLocked)} onClick={() => {
                 if (slotId && lineupInput !== undefined) void save(async () => {
-                  await onAssign({ slotId, sourceId: lineupInput });
+                  await onAssign(lineupInput === "paste"
+                    ? { slotId, sourceId: null, url: slotUrl.trim() }
+                    : { slotId, sourceId: lineupInput });
                   setLineupInput(undefined);
+                  setSlotUrl("");
                 });
               }}>Save assignment</Button>
             </div>

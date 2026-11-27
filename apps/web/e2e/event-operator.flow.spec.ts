@@ -198,7 +198,8 @@ test("legacy stream settings stay visible until an admitted profile is saved @fl
 test("assigns a saved input to a lineup slot @flow @fixture", async ({ page }, info) => {
   await page.goto("/playwright/event-operator?lineupAssignment=1");
   await page.getByText("Assign lineup input", { exact: true }).click();
-  await page.getByRole("combobox", { name: "Lineup slot", exact: true }).selectOption("aurora-slot");
+  await page.getByRole("combobox", { name: "Lineup slot", exact: true }).selectOption("slot-a");
+  await expect(page.getByRole("combobox", { name: "Saved input", exact: true }).locator("option")).toHaveText(["Choose an input", "Automatic", "Paste a link", "Custom"]);
   await page.getByRole("combobox", { name: "Saved input", exact: true }).selectOption({ label: "Custom" });
   await page.getByRole("button", { name: "Save assignment" }).click();
   await expect(page.getByRole("link", { name: "https://www.twitch.tv/custom", exact: true })).toBeVisible();
@@ -206,4 +207,17 @@ test("assigns a saved input to a lineup slot @flow @fixture", async ({ page }, i
   await page.getByRole("combobox", { name: "Saved input", exact: true }).selectOption("automatic");
   await page.getByRole("button", { name: "Save assignment" }).click();
   await expect(page.getByRole("link", { name: "https://www.twitch.tv/custom", exact: true })).toHaveCount(0);
+});
+
+test("fills a missing lineup input during a broadcast @flow @fixture", async ({ page }, info) => {
+  await page.goto("/playwright/event-operator");
+  await page.getByText("Assign lineup input", { exact: true }).click();
+  await page.getByRole("combobox", { name: "Lineup slot", exact: true }).selectOption("slot-a");
+  const input = page.getByRole("combobox", { name: "Saved input", exact: true });
+  await input.selectOption("paste");
+  await page.getByRole("textbox", { name: "Stream link", exact: true }).fill("https://www.twitch.tv/guest-live");
+  await page.getByRole("button", { name: "Save assignment" }).click();
+  await expect(page.getByRole("link", { name: "https://www.twitch.tv/guest-live", exact: true })).toBeVisible();
+  await expect(input).toBeDisabled();
+  await page.screenshot({ path: info.outputPath("lineup-input-added-live.png") });
 });
