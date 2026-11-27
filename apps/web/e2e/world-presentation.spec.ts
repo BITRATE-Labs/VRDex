@@ -30,11 +30,21 @@ test("world shows artwork and linked creator pictures without placeholder copy",
     await expect(event.getByText("Confirmed venue", { exact: true })).toBeVisible();
     await expect(event.getByText("/", { exact: true })).toHaveCount(0);
   }
-  await expect(upcoming.getByRole("link", { name: "Afterglow event listing", exact: true })).toHaveAttribute(
-    "href", "https://example.invalid/events/afterglow-harbor-sessions",
-  );
-  const [phoneUpcoming, phoneRecent] = await Promise.all([upcoming.boundingBox(), recent.boundingBox()]);
-  if (!phoneUpcoming || !phoneRecent) throw new Error("Missing phone event card bounds");
+  const upcomingSource = upcoming.getByRole("link", { name: "Afterglow event listing", exact: true });
+  const upcomingSummary = upcoming.getByText("Late-night harbor club session with house, trance, and warm social energy.");
+  await expect(upcomingSource).toHaveAttribute("href", "https://example.invalid/events/afterglow-harbor-sessions");
+  await expect(recent.getByText("Community-submitted event", { exact: true })).toBeVisible();
+  await expect(recent.getByRole("link")).toHaveCount(0);
+  const [phoneUpcoming, phoneRecent, phoneSource, phoneSummary] = await Promise.all([
+    upcoming.boundingBox(),
+    recent.boundingBox(),
+    upcomingSource.boundingBox(),
+    upcomingSummary.boundingBox(),
+  ]);
+  if (!phoneUpcoming || !phoneRecent || !phoneSource || !phoneSummary) {
+    throw new Error("Missing phone event card bounds");
+  }
+  expect(phoneSource.y + phoneSource.height).toBeLessThan(phoneSummary.y);
   expect(phoneRecent.x).toBeCloseTo(phoneUpcoming.x, 0);
   expect(phoneRecent.y).toBeGreaterThan(phoneUpcoming.y + phoneUpcoming.height);
 
