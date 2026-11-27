@@ -1568,6 +1568,41 @@ export function searchPlaywrightDiscoveryFixture(query: string): PlaywrightDisco
 
   const normalized = query.trim().toLowerCase();
 
+  if (normalized === "afterglow event schedule") {
+    const now = Date.now();
+    const hour = 60 * 60 * 1000;
+    const ended: PublicSearchResult = {
+      entityType: "event",
+      slug: eventSlug,
+      routePath: `/${communitySlug}/events/${eventSlug}`,
+      title: eventPreview.title,
+      subtitle: eventPreview.communityName,
+      summary: eventPreview.summary,
+      imageUrl: eventPreview.thumbnailImageUrl,
+      startsAt: eventStartAt,
+      endAt: eventEndAt,
+      score: 260,
+    };
+    const event = (slug: string, title: string): PublicSearchResult => ({
+      entityType: "event",
+      slug,
+      title,
+      routePath: `/${communitySlug}/events/${slug}`,
+      subtitle: eventPreview.communityName,
+      score: 250,
+    });
+    return { kind: "handled", results: [
+      { ...event("playwright-afterglow-summer-signal", "Afterglow Summer Signal"), summary: "A night of melodic house and trance in Neon Harbor.", startsAt: now + 24 * hour, endAt: now + 27 * hour, score: 280 },
+      ended,
+      { ...event(eventWatchSlug, "Afterglow Watch Room"), startsAt: watchEventStartAt, endAt: watchEventEndAt },
+      { ...event("playwright-afterglow-live-session", "Afterglow Live Session"), startsAt: now - hour, endAt: now + hour },
+      { ...event("playwright-afterglow-late-shift", "Afterglow Late Shift"), startsAt: now - 72 * hour },
+      { ...event("playwright-date-only-event", "Afterglow Open Decks"), scheduleKind: "date_only", eventDate: "2026-07-04" },
+      { ...event("playwright-afterglow-studio-session", "Afterglow Studio Session"), startsAt: now - hour, endAt: now - 2 * hour },
+      ...discoveryResults.filter((result) => result.slug === communitySlug),
+    ] };
+  }
+
   if (normalized === "playwright-search-unavailable") {
     return { kind: "error" };
   }

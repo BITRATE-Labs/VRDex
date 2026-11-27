@@ -320,7 +320,15 @@ function SearchResultImage({ result }: { result: PublicSearchResult }) {
   );
 }
 
-function SearchResultCard({ result }: { result: PublicSearchResult }) {
+function SearchResultCard({ referenceTime, result }: { referenceTime: number; result: PublicSearchResult }) {
+  const { endAt, startsAt } = result;
+  const hasTimedRange = result.entityType === "event" && result.scheduleKind !== "date_only"
+    && startsAt !== undefined && Number.isFinite(startsAt)
+    && endAt !== undefined && Number.isFinite(endAt)
+    && endAt > startsAt;
+  const eventStatus = hasTimedRange
+    ? endAt < referenceTime ? "Ended" : startsAt > referenceTime ? "Upcoming" : "In progress"
+    : undefined;
   const subtitle = resultSubtitle(result);
   const trustLabel = result.trustLabel === "community_submitted"
     ? "Community submitted"
@@ -365,9 +373,26 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
           </span>
           <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0 text-xs text-muted sm:text-sm">
             <span className="font-medium text-foreground">{entityLabel(result)}</span>
+            {eventStatus ? (
+              <span className={cn(
+                "rounded-control border px-1.5 py-0.5 text-xs leading-4 font-semibold",
+                eventStatus === "Ended"
+                  ? "border-border-strong bg-surface-elevated text-muted"
+                  : "border-accent/40 bg-accent-muted text-accent-strong",
+              )}>
+                {eventStatus}
+              </span>
+            ) : null}
             {trustLabel ? <span className="text-xs sm:border-s sm:border-border sm:ps-2">{trustLabel}</span> : null}
             {subtitle ? <span>{subtitle}</span> : null}
-            {result.startsAt === undefined && result.eventDate === undefined ? null : <ViewerLocalEventDateTime className="text-sm text-accent-strong" timestamp={result.startsAt} eventDate={result.eventDate} scheduleKind={result.scheduleKind} />}
+            {startsAt === undefined && result.eventDate === undefined ? null : (
+              <ViewerLocalEventDateTime
+                className={cn("text-sm", eventStatus === "Ended" ? "text-muted" : "text-accent-strong")}
+                timestamp={startsAt}
+                eventDate={result.eventDate}
+                scheduleKind={result.scheduleKind}
+              />
+            )}
           </span>
           {!spreadSummary ? summary : null}
           {roleLabels.length > 0 ? <span className="text-xs font-semibold text-foreground">{roleLabels.join(" · ")}</span> : null}
@@ -697,11 +722,13 @@ function filterLabel(filter: SearchResultFilter): string {
 export function SearchResultsPage({
   activeFilter,
   query,
+  referenceTime,
   results,
   status,
 }: {
   activeFilter: SearchResultFilter;
   query: string;
+  referenceTime: number;
   results: PublicSearchResult[];
   status: DiscoveryStatus;
 }) {
@@ -773,7 +800,7 @@ export function SearchResultsPage({
               </Card>
             ) : (
               <div className="grid gap-2.5 sm:gap-4">
-                {results.map((result) => <SearchResultCard key={`${result.entityType}-${result.slug}`} result={result} />)}
+                {results.map((result) => <SearchResultCard key={`${result.entityType}-${result.slug}`} referenceTime={referenceTime} result={result} />)}
               </div>
             )}
           </section>
