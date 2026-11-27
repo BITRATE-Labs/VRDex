@@ -215,9 +215,9 @@ test("fills a missing lineup input during a broadcast @flow @fixture", async ({ 
   await page.getByRole("combobox", { name: "Lineup slot", exact: true }).selectOption("slot-a");
   const input = page.getByRole("combobox", { name: "Saved input", exact: true });
   await input.selectOption("paste");
-  await page.getByRole("textbox", { name: "Stream link", exact: true }).fill("https://www.twitch.tv/guest-live");
+  await page.getByRole("textbox", { name: "Stream link", exact: true }).fill("rtspt://stream.vrcdn.live/live/lateguest");
   await page.getByRole("button", { name: "Save assignment" }).click();
-  await expect(page.getByRole("link", { name: "https://www.twitch.tv/guest-live", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "https://stream.vrcdn.live/live/lateguest.live.ts", exact: true })).toBeVisible();
   await expect(input).toBeDisabled();
   await page.screenshot({ path: info.outputPath("lineup-input-added-live.png") });
 });
