@@ -11,9 +11,10 @@ export type InterestButtonProps = {
   onToggle: () => void;
   size?: "default" | "compact";
   className?: string;
+  visibleLabelClassName?: string;
 };
 
-export function InterestButton({ label, state, onToggle, size = "default", className }: InterestButtonProps) {
+export function InterestButton({ label, state, onToggle, size = "default", className, visibleLabelClassName }: InterestButtonProps) {
   const { iconRef, onClick, onAnimationEnd } = usePreferenceSelectionPop(state === "saved", onToggle);
   const title = state === "included" ? "Included with event" : state === "saved" ? "Remove interest" : "Interested";
   return (
@@ -25,6 +26,7 @@ export function InterestButton({ label, state, onToggle, size = "default", class
         <path data-glyph="check" className={styles.check} d="m5 12 4.5 4.5L19 7" />
         <path data-glyph="remove" className={styles.remove} d="m6 6 12 12M18 6 6 18" />
       </svg>
+      {visibleLabelClassName && <span className={visibleLabelClassName} aria-hidden="true">{title}</span>}
     </button>
   );
 }

@@ -10,9 +10,10 @@ export type FavoriteButtonProps = {
   onToggle: () => void;
   size?: "default" | "compact";
   className?: string;
+  visibleLabelClassName?: string;
 };
 
-export function FavoriteButton({ label, pressed, onToggle, size = "default", className }: FavoriteButtonProps) {
+export function FavoriteButton({ label, pressed, onToggle, size = "default", className, visibleLabelClassName }: FavoriteButtonProps) {
   const { iconRef, onClick, onAnimationEnd } = usePreferenceSelectionPop(pressed, onToggle);
   const name = `${pressed ? "Remove favorite" : "Favorite"}: ${label}`;
   return (
@@ -21,6 +22,7 @@ export function FavoriteButton({ label, pressed, onToggle, size = "default", cla
       <svg ref={iconRef} onAnimationEnd={onAnimationEnd} viewBox="0 0 24 24" aria-hidden="true" className={styles.icon}>
         <path d="m12 3 2.78 5.63L21 9.54l-4.5 4.39 1.06 6.2L12 17.2l-5.56 2.93 1.06-6.2L3 9.54l6.22-.91Z" />
       </svg>
+      {visibleLabelClassName && <span className={visibleLabelClassName} aria-hidden="true">Favorite</span>}
     </button>
   );
 }

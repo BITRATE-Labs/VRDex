@@ -69,6 +69,7 @@ export function DiscoveryClubCard({
             pressed={favorite}
             onToggle={() => onFavorite(club.id)}
             className={styles.favorite}
+            visibleLabelClassName={styles.mobileActionLabel}
           />
         </div>
         <div className={styles.clubFooter}>
