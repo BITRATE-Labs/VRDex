@@ -402,13 +402,15 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
   const seriesPath = event.seriesId && event.communitySlug ? `/${event.communitySlug}/series/${event.seriesId}` : null;
   const publicLinks = event.mediaLinks.filter((link) => parseVrcdnStreamLinks(link.url) === null);
   const eventPath = publicEventPath(event);
+  const hasLocationLinks = event.worlds.length > 0 || Boolean(sourceUrl);
+  const hasCompactHost = hasLocationLinks && Boolean(event.communitySlug || event.communityName);
   const standaloneHost = Boolean(event.communitySlug || event.communityName)
     && !bannerStyle && !event.posterImageUrl && !event.watchSurfaceEnabled
     && event.worlds.length === 0 && lineup.length === 0 && event.slots.length === 0
     && !seriesPath && !sourceUrl && event.mediaLinks.length === 0;
   const locationLinkClassName = cn(
     actionCardVariants({ padding: "sm" }),
-    "w-full min-w-0 [overflow-wrap:anywhere] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus sm:w-auto",
+    "min-h-11 min-w-0 [overflow-wrap:anywhere] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus max-sm:flex-1 max-sm:basis-32 max-sm:px-2 max-sm:py-1.5 max-sm:leading-4",
   );
 
   const hostDetails = event.communitySlug ? (
@@ -465,12 +467,12 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
               >
                 <EventWatchForEvent event={event} />
               </div>
-              {event.worlds.length > 0 || sourceUrl ? (
+              {hasLocationLinks ? (
                 <div className={cn(styles.locationLinks, "flex flex-wrap gap-2")}>
                   {event.worlds.map((world) => (
-                    <Link className={locationLinkClassName} href={`/${world.slug}`} key={world.slug}>
+                    <Link className={cn(locationLinkClassName, "max-sm:border-accent/30 max-sm:bg-accent/10")} href={`/${world.slug}`} key={world.slug}>
                       <span className={actionLabelClassName}>{world.displayName}</span>
-                      <span className={actionMetaClassName}>World</span>
+                      <span className={cn(actionMetaClassName, "max-sm:mt-0.5")}>World</span>
                     </Link>
                   ))}
                   {sourceUrl ? (
@@ -479,11 +481,12 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
                         <span className={actionLabelClassName}>{event.source.label}</span>
                         <ExternalLink aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-accent-strong" />
                       </span>
-                      <span className={actionMetaClassName}>Reference link</span>
+                      <span className={cn(actionMetaClassName, "max-sm:mt-0.5")}>Reference link</span>
                     </a>
                   ) : null}
                 </div>
               ) : null}
+              {hasCompactHost ? <div className={cn(styles.mobileHost, "mt-2 sm:hidden")}>{hostDetails}</div> : null}
             </div>
             {event.posterImageUrl ? (
               <div className={cn(styles.poster, "lg:sticky lg:top-6")}>
@@ -495,7 +498,7 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
             ) : null}
 
             {standaloneHost ? hostDetails : (
-              <Card className={cn(styles.details, "text-sm")} surface="white">
+              <Card className={cn(styles.details, "text-sm", hasCompactHost && "max-sm:hidden")} surface="white">
                 {hostDetails}
               </Card>
             )}
