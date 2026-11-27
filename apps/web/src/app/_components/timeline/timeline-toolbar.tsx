@@ -34,8 +34,8 @@ export function TimelineToolbar({
       </Button>
       {children}
       <div className={styles.metadata} aria-hidden={!timeZone}>
-        <span><Globe2 aria-label="Timezone" size={13} />{timeZone.replaceAll("_", " ")}</span>
-        <span><Clock3 aria-label="Hour format" size={13} />{hour12 ? "12h" : "24h"}</span>
+        <span><Globe2 aria-hidden="true" size={13} /><span className="sr-only">Timezone</span>{timeZone.replaceAll("_", " ")}</span>
+        <span><Clock3 aria-hidden="true" size={13} /><span className="sr-only">Hour format</span>{hour12 ? "12h" : "24h"}</span>
       </div>
     </div>
   );

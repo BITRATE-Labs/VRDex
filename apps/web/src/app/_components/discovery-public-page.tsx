@@ -155,7 +155,7 @@ function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[];
   return (
     <section className="min-w-0 border-t border-border pt-6">
       <SectionTitle>Upcoming events</SectionTitle>
-      <Link href="/events/new" className="text-sm font-medium underline underline-offset-4">Add event</Link>
+      <Link href="/events/new" className="inline-flex min-h-11 items-center rounded-control text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-accent-strong">Add event</Link>
       <EventSchedule className="mt-5" empty="No events">
         {events.map((event) => (
           <EventScheduleRow
@@ -212,7 +212,7 @@ function DiscoveryCard({
 
   return (
     <TrackedDiscoveryLink
-      className="group flex gap-4 rounded-panel border border-border bg-surface px-4 py-4 transition hover:-translate-y-1 hover:border-border-strong hover:bg-surface-strong hover:shadow-panel"
+      className="group flex items-center gap-3 rounded-panel border border-border bg-surface p-3 transition-colors hover:border-border-strong hover:bg-surface-strong focus-visible:outline-2 focus-visible:outline-accent-strong sm:p-4"
       eventName={result.entityType === "event" ? "event_card_clicked" : "search_result_clicked"}
       href={result.routePath}
       properties={{
@@ -221,15 +221,16 @@ function DiscoveryCard({
         surface,
       }}
     >
-      <ResultImage result={result} />
-      <span className="flex min-w-0 flex-col gap-2">
+      <ResultImage result={result} quietFallback />
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
         {result.startsAt === undefined && result.eventDate === undefined ? null : <ViewerLocalEventDateTime className="text-sm font-medium text-accent-strong" timestamp={result.startsAt} eventDate={result.eventDate} scheduleKind={result.scheduleKind} />}
-        <span className="text-xl font-semibold group-hover:text-accent-strong">
+        <span className="text-lg font-semibold group-hover:text-accent-strong [overflow-wrap:anywhere]">
           {result.title}
         </span>
         {subtitle ? <span className="text-sm text-muted">{subtitle}</span> : null}
         {result.summary ? <span className="line-clamp-2 text-sm leading-6 text-muted">{result.summary}</span> : null}
       </span>
+      <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted group-hover:text-accent-strong" />
     </TrackedDiscoveryLink>
   );
 }
@@ -367,7 +368,7 @@ function DiscoverySection({
   return (
     <section className="min-w-0 border-t border-border pt-6">
       <SectionTitle>{title}</SectionTitle>
-      {surface === "upcoming_events" ? <Link href="/events/new" className="text-sm font-medium underline underline-offset-4">Add event</Link> : null}
+      {surface === "upcoming_events" ? <Link href="/events/new" className="inline-flex min-h-11 items-center rounded-control text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-accent-strong">Add event</Link> : null}
       <div className={cn("mt-5 grid gap-4", columns === "responsive" ? "lg:grid-cols-2" : undefined)}>
         {results.length === 0 ? (
           <p className="text-sm leading-6 text-muted">{empty}</p>
@@ -387,7 +388,7 @@ function DiscoverySection({
 
 export function DiscoveryBackendNotice({ kind }: { kind: "missing-url" | "error" }) {
   return (
-    <div className="rounded-panel border border-dashed border-white/25 bg-white/14 px-5 py-4 text-sm leading-6 text-white/78">
+    <div className="rounded-panel border border-border bg-surface px-4 py-3 text-sm leading-6 text-foreground">
       {kind === "missing-url" ? "Discovery data is not available in this environment yet." : "Discovery data is temporarily unavailable."}
     </div>
   );
@@ -415,29 +416,34 @@ export function DiscoveryLandingPage({
   const directorySections = populatedDirectory.length > 0 ? populatedDirectory : directory;
 
   return (
-    <PageShell>
-      <PageContainer className="gap-8" max="7xl">
+    <PageShell className="max-sm:py-5">
+      <PageContainer className="gap-5 sm:gap-6" max="7xl">
 
-        <section className="grid gap-6 border-b border-border py-8 lg:grid-cols-[0.7fr_1.3fr] lg:items-end lg:py-12">
+        <section className="grid gap-4 pb-1 sm:gap-5 lg:grid-cols-[0.7fr_1.3fr] lg:items-center lg:py-6">
           <div>
             <h1 className="max-w-md text-4xl leading-none font-semibold sm:text-5xl">
               Discover VR
             </h1>
           </div>
-          <DiscoverySearchForm className="w-full" surface="home" tone="default" />
+          <DiscoverySearchForm className="w-full" compact surface="home" tone="default" />
         </section>
 
         {status === "live" ? null : <DiscoveryBackendNotice kind={status} />}
 
         {data.eventSchedule && data.eventSchedule.length > 0 ? (
           <DiscoveryEventSchedule events={data.eventSchedule} now={now} />
-        ) : status === "live" && data.upcomingEvents.length === 0 ? (
-          <section className="flex flex-wrap items-center justify-between gap-x-5 gap-y-1">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <SectionTitle className="text-lg tracking-tight">Upcoming events</SectionTitle>
-              <p className="text-sm leading-6 text-muted">No events</p>
+        ) : data.upcomingEvents.length === 0 ? (
+          <section className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-panel border border-border bg-surface px-3 py-2 sm:px-4">
+            <div>
+              <SectionTitle className="text-base tracking-tight">Upcoming events</SectionTitle>
+              {status === "live" ? <p className="text-sm leading-5 text-muted">No events</p> : null}
             </div>
-            <Link href="/events/new" className="inline-flex min-h-11 items-center text-sm font-medium underline underline-offset-4">Add event</Link>
+            <Link
+              className={cn(buttonVariants({ size: "sm", variant: "surface" }), "min-h-11")}
+              href="/events/new"
+            >
+              Add event
+            </Link>
           </section>
         ) : (
           <DiscoverySection
