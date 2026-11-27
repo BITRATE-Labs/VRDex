@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getOpenApiDocument } from "@vrdex/api-contracts";
 import { buttonVariants } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, cardVariants } from "@/components/ui/card";
 import { PageContainer, PageActions, PageShell } from "@/components/ui/page-shell";
 import { cn } from "@/lib/cn";
 
@@ -76,61 +76,52 @@ export default function ApiReferencePage() {
   const tags = document.tags ?? [];
 
   return (
-    <PageShell className="py-8 sm:py-10">
-      <PageContainer max="7xl">
-        <PageActions>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <a className={buttonVariants({ variant: "secondary" })} href="/api/v0/openapi.json">
-              OpenAPI JSON
-            </a>
-            <a className={buttonVariants({ variant: "secondary" })} href="/api/v0/openapi.yaml">
-              OpenAPI YAML
-            </a>
-            <Link className={buttonVariants({ variant: "secondary" })} href="/developers/tokens">
-              Developer tokens
-            </Link>
-            <Link className={buttonVariants({ variant: "secondary" })} href="/developers/apps">
-              OAuth apps
-            </Link>
-            <Link className={buttonVariants({ variant: "ghost" })} href="/">
-              Home
-            </Link>
+    <PageShell className="py-6 sm:py-10">
+      <PageContainer className="gap-4 sm:gap-6" max="7xl">
+        <header className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
+          <div>
+            <h1 className="text-3xl font-semibold sm:text-4xl">{document.info.title}</h1>
+            <p className="mt-2 font-mono text-xs uppercase tracking-[0.22em] text-muted">
+              OpenAPI {document.openapi} / {document.info.version}
+            </p>
           </div>
+          <span className="font-mono text-xs text-muted">{operations.length} operations</span>
+        </header>
+
+        <PageActions className="gap-2">
+          <a className={buttonVariants({ variant: "secondary" })} href="/api/v0/openapi.json">
+            OpenAPI JSON
+          </a>
+          <a className={buttonVariants({ variant: "secondary" })} href="/api/v0/openapi.yaml">
+            OpenAPI YAML
+          </a>
+          <Link className={buttonVariants({ variant: "secondary" })} href="/developers/tokens">
+            Developer tokens
+          </Link>
+          <Link className={buttonVariants({ variant: "secondary" })} href="/developers/apps">
+            OAuth apps
+          </Link>
+          <Link className={buttonVariants({ variant: "ghost" })} href="/">
+            Home
+          </Link>
         </PageActions>
 
-        <section className="grid gap-5 lg:grid-cols-[0.82fr_1.18fr]">
-          <div className="space-y-5">
-            <div className="rounded-panel border border-border bg-surface px-5 py-5 sm:px-6">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <h1 className="text-3xl font-semibold sm:text-4xl">
-                    {document.info.title}
-                  </h1>
-                  <p className="mt-2 font-mono text-xs uppercase tracking-[0.22em] text-muted">
-                    OpenAPI {document.openapi} / {document.info.version}
-                  </p>
+        <section className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)] lg:gap-6">
+          <details className={cn(cardVariants({ padding: "none" }), "self-start")}>
+            <summary className="min-h-11 cursor-pointer rounded-panel px-4 py-3 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring">
+              Tags
+            </summary>
+            <div className="grid gap-3 border-t border-border px-4 py-4">
+              {tags.map((tag) => (
+                <div className="border-b border-border pb-3 last:border-0 last:pb-0" key={tag.name}>
+                  <div className="font-medium">{tag.name}</div>
+                  {"description" in tag && typeof tag.description === "string" ? (
+                    <p className="mt-1 text-sm leading-6 text-muted">{tag.description}</p>
+                  ) : null}
                 </div>
-                <span className="rounded-control border border-border bg-surface-strong px-3 py-2 font-mono text-xs">
-                  {operations.length} operations
-                </span>
-              </div>
+              ))}
             </div>
-
-            <Card>
-              <h2 className="text-lg font-semibold">Tags</h2>
-              <div className="mt-4 grid gap-3">
-                {tags.map((tag) => (
-                  <div className="border-b border-border pb-3 last:border-0 last:pb-0" key={tag.name}>
-                    <div className="font-medium">{tag.name}</div>
-                    {"description" in tag && typeof tag.description === "string" ? (
-                      <p className="mt-1 text-sm leading-6 text-muted">{tag.description}</p>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </div>
+          </details>
 
           <section className="grid gap-3">
             {operations.map((operation) => (

@@ -97,6 +97,33 @@ test("Home search, filters, refresh and history keep URL and results aligned @fl
   await assertCommunityState();
 });
 
+for (const theme of ["light", "dark"] as const) {
+  test(`Search preserves a long unbroken no-match query at 320px in ${theme} @flow @fixture`, async ({ page }) => {
+    const query = `VRDexNoMatch${"W".repeat(35)}`;
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.addInitScript((value) => localStorage.setItem("vrdex-theme", value), theme);
+    await page.goto(`/search?q=${query}`);
+
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    const heading = page.getByRole("heading", { level: 2, name: `Results for ${query}`, exact: true });
+    await expect(heading).toBeVisible();
+    await expect(heading).toHaveCSS("overflow-wrap", "anywhere");
+    await expect(page.getByText("No public results matched that search yet.", { exact: true })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+  });
+}
+
+test("Search reports a failed fetch without claiming there were no matches @flow @fixture", async ({ page }) => {
+  test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), "Uses the local Search outage fixture.");
+  const query = "playwright-search-unavailable";
+  await page.goto(`/search?q=${query}`);
+
+  await expect(page.getByText("Search data is temporarily unavailable.", { exact: true })).toBeVisible();
+  await expect(page.getByText("No public results matched that search yet.", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: /Search/i })).toHaveValue(query);
+  await expect(page.getByRole("navigation", { name: "Entity type" }).getByRole("link")).toHaveCount(5);
+});
+
 for (const destination of [
   { query: "BASICBIT", name: /BASICBIT/, path: "/basicbit" },
   { query: "Afterglow Social", name: /Afterglow Social/, path: "/playwright-afterglow-social" },

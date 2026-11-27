@@ -1307,6 +1307,7 @@ const discoveryData: PublicDiscoveryData = {
 type PlaywrightDiscoverySearchFixture =
   | { kind: "disabled" }
   | { kind: "fallthrough" }
+  | { kind: "error" }
   | { kind: "handled"; results: PublicSearchResult[] };
 type PlaywrightProfileLookupFixture =
   | { kind: "disabled" }
@@ -1477,6 +1478,10 @@ export function searchPlaywrightDiscoveryFixture(query: string): PlaywrightDisco
   }
 
   const normalized = query.trim().toLowerCase();
+
+  if (normalized === "playwright-search-unavailable") {
+    return { kind: "error" };
+  }
 
   if (!normalized) {
     return { kind: "handled", results: [] };

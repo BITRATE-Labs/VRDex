@@ -1101,7 +1101,7 @@ test.describe("fixture lookup smoke", () => {
     await expect(logo.locator("img")).toHaveCSS("object-fit", "contain");
   });
 
-  test("verified profiles use the same compact mark across profile and search views", async ({ page }, testInfo) => {
+  test("verified profiles use the same compact mark across profile and search views", async ({ page }) => {
     await page.goto("/basicbit");
     const profileMark = page.getByLabel("Verified profile");
     await expect(profileMark).toBeVisible();
@@ -1111,19 +1111,11 @@ test.describe("fixture lookup smoke", () => {
     const searchRegion = page.getByRole("region", { name: "Search results" });
     const searchResult = searchRegion.getByRole("link", { name: /BASICBIT Verified profile/ });
     const searchMark = searchRegion.getByLabel("Verified profile");
-    const resultTypeIcon = searchRegion.getByRole("img", { name: "Person" });
-    const resultTypeTooltip = searchRegion.getByText("Person", { exact: true });
     await expect(searchMark).toBeVisible();
-    await expect(resultTypeIcon).toBeVisible();
-    await expect(resultTypeTooltip).toHaveCSS("opacity", "0");
-    if (testInfo.project.name === "desktop-chromium") {
-      await searchResult.hover({ position: { x: 200, y: 45 } });
-      await expect(resultTypeTooltip).toHaveCSS("opacity", "0");
-      await resultTypeIcon.hover();
-      await expect(resultTypeTooltip).toHaveCSS("opacity", "1");
-    }
+    await expect(searchResult.getByText("Person", { exact: true })).toBeVisible();
+    await expect(searchResult.getByText("BASICBIT", { exact: true })).toHaveCSS("text-decoration-line", "underline");
     await searchResult.focus();
-    await expect(resultTypeTooltip).toHaveCSS("opacity", "1");
+    await expect(searchResult).toBeFocused();
     const searchBox = await searchMark.boundingBox();
 
     await page.goto("/search?q=BASICBIT&view=dj");
@@ -1197,4 +1189,33 @@ test("VRDex Time sign-in keeps the visitor's return path", async ({ page }) => {
   await signIn.click();
   await expect(page).toHaveURL(/\/sign-in\?returnTo=%2Ftime$/);
   await expect(page.getByRole("heading", { level: 1, name: "Sign in", exact: true })).toBeVisible();
+});
+
+test("public API reference puts endpoints in the first phone viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 760 });
+  expect((await page.goto("/developers/api"))?.status()).toBe(200);
+  const main = page.getByRole("main");
+  const title = main.getByRole("heading", { name: "VRDex Public API", exact: true, level: 1 });
+  const actions = main.getByRole("navigation", { name: "Page", exact: true });
+  await expect(title).toBeVisible();
+  await expect(actions.getByRole("link", { name: "OpenAPI JSON", exact: true })).toHaveAttribute("href", "/api/v0/openapi.json");
+  await expect(actions.getByRole("link", { name: "OpenAPI YAML", exact: true })).toHaveAttribute("href", "/api/v0/openapi.yaml");
+  const [titleBox, actionsBox] = await Promise.all([title.boundingBox(), actions.boundingBox()]);
+  if (!titleBox || !actionsBox) throw new Error("Expected public API title and actions");
+  expect(titleBox.y + titleBox.height).toBeLessThanOrEqual(actionsBox.y);
+  const tags = main.locator("details").filter({ has: page.locator("summary", { hasText: "Tags" }) });
+  const summary = tags.locator("summary");
+  const firstEndpoint = main.locator("code").first();
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: width === 320 ? 760 : 844 });
+    await expect(tags).not.toHaveAttribute("open", "");
+    await expect(firstEndpoint).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+  }
+  await summary.focus();
+  await summary.press("Enter");
+  await expect(tags).toHaveAttribute("open", "");
+  await expect(tags.getByText("Events", { exact: true })).toBeVisible();
+  await summary.press("Enter");
+  await expect(tags).not.toHaveAttribute("open", "");
 });

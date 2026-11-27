@@ -185,6 +185,10 @@ a fresh local backend without a separate `pnpm seed:local` step. Home/search
 cases carry `@fixture` and stay in the local `@flow` lane; hosted selection
 excludes them because they require this checkout's UI and local fixture data.
 
+The Search flow also checks an unbroken query at 320 px in both themes and uses
+the local-only `playwright-search-unavailable` fixture to distinguish an outage
+from a confirmed miss.
+
 ## Auth-backed E2E
 
 Issue #226 rewired the auth half of the suite onto `@clerk/testing`. Two of the
