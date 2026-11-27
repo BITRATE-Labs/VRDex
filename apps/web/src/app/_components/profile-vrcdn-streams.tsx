@@ -251,7 +251,7 @@ export function ProfileVrcdnStreams({
                   <a
                     className={cn(
                       buttonVariants({ variant: compactLinks ? "primary" : "secondary" }),
-                      linkCardClassName,
+                      linkCardClassName, "focus-visible:ring-accent-strong",
                       compactLinks && "min-h-12 rounded-control border border-transparent px-3 py-2",
                     )}
                     href={link.href}
