@@ -7,6 +7,12 @@
   display: none;
 }
 
+@media (width >= 40rem) {
+  .lead:has(> .watch:empty + .mobileHost:last-child) {
+    display: none;
+  }
+}
+
 .watch:not(:empty) + .locationLinks {
   margin-top: 1rem;
 }
