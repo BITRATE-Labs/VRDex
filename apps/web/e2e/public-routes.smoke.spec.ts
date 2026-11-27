@@ -165,6 +165,22 @@ test("private profile claim actions stay on owner-aware routes", async ({ page }
   await expect(page.getByRole("link", { name: "View profile" })).toHaveCount(0);
 });
 
+test("sign-in describes recognized contribution return paths without echoing them", async ({ page }) => {
+  const cases = [
+    ["/submit", "Add profile"],
+    ["/claim/playwright-sparse-import?source=profile", "Claim profile"],
+    ["/playwright-sparse-import/edit?section=media#media-contributions", "Edit profile"],
+    ["/account", "Manage your VRDex profile and events."],
+    ["https://example.invalid/submit", "Manage your VRDex profile and events."],
+    ["/claim/", "Manage your VRDex profile and events."],
+  ];
+  for (const [returnTo, label] of cases) {
+    expect((await page.goto("/sign-in?" + new URLSearchParams({ returnTo })))?.status()).toBe(200);
+    const signIn = page.getByRole("region", { name: "Sign in", exact: true });
+    await expect(signIn.getByText(label, { exact: true })).toBeVisible();
+  }
+});
+
 test("OpenAPI YAML document is served", async ({ page }) => {
   const response = await page.request.get("/api/v0/openapi.yaml");
 

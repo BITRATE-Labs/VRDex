@@ -13,11 +13,13 @@ import { AUTH_UNAVAILABLE_COPY } from "@/lib/auth-copy";
 export function AuthPageShell({
   children,
   headingId,
+  journeyLabel,
   subtitle,
   title,
 }: {
   children: ReactNode;
   headingId: string;
+  journeyLabel?: string;
   subtitle: string;
   title: string;
 }) {
@@ -25,13 +27,17 @@ export function AuthPageShell({
     <PageShell className="flex py-6 sm:py-8">
       <PageContainer className="gap-0" max="4xl">
 
-        <div className="flex flex-1 items-center justify-center py-10 sm:py-14">
+        <div
+          className={journeyLabel
+            ? "flex flex-1 items-start justify-center py-4 sm:items-center sm:py-14"
+            : "flex flex-1 items-center justify-center py-10 sm:py-14"}
+        >
           <section aria-labelledby={headingId} className="w-full max-w-md">
             <header className="text-center">
               <h1 id={headingId} className="text-3xl font-semibold sm:text-4xl">
                 {title}
               </h1>
-              <p className="mt-2 text-sm leading-6 text-muted">{subtitle}</p>
+              <p className="mt-2 text-sm leading-6 text-muted">{journeyLabel ?? subtitle}</p>
             </header>
 
             <div className="mt-6 flex justify-center">{children}</div>
