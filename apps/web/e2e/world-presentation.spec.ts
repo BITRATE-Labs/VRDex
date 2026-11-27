@@ -202,6 +202,16 @@ test("world event shortcut follows launch and puts keyboard focus on the populat
   await expect(shortcut).toBeHidden();
   await expect(eventHeading).toBeInViewport({ ratio: 1 });
 
+  await page.setViewportSize({ width: 1280, height: 863 });
+  await expect(shortcut).toBeInViewport({ ratio: 1 });
+  await openWorld.focus();
+  await page.keyboard.press("Tab");
+  await expect(shortcut).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#world-events$/);
+  await expect(eventHeading).toBeFocused();
+  await expect(eventHeading).toBeInViewport({ ratio: 1 });
+
   for (const width of [320, 768]) {
     await page.setViewportSize({ width, height: 800 });
     await page.goto("/playwright-neon-harbor", { waitUntil: "domcontentloaded" });
@@ -231,8 +241,11 @@ test("world event shortcut follows launch and puts keyboard focus on the populat
     await expect(main.getByRole("heading", { name: "Afterglow Harbor Sessions", level: 1, exact: true })).toBeVisible();
   }
 
+  await page.setViewportSize({ width: 1280, height: 864 });
   await page.goto("/playwright-neon-harbor-reference-only", { waitUntil: "domcontentloaded" });
   await expect(openWorld).toHaveCount(0);
+  await expect(shortcut).toBeHidden();
+  await page.setViewportSize({ width: 1280, height: 863 });
   await expect(shortcut).toBeInViewport({ ratio: 1 });
   await expect(main.getByRole("link", { name: "Discovery", exact: true })).toHaveCount(0);
 });

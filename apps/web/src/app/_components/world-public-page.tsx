@@ -348,14 +348,14 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
   const navigationLinkClassName = "inline-flex min-h-11 items-center gap-1.5 rounded-control text-sm font-medium underline decoration-current/40 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2";
   const actions = launchAction || hasEvents ? (
     <div className={cn(
-      "flex flex-wrap items-center gap-x-3 gap-y-1 lg:block",
+      "flex flex-wrap items-center gap-x-3 gap-y-1 lg:[@media(min-height:864px)]:block",
       hasLaunchDetails ? "mt-3 sm:col-span-2 sm:row-start-4 sm:mt-5 sm:justify-self-start" : "mt-5",
-      !launchAction && "lg:hidden",
+      !launchAction && "lg:[@media(min-height:864px)]:hidden",
     )}>
       {launchAction}
       {hasEvents ? (
         <a
-          className={cn(navigationLinkClassName, "lg:hidden", heroImageUrl ? "text-white/90 focus-visible:outline-white" : "text-accent-strong focus-visible:outline-accent")}
+          className={cn(navigationLinkClassName, "lg:[@media(min-height:864px)]:hidden", heroImageUrl ? "text-white/90 focus-visible:outline-white" : "text-accent-strong focus-visible:outline-accent")}
           href="#world-events"
         >
           Events
