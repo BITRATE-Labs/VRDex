@@ -133,7 +133,7 @@ export function DiscoveryEventCard({
             label={event.title}
             alt=""
             src={event.posterImageUrl}
-            sizes="(max-width: 760px) 78vw, (max-width: 880px) 340px, 23vw"
+            sizes="(max-width: 760px) 78vw, (max-width: 880px) 256px, 23vw"
           />
         </a>
       </div>
