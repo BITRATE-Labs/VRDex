@@ -331,12 +331,22 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
   const roleLabels = [...new Set([...(result.person?.roleTags ?? []), ...(result.person?.tags ?? [])])]
     .filter((label) => !shownLabels.includes(label.trim().toLowerCase()))
     .slice(0, 3);
+  const spreadSummary = result.entityType === "event" && Boolean(result.summary);
+  const summary = result.summary ? (
+    <span className={cn(
+      "line-clamp-2 text-sm leading-5 text-muted [overflow-wrap:anywhere]",
+      spreadSummary && "col-start-2 row-start-2 [@media(max-width:360px)]:col-span-full [@media(max-width:360px)]:line-clamp-3 [@media(max-width:360px)]:text-[0.8125rem]",
+    )}>
+      {result.summary}
+    </span>
+  ) : null;
 
   return (
     <div className="rounded-panel border border-border bg-surface transition-colors hover:border-border-strong">
       <TrackedDiscoveryLink
         className={cn(
           "group flex min-h-11 items-start gap-3 rounded-panel p-3 transition-colors hover:bg-surface-strong focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-strong sm:p-4",
+          spreadSummary && "grid grid-cols-[auto_minmax(0,1fr)] gap-y-1 [&>*:first-child]:row-span-2 [@media(max-width:360px)]:[&>*:first-child]:row-span-1 [@media(max-width:360px)]:py-2.5",
           (result.person?.genres.length || result.person?.outboundLinks.length) && "pb-1 sm:pb-2",
           result.claimEntryPath && "pb-2 sm:pb-2",
         )}
@@ -359,9 +369,10 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
             {subtitle ? <span>{subtitle}</span> : null}
             {result.startsAt === undefined && result.eventDate === undefined ? null : <ViewerLocalEventDateTime className="text-sm text-accent-strong" timestamp={result.startsAt} eventDate={result.eventDate} scheduleKind={result.scheduleKind} />}
           </span>
-          {result.summary ? <span className="line-clamp-2 text-sm leading-5 text-muted">{result.summary}</span> : null}
+          {!spreadSummary ? summary : null}
           {roleLabels.length > 0 ? <span className="text-xs font-semibold text-foreground">{roleLabels.join(" · ")}</span> : null}
         </span>
+        {spreadSummary ? summary : null}
       </TrackedDiscoveryLink>
       {result.person ? <PublicSearchResultDetails person={result.person} /> : null}
       {result.claimEntryPath ? (

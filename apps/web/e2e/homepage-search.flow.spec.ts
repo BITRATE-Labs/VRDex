@@ -311,6 +311,26 @@ test("mobile Search keeps event initials visible until artwork loads @flow @fixt
   }
 });
 
+test("narrow Search gives event descriptions room below the identity row @flow @fixture", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.goto("/search?q=Afterglow", { waitUntil: "commit" });
+  const event = page.getByRole("link", { name: /Afterglow Harbor Sessions/ }).first();
+  const eventTitle = event.getByText("Afterglow Harbor Sessions", { exact: true });
+  const community = publicResultRow(page, "/playwright-afterglow-social");
+  const communityTitle = community.getByText("Afterglow Social", { exact: true });
+  const summary = event.getByText("Late-night harbor club session with house, trance, and warm social energy.", { exact: true });
+  const communitySummary = community.getByText("A warm VRChat club night for music-first communities.", { exact: true });
+  const left = async (locator: typeof summary) => (await locator.boundingBox())?.x;
+
+  await expect(summary).toBeVisible();
+  await expect.poll(() => summary.evaluate((element) => element.scrollHeight <= element.clientHeight)).toBe(true);
+  expect(await left(summary)).toBeLessThan((await left(eventTitle))!);
+  expect(await left(communitySummary)).toBe(await left(communityTitle));
+
+  await page.setViewportSize({ width: 390, height: 740 });
+  await expect.poll(() => left(summary)).toBe(await left(eventTitle));
+});
+
 test("populated Search aligns titles and keeps media and role details available at 320px @flow @fixture", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 760 });
   await page.addInitScript(() => localStorage.setItem("vrdex-theme", "dark"));
