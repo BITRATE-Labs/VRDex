@@ -20,7 +20,8 @@
 }
 
 .watch button [data-watch-play-poster] {
-  background: linear-gradient(135deg, var(--media-raised), var(--media));
+  --event-watch-fallback: linear-gradient(135deg, var(--media-raised), var(--media));
+  background: var(--event-watch-fallback);
 }
 
 .watch button [data-watch-play-control] {
@@ -51,6 +52,10 @@
 @media (width < 40rem) {
   .watch button [data-watch-play-poster] {
     min-height: 12rem;
+    background-image: var(--event-watch-art, var(--event-watch-fallback));
+    background-color: var(--media);
+    background-position: center;
+    background-size: cover;
   }
 }
 
