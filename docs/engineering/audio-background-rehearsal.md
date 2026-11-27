@@ -29,10 +29,56 @@ and [approved design](../superpowers/specs/2026-10-28-mobile-vrcdn-playback-desi
 
 ## Finite integration contract
 
+Legacy event playback restores a suspended audio context when the document becomes
+visible again, without replacing its stream. If the browser requires another
+gesture, playback returns to paused with a blocked-playback signal. Pending
+restoration cannot undo a later Pause or Close. This does not provide a separate
+audio rendition or establish physical iPhone background acceptance.
+Repeated app switches invalidate pending restoration; a hidden-page rejection
+does not pause the viewer's still-active playback intent.
+Foreground restoration that never settles expires after ten seconds, exposing
+gesture-required playback instead of permanently blocking future restoration.
+The failure watchdog resets its evidence while restoration is pending, so it
+cannot tear down a media resume that is still making its bounded attempt.
+
+The foreground playback owner requests the browser's `playback` audio-session
+type when that API is available. Ownership transfers without resetting the type;
+Pause, Close, blocked playback, terminal end/unsupported/failed reasons or failed initial startup restores the previous type unless another
+caller changed it. Internal pauses during a rendition switch retain the claim
+until the switch succeeds or fails. Mode switches also expire after ten seconds,
+pausing the adapter and ending transient pause suppression.
+Unsupported or rejected Audio Session access does not block ordinary playback.
+
+Direct streams allow fifteen seconds for initial startup or an established stall
+without progress before exposing unavailable playback. Growing startup buffers
+restart that allowance; the deadline also samples buffer growth without element
+progress events. Repeated events without growth do not extend it. The existing media stays mounted for
+recovery. Retry resumes genuinely paused media in place, while an unpaused,
+starved stream reconnects on the first tap rather than falsely reporting playback.
+Growing buffers cannot extend initial startup beyond sixty seconds in the current
+foreground window. Returning from the background starts a fresh startup window.
+Recoverable stalls retain foreground ownership and the music audio-session claim;
+starting another surface pauses the stalled player before it can recover.
+Reason-less recovery keeps ownership before the first frame too; terminal
+reasons, Play exceptions, source replacement and revocation release it explicitly.
+If an established stall makes no progress for a second fifteen-second window,
+it becomes a terminal failure even when the browser emits no further events.
+Terminal reasons pause the adapter and invalidate pending Play before releasing
+foreground ownership, including native lineup recovery loops.
+MPEG-TS network completion lets buffered media drain. Profile playback ends on
+the media element's actual `ended` event, not the earlier transport EOF signal.
+Previously established system controls remain during a reason-less stall while
+the same player generation still has mounted media; terminal failures clear them.
+Hard transport errors still allow a fresh connection. Pause, Close and background visibility clear the deadline;
+a still-buffering stream receives a fresh deadline when visible again.
+
 ### Automatic video pop-out
 
 The retained player's Media Session registers `enterpictureinpicture` in video
-mode. On supported browsers, switching away can open the active video without
+mode when the adapter permits PiP. Legacy playback uses its request title while
+playing or paused when relay metadata is unavailable. Ended and unsupported
+playback clear system controls; Twitch retains its embed's own metadata.
+On supported browsers, switching away can open the active video without
 another button press. Only the current, playing video may respond. Audio mode,
 Close and stale playback generations cannot open a video window.
 

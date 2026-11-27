@@ -8,6 +8,15 @@ for (const mode of ['sequence', 'automatic', 'event-stream']) test(`composed pub
   // requiring an FFmpeg binary in the default browser CI lane.
   const transport = 'http://127.0.0.1:6799';
   let opened = 0;
+  await page.addInitScript(() => {
+    const target = window as unknown as { playbackTestContexts: AudioContext[] };
+    target.playbackTestContexts = [];
+    window.AudioContext = new Proxy(window.AudioContext, { construct(constructor, args) {
+      const context = Reflect.construct(constructor, args) as AudioContext;
+      target.playbackTestContexts.push(context);
+      return context;
+    } });
+  });
   const serve = async (route: import('@playwright/test').Route) => {
     opened++;
     await route.fulfill({ contentType: 'video/mp2t', path: path.resolve('e2e/fixtures/persistent-synthetic.mpegts'), headers: { 'access-control-allow-origin': '*' } });
@@ -23,6 +32,19 @@ for (const mode of ['sequence', 'automatic', 'event-stream']) test(`composed pub
     await page.getByRole('button', { name: 'Play Lineup live', exact: true }).click();
     const video = page.locator('video:not([hidden])');
     await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime), { timeout: 20000 }).toBeGreaterThan(1);
+    await expect.poll(() => page.evaluate(() => navigator.mediaSession?.metadata?.title)).toBe('Lineup live - VRDex');
+    if (mode !== 'event-stream') {
+      const beforeRestore = await video.evaluate(node => (node as HTMLVideoElement).currentTime);
+      const connections = opened;
+      await page.evaluate(async () => {
+        const contexts = (window as unknown as { playbackTestContexts: AudioContext[] }).playbackTestContexts;
+        await contexts[0].suspend();
+        document.querySelector<HTMLVideoElement>('video:not([hidden])')!.pause();
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(beforeRestore + 0.5);
+      expect(opened).toBe(connections);
+    }
     await expect(page.locator('video')).toHaveCount(1);
     await expect(page.getByRole('button', { name: 'Audio only', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Video', exact: true })).toHaveCount(0);
@@ -31,7 +53,7 @@ for (const mode of ['sequence', 'automatic', 'event-stream']) test(`composed pub
     if (mode !== 'event-stream') await page.getByRole('button', { name: 'Eligible', exact: true }).click();
     const sourceCount = mode === 'event-stream' ? 1 : 2;
     await expect(page.locator('video')).toHaveCount(sourceCount);
-    expect(opened).toBe(sourceCount);
+    await expect.poll(() => opened).toBe(sourceCount);
     if (mode === 'automatic') await page.screenshot({ path: testInfo.outputPath('automatic-viewer.png'), fullPage: true });
     const original = await video.elementHandle();
     const before = await video.evaluate(node => (node as HTMLVideoElement).currentTime);

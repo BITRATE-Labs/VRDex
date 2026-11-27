@@ -6,8 +6,10 @@ type Identity = { displayName: string; artwork: string | undefined };
 // Chrome supports this action ahead of our TypeScript DOM definitions.
 const ENTER_PICTURE_IN_PICTURE = "enterpictureinpicture" as MediaSessionAction;
 export function nowPlayingIdentity(state: PlaybackSnapshot): Identity | null {
-  if (!state.request || !state.metadata) return null;
-  return { displayName: state.metadata.displayName, artwork: playbackArtwork(state) };
+  if (!state.request) return null;
+  if (state.unavailableReason !== undefined) return null;
+  if (!state.metadata && (state.request.kind === "twitch" || !["playing", "paused"].includes(state.status))) return null;
+  return { displayName: state.metadata?.displayName ?? state.request.title.replace(/\s*-\s*VRDex$/, ""), artwork: playbackArtwork(state) };
 }
 function session() { return typeof navigator !== "undefined" && "mediaSession" in navigator ? navigator.mediaSession : null; }
 export function clearNowPlaying(): void {
@@ -36,7 +38,7 @@ export function applyNowPlaying({ identity, mode, actions }: { identity: Identit
   }
   try {
     // The browser invokes this when automatic PiP is permitted, without another tap.
-    current.setActionHandler(ENTER_PICTURE_IN_PICTURE, mode === "video" ? () => {
+    current.setActionHandler(ENTER_PICTURE_IN_PICTURE, mode === "video" && owner.supportsPictureInPicture ? () => {
       const state = owner.getSnapshot();
       const media = owner.media;
       if (!valid() || state.mode !== "video" || state.status !== "playing" ||
@@ -50,10 +52,13 @@ export function applyNowPlaying({ identity, mode, actions }: { identity: Identit
 /** The root provider retains this subscription alongside its existing playback owner. */
 export function retainNowPlaying(owner: EventPlaybackOwner): () => void {
   let previous = "";
+  let retained: { identity: Identity; generation: number } | undefined;
   const update = () => {
     const state = owner.getSnapshot();
-    const identity = nowPlayingIdentity(state);
     const generation = owner.generation;
+    let identity = nowPlayingIdentity(state);
+    if (!identity && state.status === "unavailable" && state.unavailableReason === undefined && owner.media && retained?.generation === generation) identity = retained.identity;
+    retained = identity ? { identity, generation } : undefined;
     const key = JSON.stringify([identity, state.mode, state.status, generation]);
     if (key === previous) return;
     previous = key;

@@ -369,3 +369,99 @@ test("refused cold lineup resume keeps live slot unavailability distinct from an
     assert.ok(owner.getSnapshot().request);
   } finally { owner.close(); }
 });
+
+test("adapter setup snapshots do not release the music session before its first Play", async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator"), audioSession = { type: "auto" };
+  Object.defineProperty(globalThis, "navigator", { configurable: true, value: { audioSession } });
+  let typeAtPlay = "", notify!: (patch: { status: "paused" | "playing" }) => void;
+  const owner = new EventPlaybackOwner((_request, report) => {
+    notify = report;
+    return { setVolume() { report({ status: "paused" }); }, setMuted() { report({ status: "paused" }); },
+      async play() { typeAtPlay = audioSession.type; report({ status: "playing" }); return true; }, pause() {}, update() {}, dispose() {} };
+  });
+  try {
+    await owner.play({ kind: "vrcdn", profileId: "p", profileSlug: "dj", title: "DJ", href: "/dj", sourceId: "AA", src: "url", transport: "mpegts" });
+    assert.equal(typeAtPlay, "playback"); assert.equal(audioSession.type, "playback");
+    notify({ status: "paused" }); assert.equal(audioSession.type, "auto");
+  } finally { owner.close(); if (descriptor) Object.defineProperty(globalThis, "navigator", descriptor); else Reflect.deleteProperty(globalThis, "navigator"); }
+});
+
+test("failed Play and transient mode-switch Pause restore only the appropriate audio claim", async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator"), audioSession = { type: "auto" };
+  Object.defineProperty(globalThis, "navigator", { configurable: true, value: { audioSession } });
+  let accepted = false, fail = false, duringSwitch = "";
+  const owner = new EventPlaybackOwner((_request, report) => ({
+    async play() { if (fail) throw new Error("failed"); return accepted; },
+    async setMode() { report({ status: "paused" }); duringSwitch = audioSession.type; return accepted; },
+    setVolume() {}, setMuted() {}, pause() {}, update() {}, dispose() {},
+  }));
+  try {
+    await owner.play(request()); assert.equal(owner.getSnapshot().status, "blocked"); assert.equal(audioSession.type, "auto");
+    fail = true; await owner.play(request()); assert.equal(owner.getSnapshot().status, "unavailable"); assert.equal(audioSession.type, "auto");
+    fail = false; accepted = true; await owner.play(request()); assert.equal(audioSession.type, "playback");
+    await owner.setMode(owner.getSnapshot().mode === "video" ? "audio" : "video");
+    assert.equal(duringSwitch, "playback"); assert.equal(owner.getSnapshot().status, "playing"); assert.equal(audioSession.type, "playback");
+    accepted = false; await owner.setMode(owner.getSnapshot().mode === "video" ? "audio" : "video");
+    assert.equal(duringSwitch, "playback"); assert.equal(owner.getSnapshot().status, "blocked"); assert.equal(audioSession.type, "auto");
+  } finally { owner.close(); if (descriptor) Object.defineProperty(globalThis, "navigator", descriptor); else Reflect.deleteProperty(globalThis, "navigator"); }
+});
+
+test("lineup recovery keeps ownership and a genuinely paused mode result stays paused", async () => {
+  let notify!: Parameters<ConstructorParameters<typeof EventPlaybackOwner>[0]>[1], pauses = 0;
+  const lineup = { started: true, following: true, paused: false, muted: false, volume: 1, connected: true, unavailable: false, current: "dj" };
+  const owner = new EventPlaybackOwner((_request, report) => {
+    notify = report;
+    return { async play() { report({ status: "unavailable", lineup: { ...lineup, unavailable: true } }); return true; }, pause() { pauses++; }, setVolume() {}, setMuted() {}, update() {}, dispose() {},
+      async setMode() { report({ status: "paused", lineup: { ...lineup, paused: true, current: "next" } }); return true; } };
+  });
+  const other = {};
+  try {
+    const { foregroundPlayback } = await import("../../apps/web/src/lib/foreground-playback");
+    await owner.play(request()); notify({ status: "unavailable", lineup: { ...lineup, unavailable: true } });
+    foregroundPlayback.acquire(other, () => {}); assert.equal(pauses, 1); assert.equal(owner.getSnapshot().status, "paused");
+    foregroundPlayback.release(other);
+    await owner.play(request());
+    notify({ status: "playing", lineup });
+    await owner.setMode(owner.getSnapshot().mode === "video" ? "audio" : "video");
+    assert.equal(owner.getSnapshot().lineup?.current, "next"); assert.equal(owner.getSnapshot().lineup?.paused, true);
+    assert.equal(owner.getSnapshot().status, "paused");
+  } finally { owner.close(); }
+});
+
+test("terminal playback reasons restore the music session after a successful start", async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator"), audioSession = { type: "auto" };
+  Object.defineProperty(globalThis, "navigator", { configurable: true, value: { audioSession } });
+  let notify!: Parameters<ConstructorParameters<typeof EventPlaybackOwner>[0]>[1];
+  const owner = new EventPlaybackOwner((_request, report) => {
+    notify = report;
+    return { async play() { return true; }, pause() {}, setVolume() {}, setMuted() {}, update() {}, dispose() {} };
+  });
+  try {
+    await owner.play(request()); assert.equal(audioSession.type, "playback");
+    notify({ status: "unavailable", unavailableReason: "ended" }); assert.equal(audioSession.type, "auto");
+    notify({ status: "playing" }); assert.equal(audioSession.type, "playback");
+    notify({ status: "unavailable", unavailableReason: "unsupported" }); assert.equal(audioSession.type, "auto");
+    await owner.play(request()); assert.equal(audioSession.type, "playback");
+    owner.update(request("a", "https://stream/replacement"));
+    assert.equal(owner.getSnapshot().status, "paused"); assert.equal(owner.media, undefined); assert.equal(audioSession.type, "auto");
+    await owner.play(request("a", "https://stream/replacement")); assert.equal(audioSession.type, "playback");
+    owner.revalidate(null, owner.generation); assert.equal(audioSession.type, "auto");
+  } finally { owner.close(); if (descriptor) Object.defineProperty(globalThis, "navigator", descriptor); else Reflect.deleteProperty(globalThis, "navigator"); }
+});
+
+test("a hung mode switch stops suppressing native Pause after its deadline", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let notify!: Parameters<ConstructorParameters<typeof EventPlaybackOwner>[0]>[1], pauses = 0;
+  const owner = new EventPlaybackOwner((_request, report) => {
+    notify = report;
+    return { async play() { return true; }, setMode() { return new Promise<boolean>(() => {}); }, pause() { pauses++; report({ status: "paused" }); }, setVolume() {}, setMuted() {}, update() {}, dispose() {} };
+  });
+  try {
+    await owner.play(request());
+    const change = owner.setMode(owner.getSnapshot().mode === "video" ? "audio" : "video");
+    notify({ status: "paused" }); assert.equal(owner.getSnapshot().status, "playing");
+    t.mock.timers.tick(10000); await change;
+    assert.equal(pauses, 1); assert.equal(owner.getSnapshot().status, "blocked");
+    notify({ status: "paused" }); assert.equal(owner.getSnapshot().status, "paused");
+  } finally { owner.close(); }
+});

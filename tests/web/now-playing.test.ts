@@ -44,7 +44,7 @@ test("authoritative raw name formats once and revision changes artwork URL", () 
   assert.equal(nowPlayingIdentity(state)?.displayName, "DJ");
   assert.match(playbackArtwork(state)!, /revision=1&brand=/);
   assert.notEqual(playbackArtwork(state), playbackArtwork({ ...state, metadata: { ...state.metadata, artworkRevision: "2" } }));
-  assert.equal(nowPlayingIdentity({ ...state, metadata: undefined }), null);
+  assert.equal(nowPlayingIdentity({ ...state, metadata: undefined })?.displayName, "DJ");
 });
 
 test("media session update and Close clear metadata and fence retained resume callbacks", async () => {
@@ -106,4 +106,32 @@ test("retained owner publishes refresh without reconnect and Close clears native
   assert.equal(session.metadata, null);
   assert.equal(handlers.get("play"), null);
   stop();
+});
+
+test("legacy playback keeps media-session controls without relay metadata and respects adapter PiP eligibility", async () => {
+  const handlers = new Map<string, (() => void) | null>();
+  Object.defineProperty(globalThis, "navigator", { configurable: true, value: { mediaSession: { setActionHandler(action: string, handler: (() => void) | null) { handlers.set(action, handler); } } } });
+  Object.defineProperty(globalThis, "MediaMetadata", { configurable: true, value: class {} });
+  let notify!: Parameters<ConstructorParameters<typeof EventPlaybackOwner>[0]>[1];
+  const owner = new EventPlaybackOwner((_request, report) => { notify = report; return { media: {} as HTMLMediaElement, supportsPictureInPicture: false, play: async () => true, pause() {}, setVolume() {}, setMuted() {}, update() {}, dispose() {} }; });
+  const release = retainNowPlaying(owner);
+  try {
+    await owner.play({ kind: "vrcdn", profileId: "p", profileSlug: "dj", title: "DJ - VRDex", href: "/dj", sourceId: "AA", src: "url", transport: "mpegts" });
+    assert.equal(nowPlayingIdentity(owner.getSnapshot())?.displayName, "DJ");
+    assert.equal(typeof handlers.get("pause"), "function");
+    assert.equal(handlers.get("enterpictureinpicture"), null);
+    notify({ status: "unavailable" });
+    assert.equal(typeof handlers.get("pause"), "function", "recoverable mounted playback keeps system controls");
+    notify({ status: "unavailable", unavailableReason: "failed" });
+    assert.equal(handlers.get("pause"), null, "terminal failures clear retained controls");
+  } finally { release(); owner.close(); }
+});
+
+test("legacy system identity clears for ended/unavailable playback and leaves Twitch metadata to its embed", () => {
+  const request = { kind: "vrcdn", profileId: "p", profileSlug: "dj", title: "DJ", href: "/dj", sourceId: "AA", src: "url", transport: "mpegts" } as const;
+  const state = { request, status: "playing", mode: "video", volume: 1, muted: false } as const;
+  assert.ok(nowPlayingIdentity(state)); assert.ok(nowPlayingIdentity({ ...state, status: "paused" }));
+  for (const status of ["idle", "loading", "blocked", "unavailable"] as const) assert.equal(nowPlayingIdentity({ ...state, status }), null);
+  assert.equal(nowPlayingIdentity({ ...state, unavailableReason: "ended", metadata: { displayName: "DJ", artworkAssetId: null, artworkRevision: null } }), null);
+  assert.equal(nowPlayingIdentity({ ...state, request: { kind: "twitch", channel: "dj", profileId: "p", profileSlug: "dj", title: "DJ", href: "/dj", sourceId: "twitch" } }), null);
 });
