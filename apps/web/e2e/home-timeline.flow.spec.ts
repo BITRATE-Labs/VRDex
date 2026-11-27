@@ -251,6 +251,7 @@ test.describe("continuous schedule @flow @fixture", () => {
     await expect(chart).toBeVisible();
   });
   test("empty Favorites keeps its focused recovery action through refresh", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
     let hold = false;
     const buffered: (() => void)[] = [];
     await page.routeWebSocket("**/api/**/sync", (socket) => {
@@ -265,11 +266,19 @@ test.describe("continuous schedule @flow @fixture", () => {
     const clear = page.getByRole("button", { name: "Clear filter", exact: true });
     await expect(status).toHaveAttribute("data-state", "ready");
     await expect(clear).toBeVisible();
+    const refresh = page.getByRole("status", { name: "Schedule refresh" });
+    const discover = page.getByRole("heading", { name: "Discover", exact: true });
+    await expect(discover).toBeVisible();
     await clear.focus();
+    const discoverTop = () => discover.evaluate((heading) => heading.getBoundingClientRect().top + window.scrollY);
+    const initialDiscoverTop = await discoverTop();
     hold = true;
     try {
       await page.evaluate(() => window.dispatchEvent(new Event("focus")));
       await expect(status).toHaveAttribute("data-state", "loading");
+      await expect(status.getByText("Loading events", { exact: true })).toHaveCount(0);
+      await expect(refresh).toHaveText("Loading events");
+      expect(await discoverTop()).toBe(initialDiscoverTop);
       await expect(clear).toBeFocused();
       await expect(page.getByText("No favorites in this range", { exact: true })).toBeVisible();
     } finally {
@@ -277,6 +286,8 @@ test.describe("continuous schedule @flow @fixture", () => {
       buffered.splice(0).forEach((send) => send());
     }
     await expect(status).toHaveAttribute("data-state", "ready");
+    await expect(refresh).toBeEmpty();
+    expect(await discoverTop()).toBe(initialDiscoverTop);
     await expect(clear).toBeFocused();
   });
   test("defaultHomeGeometry", async ({ page, isMobile }, info) => {

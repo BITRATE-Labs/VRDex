@@ -77,7 +77,9 @@ function HomeScheduleContent({
         >
           <TimelineToolbar navigation={{ anchor: null, timeZone: null, favoritesOnly: false }}
             date="" timeZone="" hour12 disabled onNavigate={() => {}} onDate={() => {}} onPan={() => {}} onNow={() => {}}>
-            <div className={styles.status} role="status">Loading events</div>
+            <div className={styles.status} role="status">
+              <span className={styles.loadingMessage}>Loading events</span>
+            </div>
           </TimelineToolbar>
           <div aria-hidden="true" inert className={styles.scroller}>
             <div className={styles.canvas} style={{ width: 14400 }}>
@@ -253,6 +255,7 @@ function ScheduleContent({
   const noFavorites =
     navigation.favoritesOnly && data.isCurrentViewport &&
     data.kind === "ready" && !data.revalidating && empty;
+  const retainedRefresh = data.revalidating && data.isCurrentViewport;
   const showFavoritesEmptyState = navigation.favoritesOnly && compactEmpty;
   const clearFilterFocused = useRef(false);
   useLayoutEffect(() => {
@@ -307,7 +310,9 @@ function ScheduleContent({
           aria-label="Schedule data state"
           data-state={data.kind}
         >
-          {data.kind === "loading" && "Loading events"}
+          {data.kind === "loading" && !retainedRefresh && (
+            <span className={styles.loadingMessage}>Loading events</span>
+          )}
           {data.kind === "error" && (
             <>
               Events unavailable{" "}
@@ -334,7 +339,7 @@ function ScheduleContent({
               Clear past selections
             </Button>
           )}
-          {data.savedState === "loading" && <span>Loading events</span>}
+          {data.savedState === "loading" && !retainedRefresh && <span>Loading events</span>}
           {data.savedState === "error" && (
             <>
               <span>Events unavailable</span>
@@ -345,6 +350,9 @@ function ScheduleContent({
           )}
         </div>
       </TimelineToolbar>
+      <div className="sr-only" role="status" aria-label="Schedule refresh">
+        {retainedRefresh && (data.kind === "loading" || data.savedState === "loading") && "Loading events"}
+      </div>
       {preference.preferences.plan.length > 0 && (
         <TimelineNight
           saved={data.saved}

@@ -193,6 +193,7 @@ test.describe("timeline time regressions @flow @fixture", () => {
           await page.goto("/", { waitUntil: "commit" });
           const shell = page.locator("[data-home-schedule]");
           await expect(shell).toBeVisible();
+          await expect(shell.getByRole("status").filter({ hasText: "Loading events" })).toBeVisible();
           const loading = await shell.boundingBox();
           expect(loading?.height).toBeGreaterThanOrEqual(376 + 56 + 48);
           await page.screenshot({ path: info.outputPath(`startup-${size.width}.png`) });
