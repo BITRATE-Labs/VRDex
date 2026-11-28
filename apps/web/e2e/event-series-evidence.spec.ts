@@ -125,7 +125,14 @@ test("public series occurrences have distinct destinations and dates @fixture", 
     expect(date).toBeTruthy();
     expect(entry).toContain("DTEND:" + date + "T050000Z");
   }
-  for (const href of destinations) {
+  expect(calendar.headers()["content-disposition"]).toBe('attachment; filename="playwright-afterglow-series.ics"');
+  const dates = ["2026-06-14", "2026-06-21", "2026-06-28", "2026-07-05"];
+  for (const [index, href] of [...destinations].entries()) {
+    const attachment = await request.get(href + "/calendar.ics");
+    expect(attachment.ok()).toBe(true);
+    expect(attachment.headers()["content-disposition"]).toBe(
+      `attachment; filename="Afterglow-Harbor-Sessions-${dates[index]}.ics"`,
+    );
     expect((await page.goto(href))?.status()).toBe(200);
     await expect(main.getByRole("link", { name: "Upcoming nights", exact: true })).toHaveAttribute("href", route);
   }

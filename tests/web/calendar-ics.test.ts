@@ -174,6 +174,43 @@ describe("public event ICS serialization", () => {
     assert.equal(decodeURIComponent(encoded), `${"東".repeat(83)}.ics`);
   });
 
+  it("names series downloads by their authored date, with a slug fallback", () => {
+    const title = "Afterglow Harbor Sessions";
+    for (const [utcDay, date] of [[15, "2026-06-14"], [22, "2026-06-21"]] as const) {
+      assert.equal(
+        publicEventIcsAttachment(title, "harbor-night", {
+          startAt: Date.UTC(2026, 5, utcDay, 2),
+          timezone: "America/New_York",
+        }),
+        `attachment; filename="Afterglow-Harbor-Sessions-${date}.ics"`,
+      );
+    }
+    assert.equal(
+      publicEventIcsAttachment(title, "harbor-night-2026-06-14", {
+        scheduleKind: "date_only",
+        eventDate: "2026-06-16",
+      }),
+      'attachment; filename="Afterglow-Harbor-Sessions-2026-06-16.ics"',
+    );
+    assert.equal(
+      publicEventIcsAttachment(title, "harbor-night", {
+        timezone: "invalid zone",
+        startAt: Date.UTC(2026, 5, 15, 2),
+      }),
+      'attachment; filename="harbor-night.ics"',
+    );
+  });
+
+  it("reserves filename bytes for a series date in the ASCII and UTF-8 names", () => {
+    const occurrence = { scheduleKind: "date_only", eventDate: "2026-06-14" } as const;
+    const ascii = publicEventIcsAttachment("A".repeat(400), "harbor-night", occurrence);
+    assert.equal(ascii, `attachment; filename="${"A".repeat(240)}-2026-06-14.ics"`);
+    const international = publicEventIcsAttachment("東".repeat(400), "harbor-night", occurrence);
+    const [fallback, encoded] = international.split("; filename*=UTF-8''");
+    assert.equal(fallback, 'attachment; filename="harbor-night-2026-06-14.ics"');
+    assert.equal(decodeURIComponent(encoded), `${"東".repeat(80)}-2026-06-14.ics`);
+  });
+
   it("formats helper values deterministically", () => {
     assert.equal(formatIcsUtcTimestamp(Date.UTC(2026, 0, 2, 3, 4, 5)), "20260102T030405Z");
     assert.equal(publicEventIcsFilename("afterglow/harbor sessions"), "afterglow-harbor-sessions.ics");
