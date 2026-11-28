@@ -111,11 +111,38 @@ test("public series occurrences have distinct destinations and dates @fixture", 
   }
 });
 
-test("an occurrence links its series @fixture", async ({ page }) => {
-  await page.goto("/playwright-afterglow-social/events/playwright-afterglow-series-night");
-  await page.getByRole("link", { name: "Upcoming nights", exact: true }).click();
-  await expect(page).toHaveURL(/\/playwright-afterglow-social\/series\/playwright-afterglow-series$/, { timeout: 20_000 });
+test("an occurrence links its series from the event actions @fixture", async ({ page, isMobile }) => {
+  const occurrence = "/playwright-afterglow-social/events/playwright-afterglow-series-night";
+  const series = "/playwright-afterglow-social/series/playwright-afterglow-series";
+  if (isMobile) await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto(occurrence);
+
+  const actions = page.getByRole("navigation", { name: "Event actions", exact: true });
+  const upcoming = actions.getByRole("link", { name: "Upcoming nights", exact: true });
+  await expect(upcoming).toHaveAttribute("href", series);
+  await expect(upcoming).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole("link", { name: "Upcoming nights", exact: true })).toHaveCount(1);
+  await expect(actions.getByRole("link", { name: "Media links", exact: true })).toHaveAttribute("href", "#event-links");
+  await expect(page.locator("#event-links")).toBeVisible();
+
+  if (isMobile) await upcoming.tap();
+  else await upcoming.press("Enter");
+  await expect(page).toHaveURL(series, { timeout: 20_000 });
   await expect(page.getByRole("heading", { name: "Upcoming nights", exact: true })).toBeVisible();
+
+  const firstNight = page.locator(`main a[href="${occurrence}"]`);
+  if (isMobile) await firstNight.tap();
+  else await firstNight.press("Enter");
+  await expect(page).toHaveURL(occurrence);
+  await expect(upcoming).toBeVisible();
+});
+
+test("a series-only occurrence has no empty links section or jump @fixture", async ({ page }) => {
+  await page.goto("/playwright-afterglow-social/events/playwright-afterglow-series-only");
+  const actions = page.getByRole("navigation", { name: "Event actions", exact: true });
+  await expect(actions.getByRole("link", { name: "Upcoming nights", exact: true })).toBeVisible();
+  await expect(actions.locator('a[href="#event-links"]')).toHaveCount(0);
+  await expect(page.locator("#event-links")).toHaveCount(0);
 });
 
 test("the series editor saves only what changed @fixture", async ({ page }) => {
