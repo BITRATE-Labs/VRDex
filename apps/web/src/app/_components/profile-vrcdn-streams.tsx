@@ -75,6 +75,15 @@ type ProfileVrcdnStreamsProps = {
   streams: ProfileVrcdnStream[];
 };
 
+function webPathname(href: string): string | undefined {
+  try {
+    const url = new URL(href);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.pathname : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function responseStates(value: unknown): VrcdnLiveStates | null {
   if (typeof value !== "object" || value === null || !("states" in value)) {
     return null;
@@ -209,6 +218,16 @@ export function ProfileVrcdnStreams({
     sync();return playback.subscribe(sync);
   },[playback,profileId]);
 
+  const linkCards = links.map((link) => {
+    const vrchat = link.kind === "vrchat_user" || link.kind === "vrchat_group" || link.type === "vrchat_profile";
+    const service = vrchat ? link.platform ?? "VRChat" : link.type === "twitch" ? "Twitch" : null;
+    const label = vrchat ? link.label.replace(/^VRChat\s*:\s*/i, "").trim() || link.label : link.label;
+    const hostname = !service && !link.platform && link.verifiedAt === undefined ? hostLabel(link.href) : undefined;
+    const pathname = hostname ? webPathname(link.href) : undefined;
+    const labelKey = label.replace(/[ \t\n\f\r]+/g, " ").replace(/^ | $/g, "");
+    return { link, vrchat, service, label, labelKey, hostname, pathname };
+  });
+
   const hasLinks = links.length > 0 || discordHandles.length > 0;
   const hasWatchSurface = streams.length > 0;
   const compactPhoneTransitions = Boolean(streamsSectionId) && hasLinks && hasWatchSurface;
@@ -243,10 +262,12 @@ export function ProfileVrcdnStreams({
               compactMobileSpacing && "max-sm:mt-3",
               linksHeadingId && "max-sm:mt-2 max-sm:gap-2",
             )}>
-              {links.map((link) => {
-                const vrchat = link.kind === "vrchat_user" || link.kind === "vrchat_group" || link.type === "vrchat_profile";
-                const service = vrchat ? link.platform ?? "VRChat" : link.type === "twitch" ? "Twitch" : null;
-                const label = vrchat ? link.label.replace(/^VRChat\s*:\s*/i, "").trim() || link.label : link.label;
+              {linkCards.map(({ link, vrchat, service, label, labelKey, hostname, pathname }) => {
+                const showPath = pathname !== undefined && linkCards.some(other =>
+                  other.labelKey === labelKey && other.hostname === hostname &&
+                  other.pathname !== undefined && other.pathname !== pathname,
+                );
+                const destination = showPath ? <>{hostname}<wbr />{pathname}</> : link.platform ?? hostname;
                 return (
                   <a
                     className={cn(
@@ -266,7 +287,7 @@ export function ProfileVrcdnStreams({
                       <span className={cn("block", compactLinks ? "font-semibold" : "font-medium")}>{service ?? label}</span>
                       {service && !link.hideCaption ? <span className="mt-0.5 block text-xs font-normal text-muted">{label}</span> : null}
                       {link.live ? <span className="mt-0.5 block text-xs font-normal text-success">Live now</span> : null}
-                      {link.verifiedAt !== undefined ? <ConnectionVerification at={link.verifiedAt} group={link.kind === "vrchat_group"} /> : !service ? <span className="mt-0.5 block text-xs font-normal text-muted">{link.platform ?? hostLabel(link.href)}</span> : null}
+                      {link.verifiedAt !== undefined ? <ConnectionVerification at={link.verifiedAt} group={link.kind === "vrchat_group"} /> : !service ? <span className="mt-0.5 block text-xs font-normal text-muted">{destination}</span> : null}
                     </span>
                     <ExternalLink aria-hidden="true" className="size-4 shrink-0" />
                   </a>

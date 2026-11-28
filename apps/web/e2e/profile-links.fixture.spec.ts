@@ -1,6 +1,26 @@
 import { expect, test } from "@playwright/test";
 import { toggleSiteTheme } from "./flow-navigation";
 
+test("same-label website cards distinguish their paths without displaying query or fragment @fixture", async ({ page }) => {
+  await page.goto("/playwright-website-destinations");
+
+  for (const [name, href] of [
+    ["Website temple.example.invalid/face", "https://temple.example.invalid/face"],
+    ["Website temple.example.invalid/donate", "https://temple.example.invalid/donate?campaign=fixture#form"],
+    ["Homepage temple.example.invalid", "https://temple.example.invalid/"],
+    ["Archive archive.example.invalid/", "https://archive.example.invalid/"],
+    [`Archive archive.example.invalid/${"collection".repeat(20)}`, `https://archive.example.invalid/${"collection".repeat(20)}`],
+  ]) {
+    const link = page.getByRole("link", { name, exact: true });
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute("href", href);
+    await expect(link).toHaveAttribute("target", "_blank");
+    await expect(link).toHaveAttribute("rel", "noreferrer");
+  }
+  await expect(page.getByRole("link", { name: "Notes example.invalid", exact: true })).toHaveCount(2);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test("Discord keeps its handle visible and copies it from the compact control @fixture", async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "clipboard", { value: { writeText: async (text: string) => { sessionStorage.setItem("copied-profile-link", text); } } });

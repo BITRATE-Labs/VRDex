@@ -1432,6 +1432,22 @@ export function getPlaywrightPublicProfileFixture(
       }],
     };
   }
+  if (slug === "playwright-website-destinations") {
+    return {
+      ...communityProfile,
+      slug,
+      displayName: "Afterglow Social",
+      outboundLinks: [
+        { type: "website", label: "Website", url: "https://temple.example.invalid/face", source: "owner_authored" },
+        { type: "website", label: " Website ", url: "https://temple.example.invalid/donate?campaign=fixture#form", source: "owner_authored" },
+        { type: "website", label: "Homepage", url: "https://temple.example.invalid/", source: "owner_authored" },
+        { type: "website", label: "Notes", url: "https://example.invalid/notes?view=1", source: "owner_authored" },
+        { type: "website", label: "Notes", url: "https://example.invalid/notes?view=2", source: "owner_authored" },
+        { type: "website", label: "Archive", url: "https://archive.example.invalid/", source: "owner_authored" },
+        { type: "website", label: "Archive", url: `https://archive.example.invalid/${"collection".repeat(20)}`, source: "owner_authored" },
+      ],
+    };
+  }
   if (slug === "playwright-sparse-community" || slug === "playwright-sparse-community-custom") {
     const customLabel = slug.endsWith("-custom");
     return {
