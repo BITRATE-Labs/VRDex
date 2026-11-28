@@ -1139,6 +1139,54 @@ test("selected Enter opens the canonical public profile @flow @fixture", async (
   await expect(page).toHaveURL(/\/basicbit$/, { timeout: 15_000 });
 });
 
+for (const [name, path, submitted, action, destination] of [
+  ["Home Enter", "/", "  Aurora  ", "enter", "/search?q=Aurora"],
+  ["Home button", "/", "  Aurora  ", "button", "/search?q=Aurora"],
+  ["Discovery Enter", "/discovery", "  Aurora  ", "enter", "/search?q=Aurora"],
+  ["Discovery button", "/discovery", "  Aurora  ", "button", "/search?q=Aurora"],
+  ["filtered Search replacement", "/search?q=basic&type=person", "  Aurora  ", "enter", "/search?q=Aurora&type=person"],
+  ["filtered Search clearing", "/search?q=basic&type=person", "", "button", "/search?type=person"],
+] as const) {
+  test(`cold ${name} submits what the browser field contains @flow @fixture`, async ({ page, isMobile }) => {
+    let releaseScripts!: () => void;
+    const held = new Promise<void>((resolve) => { releaseScripts = resolve; });
+    let heldCount = 0;
+    await page.route("**/_next/static/**/*.js*", async (route) => {
+      heldCount++;
+      await held;
+      await route.continue();
+    });
+
+    try {
+      await page.goto(path, { waitUntil: "commit" });
+      const main = page.getByRole("main");
+      const input = main.getByRole("combobox", { name: "Search VRDex" });
+      await expect(input).toBeVisible();
+      await expect.poll(() => heldCount).toBeGreaterThan(0);
+      await input.press("ControlOrMeta+a");
+      await input.press("Backspace");
+      if (submitted) await input.pressSequentially(submitted);
+      await expect(input).toHaveValue(submitted);
+
+      releaseScripts();
+      await waitForPublicSearchHydration(page);
+      await expect(input).toHaveValue(submitted);
+      if (action === "enter") {
+        await expect(input).toBeFocused();
+        await page.keyboard.press("Enter");
+      } else {
+        const submit = main.getByRole("button", { name: "Search VRDex", exact: true });
+        if (isMobile) await submit.tap();
+        else await submit.click();
+      }
+      await expect(page).toHaveURL((url) => url.pathname + url.search === destination);
+      await expect(input).toHaveValue(submitted.trim());
+    } finally {
+      releaseScripts();
+    }
+  });
+}
+
 test("View all results opens the full search from each public suggestion footer @flow @fixture", async ({ page, isMobile }) => {
   for (const [source, destination] of [
     ["/", "/search?q=Aurora"],

@@ -4,12 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { usePostHog } from "posthog-js/react";
 import { Search, X } from "lucide-react";
-import { type FormEvent, useEffect, useId, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { EntityImage } from "@/components/ui/entity-image";
 import { ProfileAvatarImage } from "@/components/ui/profile-avatar-image";
 import { cn } from "@/lib/cn";
+import { restoreInitialInlineSearch } from "@/lib/initial-inline-search";
 import { captureProductEvent } from "@/lib/posthog";
 import { type SearchSuggestion, useSearchSuggestions } from "./use-search-suggestions";
 import { searchHref, type SearchResultFilter } from "./search-view-state";
@@ -73,6 +74,14 @@ function SearchControl({
   const [query, setQuery] = useState(defaultQuery ?? "");
   const [isOpen, setIsOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const connectInput = useCallback((input: HTMLInputElement | null) => {
+    inputRef.current = input;
+    if (!input) return;
+    restoreInitialInlineSearch(input);
+    // A server-rendered field can already contain edits when React attaches.
+    setQuery(input.value);
+    if (document.activeElement === input) setIsOpen(true);
+  }, []);
   const listboxRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
   const { activeIndex, reset, setActiveIndex, suggestions } = useSearchSuggestions(query, filter, {
@@ -85,7 +94,7 @@ function SearchControl({
   const trimmedQuery = query.trim();
   const hasQueryDraft = Boolean(defaultQuery && trimmedQuery !== defaultQuery.trim());
   const hasPendingQuery = surface === "search" && hasQueryDraft && Boolean(trimmedQuery);
-  const resultsHref = searchHref({ query, filter }).replace(/^\/search/, action);
+  const resultHref = (value: string) => searchHref({ query: value, filter }).replace(/^\/search/, action);
 
   useEffect(() => {
     if (selectedIndex < 0) return;
@@ -104,15 +113,18 @@ function SearchControl({
     setActiveIndex(-1);
   }
 
-  function captureSubmission() {
-    if (query.trim()) captureProductEvent(posthog, "search_submitted", { surface, view_key: "standard" });
+  function captureSubmission(value: string) {
+    if (value.trim()) captureProductEvent(posthog, "search_submitted", { surface, view_key: "standard" });
   }
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    captureSubmission();
+    // The browser can accept input before React hydrates the form.
+    const field = new FormData(event.currentTarget).get("q");
+    const submittedQuery = typeof field === "string" ? field : "";
+    captureSubmission(submittedQuery);
     dismiss();
-    router.push(resultsHref);
+    router.push(resultHref(submittedQuery));
   }
 
   function selectSuggestion(result: SearchSuggestion) {
@@ -154,11 +166,12 @@ function SearchControl({
                 : "border-border bg-surface text-foreground placeholder:text-muted focus:border-accent focus-visible:ring-accent/20",
             )}
             id={inputId}
+            data-inline-search
             name="q"
             placeholder={placeholder}
-            ref={inputRef}
+            ref={connectInput}
             role="combobox"
-            value={query}
+            defaultValue={defaultQuery ?? ""}
             onChange={(event) => {
               if (event.currentTarget.value.trim() !== query.trim()) reset();
               else setActiveIndex(-1);
@@ -194,7 +207,11 @@ function SearchControl({
                 reset();
                 setQuery("");
                 dismiss();
-                inputRef.current?.focus();
+                const input = inputRef.current;
+                if (input) {
+                  input.value = "";
+                  input.focus();
+                }
               }}
             ><X aria-hidden="true" className="size-4" /></button>
           ) : null}
@@ -248,12 +265,12 @@ function SearchControl({
             </div>
             <Link
               className="block border-t border-border px-4 py-3 text-sm font-medium text-foreground underline underline-offset-4 hover:bg-surface-elevated focus-visible:ring-2 focus-visible:ring-focus"
-              href={resultsHref}
+              href={resultHref(query)}
               onMouseDown={(event) => {
                 // Keep the input focused until the link receives its click.
                 if (event.button === 0) event.preventDefault();
               }}
-              onClick={() => { captureSubmission(); dismiss(); }}
+              onClick={() => { captureSubmission(query); dismiss(); }}
             >
               View all results
             </Link>
