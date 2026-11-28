@@ -34,7 +34,13 @@ export default async function EventSeriesPage({ params }: EventSeriesPageProps) 
 
         <header>
           <h1 className="text-5xl leading-none font-semibold tracking-[-0.05em] sm:text-7xl">{series.title}</h1>
-          {series.summary ? <p className="mt-4 max-w-2xl text-base leading-7 text-muted sm:text-lg">{series.summary}</p> : null}
+          <a
+            className="mt-1 inline-block min-h-11 min-w-11 max-w-full rounded-control py-2.5 font-medium text-accent-strong underline decoration-accent/65 underline-offset-4 [overflow-wrap:anywhere] hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
+            href={`/${series.communitySlug}`}
+          >
+            {series.communityName}
+          </a>
+          {series.summary ? <p className="mt-1 max-w-2xl text-base leading-7 text-muted sm:text-lg">{series.summary}</p> : null}
         </header>
 
         <Card surface="white">

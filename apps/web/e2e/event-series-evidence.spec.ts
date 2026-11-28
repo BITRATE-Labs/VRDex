@@ -71,6 +71,26 @@ test("an empty public series shows its schedule status without a download action
   expect(await calendar.text()).not.toContain("BEGIN:VEVENT");
 });
 
+for (const suffix of ["", "-empty"]) {
+  test(`a public series with ${suffix ? "no" : "upcoming"} nights links its host @fixture`, async ({ page, isMobile }) => {
+    const community = "/playwright-afterglow-social";
+    const series = `${community}/series/playwright-afterglow-series${suffix}`;
+    if (isMobile) await page.setViewportSize({ width: 320, height: 720 });
+    expect((await page.goto(series))?.status()).toBe(200);
+
+    const header = page.getByRole("main").locator("header").filter({ has: page.getByRole("heading", { level: 1 }) });
+    const host = header.getByRole("link", { name: "Afterglow Social", exact: true });
+    await expect(host).toHaveAttribute("href", community);
+    await expect(host).toBeInViewport({ ratio: 1 });
+
+    if (isMobile) await host.tap();
+    else await host.press("Enter");
+
+    await expect(page).toHaveURL(community);
+    await expect(page.getByRole("heading", { name: "Afterglow Social", level: 1, exact: true })).toBeVisible();
+  });
+}
+
 test("public series occurrences have distinct destinations and dates @fixture", async ({ page, request }) => {
   const route = "/playwright-afterglow-social/series/playwright-afterglow-series";
   await page.setViewportSize({ width: 320, height: 720 });
