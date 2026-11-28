@@ -416,11 +416,10 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
   const sourceUrl = parseHttpsUrl(event.source.url)?.href;
   const seriesPath = event.seriesId && event.communitySlug ? `/${event.communitySlug}/series/${event.seriesId}` : null;
   const publicLinks = event.mediaLinks.filter((link) => parseVrcdnStreamLinks(link.url) === null);
-  const hasLinks = Boolean(seriesPath) || publicLinks.length > 0;
   const isOpenMediaLink = (link: PublicEvent["mediaLinks"][number]) =>
     link.presentation === "open" && (link.type === "watch" || link.type === "stream");
   const hasMediaLinks = publicLinks.some(isOpenMediaLink);
-  const linksLabel = hasMediaLinks ? "Media links" : hasLinks ? "Links" : undefined;
+  const linksLabel = hasMediaLinks ? "Media links" : publicLinks.length > 0 ? "Links" : undefined;
   const linksHeading = hasMediaLinks && (seriesPath || !publicLinks.every(isOpenMediaLink)) ? "Event links" : linksLabel;
   const eventPath = publicEventPath(event);
   const hasWorlds = event.worlds.length > 0;
@@ -476,6 +475,7 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
           eventPath={eventPath}
           hasLineup={lineup.length > 0}
           linksLabel={linksLabel}
+          seriesPath={seriesPath}
           onReport={() => setReportOpen(true)}
         />
 
@@ -611,9 +611,6 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
               {linksHeading}
             </h2>
             <div className="mt-4 grid gap-3">
-              {seriesPath ? <Link className={actionCardVariants({ variant: "accent" })} href={seriesPath}>
-                <span className={actionLabelClassName}>Upcoming nights</span>
-              </Link> : null}
               {publicLinks.map((link) => {
                 const key = `${link.type}-${link.url}`;
                 if (link.presentation === "copy") {

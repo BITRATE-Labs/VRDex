@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { ArrowDown, CalendarDays, Flag, ListMusic } from "lucide-react";
+import { ArrowDown, ArrowRight, CalendarDays, Flag, ListMusic } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
@@ -21,6 +21,7 @@ export function EventPublicHero({
   eventPath,
   hasLineup,
   linksLabel,
+  seriesPath,
   onReport,
 }: {
   bannerStyle?: CSSProperties;
@@ -29,6 +30,7 @@ export function EventPublicHero({
   eventPath: string | undefined;
   hasLineup: boolean;
   linksLabel: "Links" | "Media links" | undefined;
+  seriesPath: string | null;
   onReport: () => void;
 }) {
   const actionClassName = cn(
@@ -40,7 +42,7 @@ export function EventPublicHero({
   const actionTooltipClassName = cn(tooltipClassName, "group-hover:block");
 
   const detailTextClassName = bannerStyle ? "text-white/80" : "text-muted";
-  const showWatchEndStatus = Boolean(linksLabel) && event.watchSurfaceEnabled && event.status !== "cancelled"
+  const showWatchEndStatus = Boolean(linksLabel || seriesPath) && event.watchSurfaceEnabled && event.status !== "cancelled"
     && event.startAt !== undefined && Number.isFinite(event.endAt);
   const startTime = (
     <ViewerLocalEventDateTime className={cn(
@@ -102,6 +104,12 @@ export function EventPublicHero({
             </a>
             <span role="tooltip" className={actionTooltipClassName}>Add to calendar</span>
           </span> : null}
+          {seriesPath ? (
+            <Link className={actionClassName} href={seriesPath}>
+              Upcoming nights
+              <ArrowRight aria-hidden="true" />
+            </Link>
+          ) : null}
           {linksLabel ? (
             <a className={actionClassName} href="#event-links">
               <ArrowDown aria-hidden="true" className="block!" />

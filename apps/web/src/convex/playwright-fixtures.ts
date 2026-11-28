@@ -1898,6 +1898,10 @@ export function getPlaywrightPublicEventFixture(slug: string): PublicEvent | nul
     return { ...publicEvent, slug, seriesId };
   }
 
+  if (slug === "playwright-afterglow-series-only") {
+    return { ...publicEvent, id: `event-${slug}`, slug, seriesId, mediaLinks: [] };
+  }
+
   const seriesNight = seriesNights.find((night) => night.slug === slug);
   if (seriesNight) {
     const { id, startAt, doorsOpenAt, endAt, summary } = seriesNight;
