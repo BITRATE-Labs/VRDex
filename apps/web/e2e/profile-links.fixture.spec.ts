@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 import { toggleSiteTheme } from "./flow-navigation";
 
 test("same-label website cards distinguish their paths without displaying query or fragment @fixture", async ({ page }) => {
@@ -473,6 +473,42 @@ test("a rich community confirms when its hosted event list is empty @fixture", a
     if (!statusBox || !actionBox) throw new Error("Missing hosted event status or action");
     expect(statusBox.y).toBeGreaterThanOrEqual(actionBox.y + actionBox.height);
     expect(actionBox.height).toBeGreaterThanOrEqual(44);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+  }
+});
+
+test("a compact community keeps its name and group link readable at 200% text @fixture", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  expect((await page.goto("/playwright-sparse-community"))?.status()).toBe(200);
+  await page.evaluate(() => document.fonts.ready);
+  const title = page.getByRole("heading", { name: "Sparse Community", level: 1 });
+  const group = page.getByRole("link", { name: "VRChat group", exact: true });
+  const groupLabel = group.getByText("VRChat group", { exact: true });
+  const fontSize = (label: Locator) => label.evaluate(element => Number.parseFloat(getComputedStyle(element).fontSize));
+  const [normalTitleSize, normalGroupSize] = await Promise.all([fontSize(title), fontSize(groupLabel)]);
+  await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+
+  function unbrokenWords(label: Locator) {
+    return label.evaluate(element => {
+      const text = element.firstChild;
+      if (!(text instanceof Text)) throw new Error("Expected plain label text");
+      const range = document.createRange();
+      return Array.from(text.data.matchAll(/\S+/g)).flatMap(word => {
+        range.setStart(text, word.index);
+        range.setEnd(text, word.index + word[0].length);
+        return range.getClientRects().length === 1 ? [word[0]] : [];
+      });
+    });
+  }
+
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 720 });
+    await expect(group).toBeInViewport({ ratio: 1 });
+    expect(await fontSize(title)).toBe(normalTitleSize * 2);
+    expect(await fontSize(groupLabel)).toBe(normalGroupSize * 2);
+    expect(await unbrokenWords(groupLabel)).toEqual(["VRChat", "group"]);
+    expect(await unbrokenWords(title)).toContain("Sparse");
+    if (width === 390) expect(await unbrokenWords(title)).toContain("Community");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
   }
 });

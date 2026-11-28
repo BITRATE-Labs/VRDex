@@ -244,7 +244,7 @@ export function ProfileVrcdnStreams({
           <section
             aria-label={compactLinks ? "Links" : undefined}
             className={cn(
-              compactLinks ? "px-4 pb-4 sm:px-6" : "py-8",
+              compactLinks ? "px-4 pb-4 max-sm:px-[16px] sm:px-6" : "py-8",
               compactMobileSpacing && "max-sm:py-4",
               linksHeadingId && "max-sm:pt-3",
               compactPhoneTransitions && "max-sm:pb-4",
@@ -273,14 +273,14 @@ export function ProfileVrcdnStreams({
                     className={cn(
                       buttonVariants({ variant: compactLinks ? "primary" : "secondary" }),
                       linkCardClassName,
-                      compactLinks && "min-h-12 rounded-control border border-transparent px-3 py-2",
+                      compactLinks && "min-h-12 rounded-control border border-transparent px-3 py-2 max-sm:min-h-[48px] max-sm:gap-[12px] max-sm:px-[12px] max-sm:py-[8px]",
                     )}
                     href={link.href}
                     key={link.key}
                     rel="noreferrer"
                     target="_blank"
                   >
-                    <span aria-hidden="true" className={cn(profileLinkIconClassName, vrchat ? "[&>svg]:size-10" : "[&>svg]:size-6", compactLinks && "size-8 [&>svg]:size-8")}>
+                    <span aria-hidden="true" className={cn(profileLinkIconClassName, vrchat ? "[&>svg]:size-10" : "[&>svg]:size-6", compactLinks && "size-8 [&>svg]:size-8 max-sm:size-[32px] max-sm:[&>svg]:size-[32px]")}>
                       {link.kind && link.artworkUrl ? <ProfileDestinationArtwork kind={link.kind} src={link.artworkUrl} /> : <LinkTypeIcon type={link.kind === "discord_guild" ? "discord" : vrchat ? "vrchat_profile" : link.type ?? "website"} />}
                     </span>
                     <span className={cn("min-w-0 flex-1 [overflow-wrap:anywhere]", compactLinks && "[&_.text-muted]:text-inherit")}>
@@ -289,7 +289,7 @@ export function ProfileVrcdnStreams({
                       {link.live ? <span className="mt-0.5 block text-xs font-normal text-success">Live now</span> : null}
                       {link.verifiedAt !== undefined ? <ConnectionVerification at={link.verifiedAt} group={link.kind === "vrchat_group"} /> : !service ? <span className="mt-0.5 block text-xs font-normal text-muted">{destination}</span> : null}
                     </span>
-                    <ExternalLink aria-hidden="true" className="size-4 shrink-0" />
+                    <ExternalLink aria-hidden="true" className={cn("size-4 shrink-0", compactLinks && "max-sm:size-[16px]")} />
                   </a>
                 );
               })}

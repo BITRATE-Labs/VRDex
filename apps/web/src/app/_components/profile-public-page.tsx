@@ -774,7 +774,10 @@ export function ProfilePublicPage({
   ) : null;
   const Shell = embedded ? Fragment : PageShell;
   return (
-    <Shell {...(isRichPublicPerson && visitorDestinations.links.available ? { className: "max-sm:pt-6" } : {})}>
+    <Shell {...(embedded ? {} : { className: cn(
+      useCompactCommunity && "max-sm:px-[clamp(12px,calc(24px_-_0.5rem),16px)] max-sm:py-[32px]",
+      isRichPublicPerson && visitorDestinations.links.available && "max-sm:pt-6",
+    ) })}>
       <PageContainer className={cn(
         useCompactCommunity && "max-w-2xl lg:gap-4",
         isRichPublicCommunity && "max-sm:gap-3",
@@ -790,7 +793,9 @@ export function ProfilePublicPage({
             )}
           >
             <div
-              className={useCompactIdentity ? "p-4 sm:p-6" : "relative bg-media bg-cover bg-center p-5 text-white sm:p-6"}
+              className={useCompactIdentity
+                ? cn("p-4 sm:p-6", useCompactCommunity && "max-sm:p-[16px]")
+                : "relative bg-media bg-cover bg-center p-5 text-white sm:p-6"}
               style={bannerStyle}
             >
               {bannerStyle ? <span aria-hidden="true" className="absolute inset-0 bg-black/60" /> : null}
@@ -804,6 +809,7 @@ export function ProfilePublicPage({
                 <div className={cn(
                   "flex min-w-0",
                   useCompactIdentity ? "items-center gap-3 sm:gap-4" : "flex-col gap-6 sm:flex-row sm:items-center",
+                  useCompactCommunity && "max-sm:flex-wrap max-sm:gap-[12px]",
                   useSideBySideMobileIdentity && "max-sm:grid max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:items-center max-sm:gap-x-3 max-sm:gap-y-0",
                 )}>
                   <div className="relative w-fit shrink-0">
@@ -813,6 +819,7 @@ export function ProfilePublicPage({
                         useCompactIdentity
                           ? "size-14 rounded-control border border-border-strong bg-surface-elevated text-xl text-foreground sm:size-16"
                           : "size-24 bg-white/20 text-3xl shadow-panel",
+                        useCompactCommunity && "max-sm:size-[56px] max-sm:text-[min(1.25rem,24px)]",
                         useSideBySideMobileIdentity && "max-sm:size-14 max-sm:text-xl",
                       )}
                       style={useCompactIdentity ? undefined : avatarStyle}
@@ -827,7 +834,11 @@ export function ProfilePublicPage({
                       <VerifiedTrustMark className="verified-trust-mark--avatar" />
                     ) : null}
                   </div>
-                  <div className={cn("min-w-0", useSideBySideMobileIdentity && "max-sm:contents")}>
+                  <div className={cn(
+                    "min-w-0",
+                    useCompactCommunity && "max-sm:grow max-sm:basis-[min-content]",
+                    useSideBySideMobileIdentity && "max-sm:contents",
+                  )}>
                     <div className="min-w-0">
                       <h1
                         className={cn(
