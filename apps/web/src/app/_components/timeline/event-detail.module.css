@@ -183,6 +183,11 @@ button[data-state="saved"]:has(.setInterestLabel) {
   align-items: center;
   font-size: 0.8rem;
 }
+@media (max-width: 999px) and (forced-colors: none) {
+  .close {
+    --focus: var(--accent);
+  }
+}
 @media (max-width: 999px) {
   .panel {
     position: fixed;
