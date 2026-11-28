@@ -47,10 +47,11 @@ test("individual public asset downloads replace only UUID names with a usable pu
   const url = "https://example.test/api/v0/profiles/basicbit/assets/synthetic-asset/file";
 
   const cases = [
-    { name: "BASICBIT Graffiti.webp" },
+    { name: "BASICBIT_Graffiti.webp" },
     { override: { originalFileName: "BASICBIT_Primary_Logo.png", label: "BASICBIT Primary Logo", downloadMimeType: "image/png" }, name: "BASICBIT_Primary_Logo.png" },
-    { override: { originalFileName: uuid + ".jpeg", label: "BASICBIT Graffiti.v2" }, name: "BASICBIT Graffiti.v2.webp" },
-    { override: { label: 'Road / show "v2".png' }, name: "Road - show -v2.webp" },
+    { override: { originalFileName: "Published Logo.png", downloadMimeType: "image/png" }, name: "Published Logo.png" },
+    { override: { originalFileName: uuid + ".jpeg", label: "BASICBIT Graffiti.v2" }, name: "BASICBIT_Graffiti.v2.webp" },
+    { override: { label: 'Road / show "v2".png' }, name: "Road_-_show_-v2.webp" },
     { override: { label: "---" }, name: uuid + ".webp" },
     { override: { label: uuid + ".webp" }, name: uuid + ".webp" },
   ];
