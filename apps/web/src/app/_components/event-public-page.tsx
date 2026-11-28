@@ -221,8 +221,8 @@ function EventAvatar({
 export function EventScheduleNowLabel({ onArtwork = false }: { onArtwork?: boolean }) {
   return (
     <span className={cn(
-      "inline-block rounded-control border px-1.5 py-0.5 text-xs font-semibold leading-4 sm:px-2 sm:text-sm sm:leading-5",
-      onArtwork ? "border-white/45 bg-white/15 text-white" : "border-accent/45 bg-accent-muted text-accent-strong",
+      "inline-block rounded-control border px-2 py-0.5 text-sm font-bold leading-5",
+      onArtwork ? "border-sky-200 bg-sky-200 text-slate-950" : "border-accent/80 bg-accent-muted text-accent-strong",
     )}>
       Now
     </span>
