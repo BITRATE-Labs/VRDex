@@ -458,7 +458,7 @@ Selected candidate preview acceptance requires a same-repository PR and nonempty
 
 Only selected jobs run. Storybook is not built for an unrelated timeline fix. Auth and media steps inside the data-flow job are selected independently; its ordinary flow invocation receives a quoted filename pattern. Main pushes skip PR-only browser jobs; production deployment controls remain unchanged.
 
-The local data-flow job has a 45-minute limit for its serial flow suite, composed-media acceptance and artifact upload. Its previous 30-minute limit canceled a run after 257 flow tests and 12 media tests had passed. Individual test timeouts and all selected coverage remain unchanged.
+The local data-flow job allows 70 minutes when it runs the full serial flow suite and composed-media acceptance together. Other selections have 45 minutes. A run of the combined suite reached the 45-minute limit after the serial flows and the first four playback tests passed.
 
 In browsers-only mode, selected Storybook component assertions run with `PLAYWRIGHT_CAPTURE_SCREENSHOTS=false`. Affected public-route assertions also run without review captures. Review captures and image-diff jobs require `ci:visuals` or `ci:full`. Functional flows keep their existing failure screenshots, traces, and videos; those do not establish that review screenshots were collected.
 

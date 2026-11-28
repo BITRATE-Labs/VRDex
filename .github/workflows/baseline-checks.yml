@@ -591,8 +591,8 @@ jobs:
     # Pinned: ubuntu-latest moved to 26.04, where this Playwright version cannot install chromium.
     # Revert to ubuntu-latest once Playwright is upgraded to a release that supports 26.04.
     runs-on: ubuntu-24.04
-    # The serial flow suite plus composed-media checks exceeds 30 minutes on hosted runners.
-    timeout-minutes: 45
+    # The full serial flow suite and composed-media playback share this job budget.
+    timeout-minutes: ${{ needs.visual-selection.outputs.flowPattern == '.*' && needs.visual-selection.outputs.media == 'true' && 70 || 45 }}
     permissions:
       contents: read
 

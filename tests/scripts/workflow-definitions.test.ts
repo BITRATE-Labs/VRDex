@@ -344,7 +344,7 @@ describe("optional browser and visual evidence contract", () => {
     assert.equal(new Set(steps.map((step: { env?: Record<string,string> }) => step.env?.PLAYWRIGHT_JSON_REPORT_FILE).filter(Boolean)).size, 3);
   });
   it("requires real current-branch claim coverage on a local backend without exposing keys to forks", () => {
-    assert.equal(workflow.jobs["playwright-data-flow"]["timeout-minutes"], 45, "Budget includes existing flows, composed media coverage, and artifacts");
+    assert.equal(workflow.jobs["playwright-data-flow"]["timeout-minutes"], "${{ needs.visual-selection.outputs.flowPattern == '.*' && needs.visual-selection.outputs.media == 'true' && 70 || 45 }}", "Only full data-flow runs with media need the larger job budget");
     const steps = workflow.jobs["playwright-data-flow"].steps;
     const audioPrepare = steps.findIndex((step: { name?: string }) => step.name === "Prepare local browser audio backend");
     const media = steps.findIndex((step: { name?: string }) => step.name === "Run isolated composed media acceptance");
