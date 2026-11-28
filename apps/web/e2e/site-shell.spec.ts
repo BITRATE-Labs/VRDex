@@ -215,16 +215,26 @@ test("the mobile menu meets the desktop navigation at 639 and 640 pixels", async
   await expect(discovery).toHaveCount(0);
 });
 
-test("the header wraps its controls at enlarged text sizes without horizontal overflow", async ({ page }) => {
-  await page.setViewportSize({ width: 320, height: 720 });
+test("the phone header keeps its menu reachable at enlarged text sizes", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/support");
   await page.addStyleTag({ content: "html { font-size: 200%; }" });
   const nav = page.getByRole("navigation", { name: "Primary navigation", exact: true });
   const menu = nav.getByRole("button", { name: "Menu", exact: true });
+  const theme = nav.getByRole("button", { name: "Toggle color theme", exact: true });
+  await expect(nav.getByRole("link", { name: "Sign in", exact: true })).toBeVisible();
   await expect(menu).toBeInViewport({ ratio: 1 });
-  await openSiteMenu(page);
-  await expect(nav.getByRole("link", { name: "Add profile", exact: true })).toBeInViewport({ ratio: 1 });
+  expect((await nav.boundingBox())?.height).toBeLessThan(568 / 2);
   expect(await nav.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+
+  await openSiteMenu(page);
+  await expect(nav.getByRole("link", { name: "Discovery", exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(nav.getByRole("link", { name: "Add profile", exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(theme).toBeInViewport({ ratio: 1 });
+  await theme.focus();
+  await theme.press("Escape");
+  await expect(menu).toBeFocused();
+  await expect(theme).toHaveCount(0);
 });
 
 test("the shared header switches to one readable logo in each theme", async ({ page }) => {

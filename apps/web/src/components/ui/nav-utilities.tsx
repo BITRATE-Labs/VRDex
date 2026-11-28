@@ -30,7 +30,7 @@ const convexEnabled = Boolean(process.env.NEXT_PUBLIC_CONVEX_URL);
  * is what let that happen, so these are sized by the row instead.
  */
 const NAV_CONTROL_HEIGHT = "h-11 py-0 sm:h-10";
-const MOBILE_ACCOUNT_WIDTH = "max-sm:w-20";
+const mobileAccountClass = cn(styles.accountControl, "max-sm:w-20");
 type HeaderPanel = "search" | "menu";
 
 function NavSearchPanel({ id, onClose }: { id: string; onClose: (restoreFocus?: boolean) => void }) {
@@ -166,7 +166,7 @@ function NavSearch({ isOpen, onOpen, onClose }: { isOpen: boolean; onOpen: () =>
         aria-controls={isOpen ? panelId : undefined}
         aria-expanded={isOpen}
         aria-label="Search"
-        className={cn(buttonVariants({ variant: "ghost" }), "size-11 shrink-0 p-0 sm:size-10")}
+        className={cn(buttonVariants({ variant: "ghost" }), "size-11 shrink-0 p-0 sm:size-10", styles.searchToggle)}
         ref={toggleRef}
         title="Search"
         type="button"
@@ -182,7 +182,7 @@ function NavSearch({ isOpen, onOpen, onClose }: { isOpen: boolean; onOpen: () =>
 
 function SignedOutControl() {
   return (
-    <Link className={cn(buttonVariants({ variant: "secondary" }), NAV_CONTROL_HEIGHT, MOBILE_ACCOUNT_WIDTH, "whitespace-normal leading-tight")} href="/sign-in">
+    <Link className={cn(buttonVariants({ variant: "secondary" }), NAV_CONTROL_HEIGHT, mobileAccountClass, "whitespace-normal leading-tight")} href="/sign-in">
       Sign in
     </Link>
   );
@@ -193,7 +193,11 @@ function ConnectedAccountControl({ showMyEvents }: { showMyEvents: boolean }) {
   const viewer = useQuery(api.accounts.viewer, isAuthenticated ? {} : "skip");
 
   if (isLoading) {
-    return <span aria-hidden="true" className={cn("rounded-control border border-border bg-surface-strong sm:w-24", NAV_CONTROL_HEIGHT, MOBILE_ACCOUNT_WIDTH)} />;
+    return (
+      <span aria-hidden="true" className={cn("inline-flex shrink-0 items-center justify-center sm:w-24", NAV_CONTROL_HEIGHT, mobileAccountClass)}>
+        <span className="h-2 w-9 rounded bg-muted/30" />
+      </span>
+    );
   }
 
   if (!isAuthenticated) {
@@ -207,7 +211,7 @@ function ConnectedAccountControl({ showMyEvents }: { showMyEvents: boolean }) {
     {showMyEvents ? <Link className={cn(buttonVariants({ variant: "ghost" }), NAV_CONTROL_HEIGHT, "hidden sm:inline-flex")} href="/account/events">My events</Link> : null}
     <Link
       aria-label="Account"
-      className={cn(buttonVariants({ variant: "secondary" }), NAV_CONTROL_HEIGHT, MOBILE_ACCOUNT_WIDTH, "gap-2 px-1.5 sm:pr-3")}
+      className={cn(buttonVariants({ variant: "secondary" }), NAV_CONTROL_HEIGHT, mobileAccountClass, "gap-2 px-1.5 sm:pr-3")}
       href="/account"
     >
       <EntityImage alt="" className="size-7 rounded-control" label={label} sizes="28px" src={viewer?.user.image} />
@@ -263,7 +267,7 @@ function HeaderControls({ accountMode, pathname, showMyEvents }: { accountMode: 
   }
 
   return (
-    <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1 sm:relative sm:flex-nowrap sm:gap-x-1">
+    <div className={cn("ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1 sm:relative sm:flex-nowrap sm:gap-x-1", styles.utilities)}>
       <NavSearch
         isOpen={panel === "search"}
         onOpen={() => setPanel("search")}
@@ -299,7 +303,7 @@ function HeaderControls({ accountMode, pathname, showMyEvents }: { accountMode: 
         <button
           aria-controls={panel === "menu" ? menuId : undefined}
           aria-expanded={panel === "menu"}
-          className={cn(buttonVariants({ variant: "ghost" }), "size-11 p-0")}
+          className={cn(buttonVariants({ variant: "ghost" }), "size-11 p-0", styles.menuToggle)}
           ref={menuToggleRef}
           type="button"
           onClick={(event) => {
