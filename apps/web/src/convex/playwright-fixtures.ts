@@ -1899,7 +1899,7 @@ export function getPlaywrightPublicEventFixture(slug: string): PublicEvent | nul
   }
 
   if (slug === "playwright-afterglow-series-only") {
-    return { ...publicEvent, id: `event-${slug}`, slug, seriesId, mediaLinks: [] };
+    return { ...publicEvent, id: `event-${slug}`, slug, seriesId, bannerImageUrl: undefined, mediaLinks: [] };
   }
 
   const seriesNight = seriesNights.find((night) => night.slug === slug);

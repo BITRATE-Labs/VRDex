@@ -111,15 +111,18 @@ test("public series occurrences have distinct destinations and dates @fixture", 
   }
 });
 
-test("an occurrence links its series from the event actions @fixture", async ({ page, isMobile }) => {
+test("an occurrence links its series beside the event date @fixture", async ({ page, isMobile }) => {
   const occurrence = "/playwright-afterglow-social/events/playwright-afterglow-series-night";
   const series = "/playwright-afterglow-social/series/playwright-afterglow-series";
   if (isMobile) await page.setViewportSize({ width: 320, height: 568 });
   await page.goto(occurrence);
 
   const actions = page.getByRole("navigation", { name: "Event actions", exact: true });
-  const upcoming = actions.getByRole("link", { name: "Upcoming nights", exact: true });
+  const hero = page.getByRole("region", { name: "Afterglow Harbor Sessions", exact: true });
+  const upcoming = hero.getByRole("link", { name: "Upcoming nights", exact: true });
   await expect(upcoming).toHaveAttribute("href", series);
+  await expect(upcoming.locator("svg")).toBeVisible();
+  await expect(actions.getByRole("link", { name: "Upcoming nights", exact: true })).toHaveCount(0);
   await expect(upcoming).toBeInViewport({ ratio: 1 });
   await expect(page.getByRole("link", { name: "Upcoming nights", exact: true })).toHaveCount(1);
   await expect(actions.getByRole("link", { name: "Media links", exact: true })).toHaveAttribute("href", "#event-links");
@@ -140,7 +143,8 @@ test("an occurrence links its series from the event actions @fixture", async ({ 
 test("a series-only occurrence has no empty links section or jump @fixture", async ({ page }) => {
   await page.goto("/playwright-afterglow-social/events/playwright-afterglow-series-only");
   const actions = page.getByRole("navigation", { name: "Event actions", exact: true });
-  await expect(actions.getByRole("link", { name: "Upcoming nights", exact: true })).toBeVisible();
+  const hero = page.getByRole("region", { name: "Afterglow Harbor Sessions", exact: true });
+  await expect(hero.getByRole("link", { name: "Upcoming nights", exact: true })).toBeVisible();
   await expect(actions.locator('a[href="#event-links"]')).toHaveCount(0);
   await expect(page.locator("#event-links")).toHaveCount(0);
 });
