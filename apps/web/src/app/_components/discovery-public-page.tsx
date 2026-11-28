@@ -8,6 +8,7 @@ import { EditPublicSearchLink } from "./public-search-control";
 import { searchHref, type SearchResultFilter } from "./search-view-state";
 import { SearchViewShell } from "./search-view-shell";
 import { PublicSearchResultDetails } from "./public-search-result-details";
+import { SearchResultsHistory } from "./search-results-history";
 import styles from "./discovery-public-page.module.css";
 import type { PublicEventPreview } from "./event-public-page";
 import { ViewerLocalEventDateTime, ViewerLocalEventTime } from "./viewer-local-event-times";
@@ -399,7 +400,7 @@ function SearchResultCard({ referenceTime, result }: { referenceTime: number; re
         </span>
         {spreadSummary ? summary : null}
       </TrackedDiscoveryLink>
-      {result.person ? <PublicSearchResultDetails person={result.person} /> : null}
+      {result.person ? <PublicSearchResultDetails person={result.person} slug={result.slug} /> : null}
       {result.claimEntryPath ? (
         <div className="ml-16 w-fit pb-3 pr-3 sm:ml-[5.25rem] sm:pr-4">
           <Link
@@ -744,7 +745,7 @@ export function SearchResultsPage({
       searchControl={<DiscoverySearchForm compact defaultQuery={query} filter={activeFilter} inputId={inputId} placeholder="Search VRDex" surface="search" tone="default" />}
     >
         {hasQuery ? (
-          <section aria-describedby="search-results-query" aria-label="Search results" className="space-y-3 sm:space-y-5">
+          <SearchResultsHistory>
             <nav aria-label="Entity type" className="flex flex-wrap gap-x-0.5 border-b border-border sm:gap-x-2">
               {filters.map((filter) => {
                 const active = filter === activeFilter;
@@ -803,7 +804,7 @@ export function SearchResultsPage({
                 {results.map((result) => <SearchResultCard key={`${result.entityType}-${result.slug}`} referenceTime={referenceTime} result={result} />)}
               </div>
             )}
-          </section>
+          </SearchResultsHistory>
         ) : null}
         {activeFilter === "event" ? (
           <Link

@@ -10,7 +10,7 @@ const summaryClassName = "inline-flex min-h-11 min-w-11 w-fit cursor-pointer lis
 const disclosureClassName = cn("min-w-0 open:basis-full", styles.disclosure);
 const detailPanelClassName = "order-last min-w-0 flex-[1_0_100%]";
 
-export function PublicSearchResultDetails({ person }: { person: PublicSearchPerson }) {
+export function PublicSearchResultDetails({ person, slug }: { person: PublicSearchPerson; slug: string }) {
   const genres = orderedPublicSearchGenres(person.genres);
   const visibleGenres = genres.slice(0, 3).map(publicSearchGenreLabel);
   const remainingGenres = genres.slice(3).map(publicSearchGenreLabel);
@@ -25,7 +25,7 @@ export function PublicSearchResultDetails({ person }: { person: PublicSearchPers
         <span className="min-w-0 [overflow-wrap:anywhere] max-sm:basis-full">{visibleGenres.join(" · ")}</span>
       ) : null}
       {remainingGenreCount > 0 ? (
-        <details className={cn(disclosureClassName, "group/genres")}>
+        <details className={cn(disclosureClassName, "group/genres")} data-search-disclosure={`${slug}:genres`}>
           <summary aria-label={`${remainingGenreCount} more ${genreNoun}`} className={summaryClassName}>
             <span>+{remainingGenreCount} {genreNoun}</span>
             <ChevronDown aria-hidden="true" className="size-3 shrink-0 group-open/genres:rotate-180" />
@@ -34,7 +34,7 @@ export function PublicSearchResultDetails({ person }: { person: PublicSearchPers
         </details>
       ) : null}
       {person.outboundLinks.length > 0 ? (
-        <details className={cn(disclosureClassName, "group/links")}>
+        <details className={cn(disclosureClassName, "group/links")} data-search-disclosure={`${slug}:links`}>
           <summary className={summaryClassName}>
             <ChevronDown aria-hidden="true" className="size-3 shrink-0 group-open/links:rotate-180 sm:order-last" />
             Links

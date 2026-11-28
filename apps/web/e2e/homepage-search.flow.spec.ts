@@ -531,6 +531,83 @@ test("public result genres and Links disclose independently per person @flow @fi
   await expect(page).toHaveURL(/\/basicbit$/, { timeout: 15_000 });
 });
 
+test("Search Back and Forward restore disclosures independently by entry @flow @fixture", async ({ page, isMobile }) => {
+  test.setTimeout(60_000);
+  if (isMobile) await page.setViewportSize({ width: 320, height: 568 });
+  const search = "/search?q=VRDJ";
+  const profile = "/playwright-moth";
+  const result = publicResultRow(page, profile);
+  const mainSearch = page.getByRole("main").getByRole("combobox", { name: "Search VRDex" });
+  const name = result.getByRole("link", { name: /Moth/ }).first();
+  const links = result.locator("summary", { hasText: "Links" });
+  const publicLink = result.getByRole("link", { name: "VRChat profile VRChat", exact: true });
+  const genres = publicResultRow(page, "/basicbit").getByLabel("8 more genres", { exact: true });
+
+  await page.goto(search);
+  await waitForPublicSearchHydration(page);
+  await expect(links.locator("..")).toHaveJSProperty("open", false);
+  await page.evaluate(() => history.replaceState({ ...history.state, disclosureProbe: true }, ""));
+  await links.press("Enter");
+  await expect(publicLink).toBeVisible();
+  await name.click();
+  await expect(page).toHaveURL(/\/playwright-moth$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/search\?q=VRDJ$/);
+  await expect(publicLink).toBeVisible();
+  expect(await page.evaluate(() => history.state.disclosureProbe)).toBe(true);
+
+  await mainSearch.press("Enter");
+  await expect(publicLink).toBeVisible();
+  await genres.press("Enter");
+  await expect(genres.locator("..")).toHaveJSProperty("open", true);
+  const people = page.getByRole("navigation", { name: "Entity type" }).getByRole("link", { name: "People" });
+  await people.click();
+  await expect(page).toHaveURL(/\/search\?q=VRDJ&type=person$/);
+  await expect(links.locator("..")).toHaveJSProperty("open", false);
+  await expect(genres.locator("..")).toHaveJSProperty("open", false);
+  await page.goBack();
+  await expect(publicLink).toBeVisible();
+  await expect(genres.locator("..")).toHaveJSProperty("open", true);
+  await page.goForward();
+  await expect(links.locator("..")).toHaveJSProperty("open", false);
+  await page.goBack();
+
+  await expect(publicLink).toBeVisible();
+  await name.click();
+  await expect(page).toHaveURL(/\/playwright-moth$/);
+  const nav = page.getByRole("banner").getByRole("navigation", { name: "Primary navigation" });
+  await nav.getByRole("button", { name: "Search", exact: true }).click();
+  const quickSearch = nav.getByRole("combobox", { name: "Search VRDex" });
+  await quickSearch.fill("VRDJ");
+  await quickSearch.press("Enter");
+  await expect(page).toHaveURL(/\/search\?q=VRDJ$/);
+  await expect(links.locator("..")).toHaveJSProperty("open", false);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/playwright-moth$/);
+  await page.goBack();
+  await expect(publicLink).toBeVisible();
+  await links.press("Enter");
+  await expect(links.locator("..")).toHaveJSProperty("open", false);
+  await name.click();
+  await expect(page).toHaveURL(/\/playwright-moth$/);
+  await page.goBack();
+  await expect(links.locator("..")).toHaveJSProperty("open", false);
+  await expect(genres.locator("..")).toHaveJSProperty("open", true);
+
+  await page.goto(search + "&type=all");
+  await waitForPublicSearchHydration(page);
+  await links.press("Enter");
+  await expect(publicLink).toBeVisible();
+  await mainSearch.press("Enter");
+  await expect(page).toHaveURL(/\/search\?q=VRDJ$/);
+  await expect(links.locator("..")).toHaveJSProperty("open", false);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/search\?q=VRDJ&type=all$/);
+  await expect(publicLink).toBeVisible();
+  await page.goForward();
+  await expect(links.locator("..")).toHaveJSProperty("open", false);
+});
+
 test("sparse public results omit empty disclosure controls @flow @fixture", async ({ page, isMobile }, info) => {
   if (isMobile) await page.setViewportSize({ width: 320, height: 800 });
   await prepareVisualPage(page);
