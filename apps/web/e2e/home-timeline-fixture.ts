@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { test as base, expect, type Page } from "@playwright/test";
+import { test as base, expect, type Locator, type Page } from "@playwright/test";
 import { withTimelineFixtureLease } from "./home-timeline-lease";
 export const TIMELINE_NOW = Date.UTC(2026, 9, 26, 21, 30);
 export async function loadCompleteSchedule(page: Page) {
@@ -10,6 +10,12 @@ export async function loadCompleteSchedule(page: Page) {
     await page.getByRole("button", { name: "More", exact: true }).click();
   }
   await expect(state).toHaveAttribute("data-state", "ready", { timeout: 20000 });
+}
+export async function activateTimelineEventPreference(page: Page, opener: Locator, action: string | RegExp) {
+  await opener.click();
+  const panel = page.getByLabel("Event details", { exact: true });
+  await panel.getByRole("button", { name: action, exact: typeof action === "string" }).first().click();
+  await panel.getByRole("button", { name: "Close", exact: true }).click();
 }
 export type TimelineFixture = {
   runId: string;

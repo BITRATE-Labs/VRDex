@@ -1,5 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import { test, TIMELINE_NOW, loadCompleteSchedule } from "./home-timeline-fixture";
+import { test, TIMELINE_NOW, loadCompleteSchedule, activateTimelineEventPreference } from "./home-timeline-fixture";
 import { initializeDiscovery, usableDiscovery } from "./home-discovery-fixture";
 import { captureRouteScreenshot, prepareVisualPage, waitForVisualReady } from "./public-routes";
 
@@ -154,9 +154,11 @@ test.describe("Home schedule images @visual @snapshot @fixture", () => {
       "ORBIT: Interstellar Bassline Orchestra",
       "Low Tide",
     ]) {
-      await page
-        .getByRole("button", { name: `Interested: ${title}`, exact: true })
-        .click();
+      await activateTimelineEventPreference(
+        page,
+        page.getByRole("button", { name: `Open ${title}`, exact: true }),
+        `Interested: ${title}`,
+      );
     }
     const overlappingBars = page.getByTestId("night-lanes").locator("[data-night-reference]");
     await expect(overlappingBars).toHaveCount(2);
