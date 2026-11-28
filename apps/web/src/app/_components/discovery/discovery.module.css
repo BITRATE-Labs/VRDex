@@ -365,6 +365,23 @@
 .date {
   overflow-wrap: anywhere;
 }
+.host {
+  display: inline-block;
+  min-inline-size: 24px;
+  max-inline-size: 100%;
+  min-block-size: 24px;
+  padding-block: 0.25rem;
+  color: var(--accent-strong);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+.host:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
 .eventTime {
   color: var(--foreground);
   font-size: 0.8125rem;

@@ -120,6 +120,63 @@ test.describe("Home discovery @flow @fixture", () => {
     await expect(next).toHaveAttribute("aria-disabled", "false");
   });
 
+  test("Back restores the event rail after opening a host or full event page", async ({ page, isMobile }) => {
+    await page.setViewportSize({ width: isMobile ? 320 : 390, height: 740 });
+    const discover = await usableDiscovery(page);
+    const events = discover.getByRole("group", { name: "Events", exact: true });
+    const rail = events.locator("#discovery-events-rail");
+    const next = events.getByRole("button", { name: "Next events", exact: true });
+    const card = rail.getByTestId("discovery-event-card").last();
+    const title = card.getByRole("heading").getByRole("link");
+    const host = card.locator("p a[href]");
+    const position = () => rail.evaluate(element => ({ left: element.scrollLeft, top: window.scrollY }));
+    const activate = (link: typeof title) => isMobile ? link.tap() : link.press("Enter");
+
+    await expect(next).toHaveAttribute("aria-disabled", "false");
+    if (isMobile) await next.tap();
+    else await next.click();
+    await expect(next).toHaveAttribute("aria-disabled", "true");
+    await host.scrollIntoViewIfNeeded();
+    const fromHost = await position();
+    expect(fromHost.left).toBeGreaterThan(0);
+    const hostURL = new URL((await host.getAttribute("href"))!, page.url()).href;
+    await activate(host);
+    await expect(page).toHaveURL(hostURL);
+    await expect(page.getByRole("main").getByRole("heading", { level: 1 })).toBeVisible();
+
+    await page.goBack();
+    await usableDiscovery(page);
+    await expect.poll(position).toEqual(fromHost);
+    await expect(next).toHaveAttribute("aria-disabled", "true");
+
+    const eventURL = new URL((await title.getAttribute("href"))!, page.url()).href;
+    const fromEvent = await position();
+    await activate(title);
+    const openEvent = page.getByRole("link", { name: "Open full event page", exact: true });
+    await expect(openEvent).toHaveAttribute("href", new URL(eventURL).pathname);
+    await activate(openEvent);
+    await expect(page).toHaveURL(eventURL);
+    await expect(page.getByRole("main").getByRole("heading", { level: 1 })).toBeVisible();
+
+    await page.goBack();
+    await usableDiscovery(page);
+    await expect.poll(position).toEqual(fromEvent);
+    await expect(next).toHaveAttribute("aria-disabled", "true");
+
+    const previous = events.getByRole("button", { name: "Previous events", exact: true });
+    if (isMobile) await previous.tap();
+    else await previous.click();
+    await expect.poll(async () => (await position()).left).toBeLessThanOrEqual(4);
+    const browse = discover.getByRole("link", { name: "Browse", exact: true });
+    if (isMobile) await browse.tap();
+    else await browse.press("Enter");
+    await expect(page).toHaveURL(/\/discovery$/);
+    await page.goBack();
+    await usableDiscovery(page);
+    await expect.poll(async () => (await position()).left).toBeLessThanOrEqual(4);
+    await expect(next).toHaveAttribute("aria-disabled", "false");
+  });
+
   test("favoriteChangeKeepsCandidatesAndCards", async ({ page }, info) => {
     const queries = observeDiscoveryQueries(page);
     await page.reload();

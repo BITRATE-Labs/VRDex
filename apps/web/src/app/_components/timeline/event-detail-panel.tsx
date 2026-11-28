@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useEffectEvent, useRef, useSyncExternalStore } from "react";
+import { useEffect, useEffectEvent, useRef, useSyncExternalStore, type MouseEventHandler } from "react";
 import { publicEventPath } from "@/lib/event-path";
 import { Button, buttonVariants } from "@/components/ui/button";
 import type { TimelineSelection } from "../home-browse-provider";
@@ -23,12 +23,14 @@ export function EventDetailPanel({
   timeZone,
   hour12,
   onClose,
+  onFollowLink,
   ...preferences
 }: {
   selection: TimelineSelection | null;
   timeZone: string;
   hour12: boolean;
   onClose(): void;
+  onFollowLink: MouseEventHandler<HTMLElement>;
 } & DetailPreferenceProps) {
   const detail = useEventDetail({ slug: selection?.slug ?? null });
   const event = detail.kind === "available" ? detail.event : null;
@@ -174,8 +176,8 @@ export function EventDetailPanel({
     </>
   );
   return narrow ? (
-    <dialog ref={dialog} className={styles.panel} aria-label="Event details" onCancel={event => { event.preventDefault(); dismiss(); }}>
+    <dialog ref={dialog} className={styles.panel} aria-label="Event details" onClick={onFollowLink} onCancel={event => { event.preventDefault(); dismiss(); }}>
       {content}
     </dialog>
-  ) : <section className={styles.panel} aria-label="Event details">{content}</section>;
+  ) : <section className={styles.panel} aria-label="Event details" onClick={onFollowLink}>{content}</section>;
 }
