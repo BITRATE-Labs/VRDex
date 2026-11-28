@@ -137,6 +137,7 @@ export function TimelineChart({
   }
   const height = viewportLoading ? settledHeight : viewportHeight;
   const showEmptyState = Boolean(emptyState);
+  const compactQuietPlot = compactEmpty && !viewportLoading && actions.plan.length === 0;
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el || showEmptyState) return;
@@ -302,7 +303,7 @@ export function TimelineChart({
             data-testid="public-timeline-lanes"
             data-loading-placeholder={loadingStatus ? true : undefined}
             data-viewport-loading={viewportLoading || undefined}
-            className={styles.lanes}
+            className={compactQuietPlot ? `${styles.lanes} max-[360px]:max-h-10` : styles.lanes}
             style={{ height }}
           >
             {loadingStatus}

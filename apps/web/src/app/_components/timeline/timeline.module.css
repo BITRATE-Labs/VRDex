@@ -60,21 +60,27 @@
   align-items: center;
   gap: 0.3rem;
 }
-.navigation input,
-.navigation .pendingDate {
+.dateControl,
+.pendingDate {
   width: 140px;
   min-width: 0;
+}
+.dateControl {
+  position: relative;
+}
+.dateControl input,
+.pendingDate {
   min-height: 36px;
   padding-inline: 0.5rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   background: var(--surface-strong);
 }
-.navigation .pendingDate {
+.pendingDate {
   position: relative;
   opacity: 0.6;
 }
-.navigation .pendingDate::after {
+.pendingDate::after {
   content: "";
   position: absolute;
   inset-block-start: 50%;
@@ -85,14 +91,36 @@
   border-radius: 2px;
   background: color-mix(in srgb, var(--surface-strong) 85%, var(--foreground));
 }
-.navigation input {
+.dateControl input {
+  display: block;
+  width: 100%;
+  padding-inline-end: 2rem;
   color-scheme: inherit;
   color: var(--foreground);
   font-size: 0.8rem;
 }
-@media (forced-colors: none) {
-  :global(html[data-theme="dark"]) .navigation input::-webkit-calendar-picker-indicator {
-    filter: brightness(0) invert(1);
+.dateControl input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block: 0;
+  width: 2rem;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.dateControl svg {
+  position: absolute;
+  inset-inline-end: 0.5rem;
+  inset-block-start: 50%;
+  translate: 0 -50%;
+  color: var(--foreground);
+  pointer-events: none;
+}
+@media (forced-colors: active) {
+  .dateControl svg {
+    color: ButtonText;
   }
 }
 .scroller {
@@ -672,11 +700,14 @@
     order: 2;
     padding-inline: 0.375rem;
   }
-  .navigation input,
-  .navigation .pendingDate {
+  .dateControl,
+  .pendingDate {
     flex: 0 0 calc(100% - var(--toolbar-side-width) - 0.5rem);
+  }
+  .dateControl input,
+  .pendingDate {
     min-height: 44px;
-    padding: 0.5rem;
+    padding-block: 0.5rem;
   }
   .status {
     flex-basis: 100%;
