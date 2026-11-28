@@ -18,6 +18,7 @@ import { HomeLiveNow } from "./home-live-now";
 import { ProfileVrcdnStreams } from "./profile-vrcdn-streams";
 import streamStyles from "./profile-vrcdn-streams.module.css";
 import { ProfilePrivateRecord } from "./profile-private-record";
+import { ProfileSectionNavigation } from "./profile-section-navigation";
 import { PublicGroupMembershipChart, type GroupMembership } from "./public-group-membership-chart";
 import { CommunityPopulationHistory } from "./public-group-population-chart";
 import { CommunityActivityDetails, CommunityActivitySection, CommunityActivitySummary } from "./community-activity-layout";
@@ -822,8 +823,7 @@ export function ProfilePublicPage({
                   </div>
                 </div>
                 {visitorLinks.length > 0 ? (
-                  <nav
-                    aria-label="Profile sections"
+                  <ProfileSectionNavigation
                     className={cn(
                       "flex flex-wrap gap-x-1 max-sm:justify-center max-sm:rounded-control max-sm:px-1 max-sm:ring-1 max-sm:ring-white/20 max-sm:ring-inset",
                       aboutCopy && "lg:col-span-2 lg:row-start-2",
@@ -851,7 +851,7 @@ export function ProfilePublicPage({
                         </span>
                       ) : link;
                     })}
-                  </nav>
+                  </ProfileSectionNavigation>
                 ) : null}
                 {communityEventEntry}
                 {aboutCopy ? (

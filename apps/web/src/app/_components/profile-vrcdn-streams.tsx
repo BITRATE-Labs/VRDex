@@ -231,7 +231,7 @@ export function ProfileVrcdnStreams({
   const hasLinks = links.length > 0 || discordHandles.length > 0;
   const hasWatchSurface = streams.length > 0;
   const compactPhoneTransitions = Boolean(streamsSectionId) && hasLinks && hasWatchSurface;
-  const linkCardClassName = cn(profileLinkCardClassName, linksHeadingId && "max-sm:min-h-[4.25rem] max-sm:py-2");
+  const linkCardClassName = cn(profileLinkCardClassName, "focus-visible:ring-accent-strong", linksHeadingId && "max-sm:min-h-[4.25rem] max-sm:py-2");
 
   return (
     <div className={cn(
@@ -272,7 +272,7 @@ export function ProfileVrcdnStreams({
                   <a
                     className={cn(
                       buttonVariants({ variant: compactLinks ? "primary" : "secondary" }),
-                      linkCardClassName, "focus-visible:ring-accent-strong",
+                      linkCardClassName,
                       compactLinks && "min-h-12 rounded-control border border-transparent px-3 py-2",
                     )}
                     href={link.href}
