@@ -244,7 +244,7 @@ export function ProfileVrcdnStreams({
           <section
             aria-label={compactLinks ? "Links" : undefined}
             className={cn(
-              compactLinks ? "px-4 pb-4 max-sm:px-[16px] sm:px-6" : "py-8",
+              compactLinks ? "px-4 pb-4 max-sm:px-[16px] sm:px-6 lg:pb-0" : "py-8",
               compactMobileSpacing && "max-sm:py-4",
               linksHeadingId && "max-sm:pt-3",
               compactPhoneTransitions && "max-sm:pb-4",
@@ -258,7 +258,7 @@ export function ProfileVrcdnStreams({
               ) : <SectionHeading>Links</SectionHeading>
             ) : null}
             <div className={cn(
-              compactLinks ? styles.compactLinkGrid : "mt-5 grid gap-3 sm:grid-cols-2",
+              compactLinks ? cn(styles.compactLinkGrid, "lg:justify-items-end") : "mt-5 grid gap-3 sm:grid-cols-2",
               compactMobileSpacing && "max-sm:mt-3",
               linksHeadingId && "max-sm:mt-2 max-sm:gap-2",
             )}>
@@ -285,6 +285,7 @@ export function ProfileVrcdnStreams({
                       vrchat ? "[&>svg]:size-10" : "[&>svg]:size-6",
                       compactLinks && "size-8 [&>svg]:size-8 max-sm:size-[32px] max-sm:[&>svg]:size-[32px]",
                       compactLinks && link.kind === "vrchat_group" && styles.vrchatGroupMark,
+                      compactLinks && link.kind === "vrchat_group" && !link.artworkUrl && "lg:hidden",
                     )}>
                       {link.kind && link.artworkUrl ? <ProfileDestinationArtwork kind={link.kind} src={link.artworkUrl} /> : <LinkTypeIcon type={link.kind === "discord_guild" ? "discord" : vrchat ? "vrchat_profile" : link.type ?? "website"} />}
                     </span>

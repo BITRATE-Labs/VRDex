@@ -787,10 +787,12 @@ export function ProfilePublicPage({
         <div className={useCompactIdentity ? cn("mx-auto w-full max-w-2xl rounded-panel border border-border-strong bg-surface-strong", !useCompactCommunity && "shadow-panel") : "contents"}>
           <section
             aria-labelledby={`profile-title-${profile.slug}`}
-            className={useCompactIdentity ? undefined : cn(
-              "overflow-hidden rounded-card border border-border bg-media shadow-panel",
-              isRichPublicPerson && "max-sm:[html[data-theme=light]_&]:shadow-sm",
-            )}
+            className={useCompactIdentity
+              ? cn(useCompactCommunity && creatorLinks.length > 0 && "lg:grid lg:grid-cols-[minmax(0,1fr)_13rem] lg:items-center")
+              : cn(
+                "overflow-hidden rounded-card border border-border bg-media shadow-panel",
+                isRichPublicPerson && "max-sm:[html[data-theme=light]_&]:shadow-sm",
+              )}
           >
             <div
               className={useCompactIdentity
