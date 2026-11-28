@@ -21,7 +21,7 @@ export function TimelineRecent({ records, now, timeZone, hour12, ...actions }: T
     <h3>Recent</h3>
     <ul>{recent.map(({ event, time }) => <li key={event.id}>
       <button aria-label={`Open ${event.title}`} aria-pressed={actions.selection?.eventId === event.id}
-        onClick={() => actions.onSelect({ eventId: event.id, slug: event.slug })}>
+        onClick={(click) => actions.onSelect({ eventId: event.id, slug: event.slug }, click.currentTarget)}>
         <strong>{event.title}</strong>
         <span>{time.label} · <ViewerLocalEventDateTime timestamp={time.at} timeZone={timeZone} hour12={hour12} showTimeZone={false} /></span>
       </button>

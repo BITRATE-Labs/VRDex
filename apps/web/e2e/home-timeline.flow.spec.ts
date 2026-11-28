@@ -815,6 +815,35 @@ test.describe("continuous schedule @flow @fixture", () => {
     await expect(panel).toHaveCount(0);
     await expect(invoker).toBeFocused();
   });
+  test("phone details restore the Schedule button activated without focus", async ({
+    page,
+    timelineFixture,
+    isMobile,
+  }) => {
+    test.skip(!isMobile);
+    const chart = page.getByRole("region", { name: "Timeline chart", exact: true });
+    const invoker = chart.getByTestId(`event-${timelineFixture.eventIds[3]}`).getByRole("button", {
+      name: "Open ORBIT: Interstellar Bassline Orchestra",
+      exact: true,
+    });
+    const panel = page.getByRole("dialog", { name: "Event details", exact: true });
+    const close = panel.getByRole("button", { name: "Close", exact: true });
+    const scrollPosition = () => chart.evaluate((node) => [window.scrollY, node.scrollLeft]);
+
+    await invoker.scrollIntoViewIfNeeded();
+    for (const dismiss of [() => close.tap(), () => page.keyboard.press("Escape")]) {
+      await chart.focus();
+      await expect(chart).toBeFocused();
+      const before = await scrollPosition();
+      // A WebKit tap can dispatch a click without moving focus to the button.
+      await invoker.dispatchEvent("click");
+      await expect(close).toBeFocused();
+      await dismiss();
+      await expect(panel).toHaveCount(0);
+      await expect(invoker).toBeFocused();
+      await expect.poll(scrollPosition).toEqual(before);
+    }
+  });
   test("panelUsesCompactPerformerControls", async ({
     page,
     timelineFixture,

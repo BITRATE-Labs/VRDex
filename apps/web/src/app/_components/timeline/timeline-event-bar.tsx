@@ -14,7 +14,7 @@ export type TimelineActions = {
   selection: TimelineSelection | null;
   plan: ReadonlyArray<PlanReference>;
   favoriteProfileIds: ReadonlyArray<string>;
-  onSelect: (selection: TimelineSelection) => void;
+  onSelect: (selection: TimelineSelection, invoker: HTMLButtonElement) => void;
   onSave: (reference: PlanReference) => void;
   onFavorite: (profileId: string) => void;
 };
@@ -65,8 +65,8 @@ export function TimelineEventBar({
           className={styles.eventOpen}
           aria-label={`Open ${event.title}`}
           aria-pressed={selected && !actions.selection?.slotId}
-          onClick={() =>
-            actions.onSelect({ eventId: event.id, slug: event.slug })
+          onClick={(click) =>
+            actions.onSelect({ eventId: event.id, slug: event.slug }, click.currentTarget)
           }
         >
           {event.host?.imageUrl ? (
@@ -152,12 +152,12 @@ export function TimelineEventBar({
                 title={slot.displayLabel}
                 aria-label={`Open ${slot.displayLabel} at ${event.title}`}
                 aria-pressed={actions.selection?.slotId === slot.id}
-                onClick={() =>
+                onClick={(click) =>
                   actions.onSelect({
                     eventId: event.id,
                     slug: event.slug,
                     slotId: slot.id,
-                  })
+                  }, click.currentTarget)
                 }
               >
                 {slot.performer &&

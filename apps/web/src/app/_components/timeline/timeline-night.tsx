@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { useId } from "react";
+import { useId, type MouseEvent } from "react";
 import { BookmarkCheck, Star, TriangleAlert, X } from "lucide-react";
 import { InterestButton } from "@/components/ui/interest-button";
 import { isPastSaved, planSaveState } from "@/lib/timeline/plan-actions";
@@ -168,14 +168,14 @@ export function TimelineNight({
               showStartTime && startTimeId,
               description && statusId,
             ].filter(Boolean).join(" ");
-            const select = () =>
+            const select = (click: MouseEvent<HTMLButtonElement>) =>
               actions.onSelect({
                 eventId: item.event.id,
                 slug: item.event.slug,
                 ...(item.reference.kind === "set"
                   ? { slotId: item.reference.slotId }
                   : {}),
-              });
+              }, click.currentTarget);
             return (
               <article
                 key={lane.key}
@@ -291,12 +291,12 @@ export function TimelineNight({
                         title={slot.displayLabel}
                         aria-label={`Open ${slot.displayLabel} at ${item.event.title}`}
                         aria-describedby={favorite ? favoriteId : undefined}
-                        onClick={() =>
+                        onClick={(click) =>
                           actions.onSelect({
                             eventId: item.event.id,
                             slug: item.event.slug,
                             slotId: slot.id,
-                          })
+                          }, click.currentTarget)
                         }
                       >
                         {favorite && <span id={favoriteId} hidden>{favorite}</span>}
@@ -329,14 +329,14 @@ export function TimelineNight({
                   <span>Unavailable</span>
                 ) : (
                   <button
-                    onClick={() =>
+                    onClick={(click) =>
                       actions.onSelect({
                         eventId: item.event.id,
                         slug: item.event.slug,
                         ...(item.reference.kind === "set"
                           ? { slotId: item.reference.slotId }
                           : {}),
-                      })
+                      }, click.currentTarget)
                     }
                   >
                     {item.slot?.displayLabel ?? item.event.title}
