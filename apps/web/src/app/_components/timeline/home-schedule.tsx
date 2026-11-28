@@ -298,8 +298,8 @@ function ScheduleContent({
       document.removeEventListener("keydown", key, true);
     };
   }, [cancelReplace, flushReplace, setDisplayTimeZone]);
-  const onSelect = (next: TimelineSelection) => {
-    browse.selectEvent(next, document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  const onSelect = (next: TimelineSelection, invoker: HTMLButtonElement) => {
+    browse.selectEvent(next, invoker);
   };
   const onSave = (reference: PlanReference) => {
     const action = togglePlanAction(preference.preferences.plan, reference);
