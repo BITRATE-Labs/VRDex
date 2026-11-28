@@ -263,11 +263,27 @@ test("world event shortcut follows launch and puts keyboard focus on the populat
     await page.keyboard.press("Tab");
     await expect(main.getByRole("link", { name: "Afterglow event listing", exact: true })).toBeFocused();
     await event.focus();
+    const eventListScroll = await page.evaluate(() => window.scrollY);
+    const eventTitle = main.getByRole("heading", { name: "Afterglow Harbor Sessions", level: 1, exact: true });
     await Promise.all([
       page.waitForURL(afterglowEventPath, { waitUntil: "domcontentloaded" }),
       page.keyboard.press("Enter"),
     ]);
-    await expect(main.getByRole("heading", { name: "Afterglow Harbor Sessions", level: 1, exact: true })).toBeVisible();
+    await expect(eventTitle).toBeVisible();
+
+    await page.goBack();
+    await expect(page).toHaveURL("/playwright-neon-harbor#world-events");
+    await expect(main.getByRole("heading", { name: "Neon Harbor", level: 1, exact: true })).toBeVisible();
+    await expect(eventTitle).toHaveCount(0);
+    await expect(eventHeading).toBeFocused();
+    await expect(eventHeading).toBeInViewport({ ratio: 1 });
+    await expect.poll(() => page.evaluate(y => Math.abs(window.scrollY - y), eventListScroll)).toBeLessThanOrEqual(2);
+    await page.keyboard.press("Tab");
+    await expect(event).toBeFocused();
+
+    await page.goForward();
+    await expect(page).toHaveURL(afterglowEventPath);
+    await expect(eventTitle).toBeVisible();
   }
 
   await page.setViewportSize({ width: 1280, height: 864 });
