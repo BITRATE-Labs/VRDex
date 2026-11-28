@@ -24,16 +24,18 @@ export function SearchResultsHistory({ children }: { children: ReactNode }) {
   const resultsRef = useRef<HTMLElement>(null);
   const searchParams = useSearchParams();
   const previousSearch = useRef<string | null>(null);
+  const pendingFocus = useRef<{ href: string; search: string } | null>(null);
 
   useLayoutEffect(() => {
     const results = resultsRef.current;
     if (!results) return;
-    const currentSearch = () => location.pathname + location.search;
+    const currentSearch = () => `${location.pathname}?${new URLSearchParams(location.search)}`;
     const mountedSearch = currentSearch();
     const disclosures = () => Array.from(results.querySelectorAll<HTMLDetailsElement>("details[data-search-disclosure]"));
 
     const restore = () => {
       if (currentSearch() !== mountedSearch) return;
+      pendingFocus.current = null;
       const open = new Set(readOpenDisclosures());
       for (const detail of disclosures()) {
         detail.open = open.has(detail.dataset.searchDisclosure!);
@@ -71,12 +73,24 @@ export function SearchResultsHistory({ children }: { children: ReactNode }) {
 
     const saveDisclosures = () => save();
     const handleLink = (event: MouseEvent) => {
-      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (currentSearch() !== mountedSearch || event.defaultPrevented || event.button !== 0
+        || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       const link = event.target instanceof Element ? event.target.closest("a") : null;
       if (!link || link.origin !== location.origin || (link.target && link.target !== "_self") || link.hasAttribute("download")) return;
       // A link can leave before a pending native toggle event is delivered.
       const keyboardResult = event.isTrusted && event.detail === 0 && link.matches(resultSelector);
-      save(keyboardResult ? link.href : null);
+      const href = keyboardResult ? link.href : null;
+      pendingFocus.current = href === null ? null : { href, search: mountedSearch };
+      save(href);
+    };
+
+    const saveBeforePageExit = () => {
+      const pending = pendingFocus.current;
+      pendingFocus.current = null;
+      // A full-document result navigation can rewrite this Search entry before leaving it.
+      if (pending?.search === mountedSearch && history.state?.[focusKey] !== pending.href) {
+        save(pending.href);
+      }
     };
 
     const restoreCachedPage = (event: PageTransitionEvent) => {
@@ -90,11 +104,13 @@ export function SearchResultsHistory({ children }: { children: ReactNode }) {
     results.addEventListener("toggle", saveDisclosures, true);
     results.addEventListener("click", handleLink, true);
     window.addEventListener("popstate", restore);
+    window.addEventListener("pagehide", saveBeforePageExit);
     window.addEventListener("pageshow", restoreCachedPage);
     return () => {
       results.removeEventListener("toggle", saveDisclosures, true);
       results.removeEventListener("click", handleLink, true);
       window.removeEventListener("popstate", restore);
+      window.removeEventListener("pagehide", saveBeforePageExit);
       window.removeEventListener("pageshow", restoreCachedPage);
     };
   }, [children, searchParams]);
