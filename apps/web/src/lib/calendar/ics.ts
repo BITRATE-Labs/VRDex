@@ -88,9 +88,36 @@ export function formatIcsUtcTimestamp(timestamp: number): string {
 }
 
 export function publicEventIcsFilename(slug: string): string {
-  const basename = slug.replace(/[^a-z0-9-]/gi, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return `${sanitizeIcsBasename(slug) || "event"}.ics`;
+}
 
-  return `${basename || "event"}.ics`;
+export function publicEventIcsAttachment(title: string, slug: string): string {
+  const asciiTitle = sanitizeIcsBasename(title) || sanitizeIcsBasename(slug) || "event";
+  const attachment = `attachment; filename="${safeIcsBasename(asciiTitle)}.ics"`;
+  const internationalTitle = safeIcsBasename(
+    sanitizeIcsBasename(title.normalize("NFC"), /[^\p{L}\p{M}\p{N}\p{Extended_Pictographic}-]/gu),
+  );
+
+  return /[^\u0020-\u007e]/.test(internationalTitle)
+    ? `${attachment}; filename*=UTF-8''${encodeURIComponent(internationalTitle)}.ics`
+    : attachment;
+}
+
+function sanitizeIcsBasename(value: string, unsafe = /[^a-z0-9-]/gi): string {
+  return value.replace(unsafe, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+}
+
+function safeIcsBasename(value: string): string {
+  let bounded = "";
+  let bytes = 0;
+  for (const character of value) {
+    bytes += textEncoder.encode(character).length;
+    if (bytes > 251) break; // Keep the UTF-8 filename, including .ics, within 255 bytes.
+    bounded += character;
+  }
+
+  const basename = bounded.replace(/-$/, "");
+  return /^(?:con|prn|aux|nul|(?:com|lpt)[1-9¹²³])$/i.test(basename) ? `_${basename}` : basename;
 }
 
 export function createPublicEventIcs(event: PublicCalendarEvent, options: CreatePublicEventIcsOptions): string {

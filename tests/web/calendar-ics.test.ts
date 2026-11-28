@@ -12,6 +12,7 @@ import {
   escapeIcsText,
   foldIcsLine,
   formatIcsUtcTimestamp,
+  publicEventIcsAttachment,
   publicEventIcsFilename,
 } from "../../apps/web/src/lib/calendar/ics";
 
@@ -149,6 +150,28 @@ describe("public event ICS serialization", () => {
     assert.match(unfoldedCalendar, /LOCATION:Public Host\r\n/);
     assert.equal(calendar.includes("operatorNotes"), false);
     assert.equal(calendar.includes("switch_source"), false);
+  });
+
+  it("uses the sanitized event title as the attachment filename", () => {
+    assert.equal(publicEventIcsAttachment('Afterglow / Harbor: "Night 2"', "e-k7mq42"),
+      'attachment; filename="Afterglow-Harbor-Night-2.ics"');
+    assert.equal(publicEventIcsAttachment("CON", "e-k7mq42"), 'attachment; filename="_CON.ics"');
+    assert.equal(publicEventIcsAttachment("?:\\\\", "e-k7mq42"), 'attachment; filename="e-k7mq42.ics"');
+  });
+
+  it("includes a safe UTF-8 filename with an ASCII fallback for international titles", () => {
+    assert.equal(publicEventIcsAttachment("Club / Café", "e-k7mq42"),
+      "attachment; filename=\"Club-Caf.ics\"; filename*=UTF-8''Club-Caf%C3%A9.ics");
+    assert.equal(publicEventIcsAttachment("東京\\\\..\\\\舞踏 \r\n\u202e", "e-k7mq42"),
+      "attachment; filename=\"e-k7mq42.ics\"; filename*=UTF-8''%E6%9D%B1%E4%BA%AC-%E8%88%9E%E8%B8%8F.ics");
+  });
+
+  it("bounds attachment filenames from older data by their UTF-8 byte length", () => {
+    const ascii = publicEventIcsAttachment("A".repeat(400), "e-k7mq42");
+    assert.equal(ascii, `attachment; filename="${"A".repeat(251)}.ics"`);
+    const international = publicEventIcsAttachment("東".repeat(400), "e-k7mq42");
+    const encoded = international.split("filename*=UTF-8''")[1];
+    assert.equal(decodeURIComponent(encoded), `${"東".repeat(83)}.ics`);
   });
 
   it("formats helper values deterministically", () => {

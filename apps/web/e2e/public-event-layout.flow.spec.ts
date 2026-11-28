@@ -313,6 +313,7 @@ test("sparse guest events preserve real content and deny Host routes @flow @fixt
   const calendar = await request.get(path + sparseSlug + "/calendar.ics");
   expect(calendar.status()).toBe(200);
   expect(calendar.headers()["content-type"]).toContain("text/calendar");
+  expect(calendar.headers()["content-disposition"]).toBe('attachment; filename="July-Fourth-Sessions.ics"');
   const ics = await calendar.text();
   expect(ics).toContain("DTSTART;VALUE=DATE:20260704");
   expect(ics).not.toContain("DTEND");
