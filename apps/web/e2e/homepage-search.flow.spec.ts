@@ -235,6 +235,53 @@ for (const theme of ["light", "dark"] as const) {
   });
 }
 
+test("Edit search reveals and replaces a no-match query at enlarged phone text size @flow @fixture", async ({ page, isMobile }) => {
+  test.skip(!isMobile);
+  const query = "VRDexEditSearchNoMatch7831";
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto(`/search?q=${query}`);
+  await page.addStyleTag({ content: "html { font-size: 200%; }" });
+  await waitForPublicSearchHydration(page);
+  const main = page.getByRole("main");
+  const edit = main.getByRole("link", { name: "Edit search", exact: true });
+  const input = main.getByRole("combobox", { name: "Search VRDex", exact: true });
+  const submit = main.getByRole("button", { name: "Search VRDex", exact: true });
+  await expect(edit).toHaveAttribute("href", "#standard-search-query");
+  await edit.tap();
+  await expect(input).toBeFocused();
+  await expect.poll(() => input.evaluate((element: HTMLInputElement) => {
+    const { left, top, bottom } = element.getBoundingClientRect();
+    const headerBottom = document.querySelector("[data-site-header]")?.getBoundingClientRect().bottom ?? 0;
+    return top >= headerBottom && bottom <= window.innerHeight
+      && [top + 6, bottom - 6].every((y) => document.elementFromPoint(left + 12, y) === element)
+      && element.selectionStart === 0 && element.selectionEnd === element.value.length;
+  })).toBe(true);
+  await expect(page).toHaveURL((url) => url.searchParams.get("q") === query && !url.hash);
+
+  await page.keyboard.insertText("DJ Aurora");
+  await expect(input).toHaveValue("DJ Aurora");
+  await expect.poll(() => input.evaluate((element: HTMLInputElement) => {
+    const css = getComputedStyle(element);
+    const available = element.clientWidth - parseFloat(css.paddingInlineStart) - parseFloat(css.paddingInlineEnd);
+    const canvas = document.createElement("canvas").getContext("2d");
+    if (!canvas) return false;
+    canvas.font = css.font;
+    return available >= canvas.measureText(element.value).width;
+  })).toBe(true);
+  const suggestion = page.getByRole("option", { name: /DJ Aurora/ }).first();
+  await expect(suggestion).toBeVisible();
+  await expect.poll(async () => {
+    const [option, button] = await Promise.all([suggestion.boundingBox(), submit.boundingBox()]);
+    return Boolean(option && button && option.y >= button.y + button.height);
+  }).toBe(true);
+  await submit.tap();
+  await expect(page).toHaveURL((url) => url.pathname === "/search" && url.searchParams.get("q") === "DJ Aurora");
+  const result = main.getByRole("link", { name: /DJ Aurora/ }).first();
+  await expect(result).toHaveAttribute("href", "/playwright-dj-aurora");
+  await result.tap();
+  await expect(page).toHaveURL("/playwright-dj-aurora");
+});
+
 test("Search reports a failed fetch without claiming there were no matches @flow @fixture", async ({ page }) => {
   test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), "Uses the local Search outage fixture.");
   const query = "playwright-search-unavailable";
@@ -996,6 +1043,7 @@ test("public preview caps real eight-result responses without shifting layout @f
 test("selected Enter opens the canonical public profile @flow @fixture", async ({ page }, info) => {
   await page.addInitScript(() => localStorage.setItem("vrdex-theme", "dark"));
   await page.goto("/discovery");
+  await waitForPublicSearchHydration(page);
   const input = page.getByRole("combobox", { name: /Search/i });
   await input.fill("basic");
   await expect(page.getByRole("option", { name: /BASICBIT/ })).toBeVisible();

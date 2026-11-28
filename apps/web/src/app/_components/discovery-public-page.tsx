@@ -369,6 +369,7 @@ function SearchResultCard({ referenceTime, result }: { referenceTime: number; re
   const spreadSummary = result.entityType === "event" && Boolean(result.summary);
   const summary = result.summary ? (
     <span className={cn(
+      styles.standardResultSummary,
       "line-clamp-2 text-sm leading-5 text-muted [overflow-wrap:anywhere]",
       spreadSummary && "col-start-2 row-start-2 [@media(max-width:360px)]:col-span-full [@media(max-width:360px)]:line-clamp-3 [@media(max-width:360px)]:text-[0.8125rem]",
     )}>
@@ -380,6 +381,7 @@ function SearchResultCard({ referenceTime, result }: { referenceTime: number; re
     <div className="rounded-panel border border-border bg-surface transition-colors hover:border-border-strong">
       <TrackedDiscoveryLink
         className={cn(
+          styles.standardResultLink,
           "group flex min-h-11 items-start gap-3 rounded-panel p-3 transition-colors hover:bg-surface-strong focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-strong sm:p-4",
           spreadSummary && "grid grid-cols-[auto_minmax(0,1fr)] gap-y-1 [&>*:first-child]:row-span-2 [@media(max-width:360px)]:[&>*:first-child]:row-span-1 [@media(max-width:360px)]:py-2.5",
           (result.person?.genres.length || result.person?.outboundLinks.length) && "pb-1 sm:pb-2",
@@ -429,7 +431,7 @@ function SearchResultCard({ referenceTime, result }: { referenceTime: number; re
       </TrackedDiscoveryLink>
       {result.person ? <PublicSearchResultDetails person={result.person} slug={result.slug} /> : null}
       {result.claimEntryPath ? (
-        <div className="ml-16 w-fit pb-3 pr-3 sm:ml-[5.25rem] sm:pr-4">
+        <div className={cn(styles.standardResultClaim, "ml-16 w-fit pb-3 pr-3 sm:ml-[5.25rem] sm:pr-4")}>
           <Link
             className="inline-flex min-h-11 items-center rounded-control pr-3 text-sm font-medium text-muted underline decoration-current/50 underline-offset-4 hover:text-foreground hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
             href={result.claimEntryPath}
@@ -770,7 +772,11 @@ export function SearchResultsPage({
       activeView="standard"
       className="max-sm:py-5"
       hasQuery={hasQuery}
-      searchControl={<DiscoverySearchForm compact defaultQuery={query} filter={activeFilter} inputId={inputId} placeholder="Search VRDex" surface="search" tone="default" />}
+      searchControl={(
+        <div className={styles.standardSearch}>
+          <DiscoverySearchForm className={styles.searchForm} compact defaultQuery={query} filter={activeFilter} inputId={inputId} placeholder="Search VRDex" surface="search" tone="default" />
+        </div>
+      )}
     >
         {hasQuery ? (
           <SearchResultsHistory>
@@ -828,7 +834,7 @@ export function SearchResultsPage({
                 )}
               </Card>
             ) : (
-              <div className="grid gap-2.5 sm:gap-4">
+              <div className={cn(styles.standardResults, "grid grid-cols-1 gap-2.5 sm:gap-4")}>
                 {results.map((result) => <SearchResultCard key={`${result.entityType}-${result.slug}`} referenceTime={referenceTime} result={result} />)}
               </div>
             )}

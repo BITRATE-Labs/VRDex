@@ -7,7 +7,7 @@ import { NavUtilities } from "@/components/ui/nav-utilities";
 
 export function SiteHeader() {
   return (
-    <header className={`${styles.header} sticky top-0 z-40 border-b border-border-strong bg-background px-4 sm:px-6 lg:px-12`}>
+    <header className={`${styles.header} sticky top-0 z-40 border-b border-border-strong bg-background px-4 sm:px-6 lg:px-12`} data-site-header>
       <a
         className={buttonVariants({ className: "mt-2 min-h-11 w-fit not-focus:sr-only focus:flex", variant: "primary" })}
         href="#main-content"

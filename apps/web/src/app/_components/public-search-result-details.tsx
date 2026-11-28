@@ -20,7 +20,7 @@ export function PublicSearchResultDetails({ person, slug }: { person: PublicSear
   if (genres.length === 0 && person.outboundLinks.length === 0) return null;
 
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5 sm:items-baseline sm:gap-y-1 ps-16 pe-3 pb-2.5 text-xs leading-5 text-muted sm:ps-[5.25rem] sm:pe-4 sm:pb-3 sm:text-sm">
+    <div className={cn(styles.resultDetails, "flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5 sm:items-baseline sm:gap-y-1 ps-16 pe-3 pb-2.5 text-xs leading-5 text-muted sm:ps-[5.25rem] sm:pe-4 sm:pb-3 sm:text-sm")}>
       {visibleGenres.length > 0 ? (
         <span className="min-w-0 [overflow-wrap:anywhere] max-sm:basis-full">{visibleGenres.join(" · ")}</span>
       ) : null}

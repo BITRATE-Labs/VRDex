@@ -42,8 +42,20 @@ export function EditPublicSearchLink({ inputId }: { inputId: string }) {
         const input = document.getElementById(inputId);
         if (!(input instanceof HTMLInputElement)) return;
         event.preventDefault();
-        input.focus();
-        input.select();
+        input.focus({ preventScroll: true });
+        input.setSelectionRange(0, input.value.length);
+        requestAnimationFrame(() => {
+          if (document.activeElement !== input) return;
+          const viewport = window.visualViewport;
+          const viewportTop = viewport?.offsetTop ?? 0;
+          const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight);
+          const headerBottom = document.querySelector("[data-site-header]")?.getBoundingClientRect().bottom ?? 0;
+          const visibleTop = Math.max(viewportTop, headerBottom);
+          const field = input.getBoundingClientRect();
+          if (field.top < visibleTop || field.bottom > viewportBottom) {
+            window.scrollBy({ top: field.top - visibleTop - 8, behavior: "instant" });
+          }
+        });
       }}
     >
       Edit search
@@ -131,6 +143,7 @@ function SearchControl({
             autoComplete="off"
             className={cn(
               "w-full rounded-control border pr-12 pl-5 text-base outline-none focus-visible:ring-2",
+              inputId && "scroll-mt-24",
               compact === true ? "min-h-11 py-2" : "min-h-14 py-3",
               compact === "mobile" && "max-sm:min-h-11 max-sm:py-2",
               compact && "max-sm:pr-11 max-sm:pl-3",
