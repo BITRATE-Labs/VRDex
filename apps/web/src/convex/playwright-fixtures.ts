@@ -1455,6 +1455,33 @@ export function getPlaywrightPublicProfileFixture(
       }],
     };
   }
+  if (profileType === "community" && (slug === "playwright-afterglow-group-alias" || slug === "playwright-afterglow-group-ambiguous")) {
+    const groupId = "grp_12345678-1234-1234-1234-123456789abc";
+    const aliasLink = {
+      type: "vrchat_profile",
+      label: "Afterglow meetup",
+      url: "https://vrc.group/TEST.1234",
+      source: "owner_authored",
+      destination: { kind: "vrchat_group", status: "resolved", targetKey: "vrchat_group:TEST.1234", entityId: groupId },
+    } as const;
+    return {
+      ...communityProfile,
+      outboundLinks: [
+        ...communityProfile.outboundLinks,
+        aliasLink,
+        ...(slug === "playwright-afterglow-group-ambiguous" ? [{
+          type: "vrchat_profile",
+          label: "Afterglow partner group",
+          url: "https://vrchat.com/home/group/grp_87654321-1234-1234-1234-123456789abc",
+          source: "owner_authored",
+        } as const] : []),
+      ],
+      verifiedConnections: [{
+        assetType: "vrchat_group", assetExternalId: groupId, url: `https://vrchat.com/home/group/${groupId}`,
+        displayName: "Afterglow Social", verifiedAt: Date.UTC(2026, 7, 26), linkRole: "primary",
+      }],
+    };
+  }
   if (slug === "playwright-website-destinations") {
     return {
       ...communityProfile,

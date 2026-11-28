@@ -1,10 +1,11 @@
 import type { PublicVerifiedConnection } from "@vrdex/api-contracts";
 import { mergeVerifiedVrchatLinks, isVerifiedVrchatLink } from "@/lib/profile-link-verification";
 import Link from "next/link";
-import { ArrowDown, ChevronRight } from "lucide-react";
+import { ArrowDown, ChevronRight, ExternalLink } from "lucide-react";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { profileLinkHasCustomLabel,profileLinkPresentation,type ProfileLinkDestinationMetadata } from "../../../../../convex/_profileLinkPresentation";
 import { parseProfileLinkDestination } from "../../../../../convex/_profileLinkDestination";
+import { normalizeVrchatTargetId } from "../../../../../convex/_vrchatIdentity";
 import { Fragment, type CSSProperties, type ReactNode } from "react";
 
 import { authoredEventSchedule } from "../../../../../convex/_eventRuntime";
@@ -475,6 +476,26 @@ export function ProfilePublicPage({
   const hasCommunityEvents = isRichPublicCommunity && eventPreviews.length > 0;
   const featuredEvent = hasCommunityEvents ? eventPreviews.find((event) => publicEventPath(event)) : undefined;
   const featuredEventPath = featuredEvent ? publicEventPath(featuredEvent) : undefined;
+  const communityGroupLinks = featuredEventPath ? creatorLinks.flatMap(({ link, href }) => {
+    const destination = parseProfileLinkDestination(link);
+    if (destination?.kind !== "vrchat_group") return [];
+
+    const metadata = link.destination?.targetKey === destination.key && link.destination.kind === destination.kind
+      ? link.destination : undefined;
+    const resolvedGroupId = !destination.locator.startsWith("grp_") && metadata?.status === "resolved" && metadata.entityId
+      ? normalizeVrchatTargetId(metadata.entityId, "vrchat_group") : null;
+    const verified = link.verifiedAt !== undefined;
+    return [{
+      href,
+      key: resolvedGroupId ? `vrchat_group:${resolvedGroupId}` : destination.key,
+      verified,
+      eligible: (link.source === "owner_authored" || verified) && metadata?.status !== "invalid",
+    }];
+  }) : [];
+  const featuredGroupLink = new Set(communityGroupLinks.map(({ key }) => key)).size === 1
+    ? communityGroupLinks.find(({ eligible, verified }) => eligible && verified)
+      ?? communityGroupLinks.find(({ eligible }) => eligible)
+    : undefined;
   const showCommunityEventListLink = hasCommunityEvents && (!featuredEventPath || eventPreviews.length > 1);
   const isRichPublicPerson = isPerson && !embedded && !useCompactIdentity;
   const useSideBySideMobileIdentity = isRichPublicCommunity || isRichPublicPerson;
@@ -666,6 +687,7 @@ export function ProfilePublicPage({
       }))}
     />
   );
+  const communityHeroLinkClassName = "inline-flex min-h-11 w-fit items-center gap-1.5 rounded-control text-sm font-medium text-white underline decoration-current/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
   const communityEventEntry = hasCommunityEvents ? (
     <div className={cn("grid min-w-0 gap-1", aboutCopy && "lg:col-start-1 lg:row-start-2")}>
       {featuredEvent && featuredEventPath ? (
@@ -690,9 +712,20 @@ export function ProfilePublicPage({
           <ChevronRight aria-hidden="true" className="size-4 text-white/90" />
         </Link>
       ) : null}
+      {featuredGroupLink ? (
+        <a
+          className={cn(buttonVariants({ variant: "inverse", size: "sm" }), "min-h-11 w-fit gap-2 border-white/50 bg-transparent px-3 hover:bg-white/10 focus-visible:ring-white")}
+          href={featuredGroupLink.href}
+          rel="noreferrer"
+          target="_blank"
+        >
+          VRChat group
+          <ExternalLink aria-hidden="true" className="size-4" />
+        </a>
+      ) : null}
       {showCommunityEventListLink ? (
         <a
-          className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-control text-sm font-medium text-white underline decoration-current/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          className={communityHeroLinkClassName}
           href="#profile-events"
         >
           Hosted events

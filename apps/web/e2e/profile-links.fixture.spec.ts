@@ -448,19 +448,27 @@ test("a sparse community highlights its group and confirms empty hosted events @
   expect((await page.goto(`/${slug}-custom`))?.status()).toBe(200);
   await expect(page.getByRole("link", { name: "VRChat group Official meetup group", exact: true })).toHaveAttribute("href", groupUrl);
 
+  await page.setViewportSize({ width: 320, height: 568 });
   expect((await page.goto("/playwright-afterglow-social-group"))?.status()).toBe(200);
-  const richGroup = page.getByRole("link", { name: /^VRChat group(?:\s|$)/ });
-  const groupedEntry = page.getByRole("region", { name: "Afterglow Social", exact: true }).getByRole("link", { name: /Afterglow Harbor Sessions/ });
+  const richIdentity = page.getByRole("region", { name: "Afterglow Social", exact: true });
+  const richGroup = richIdentity.getByRole("link", { name: "VRChat group", exact: true });
+  const groupedEntry = richIdentity.getByRole("link", { name: /Afterglow Harbor Sessions/ });
   await expect(richGroup).toHaveAttribute("href", groupUrl);
+  await expect(richGroup).toHaveAttribute("target", "_blank");
+  await expect(richGroup).toHaveAttribute("rel", "noreferrer");
+  await expect(page.getByRole("link", { name: "VRChat group VRChat group 1234…9abc", exact: true })).toHaveAttribute("href", groupUrl);
   await expect(groupedEntry).toHaveAttribute("href", "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions");
   const [richGroupBox, groupedEntryBox] = await Promise.all([richGroup.boundingBox(), groupedEntry.boundingBox()]);
   if (!richGroupBox || !groupedEntryBox) throw new Error("Missing group or event entry bounds");
   expect(groupedEntryBox.y + groupedEntryBox.height).toBeLessThanOrEqual(richGroupBox.y);
+  expect(richGroupBox.height).toBeGreaterThanOrEqual(44);
   await expect(groupedEntry).toBeInViewport({ ratio: 1 });
+  await expect(richGroup).toBeInViewport({ ratio: 1 });
   await expect(groupedEntry.getByText("Hosted event", { exact: true })).toBeVisible();
 
+  await page.setViewportSize({ width: 320, height: 720 });
   expect((await page.goto("/playwright-afterglow-social"))?.status()).toBe(200);
-  const richIdentity = page.getByRole("region", { name: "Afterglow Social", exact: true });
+  await expect(richGroup).toHaveCount(0);
   await expect(richIdentity.getByText("Unclaimed", { exact: true })).toBeVisible();
   await expect(page.getByText("Unclaimed", { exact: true })).toHaveCount(1);
   await expect(claim).toHaveAttribute("href", "/claim/playwright-afterglow-social?source=profile");
@@ -516,6 +524,20 @@ test("a sparse community highlights its group and confirms empty hosted events @
   await expect(page.getByRole("heading", { level: 1, name: "Afterglow Harbor Sessions", exact: true })).toBeVisible();
 });
 
+test("the rich community group shortcut uses a verified destination only when its group is unambiguous @fixture", async ({ page }) => {
+  const hero = page.getByRole("region", { name: "Afterglow Social", exact: true });
+  const group = hero.getByRole("link", { name: "VRChat group", exact: true });
+  const groupUrl = "https://vrchat.com/home/group/grp_12345678-1234-1234-1234-123456789abc";
+  expect((await page.goto("/playwright-afterglow-group-alias"))?.status()).toBe(200);
+  await expect(group).toHaveAttribute("href", groupUrl);
+  await expect(page.locator('a[href="https://vrc.group/TEST.1234"]')).toHaveCount(1);
+
+  expect((await page.goto("/playwright-afterglow-group-ambiguous"))?.status()).toBe(200);
+  await expect(hero.getByRole("link", { name: /Afterglow Harbor Sessions/ })).toBeVisible();
+  await expect(group).toHaveCount(0);
+  await expect(page.locator(`a[href="${groupUrl}"]`)).toHaveCount(1);
+  await expect(page.locator('a[href="https://vrchat.com/home/group/grp_87654321-1234-1234-1234-123456789abc"]')).toHaveCount(1);
+});
 test("an event entry stays above rich community content and the list follows the owner order @fixture", async ({ page, isMobile }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/playwright-group-population-multiple-events");
