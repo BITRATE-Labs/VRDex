@@ -218,15 +218,28 @@ function EventAvatar({
   );
 }
 
+export function EventScheduleNowLabel({ onArtwork = false }: { onArtwork?: boolean }) {
+  return (
+    <span className={cn(
+      "inline-block rounded-control border px-1.5 py-0.5 text-xs font-semibold leading-4 sm:px-2 sm:text-sm sm:leading-5",
+      onArtwork ? "border-white/45 bg-white/15 text-white" : "border-accent/45 bg-accent-muted text-accent-strong",
+    )}>
+      Now
+    </span>
+  );
+}
+
 export function EventPreviewCard({
   event,
   variant = "default",
   seriesSummary,
+  scheduledNow = false,
   yearReferenceAt,
 }: {
   event: PublicEventPreview;
   variant?: "default" | "series" | "community";
   seriesSummary?: string;
+  scheduledNow?: boolean;
   yearReferenceAt?: number;
 }) {
   const titleId = useId();
@@ -271,6 +284,7 @@ export function EventPreviewCard({
             isSeries || compactWithoutArtwork ? "gap-x-3 gap-y-1" : "gap-x-4 gap-y-1",
             useThemeColors ? "text-muted" : "text-white/84",
           )}>
+            {scheduledNow ? <EventScheduleNowLabel onArtwork={!useThemeColors} /> : null}
             {hasSeriesDate ? (
               <span className={cn("text-lg font-semibold leading-tight", useThemeColors ? "text-foreground" : "text-white")} id={hasDatedTitle ? dateId : undefined}>
                 {dateTime}

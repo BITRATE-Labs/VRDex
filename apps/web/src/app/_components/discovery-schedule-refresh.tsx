@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 
 const maxTimeoutMs = 2_147_483_647;
 
-export function DiscoveryScheduleRefresh({ nextTransition, serverNow }: {
+export function EventScheduleRefresh({ nextTransition, serverNow }: {
   nextTransition: number;
   serverNow: number;
 }) {

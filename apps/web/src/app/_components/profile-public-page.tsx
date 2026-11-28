@@ -7,7 +7,9 @@ import { profileLinkHasCustomLabel,profileLinkPresentation,type ProfileLinkDesti
 import { parseProfileLinkDestination } from "../../../../../convex/_profileLinkDestination";
 import { Fragment, type CSSProperties, type ReactNode } from "react";
 
-import { EventPreviewCard, type PublicEventPreview } from "./event-public-page";
+import { authoredEventSchedule } from "../../../../../convex/_eventRuntime";
+import { EventPreviewCard, EventScheduleNowLabel, type PublicEventPreview } from "./event-public-page";
+import { EventScheduleRefresh } from "./discovery-schedule-refresh";
 import { ViewerLocalEventDateTime } from "./viewer-local-event-times";
 import { PublicMediaAssetCard } from "./public-media-asset-card";
 import { EntityImage } from "@/components/ui/entity-image";
@@ -359,6 +361,21 @@ export function ProfilePublicPage({
   const avatarAppearance = mediaKit.avatarAppearance ?? defaultAvatarAppearance;
   const avatarStyle: CSSProperties = avatarFrameStyle(undefined, avatarAppearance);
   const eventPreviews = isPerson ? profile.upcomingEvents : profile.hostedEvents;
+  const scheduleNow = embedded ? undefined : yearReferenceAt;
+  const eventSchedules = new Map(eventPreviews.map((event) => {
+    if (scheduleNow === undefined) return [event, undefined] as const;
+    const authored = authoredEventSchedule(event, scheduleNow);
+    const { startAt } = event;
+    const hasTimedStart = event.scheduleKind !== "date_only" && event.status !== "cancelled"
+      && startAt !== undefined && Number.isFinite(startAt);
+    return [event, {
+      scheduledNow: authored.scheduledNow,
+      started: hasTimedStart && startAt <= scheduleNow,
+      nextTransition: authored.nextTransition ?? (hasTimedStart && startAt > scheduleNow ? startAt : Infinity),
+    }] as const;
+  }));
+  const eventSectionLabel = [...eventSchedules.values()].some((schedule) => schedule?.started) ? "Events" : "Upcoming events";
+  const nextEventTransition = Math.min(...[...eventSchedules.values()].map((schedule) => schedule?.nextTransition ?? Infinity));
   const canClaim = profile.trustLabel === "community_submitted" || profile.trustLabel === "unclaimed";
   // Owner-authored personalization wins when present; the factual/community
   // bio remains the fallback instead of rendering two competing About blocks.
@@ -464,7 +481,7 @@ export function ProfilePublicPage({
   const visitorDestinations = {
     links: { id: "profile-links", label: "Links", available: creatorLinks.length > 0 || discordHandles.length > 0 },
     streams: { id: "profile-streams", label: "VRCDN", available: vrcdnStreams.length > 0 },
-    events: { id: "profile-events", label: "Upcoming events", available: eventPreviews.length > 0 },
+    events: { id: "profile-events", label: eventSectionLabel, available: eventPreviews.length > 0 },
     media_kit: { id: "profile-media-kit", label: "Media kit", available: hasMediaKit },
     worlds: { id: "profile-worlds", label: "Worlds", available: profile.worldCredits.length > 0 },
   };
@@ -494,6 +511,9 @@ export function ProfilePublicPage({
         isRichPublicCommunity && "max-sm:py-5",
         hasSingleCommunityEvent && "lg:grid lg:grid-cols-2 lg:gap-x-3",
       )}>
+        {scheduleNow !== undefined && Number.isFinite(nextEventTransition) ? (
+          <EventScheduleRefresh nextTransition={nextEventTransition} serverNow={scheduleNow} />
+        ) : null}
         <div className="flex flex-wrap items-center justify-between gap-3">
           {isPerson
             ? visitorHeading("events")
@@ -526,7 +546,7 @@ export function ProfilePublicPage({
             !hasSingleCommunityEvent && linksColumnSection !== "events" && "lg:grid-cols-2",
           )}>
             {eventPreviews.map((event) => (
-              <EventPreviewCard event={event} key={`${event.slug ?? event.title}-${event.startAt}`} variant={isRichPublicCommunity ? "community" : undefined} yearReferenceAt={yearReferenceAt} />
+              <EventPreviewCard event={event} key={`${event.slug ?? event.title}-${event.startAt}`} variant={isRichPublicCommunity ? "community" : undefined} scheduledNow={eventSchedules.get(event)?.scheduledNow} yearReferenceAt={yearReferenceAt} />
             ))}
           </div>
         ) : <p className="mt-2 text-sm font-medium text-foreground">No events</p>}
@@ -653,7 +673,10 @@ export function ProfilePublicPage({
           href={featuredEventPath}
         >
           <span className="min-w-0">
-            <span className="block text-xs leading-4 font-medium text-white/85">Hosted event</span>
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-4 font-medium text-white/85">
+              <span>Hosted event</span>
+              {eventSchedules.get(featuredEvent)?.scheduledNow ? <EventScheduleNowLabel onArtwork /> : null}
+            </span>
             <span className="block wrap-anywhere text-base leading-5 font-bold group-hover:underline">{featuredEvent.title}</span>
             <ViewerLocalEventDateTime
               className="block text-sm leading-5 text-white/90"

@@ -1045,6 +1045,19 @@ const publicEvent: PublicEvent = {
   ],
 };
 
+const profileScheduleEventFixtures: PublicEvent[] = [
+  { slug: "playwright-harbor-current", title: "Harbor Current Sessions", startAt: Date.UTC(2026, 0, 2, 10), endAt: Date.UTC(2026, 0, 2, 15) },
+  { slug: "playwright-harbor-next", title: "Harbor Next Sessions", startAt: Date.UTC(2026, 0, 2, 16), endAt: Date.UTC(2026, 0, 2, 19) },
+  { slug: "playwright-harbor-open-end", title: "Harbor Open End", startAt: Date.UTC(2026, 0, 2, 11), endAt: undefined },
+].map((event) => ({
+  ...publicEvent,
+  ...event,
+  id: `event-${event.slug}`,
+  doorsOpenAt: undefined,
+  slots: [],
+  nextSlots: [],
+}));
+
 const sparseDateEvent: PublicEvent = {
   ...publicEvent,
   id: "event-" + playwrightGuestEventSlugs.sparseDate,
@@ -1395,6 +1408,12 @@ export function getPlaywrightPublicProfileFixture(
   }
 
   if (profileType === "person") {
+    if (slug === "playwright-person-open-end-event") {
+      return { ...toPublicFixturePersonProfile(personProfile), slug, upcomingEvents: profileScheduleEventFixtures.slice(2) };
+    }
+    if (slug === "playwright-person-current-events") {
+      return { ...toPublicFixturePersonProfile(personProfile), slug, upcomingEvents: profileScheduleEventFixtures };
+    }
     if (slug === "playwright-event-only-profile") {
       const event = getPlaywrightPublicEventFixture(playwrightGuestEventSlugs.sparseDate);
       return event && {
@@ -1415,6 +1434,10 @@ export function getPlaywrightPublicProfileFixture(
     const profile = personProfiles.find((entry) => entry.slug === slug);
 
     return profile ? toPublicFixturePersonProfile(profile) : null;
+  }
+
+  if (profileType === "community" && slug === "playwright-community-current-events") {
+    return { ...communityProfile, slug, hostedEvents: profileScheduleEventFixtures };
   }
 
   if (profileType === "community" && slug === communitySlug) {
@@ -1970,7 +1993,9 @@ export function getPlaywrightPublicEventFixture(slug: string): PublicEvent | nul
     return sparseDateEvent;
   }
 
-  return artlessEventCardVariants.find((event) => event.slug === slug) ?? null;
+  return profileScheduleEventFixtures.find((event) => event.slug === slug)
+    ?? artlessEventCardVariants.find((event) => event.slug === slug)
+    ?? null;
 }
 
 export function getPlaywrightPublicShortLinkFixture(
