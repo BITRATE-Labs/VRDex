@@ -846,6 +846,25 @@ test("non-person public results retain canonical metadata and viewer-local event
   await context.close();
 });
 
+test("Discovery Back restores the keyboard-activated result @flow @fixture", async ({ page }) => {
+  const community = "/playwright-afterglow-social";
+  for (const [path, nextPath] of [
+    [community + "/events/playwright-afterglow-harbor-sessions", "/playwright-dj-aurora"],
+    [community, "/playwright-neon-harbor"],
+  ]) {
+    await page.goto("/discovery");
+    await waitForPublicSearchHydration(page);
+    const link = page.locator(`main a[href="${path}"]`).first();
+    await link.focus();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL((url) => url.pathname === path);
+    await page.goBack();
+    await expect(link).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.locator("main a:focus")).toHaveAttribute("href", nextPath);
+  }
+});
+
 test("public preview caps real eight-result responses without shifting layout @flow @fixture", async ({ page, createSearchProfiles }, info) => {
   const { query, profiles } = await createSearchProfiles(8);
   await page.addInitScript(() => localStorage.setItem("vrdex-theme", "dark"));

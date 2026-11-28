@@ -8,6 +8,7 @@ import { EditPublicSearchLink } from "./public-search-control";
 import { searchHref, type SearchResultFilter } from "./search-view-state";
 import { SearchViewShell } from "./search-view-shell";
 import { PublicSearchResultDetails } from "./public-search-result-details";
+import { DiscoveryResultFocus } from "./discovery-result-focus";
 import { SearchResultsHistory } from "./search-results-history";
 import styles from "./discovery-public-page.module.css";
 import type { PublicEventPreview } from "./event-public-page";
@@ -223,6 +224,7 @@ function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[];
               <TrackedDiscoveryLink
                 className="rounded-control text-section font-semibold text-accent-strong underline decoration-accent/55 underline-offset-4 transition hover:decoration-current focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring max-sm:flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center sm:text-xl"
                 eventName="event_card_clicked"
+                data-discovery-result={`upcoming_events:${publicEventPath(event)}`}
                 href={publicEventPath(event)!}
                 properties={{ entity_type: "event", surface: "upcoming_events" }}
               >
@@ -261,6 +263,7 @@ function DiscoveryCard({
         result.profileType === "community" && "max-sm:items-start",
         spreadSummary && "grid grid-cols-[auto_minmax(0,1fr)_auto] gap-y-1 max-[360px]:gap-y-2 [&>*:first-child]:row-span-2 max-[360px]:[&>*:first-child]:row-span-1",
       )}
+      data-discovery-result={`${surface}:${result.routePath}`}
       eventName={result.entityType === "event" ? "event_card_clicked" : "search_result_clicked"}
       href={result.routePath}
       properties={{
@@ -630,7 +633,8 @@ export function DiscoveryLandingPage({
 
   return (
     <PageShell className="max-sm:py-5">
-      <PageContainer className={cn("gap-4 sm:gap-6", singleDirectory && "lg:max-w-[40rem]")} max={singleDirectory ? "3xl" : "7xl"}>
+      <PageContainer className={cn("gap-4 sm:gap-6", singleDirectory && "lg:max-w-[40rem]")} data-discovery-results max={singleDirectory ? "3xl" : "7xl"}>
+        <DiscoveryResultFocus />
 
         <section className={cn("grid gap-4 pb-1 sm:gap-5 lg:items-center", singleDirectory ? "lg:grid-cols-[auto_minmax(0,1fr)] lg:py-3" : "lg:grid-cols-[0.7fr_1.3fr] lg:py-6")}>
           <div>
