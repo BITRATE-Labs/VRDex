@@ -331,12 +331,24 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
       <dd className={cn("mt-1", isSparse ? "text-base font-semibold" : "font-medium")}>{visibilityLabel(world.visibilityStatus)}</dd>
     </div>
   );
+  const referenceLinkClassName = "min-h-11 max-w-full flex-col items-start gap-0.5 whitespace-normal py-1.5 text-left";
+  const referenceLinkContent = referenceUrl ? (
+    <>
+      <span className="flex items-center gap-1.5">
+        Reference link
+        <ExternalLink aria-hidden="true" className="size-3.5 shrink-0" />
+      </span>
+      <span className="text-xs font-normal [overflow-wrap:anywhere]" id="world-reference-host">
+        {new URL(referenceUrl).hostname}
+      </span>
+    </>
+  ) : null;
   const heroDestination = heroDestinationUrl ? (
     <a
       className={cn(
         buttonVariants({ variant: "primary" }),
         hasLaunchDetails && "max-sm:min-h-11",
-        !canonicalWorldUrl && "min-h-11 max-w-full flex-col items-start gap-0.5 whitespace-normal py-1.5 text-left",
+        !canonicalWorldUrl && referenceLinkClassName,
         heroImageUrl
           ? "focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-media"
           : "focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-strong",
@@ -347,17 +359,7 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
       rel="noreferrer"
       target="_blank"
     >
-      {canonicalWorldUrl ? "Open VRChat world" : (
-        <>
-          <span className="flex items-center gap-1.5">
-            Reference link
-            <ExternalLink aria-hidden="true" className="size-3.5 shrink-0" />
-          </span>
-          <span className="text-xs font-normal [overflow-wrap:anywhere]" id="world-reference-host">
-            {new URL(heroDestinationUrl).hostname}
-          </span>
-        </>
-      )}
+      {canonicalWorldUrl ? "Open VRChat world" : referenceLinkContent}
     </a>
   ) : null;
   const navigationLinkClassName = "inline-flex min-h-11 items-center gap-1.5 rounded-control text-sm font-medium underline decoration-current/40 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2";
@@ -534,12 +536,14 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
               <Card surface="white">
                 <Eyebrow>Primary links</Eyebrow>
                 <a
-                  className={cn(buttonVariants({ variant: "secondary" }), "mt-4")}
+                  className={cn(buttonVariants({ variant: "secondary" }), referenceLinkClassName, "mt-4")}
+                  aria-label="Reference link"
+                  aria-describedby="world-reference-host"
                   href={lowerReferenceUrl}
                   rel="noreferrer"
                   target="_blank"
                 >
-                  Reference link
+                  {referenceLinkContent}
                 </a>
               </Card>
             ) : null}
