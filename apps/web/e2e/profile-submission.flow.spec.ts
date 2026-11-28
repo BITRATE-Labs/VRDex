@@ -145,7 +145,7 @@ test("profile submission writes through to public profile and discovery @flow", 
     if (!process.env.PLAYWRIGHT_BASE_URL) {
       // Unclaimed listings keep ownership clear without submission metadata.
       await expect(
-        page.getByRole("complementary", { name: "Profile ownership" }).getByText("Unclaimed", { exact: true }),
+        page.getByRole("main").getByText("Unclaimed", { exact: true }),
       ).toBeVisible();
     }
     await expect(page.getByLabel("Verified profile")).toHaveCount(0);
@@ -157,6 +157,9 @@ test("profile submission writes through to public profile and discovery @flow", 
     if (submittedStreamId !== undefined) {
       const questUrl = `https://stream.vrcdn.live/live/${submittedStreamId}.live.ts`;
       const questCopy = page.getByRole("button", { name: "Copy Quest", exact: true });
+      const vrcdnLink = page.getByRole("link", { exact: true, name: "VRCDN" });
+      const streamShortcut = vrcdnLink.and(page.locator('a[href="#profile-streams"]'));
+      const outboundVrcdnLink = vrcdnLink.and(page.locator('a[href]:not([href^="#"])'));
       const rendersWatchControls = (await questCopy.count()) > 0;
 
       if (targetRunsCurrentRevision) {
@@ -172,13 +175,17 @@ test("profile submission writes through to public profile and discovery @flow", 
         const playbackLinks = page.getByText("Playback links", { exact: true });
         if (await playbackLinks.count()) await playbackLinks.click();
         await expect(page.getByText(questUrl, { exact: true })).toBeVisible();
-        await expect(page.getByRole("link", { exact: true, name: "VRCDN" })).toHaveCount(0);
+        if (targetRunsCurrentRevision) {
+          await expect(streamShortcut).toBeVisible();
+          await expect(page.locator("#profile-streams")).toBeVisible();
+        }
+        await expect(outboundVrcdnLink).toHaveCount(0);
         await expect(page.getByText("Live now", { exact: true })).toHaveCount(0);
       } else {
         // Shared staging tracks main, not the pull-request SHA. An older
         // deployment still renders the generic VRCDN link or the legacy copy
         // row. Exact-revision targets cannot enter this tolerance branch.
-        const legacyLink = page.getByRole("link", { exact: true, name: "VRCDN" });
+        const legacyLink = outboundVrcdnLink;
         if ((await legacyLink.count()) > 0) {
           await expect(legacyLink).toHaveAttribute("href", questUrl);
         } else {

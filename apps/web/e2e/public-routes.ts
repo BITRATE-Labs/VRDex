@@ -254,12 +254,14 @@ export async function expectDiscoveryPage(page: Page) {
 }
 
 export async function expectSearchPage(page: Page) {
+  const results = page.getByRole("region", { name: "Search results" });
+  const aurora = results.getByRole("link", { name: /DJ Aurora/i }).first();
   await expect(page.getByRole("heading", { name: "Search results", exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Search results" })).toHaveAccessibleDescription("Results for aurora");
+  await expect(results).toHaveAccessibleDescription("Results for aurora");
   await expect(page.getByRole("button", { name: /Search VRDex/i })).toBeVisible();
-  await expect(page.getByRole("link", { name: /DJ Aurora/i }).first()).toBeVisible();
-  await expect(page.locator('[title="Logo"]').first()).toBeVisible();
-  for (const image of await page.getByRole("region", { name: "Search results" }).locator("img").all()) {
+  await expect(aurora).toBeVisible();
+  await expect(aurora.locator("img")).toHaveAttribute("src", /\/api\/e2e\/fixture-assets\/fixture-aurora-profile-image$/);
+  for (const image of await results.locator("img").all()) {
     await expectDecodedImage(image);
   }
   await expect(page.getByRole("heading", { name: /Upcoming events/i })).toHaveCount(0);
