@@ -10,6 +10,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { EntityImage } from "@/components/ui/entity-image";
 import { ProfileAvatarImage } from "@/components/ui/profile-avatar-image";
 import { cn } from "@/lib/cn";
+import { isClerkDevelopmentStarting } from "@/lib/clerk-startup-navigation";
 import { restoreInitialInlineSearch } from "@/lib/initial-inline-search";
 import { captureProductEvent } from "@/lib/posthog";
 import { type SearchSuggestion, useSearchSuggestions } from "./use-search-suggestions";
@@ -124,7 +125,10 @@ function SearchControl({
     const submittedQuery = typeof field === "string" ? field : "";
     captureSubmission(submittedQuery);
     dismiss();
-    router.push(resultHref(submittedQuery));
+    const destination = resultHref(submittedQuery);
+    // Clerk's development setup can replace history before an in-app navigation commits.
+    if (isClerkDevelopmentStarting()) window.location.assign(destination);
+    else router.push(destination);
   }
 
   function selectSuggestion(result: SearchSuggestion) {
