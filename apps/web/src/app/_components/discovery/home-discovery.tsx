@@ -155,7 +155,10 @@ function CardRail({
 
   return (
     <>
-      <div className={styles.railHeading}>
+      <div
+        className={styles.railHeading}
+        data-reserve-controls={placeholder && count > 1 && (edges?.left || edges?.right) ? "" : undefined}
+      >
         <h3
           id={headingId}
           className={styles.groupHeading}
@@ -430,26 +433,45 @@ function AvailableDiscovery({
 function DiscoveryFrames() {
   return (
     <div className={styles.groups} aria-hidden="true">
-      {(["Events", "Clubs"] as const).map((group, index) => (
+      {(["Events", "Clubs"] as const).map((group) => (
         <div key={group}>
           <CardRail title={group} placeholder>
-            {[0, 1].map((slot) => (
-              <div
-                key={slot}
-                data-testid="discovery-placeholder"
-                className={styles.card}
-              >
-                <div className={`${index === 0 ? styles.artwork : styles.clubArtwork} ${styles.skeleton}`} />
-                <div
-                  className={
-                    index === 0 ? styles.eventMetadata : styles.clubMetadata
-                  }
-                >
-                  <span className={styles.skeletonLine} />
-                  <span className={styles.skeletonLine} />
+            {[0, 1].map((slot) =>
+              group === "Events" ? (
+                <div key={slot}>
+                  <article
+                    className={`${styles.card} ${styles.eventCard} ${styles.eventPlaceholder}`}
+                    data-testid="discovery-placeholder"
+                  >
+                    <div className={styles.eventMetadata}>
+                      <span className={`${styles.name} ${styles.skeletonLabel}`}>&nbsp;</span>
+                      <p className={styles.date}>
+                        <span className={styles.hostDetails}>
+                          <span className={`${styles.host} ${styles.skeletonLabel}`}>&nbsp;</span>
+                        </span>
+                      </p>
+                      <span className={`${styles.save} ${styles.skeleton}`} />
+                      <div className={styles.favoriteSummary}>
+                        <span className={styles.skeletonLine} />
+                      </div>
+                    </div>
+                    <div className={`${styles.artwork} ${styles.skeleton}`} />
+                  </article>
                 </div>
-              </div>
-            ))}
+              ) : (
+                <div
+                  key={slot}
+                  data-testid="discovery-placeholder"
+                  className={styles.card}
+                >
+                  <div className={`${styles.clubArtwork} ${styles.skeleton}`} />
+                  <div className={styles.clubMetadata}>
+                    <span className={styles.skeletonLine} />
+                    <span className={styles.skeletonLine} />
+                  </div>
+                </div>
+              ),
+            )}
           </CardRail>
         </div>
       ))}

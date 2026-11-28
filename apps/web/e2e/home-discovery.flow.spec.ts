@@ -529,7 +529,12 @@ test.describe("Home discovery @flow @fixture", () => {
       name: "Interested: ORBIT",
       exact: true,
     });
-    await add.click();
+    const clickInterested = async () => {
+      // Hover the event header to expose its compact actions.
+      await bar.getByRole("button", { name: "Open ORBIT", exact: true }).hover();
+      await add.click();
+    };
+    await clickInterested();
     const warning = page.getByText("Limit reached", { exact: true });
     await expect(warning).toHaveCount(1);
     await expect(warning).toBeInViewport({ ratio: 1 });
@@ -548,7 +553,7 @@ test.describe("Home discovery @flow @fixture", () => {
       })
       .click();
     await expect(warning).toHaveCount(0);
-    await add.click();
+    await clickInterested();
     await expect(
       schedule
         .getByRole("button", {
@@ -990,7 +995,8 @@ test.describe("dense Home discovery @flow @fixture", () => {
     const queries = observeDiscoveryQueries(page);
     await page.goto("/");
     const discover = await usableDiscovery(page);
-    const open = discover.getByRole("link", { name: "Open Distant Horizons", exact: true });
+    // The card title is the keyboard stop. The poster only adds a pointer target.
+    const open = discover.getByRole("link", { name: "Distant Horizons", exact: true });
     const other = await context.newPage();
     await other.goto("/search");
     await page.bringToFront();
