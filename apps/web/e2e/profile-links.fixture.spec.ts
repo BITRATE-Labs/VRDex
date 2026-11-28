@@ -506,7 +506,11 @@ test("a compact community keeps its name and group link readable at 200% text @f
     await expect(group).toBeInViewport({ ratio: 1 });
     expect(await fontSize(title)).toBe(normalTitleSize * 2);
     expect(await fontSize(groupLabel)).toBe(normalGroupSize * 2);
-    expect(await unbrokenWords(groupLabel)).toEqual(["VRChat", "group"]);
+    expect(await groupLabel.evaluate(element => {
+      const label = document.createRange();
+      label.selectNodeContents(element);
+      return label.getClientRects().length;
+    })).toBe(1);
     expect(await unbrokenWords(title)).toContain("Sparse");
     if (width === 390) expect(await unbrokenWords(title)).toContain("Community");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);

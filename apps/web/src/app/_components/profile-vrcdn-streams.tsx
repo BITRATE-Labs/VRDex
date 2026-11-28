@@ -258,7 +258,7 @@ export function ProfileVrcdnStreams({
               ) : <SectionHeading>Links</SectionHeading>
             ) : null}
             <div className={cn(
-              compactLinks ? "grid" : "mt-5 grid gap-3 sm:grid-cols-2",
+              compactLinks ? styles.compactLinkGrid : "mt-5 grid gap-3 sm:grid-cols-2",
               compactMobileSpacing && "max-sm:mt-3",
               linksHeadingId && "max-sm:mt-2 max-sm:gap-2",
             )}>
@@ -280,7 +280,12 @@ export function ProfileVrcdnStreams({
                     rel="noreferrer"
                     target="_blank"
                   >
-                    <span aria-hidden="true" className={cn(profileLinkIconClassName, vrchat ? "[&>svg]:size-10" : "[&>svg]:size-6", compactLinks && "size-8 [&>svg]:size-8 max-sm:size-[32px] max-sm:[&>svg]:size-[32px]")}>
+                    <span aria-hidden="true" className={cn(
+                      profileLinkIconClassName,
+                      vrchat ? "[&>svg]:size-10" : "[&>svg]:size-6",
+                      compactLinks && "size-8 [&>svg]:size-8 max-sm:size-[32px] max-sm:[&>svg]:size-[32px]",
+                      compactLinks && link.kind === "vrchat_group" && styles.vrchatGroupMark,
+                    )}>
                       {link.kind && link.artworkUrl ? <ProfileDestinationArtwork kind={link.kind} src={link.artworkUrl} /> : <LinkTypeIcon type={link.kind === "discord_guild" ? "discord" : vrchat ? "vrchat_profile" : link.type ?? "website"} />}
                     </span>
                     <span className={cn("min-w-0 flex-1 [overflow-wrap:anywhere]", compactLinks && "[&_.text-muted]:text-inherit")}>
