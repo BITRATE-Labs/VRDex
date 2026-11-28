@@ -269,6 +269,43 @@ test("populated person profiles give visitors keyboard shortcuts before ownershi
   ))).toBe(true);
 });
 
+test("profile events identify the authored current window @fixture", async ({ page }) => {
+  await page.clock.setFixedTime(Date.UTC(2026, 0, 2, 12));
+  await page.route("**/api/profile-live/**/vrcdn*", route => route.fulfill({ json: { states: {} } }));
+  for (const [slug, heading] of [
+    ["playwright-person-current-events", "Events"],
+    ["playwright-community-current-events", "Hosted events"],
+  ]) {
+    expect((await page.goto(`/${slug}`))?.status()).toBe(200);
+    const title = page.getByRole("heading", { name: heading, exact: true });
+    await expect(title).toBeVisible();
+    const section = title.locator("xpath=ancestor::section[1]");
+    for (const [event, scheduledNow] of [
+      ["Harbor Current Sessions", true],
+      ["Harbor Next Sessions", false],
+      ["Harbor Open End", false],
+    ] as const) {
+      const card = section.getByRole("article").filter({ has: page.getByRole("heading", { name: event, exact: true }) });
+      await expect(card.getByText("Now", { exact: true })).toHaveCount(scheduledNow ? 1 : 0);
+    }
+    if (heading === "Events") {
+      await expect(page.getByRole("navigation", { name: "Profile sections" }).getByRole("link", { name: "Events", exact: true }))
+        .toHaveAttribute("href", "#profile-events");
+    } else {
+      const featured = page.getByRole("link", { name: /Hosted event.*Harbor Current Sessions/ });
+      await expect(featured.getByText("Now", { exact: true })).toBeVisible();
+      await expect(featured).toHaveAttribute("href", "/playwright-afterglow-social/events/playwright-harbor-current");
+    }
+  }
+  await page.goto("/playwright-person-open-end-event");
+  await expect(page.getByRole("heading", { name: "Events", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Harbor Open End", exact: true })).toBeVisible();
+  await expect(page.getByText("Now", { exact: true })).toHaveCount(0);
+  await page.goto("/playwright-dj-aurora");
+  await expect(page.getByRole("heading", { name: "Upcoming events", exact: true })).toBeVisible();
+  await expect(page.getByText("Now", { exact: true })).toHaveCount(0);
+});
+
 test("person event titles open from anywhere on the title row @fixture", async ({ page, isMobile }) => {
   await page.setViewportSize(isMobile ? { width: 320, height: 568 } : { width: 1280, height: 900 });
   await page.route("**/api/profile-live/playwright-dj-aurora/vrcdn*", route => route.fulfill({ json: { states: {} } }));

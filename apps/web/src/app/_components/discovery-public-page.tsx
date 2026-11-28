@@ -9,7 +9,7 @@ import { searchHref, type SearchResultFilter } from "./search-view-state";
 import { SearchViewShell } from "./search-view-shell";
 import { PublicSearchResultDetails } from "./public-search-result-details";
 import { DiscoveryResultFocus } from "./discovery-result-focus";
-import { DiscoveryScheduleRefresh } from "./discovery-schedule-refresh";
+import { EventScheduleRefresh } from "./discovery-schedule-refresh";
 import { SearchResultsHistory } from "./search-results-history";
 import styles from "./discovery-public-page.module.css";
 import type { PublicEventPreview } from "./event-public-page";
@@ -194,7 +194,7 @@ function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[];
   const nextTransition = Math.min(...rows.map((row) => row.nextTransition ?? Infinity));
   return (
     <section className="min-w-0 border-t border-border pt-3 sm:pt-6">
-      {Number.isFinite(nextTransition) ? <DiscoveryScheduleRefresh nextTransition={nextTransition} serverNow={now} /> : null}
+      {Number.isFinite(nextTransition) ? <EventScheduleRefresh nextTransition={nextTransition} serverNow={now} /> : null}
       <DiscoveryEventsHeading title={rows.some((row) => row.hasStarted) ? "Events" : "Upcoming events"} />
       <EventSchedule className="mt-2 sm:mt-5" empty="No events">
         {rows.map(({ event, scheduledNow, status }) => (
