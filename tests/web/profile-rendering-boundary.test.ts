@@ -8,7 +8,10 @@ it("preserves verified connection label precedence through the public page", asy
     import assert from "node:assert/strict";
     import React from "./apps/web/node_modules/react/index.js";
     import { renderToStaticMarkup } from "./apps/web/node_modules/react-dom/server.node.js";
-    import { ProfilePublicPage } from "./apps/web/src/app/_components/profile-public-page.tsx";
+    import { createRequire } from "node:module";
+    const require = createRequire(import.meta.url);
+    require.extensions[".css"] = module => { module.exports = {}; };
+    const { ProfilePublicPage } = require("./apps/web/src/app/_components/profile-public-page.tsx");
     const id = "usr_11111111-2222-3333-4444-555555555555";
     const url = "https://vrchat.com/home/user/" + id;
     const connection = { assetType: "vrchat_user", assetExternalId: id, url, verifiedAt: Date.UTC(2026, 9, 25), linkRole: "primary" };
@@ -47,7 +50,7 @@ it("keeps server-only media-kit configuration out of the client-compatible profi
   }
 });
 
-it("keeps file metadata and source inside the media disclosure", async () => {
+it("describes the download with file metadata and keeps source in the media disclosure", async () => {
   const { execFileSync } = await import("node:child_process");
   execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", `
     import assert from "node:assert/strict";
@@ -57,10 +60,18 @@ it("keeps file metadata and source inside the media disclosure", async () => {
     const asset = { assetId: "asset", detailsUrl: "/profile#media-asset", imageUrl: "/image.png", downloadUrl: "/file", mimeType: "image/png", byteSize: 1024, credit: "Shared by Karly", creditUrl: "https://example.test/source" };
     const render = (a, open = false) => renderToStaticMarkup(React.createElement(PublicMediaAssetCardView, { asset: a, label: "Image", state: { kind: "closed" }, open }));
     const html = render(asset);
-    assert.doesNotMatch(html, /View source|PNG.*1 KB/);
+    const descriptionId = html.match(/aria-describedby="([^"]+)" aria-label="Download Image"/)?.[1];
+    assert.ok(descriptionId);
+    assert.ok(html.slice(0, html.indexOf("<details")).includes('<p id="' + descriptionId + '"'));
+    assert.equal(html.split("PNG / 1 KB").length - 1, 1);
+    assert.doesNotMatch(html, /View source/);
     const expanded = render(asset, true);
-    assert.match(expanded.slice(expanded.indexOf("<details")), /View source/);
-    assert.match(expanded.slice(expanded.indexOf("<details")), /PNG.*1 KB/);
+    const details = expanded.slice(expanded.indexOf("<details"));
+    assert.match(details, /href="https:\\/\\/example\\.test\\/source">View source/);
+    assert.doesNotMatch(details, /PNG \\/ 1 KB/);
+    const versioned = render({ ...asset, downloadMimeType: "image/webp", downloadByteSize: 2048 });
+    assert.match(versioned, /WEBP \\/ 2 KB/);
+    assert.doesNotMatch(versioned, /PNG \\/ 1 KB/);
     assert.match(html, /Details &amp; history/);
     assert.doesNotMatch(html, /Karly|Uploaded by/);
     assert.match(render({ ...asset, detailsUrl: undefined }, true), /View source/);
