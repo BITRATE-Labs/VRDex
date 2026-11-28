@@ -273,7 +273,7 @@ export function ProfileVrcdnStreams({
                     className={cn(
                       buttonVariants({ variant: compactLinks ? "primary" : "secondary" }),
                       linkCardClassName,
-                      compactLinks && "min-h-12 rounded-control border border-transparent px-3 py-2 max-sm:min-h-[48px] max-sm:gap-[12px] max-sm:px-[12px] max-sm:py-[8px]",
+                      compactLinks && "min-h-12 rounded-control border border-transparent px-3 py-2 sm:w-fit sm:max-w-full max-sm:min-h-[48px] max-sm:gap-[12px] max-sm:px-[12px] max-sm:py-[8px]",
                     )}
                     href={link.href}
                     key={link.key}

@@ -557,6 +557,13 @@ test("a sparse community highlights its group and confirms empty hosted events @
   if (!eventsBounds) throw new Error("Missing hosted events bounds");
   expect(eventsBounds.y + eventsBounds.height).toBeLessThanOrEqual(claimBounds.y);
 
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.evaluate(() => document.fonts.ready);
+  const desktopGroupBounds = await group.boundingBox();
+  if (!desktopGroupBounds) throw new Error("Missing desktop community group link");
+  expect(desktopGroupBounds.height).toBeGreaterThanOrEqual(44);
+  expect(desktopGroupBounds.width).toBeLessThan(groupBounds.width);
+
   expect((await page.goto(`/${slug}-custom`))?.status()).toBe(200);
   await expect(page.getByRole("link", { name: "VRChat group Official meetup group", exact: true })).toHaveAttribute("href", groupUrl);
 
