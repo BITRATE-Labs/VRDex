@@ -1,5 +1,5 @@
 import { cva, type VariantProps } from "class-variance-authority";
-import type { ComponentPropsWithoutRef } from "react";
+import type { ComponentPropsWithRef, ComponentPropsWithoutRef } from "react";
 
 import { cn } from "@/lib/cn";
 
@@ -37,7 +37,7 @@ export function PageShell({ className, tone, ...props }: PageShellProps) {
   );
 }
 
-export function PageContainer({ className, max = "6xl", ...props }: ComponentPropsWithoutRef<"div"> & { max?: "3xl" | "4xl" | "5xl" | "6xl" | "7xl" }) {
+export function PageContainer({ className, max = "6xl", ...props }: ComponentPropsWithRef<"div"> & { max?: "3xl" | "4xl" | "5xl" | "6xl" | "7xl" }) {
   return (
     <div
       className={cn(

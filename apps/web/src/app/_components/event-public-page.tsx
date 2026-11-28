@@ -22,6 +22,7 @@ import { EventWatchForEvent } from "./event-live-watch";
 import { useCurrentTimestamp } from "./event-watch-surface";
 import { EventPublicHero } from "./event-public-hero";
 import { useEventLineupReturn } from "./event-lineup-return";
+import { useFragmentBackFocus } from "./use-fragment-back-focus";
 import styles from "./event-public-page.module.css";
 import { parseVrcdnStreamLinks } from "../../../../../convex/_vrcdnLinks";
 import { authoredEventSchedule } from "../../../../../convex/_eventRuntime";
@@ -516,6 +517,7 @@ function EventPublicLineup({ event, lineup, listRef, rememberLineupRow }: {
 
 function EventPublicPageContent({ event }: { event: PublicEvent }) {
   const [reportOpen, setReportOpen] = useState(false);
+  const fragmentScope = useFragmentBackFocus<HTMLDivElement>();
   const canHost = useQuery(api.events.getHostAccess, event.communitySlug ? { slug: event.slug, communitySlug: event.communitySlug } : "skip");
   const lineup = eventLineupForDisplay(event);
   const { listRef, posterRef, rememberLineupRow } = useEventLineupReturn(event.slug, event.posterImageUrl);
@@ -580,7 +582,7 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
 
   return (
     <PageShell className={cn(styles.page, "pt-[var(--event-mobile-space,0.75rem)] pb-3 sm:py-6 lg:py-7")} tone="event">
-      <PageContainer className="gap-[var(--event-mobile-space,0.75rem)] sm:gap-5">
+      <PageContainer className="gap-[var(--event-mobile-space,0.75rem)] sm:gap-5" ref={fragmentScope}>
         <EventPublicHero
           bannerStyle={bannerStyle}
           canHost={canHost === true}

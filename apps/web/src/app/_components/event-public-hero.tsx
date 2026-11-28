@@ -36,7 +36,8 @@ export function EventPublicHero({
   const actionClassName = cn(
     buttonVariants({ variant: bannerStyle ? "secondary" : "surface" }),
     "h-11 min-w-11 gap-1 whitespace-nowrap px-1.5 py-0 text-xs sm:h-9 sm:min-w-9 sm:px-3 [&_svg]:hidden [&_svg]:size-3.5 [&_svg]:shrink-0 min-[360px]:[&_svg]:block",
-    !bannerStyle && "focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-strong",
+    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:ring-0",
+    bannerStyle ? "outline-white" : "outline-accent-strong",
   );
   const tooltipClassName = "pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden whitespace-nowrap rounded-control border border-border bg-surface px-2 py-1 text-xs text-foreground shadow-lg group-focus-within:block sm:top-full sm:right-0 sm:bottom-auto sm:left-auto sm:mt-2 sm:mb-0";
   const actionTooltipClassName = cn(tooltipClassName, "group-hover:block");
