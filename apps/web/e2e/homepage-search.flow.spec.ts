@@ -1146,6 +1146,7 @@ for (const [name, path, submitted, action, destination] of [
   ["Discovery button", "/discovery", "  Aurora  ", "button", "/search?q=Aurora"],
   ["filtered Search replacement", "/search?q=basic&type=person", "  Aurora  ", "enter", "/search?q=Aurora&type=person"],
   ["filtered Search clearing", "/search?q=basic&type=person", "", "button", "/search?type=person"],
+  ["filtered multiword Search clearing", "/search?q=Afterglow%20Harbor%20Sessions&type=event", "", "enter", "/search?type=event"],
 ] as const) {
   test(`cold ${name} submits what the browser field contains @flow @fixture`, async ({ page, isMobile }) => {
     let releaseScripts!: () => void;

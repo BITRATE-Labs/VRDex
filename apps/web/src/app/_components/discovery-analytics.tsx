@@ -3,6 +3,7 @@
 import Link, { type LinkProps } from "next/link";
 import { useFeatureFlagEnabled, usePostHog } from "posthog-js/react";
 import { type ReactNode } from "react";
+import { isClerkDevelopmentStarting } from "@/lib/clerk-startup-navigation";
 
 import {
   type DiscoveryAnalyticsSurface,
@@ -55,13 +56,7 @@ export function TrackedDiscoveryLink<Event extends TrackedDiscoveryEvent>({
         posthog?.capture(eventName, properties);
       }}
       onNavigate={event => {
-        const clerk = (window as Window & { Clerk?: { loaded: boolean } }).Clerk;
-        if (
-          properties.surface === "search_results" &&
-          process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.startsWith("pk_test_") &&
-          !clerk?.loaded &&
-          typeof props.href === "string"
-        ) {
+        if (properties.surface === "search_results" && typeof props.href === "string" && isClerkDevelopmentStarting()) {
           // Clerk's development startup rewrites history while Next is navigating.
           event.preventDefault();
           window.location.assign(props.href);
