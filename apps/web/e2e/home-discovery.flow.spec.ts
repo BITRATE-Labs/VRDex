@@ -1,4 +1,4 @@
-import { expect } from "@playwright/test";
+import { expect, test as browserTest } from "@playwright/test";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api";
 import { loadCompleteSchedule } from "./home-timeline-fixture";
@@ -11,6 +11,24 @@ import {
   changeTimelineFixture,
   discoveryTransportFailure,
 } from "./home-discovery-fixture";
+
+browserTest("Discover Browse is reachable while loading at enlarged phone text sizes @flow", async ({ page, isMobile }) => {
+  browserTest.skip(!isMobile);
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.routeWebSocket("**/api/**/sync", () => {});
+  await page.goto("/");
+  await page.addStyleTag({ content: "html { font-size: 200%; }" });
+  const discover = page.getByRole("region", { name: "Discover", exact: true });
+  await expect(discover.getByRole("status")).toHaveText("Loading");
+  const browse = discover.getByRole("link", { name: "Browse", exact: true });
+
+  await expect.poll(() => browse.evaluate(link => {
+    const { left, right } = link.getBoundingClientRect();
+    return window.scrollX === 0 && left >= 0 && right <= window.innerWidth;
+  })).toBe(true);
+  await browse.tap();
+  await expect(page).toHaveURL(/\/discovery$/);
+});
 
 test.describe("Home discovery @flow @fixture", () => {
   test.use({ timelineScenario: "discovery" });

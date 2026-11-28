@@ -9,8 +9,9 @@
 }
 .heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 1rem;
+  gap: 0.5rem 1rem;
   margin-bottom: 1.1rem;
 }
 .heading h2 {
@@ -620,11 +621,26 @@
   }
 }
 @media (max-width: 760px) {
+  .heading {
+    container: discover-heading / inline-size;
+  }
   .heading .browse {
+    margin-inline-start: auto;
     min-height: 44px;
     background: var(--surface-elevated);
     color: var(--foreground);
     font-weight: 600;
+  }
+  @container discover-heading (width < 17rem) {
+    .heading h2 {
+      flex-basis: 100%;
+    }
+    .heading .browse {
+      margin-inline-start: 0;
+    }
+    .heading .loading {
+      order: 1;
+    }
   }
   .groups {
     grid-template-columns: minmax(0, 1fr);
