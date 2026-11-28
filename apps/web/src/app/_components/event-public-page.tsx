@@ -525,7 +525,7 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
   const desktopWatchArt = watchBannerArt && watchBannerArt.backgroundImage !== watchPosterArt?.backgroundImage
     ? watchBannerArt
     : undefined;
-  const sourceUrl = parseHttpsUrl(event.source.url)?.href;
+  const sourceUrl = parseHttpsUrl(event.source.url);
   const seriesPath = event.seriesId && event.communitySlug ? `/${event.communitySlug}/series/${event.seriesId}` : null;
   const publicLinks = event.mediaLinks.filter((link) => parseVrcdnStreamLinks(link.url) === null);
   const isOpenMediaLink = (link: PublicEvent["mediaLinks"][number]) =>
@@ -621,12 +621,14 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
                     </Link>
                   ))}
                   {sourceUrl ? (
-                    <a className={locationLinkClassName} href={sourceUrl} rel="noreferrer" target="_blank">
+                    <a className={locationLinkClassName} href={sourceUrl.href} rel="noreferrer" target="_blank">
                       <span className="flex items-start gap-2">
-                        <span className={cn(actionLabelClassName, hasWorlds && "text-foreground decoration-border-strong")}>{event.source.label}</span>
-                        <ExternalLink aria-hidden="true" className={cn("mt-0.5 size-3.5 shrink-0", hasWorlds ? "text-muted" : "text-accent-strong")} />
+                        <span className={cn(actionLabelClassName, "font-semibold", hasWorlds && "text-foreground decoration-border-strong")}>{sourceUrl.hostname}</span>
+                        <ExternalLink aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-strong" />
                       </span>
-                      <span className={cn(actionMetaClassName, "max-sm:mt-0.5")}>Reference link</span>
+                      <span className={cn(actionMetaClassName, "max-sm:mt-0.5")}>
+                        {event.source.label} · Reference link
+                      </span>
                     </a>
                   ) : null}
                 </div>
