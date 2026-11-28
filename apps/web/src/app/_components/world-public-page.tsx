@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import { publicEventPath } from "@/lib/event-path";
 import { safeImageBackground, safeImageUrl } from "@/lib/safe-image";
 import { ViewerLocalEventDateTime } from "./viewer-local-event-times";
+import { WorldEventsFocus } from "./world-events-focus";
 
 type WorldVisibilityStatus = "unknown" | "private" | "community_labs" | "public";
 type PlatformCompatibility = "pc" | "android" | "ios";
@@ -371,13 +372,13 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
     )}>
       {heroDestination}
       {hasEvents ? (
-        <a
+        <Link
           className={cn(navigationLinkClassName, "lg:[@media(min-height:864px)]:hidden", heroImageUrl ? "text-white/90 focus-visible:outline-white" : "text-accent-strong focus-visible:outline-accent")}
           href="#world-events"
         >
           Events
           <ArrowDown aria-hidden="true" className="size-3.5" />
-        </a>
+        </Link>
       ) : null}
     </div>
   ) : null;
@@ -456,8 +457,9 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
 
         {hasEvents ? (
           <Card surface="white" className="max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:shadow-none">
+            <WorldEventsFocus />
             <SectionTitle
-              className="scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent"
+              className="scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent max-sm:[@media(scripting:none)]:scroll-mt-32"
               id="world-events"
               tabIndex={-1}
             >
