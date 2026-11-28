@@ -452,6 +452,46 @@ test("sparse guest events preserve real content and deny Host routes @flow @fixt
   expect(stage?.width).toBeLessThan(1000);
 });
 
+test("guest Event report can be dismissed at 200 percent text on a narrow screen @flow @fixture", async ({ page, isMobile }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto(path + guestListedSlug, { waitUntil: "networkidle" });
+  await page.addStyleTag({ content: "html { font-size: 200%; }" });
+  const report = page.getByRole("main").getByRole("button", { name: "Report event", exact: true });
+  const dialog = page.getByRole("dialog", { name: "Report event", exact: true });
+  const close = dialog.getByRole("button", { name: "Close", exact: true });
+
+  await report.press("Enter");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Submit report", exact: true })).toBeDisabled();
+  await expect(close).toBeFocused();
+  const center = await close.evaluate((button) => {
+    const dialog = button.closest("dialog")!;
+    const buttonBounds = button.getBoundingClientRect();
+    const dialogBounds = dialog.getBoundingClientRect();
+    const x = buttonBounds.left + buttonBounds.width / 2;
+    const y = buttonBounds.top + buttonBounds.height / 2;
+    return {
+      x,
+      y,
+      hitsClose: button.contains(document.elementFromPoint(x, y)),
+      fits: buttonBounds.left >= dialogBounds.left && buttonBounds.right <= dialogBounds.right
+        && dialog.scrollWidth === dialog.clientWidth,
+    };
+  });
+  expect(center.fits).toBe(true);
+  expect(center.hitsClose).toBe(true);
+  if (isMobile) await page.touchscreen.tap(center.x, center.y);
+  else await page.mouse.click(center.x, center.y);
+  await expect(dialog).not.toBeVisible();
+  await expect(report).toBeFocused();
+
+  await report.press("Enter");
+  await expect(close).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+  await expect(report).toBeFocused();
+});
+
 test("desktop watch shares the media row with event details @flow @fixture", async ({ page }) => {
   await page.route("https://*.vrcdn.live/**", (route) => route.abort());
   await page.setViewportSize({ width: 1280, height: 900 });
