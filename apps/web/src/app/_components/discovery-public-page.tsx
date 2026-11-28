@@ -381,6 +381,7 @@ function SearchResultCard({ referenceTime, result }: { referenceTime: number; re
           (result.person?.genres.length || result.person?.outboundLinks.length) && "pb-1 sm:pb-2",
           result.claimEntryPath && "pb-2 sm:pb-2",
         )}
+        data-search-result=""
         eventName={result.entityType === "event" ? "event_card_clicked" : "search_result_clicked"}
         href={result.routePath}
         properties={{
