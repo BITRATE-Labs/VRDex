@@ -246,9 +246,18 @@ test("Edit search reveals and replaces a no-match query at enlarged phone text s
   const edit = main.getByRole("link", { name: "Edit search", exact: true });
   const input = main.getByRole("combobox", { name: "Search VRDex", exact: true });
   const submit = main.getByRole("button", { name: "Search VRDex", exact: true });
+  const header = page.locator("[data-site-header]");
+  await header.evaluate((element: HTMLElement) => {
+    Object.assign(element.style, { height: "65px", overflow: "hidden", transformOrigin: "top" });
+  });
   await expect(edit).toHaveAttribute("href", "#standard-search-query");
   await edit.tap();
   await expect(input).toBeFocused();
+  await expect.poll(() => input.evaluate((element) => element.getBoundingClientRect().top)).toBeGreaterThanOrEqual(65);
+  // Grow the header's visual obstruction after reveal, without shifting the field's document position.
+  await header.evaluate((element: HTMLElement) => {
+    element.style.transform = `scaleY(${117 / 65})`;
+  });
   await expect.poll(() => input.evaluate((element: HTMLInputElement) => {
     const { left, top, bottom } = element.getBoundingClientRect();
     const headerBottom = document.querySelector("[data-site-header]")?.getBoundingClientRect().bottom ?? 0;
@@ -1257,6 +1266,7 @@ test("Home and full search exclude private seed terms and nonpublic profile fiel
 test("suggestion failure still permits explicit search @flow @fixture", async ({ page }) => {
   await page.route("**/search/suggest?**", (route) => route.fulfill({ status: 503, body: "<!doctype html>" }));
   await page.goto("/discovery");
+  await waitForPublicSearchHydration(page);
   const input = page.getByRole("combobox", { name: /Search/i });
   const failed = page.waitForResponse((response) => response.url().includes("/search/suggest"));
   await input.fill("basic");
