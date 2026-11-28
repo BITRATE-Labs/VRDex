@@ -532,6 +532,42 @@ test("public result genres and Links disclose independently per person @flow @fi
   await expect(page).toHaveURL(/\/basicbit$/, { timeout: 15_000 });
 });
 
+test("Search Back restores the keyboard-activated result and tab order @flow @fixture", async ({ page, isMobile }) => {
+  if (isMobile) await page.setViewportSize({ width: 320, height: 650 });
+  const search = "/search?q=Sparse%20Import";
+  const profile = "/playwright-sparse-import";
+  const result = publicResultRow(page, profile);
+  const name = result.locator(`a[href="${profile}"]`);
+  const claim = result.getByRole("link", { name: "Claim this profile", exact: true });
+
+  await page.goto(search);
+  await waitForPublicSearchHydration(page);
+  await expect(name).toBeVisible();
+  await expect(claim).toBeVisible();
+  for (let step = 0; step < 30; step++) {
+    await page.keyboard.press("Tab");
+    if (await name.evaluate(link => link === document.activeElement)) break;
+  }
+  await expect(name).toBeFocused();
+  const scrollY = await page.evaluate(() => window.scrollY);
+
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL((url) => url.pathname === profile);
+  await page.goBack();
+  await expect(page).toHaveURL((url) => url.pathname === "/search" && url.searchParams.get("q") === "Sparse Import");
+  await expect(name).toBeFocused();
+  expect(Math.abs(await page.evaluate(() => window.scrollY) - scrollY)).toBeLessThanOrEqual(1);
+  await page.keyboard.press("Tab");
+  await expect(claim).toBeFocused();
+
+  if (isMobile) await name.tap();
+  else await name.click();
+  await expect(page).toHaveURL((url) => url.pathname === profile);
+  await page.goBack();
+  await expect(name).toBeVisible();
+  await expect(name).not.toBeFocused();
+});
+
 test("Search Back and Forward restore disclosures independently by entry @flow @fixture", async ({ page, isMobile }) => {
   test.setTimeout(60_000);
   if (isMobile) await page.setViewportSize({ width: 320, height: 568 });
