@@ -910,6 +910,43 @@ test("non-person public results retain canonical metadata and viewer-local event
   await context.close();
 });
 
+test("Discovery search and category headings fit at enlarged phone text size @flow @fixture", async ({ page, isMobile }) => {
+  test.skip(!isMobile);
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto("/discovery");
+  await page.addStyleTag({ content: "html { font-size: 200%; }" });
+  await waitForPublicSearchHydration(page);
+  const input = page.getByRole("combobox", { name: "Search VRDex", exact: true });
+  const submit = page.getByRole("button", { name: "Search VRDex", exact: true });
+  await expect(submit).toBeInViewport({ ratio: 1 });
+  await expect.poll(() => input.evaluate((element) => {
+    if (!(element instanceof HTMLInputElement)) return false;
+    const css = getComputedStyle(element);
+    const available = element.clientWidth - parseFloat(css.paddingInlineStart) - parseFloat(css.paddingInlineEnd);
+    const canvas = document.createElement("canvas").getContext("2d");
+    if (!canvas) return false;
+    canvas.font = css.font;
+    return available >= canvas.measureText(element.placeholder).width
+      && document.documentElement.scrollWidth === window.innerWidth
+      && [...document.querySelectorAll("main h1, main h2")].every((heading) => heading.scrollWidth <= heading.clientWidth);
+  })).toBe(true);
+
+  const option = page.getByRole("option", { name: /DJ Aurora/ });
+  await expect(async () => {
+    await input.fill("");
+    await input.fill("Aurora");
+    await expect(option).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 10_000 });
+  await expect(input).toHaveValue("Aurora");
+  await expect.poll(async () => {
+    const [result, submitButton] = await Promise.all([option.boundingBox(), submit.boundingBox()]);
+    return Boolean(result && submitButton && result.y >= submitButton.y + submitButton.height);
+  }).toBe(true);
+  await option.tap({ trial: true });
+  await submit.tap();
+  await expect(page).toHaveURL((url) => url.pathname === "/search" && url.searchParams.get("q") === "Aurora");
+});
+
 test("Discovery Back restores the keyboard-activated result @flow @fixture", async ({ page }) => {
   const community = "/playwright-afterglow-social";
   for (const [path, nextPath] of [

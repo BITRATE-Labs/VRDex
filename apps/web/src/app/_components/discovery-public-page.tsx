@@ -268,7 +268,8 @@ function DiscoveryCard({
   const spreadSummary = result.profileType === "community" && Boolean(result.summary);
   const summary = result.summary ? (
     <span className={cn(
-      "line-clamp-2 text-sm leading-6 text-muted",
+      styles.directorySummary,
+      "line-clamp-2 text-sm leading-6 text-muted wrap-anywhere",
       spreadSummary && "col-start-2 row-start-2 max-[360px]:col-span-full max-[360px]:line-clamp-3",
     )}>
       {result.summary}
@@ -278,7 +279,8 @@ function DiscoveryCard({
   return (
     <TrackedDiscoveryLink
       className={cn(
-        "group flex items-center gap-3 rounded-panel border border-border bg-surface p-3 transition-colors hover:border-border-strong hover:bg-surface-strong focus-visible:outline-2 focus-visible:outline-accent-strong sm:p-4",
+        styles.directoryCard,
+        "group flex min-w-0 items-center gap-3 rounded-panel border border-border bg-surface p-3 transition-colors hover:border-border-strong hover:bg-surface-strong focus-visible:outline-2 focus-visible:outline-accent-strong sm:p-4",
         result.profileType === "community" && "max-sm:items-start",
         spreadSummary && "grid grid-cols-[auto_minmax(0,1fr)_auto] gap-y-1 max-[360px]:gap-y-2 [&>*:first-child]:row-span-2 max-[360px]:[&>*:first-child]:row-span-1",
       )}
@@ -293,6 +295,7 @@ function DiscoveryCard({
     >
       <ResultImage result={result} quietFallback />
       <span className={cn(
+        styles.directoryDetails,
         "flex min-w-0 flex-1 flex-col gap-1",
         result.profileType === "community" && "max-sm:min-h-10 max-sm:justify-center",
         spreadSummary && "col-start-2 row-start-1 self-end max-[360px]:self-center",
@@ -301,10 +304,11 @@ function DiscoveryCard({
         <span className="text-lg font-semibold group-hover:text-accent-strong [overflow-wrap:anywhere]">
           {result.title}
         </span>
-        {subtitle ? <span className="text-sm text-muted">{subtitle}</span> : null}
+        {subtitle ? <span className="text-sm text-muted wrap-anywhere">{subtitle}</span> : null}
         {!spreadSummary ? summary : null}
       </span>
       <ChevronRight aria-hidden="true" className={cn(
+        styles.directoryArrow,
         "size-4 shrink-0 self-center text-muted group-hover:text-accent-strong",
         result.profileType === "community" && (subtitle || result.summary) && "max-sm:mt-1.5 max-sm:self-start",
         spreadSummary && "col-start-3 row-span-2 row-start-1 max-[360px]:row-span-1",
@@ -520,12 +524,12 @@ function DiscoverySection({
   surface: DiscoveryAnalyticsSurface;
 }) {
   return (
-    <section className="min-w-0 border-t border-border pt-4 sm:pt-6">
+    <section className={cn(styles.directory, "min-w-0 border-t border-border pt-4 sm:pt-6")}>
       {surface === "upcoming_events" ? (
         <DiscoveryEventsHeading title={title} />
       ) : (
         <SectionTitle
-          className={headingId ? "scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent" : undefined}
+          className={cn(styles.directoryTitle, "wrap-anywhere", headingId && "scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent")}
           id={headingId}
           tabIndex={headingId ? -1 : undefined}
         >
@@ -533,7 +537,7 @@ function DiscoverySection({
         </SectionTitle>
       )}
       <div className={cn(
-        "mt-3 grid gap-4 sm:mt-5",
+        "mt-3 grid grid-cols-1 gap-4 sm:mt-5",
         columns !== "single" && "lg:grid-cols-2",
         columns === "single-xl" && "xl:grid-cols-1",
       )}>
@@ -656,13 +660,13 @@ export function DiscoveryLandingPage({
       <PageContainer className={cn("gap-4 sm:gap-6", singleDirectory && "lg:max-w-[40rem]")} data-discovery-results max={singleDirectory ? "3xl" : "7xl"}>
         <DiscoveryResultFocus />
 
-        <section className={cn("grid gap-4 pb-1 sm:gap-5 lg:items-center", singleDirectory ? "lg:grid-cols-[auto_minmax(0,1fr)] lg:py-3" : "lg:grid-cols-[0.7fr_1.3fr] lg:py-6")}>
+        <section className={cn(styles.intro, "grid grid-cols-1 gap-4 pb-1 sm:gap-5 lg:items-center", singleDirectory ? "lg:grid-cols-[auto_minmax(0,1fr)] lg:py-3" : "lg:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] lg:py-6")}>
           <div>
-            <h1 className="max-w-md text-4xl leading-none font-semibold sm:text-5xl">
+            <h1 className={cn(styles.introTitle, "max-w-md text-4xl leading-none font-semibold wrap-anywhere sm:text-5xl")}>
               Discover VR
             </h1>
           </div>
-          <DiscoverySearchForm className="w-full" compact iconSubmit placeholder="Search VRDex" surface="home" tone="default" />
+          <DiscoverySearchForm className={cn(styles.searchForm, "w-full")} compact iconSubmit placeholder="Search VRDex" surface="home" tone="default" />
         </section>
 
         {showDirectoryShortcuts ? (
