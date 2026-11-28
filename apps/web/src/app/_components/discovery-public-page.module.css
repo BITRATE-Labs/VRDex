@@ -157,6 +157,7 @@
 }
 
 @media (scripting: none) {
+  .directoryTitle[id],
   .standardSearch input[role="combobox"] {
     /* Leave room for the site header's unnested navigation without hydration. */
     scroll-margin-top: 9.25rem;
