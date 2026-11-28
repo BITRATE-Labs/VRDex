@@ -174,14 +174,18 @@ it("uses authenticated asset routes for hidden owner previews without widening p
   execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", `
     import assert from "node:assert/strict";
     import { readFileSync } from "node:fs";
+    import { createRequire } from "node:module";
     import React from "./apps/web/node_modules/react/index.js";
     import { renderToStaticMarkup } from "./apps/web/node_modules/react-dom/server.node.js";
-    import { ProfilePublicPage } from "./apps/web/src/app/_components/profile-public-page.tsx";
+    const require = createRequire(import.meta.url);
+    require.extensions[".css"] = module => { module.exports = {}; };
+    const { ProfilePublicPage } = require("./apps/web/src/app/_components/profile-public-page.tsx");
     for (const { profile, hasCard } of JSON.parse(readFileSync(0, "utf8"))) {
       const html = renderToStaticMarkup(React.createElement(ProfilePublicPage, { profile, embedded: true, mediaKitGalleryEnabled: true }));
       assert.equal(html.includes('id="media-'), hasCard, "preview card visibility");
       if (hasCard) assert.ok(html.includes('Download'), "preview retains download");
-      assert.equal(html.includes('Details &amp; history'), hasCard, "preview metadata stays inside disclosure");
+      assert.equal(html.includes('PNG / 1 KB'), hasCard, "preview file metadata stays available on the card");
+      assert.ok(!html.includes('Details &amp; history'), "hidden preview offers no public history disclosure");
       assert.ok(!html.includes('Uploaded by'), "hidden preview exposes no public provenance");
       if (hasCard) assert.ok(!html.includes('/api/v0/profiles/preview-assets/assets/'), "hidden preview retains authenticated asset paths");
     }
