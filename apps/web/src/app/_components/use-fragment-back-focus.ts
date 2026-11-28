@@ -24,13 +24,21 @@ export function useFragmentBackFocus<T extends HTMLElement>() {
     let entries = [currentEntry()];
     let index = 0;
     let historyLength = window.history.length;
-    let pending: { href: string; returnFocus?: ReturnFocus } | undefined;
+    let pending: { href: string; managed: boolean; returnFocus?: ReturnFocus } | undefined;
     let frame = 0;
 
-    const onClick = (event: MouseEvent) => {
+    const recordJump = (entry: FragmentEntry) => {
+      entries = [...entries.slice(0, index + 1), { ...entry, returnFocus: pending?.returnFocus }];
+      index += 1;
+      pending = undefined;
+    };
+
+    const onClick = (event: MouseEvent, managed: boolean) => {
+      const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
+      if (Boolean(link?.hasAttribute("data-managed-fragment")) !== managed) return;
+      if (pending?.managed && pending.href === location.href) recordJump(currentEntry());
       pending = undefined;
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
       if (!link?.hash || link.hash === location.hash || link.origin !== location.origin
         || link.pathname !== location.pathname || link.search !== location.search
         || (link.target && link.target !== "_self") || link.hasAttribute("download")) return;
@@ -43,26 +51,34 @@ export function useFragmentBackFocus<T extends HTMLElement>() {
 
       pending = {
         href: link.href,
+        managed,
         returnFocus: event.isTrusted && event.detail === 0 && container.contains(link)
           ? { link, scrollY: window.scrollY }
           : undefined,
       };
     };
 
+    const onManagedClick = (event: MouseEvent) => onClick(event, true);
+    const onNativeClick = (event: MouseEvent) => onClick(event, false);
+    const onFocusIn = (event: FocusEvent) => {
+      // Next's hash-only Link pushes state and focuses the heading without popstate.
+      if (!pending?.managed || pending.href !== location.href || !(event.target instanceof Element)
+        || event.target.id !== location.hash.slice(1)) return;
+      historyLength = window.history.length;
+      recordJump(currentEntry());
+    };
+
     function onPopState() {
       cancelAnimationFrame(frame);
       const entry = currentEntry();
-      const jump = pending;
-      pending = undefined;
-
       const newEntry = window.history.length > historyLength;
       historyLength = window.history.length;
 
-      if (jump?.href === entry.href) {
-        entries = [...entries.slice(0, index + 1), { ...entry, returnFocus: jump.returnFocus }];
-        index += 1;
+      if (pending?.href === entry.href) {
+        recordJump(entry);
         return;
       }
+      pending = undefined;
 
       const back = sameEntry(entries[index - 1], entry);
       const forward = sameEntry(entries[index + 1], entry);
@@ -90,11 +106,15 @@ export function useFragmentBackFocus<T extends HTMLElement>() {
       });
     }
 
-    document.addEventListener("click", onClick);
+    document.addEventListener("click", onManagedClick, true);
+    document.addEventListener("click", onNativeClick);
+    document.addEventListener("focusin", onFocusIn);
     window.addEventListener("popstate", onPopState);
     return () => {
       cancelAnimationFrame(frame);
-      document.removeEventListener("click", onClick);
+      document.removeEventListener("click", onManagedClick, true);
+      document.removeEventListener("click", onNativeClick);
+      document.removeEventListener("focusin", onFocusIn);
       window.removeEventListener("popstate", onPopState);
     };
   }, []);

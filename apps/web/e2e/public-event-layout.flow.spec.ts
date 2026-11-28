@@ -97,6 +97,50 @@ test("keyboard Back resumes the event shortcut tab order @flow @fixture", async 
   await expect(media).toBeFocused();
 });
 
+test("Back from a linked performer restores the Event lineup row @flow @fixture", async ({ page, isMobile }) => {
+  await page.setViewportSize({ width: 390, height: 750 });
+  await page.clock.setFixedTime(watchTime);
+  const performerPage = page.getByRole("heading", { name: "DJ Aurora", exact: true, level: 1 });
+  const shortcut = page.getByRole("link", { name: "Lineup", exact: true });
+  const heading = page.getByRole("heading", { name: "Lineup", exact: true });
+  const performer = page.getByRole("link", { name: "DJ Aurora", exact: true });
+  const row = performer.locator("xpath=ancestor::li");
+  for (const [keyboard, slug, title] of [
+    [false, guestListedSlug, "Afterglow Harbor Sessions"],
+    [true, guestWatchSlug, "Afterglow Watch Room"],
+  ] as const) {
+    const event = page.getByRole("heading", { name: title, exact: true, level: 1 });
+    const lineupUrl = (url: URL) => url.pathname === path + slug && url.hash === "#event-lineup";
+    await page.goto(path + slug, { waitUntil: "networkidle" });
+    if (keyboard) await shortcut.press("Enter");
+    else if (isMobile) await shortcut.tap();
+    else await shortcut.click();
+    await expect(page).toHaveURL(lineupUrl);
+    if (keyboard) await expect(heading).toBeFocused();
+
+    await performer.evaluate((link) => link.scrollIntoView({ block: "center", behavior: "instant" }));
+    const departureTop = await row.evaluate((element) => element.getBoundingClientRect().top);
+    if (keyboard) await performer.press("Enter");
+    else if (isMobile) await performer.tap();
+    else await performer.click();
+    await expect(performerPage).toBeVisible();
+
+    for (let visit = 0; visit < 2; visit++) {
+      await page.goBack();
+      await expect(page).toHaveURL(lineupUrl);
+      await expect(event).toBeVisible();
+      await expect(performer).toBeInViewport({ ratio: 1 });
+      await expect.poll(() => row.evaluate((element, top) =>
+        Math.abs(element.getBoundingClientRect().top - top), departureTop)).toBeLessThan(3);
+      if (keyboard && visit === 0) await expect(performer).toBeFocused();
+      if (visit === 0) {
+        await page.goForward();
+        await expect(performerPage).toBeVisible();
+      }
+    }
+  }
+});
+
 test("published lineups are directly reachable from the event hero @flow @fixture", async ({ page }) => {
   await page.clock.setFixedTime(watchTime);
 
