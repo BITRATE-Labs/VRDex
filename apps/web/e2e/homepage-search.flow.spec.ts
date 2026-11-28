@@ -568,6 +568,34 @@ test("Search Back restores the keyboard-activated result and tab order @flow @fi
   await expect(name).not.toBeFocused();
 });
 
+test("Search Back restores the keyboard result after a full-document history rewrite @flow @fixture", async ({ page }) => {
+  const profile = "/playwright-sparse-import";
+  const result = page.getByRole("region", { name: "Search results" }).locator(`a[href="${profile}"]`);
+
+  await page.goto("/search?q=Sparse%20Import");
+  await waitForPublicSearchHydration(page);
+  const initialDocument = await page.evaluate(() => performance.timeOrigin);
+  await result.evaluate(link => {
+    link.addEventListener("click", event => {
+      // Simulate an auth startup rewrite after result capture, before native anchor navigation.
+      const state = { ...history.state };
+      delete state.vrdexSearchResultFocus;
+      const url = new URL(location.href);
+      url.search = url.searchParams.toString();
+      history.replaceState(state, "", url);
+      event.stopPropagation();
+    }, { once: true });
+  });
+
+  await result.press("Enter");
+  await expect(page).toHaveURL(url => url.pathname === profile);
+  await expect.poll(() => page.evaluate(() => performance.timeOrigin)).not.toBe(initialDocument);
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/search\?q=Sparse\+Import$/);
+  await expect(result).toBeFocused();
+});
+
 test("Search Back and Forward restore disclosures independently by entry @flow @fixture", async ({ page, isMobile }) => {
   test.setTimeout(60_000);
   if (isMobile) await page.setViewportSize({ width: 320, height: 568 });
