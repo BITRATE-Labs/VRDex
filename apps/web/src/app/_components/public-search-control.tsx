@@ -53,7 +53,9 @@ export function EditPublicSearchLink({ inputId }: { inputId: string }) {
           const visibleTop = Math.max(viewportTop, headerBottom);
           const field = input.getBoundingClientRect();
           if (field.top < visibleTop || field.bottom > viewportBottom) {
-            window.scrollBy({ top: field.top - visibleTop - 8, behavior: "instant" });
+            const fieldCenter = (field.top + field.bottom) / 2;
+            const visibleCenter = (visibleTop + viewportBottom) / 2;
+            window.scrollBy({ top: fieldCenter - visibleCenter, behavior: "instant" });
           }
         });
       }}
