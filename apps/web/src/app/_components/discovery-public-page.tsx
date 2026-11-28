@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { publicScheduleStatus } from "../../../../../convex/_eventRuntime";
-import { CalendarDays, Globe2, UserRound, UsersRound } from "lucide-react";
 
 import { DiscoveryFeatureGate, DiscoverySearchForm, TrackedDiscoveryLink } from "./discovery-analytics";
 import { HomeActiveWorldsSection, type PublicActiveWorld } from "./home-active-worlds";
@@ -47,38 +46,6 @@ function entityLabel(result: PublicSearchResult): string {
   }
 
   return result.entityType === "event" ? "Event" : "World";
-}
-
-function entityIcon(result: PublicSearchResult) {
-  if (result.entityType === "profile") {
-    return result.profileType === "community"
-      ? <UsersRound aria-hidden="true" className="size-4.5" strokeWidth={1.8} />
-      : <UserRound aria-hidden="true" className="size-4.5" strokeWidth={1.8} />;
-  }
-
-  return result.entityType === "event"
-    ? <CalendarDays aria-hidden="true" className="size-4.5" strokeWidth={1.8} />
-    : <Globe2 aria-hidden="true" className="size-4.5" strokeWidth={1.8} />;
-}
-
-function EntityTypeIcon({ result }: { result: PublicSearchResult }) {
-  const label = entityLabel(result);
-
-  return (
-    <span
-      aria-label={label}
-      className="group/type relative inline-flex size-7 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:text-accent-strong"
-      role="img"
-    >
-      {entityIcon(result)}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute top-full right-0 z-10 mt-1.5 rounded-control border border-border bg-surface-strong px-2 py-1 text-xs font-medium whitespace-nowrap text-foreground opacity-0 shadow-panel transition-opacity group-hover/type:opacity-100 group-focus-visible:opacity-100"
-      >
-        {label}
-      </span>
-    </span>
-  );
 }
 
 function resultSubtitle(result: PublicSearchResult): string | undefined {
@@ -263,7 +230,7 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
   return (
     <div className="rounded-panel border border-border bg-surface transition hover:-translate-y-0.5 hover:border-border-strong hover:bg-surface-strong hover:shadow-panel">
       <TrackedDiscoveryLink
-        className="group flex gap-4 px-4 py-4"
+        className="group flex gap-4 rounded-panel p-4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-strong"
         eventName={result.entityType === "event" ? "event_card_clicked" : "search_result_clicked"}
         href={result.routePath}
         properties={{
@@ -274,11 +241,11 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
       >
         <ResultImage result={result} />
         <span className="flex min-w-0 flex-1 flex-col gap-2">
-          <span className="flex items-start justify-between gap-4">
-            <span className="min-w-0 text-xl font-semibold group-hover:text-accent-strong">
+          <span className="flex flex-col gap-1">
+            <span className="text-xl font-semibold text-accent-strong underline decoration-accent/50 underline-offset-4 group-hover:decoration-current [overflow-wrap:anywhere]">
               {result.title}
             </span>
-            <EntityTypeIcon result={result} />
+            <span className="text-sm text-muted">{entityLabel(result)}</span>
           </span>
           {subtitle ? <span className="text-sm text-muted">{subtitle}</span> : null}
           {result.startsAt === undefined && result.eventDate === undefined ? null : <ViewerLocalEventDateTime className="text-sm text-accent-strong" timestamp={result.startsAt} eventDate={result.eventDate} scheduleKind={result.scheduleKind} />}
@@ -288,8 +255,11 @@ function SearchResultCard({ result }: { result: PublicSearchResult }) {
       </TrackedDiscoveryLink>
       {result.person ? <PublicSearchResultDetails person={result.person} /> : null}
       {result.claimEntryPath ? (
-        <div className="border-t border-border px-4 py-3">
-          <Link className="text-sm font-medium text-accent-strong hover:underline" href={result.claimEntryPath}>
+        <div className="border-t border-border px-4">
+          <Link
+            className="inline-flex min-h-11 items-center rounded-control text-sm font-medium text-muted underline decoration-border-strong underline-offset-4 hover:text-accent-strong hover:decoration-current focus-visible:outline-2 focus-visible:outline-accent-strong"
+            href={result.claimEntryPath}
+          >
             Claim this profile
           </Link>
         </div>
@@ -525,7 +495,7 @@ export function SearchResultsPage({
         {activeFilter === "event" ? <Link className={buttonVariants({ variant: "primary" })} href="/events/new">Add event</Link> : null}
         {hasQuery ? (
           <section aria-label="Search results" className="space-y-5">
-            <h2 className="text-2xl font-semibold tracking-[-0.03em]">Results for {query}</h2>
+            <h2 className="text-2xl font-semibold tracking-[-0.03em] [overflow-wrap:anywhere]">Results for {query}</h2>
             <div className="flex flex-wrap items-center gap-3">
               <nav aria-label="Entity type" className="flex flex-wrap gap-x-0.5 gap-y-2 sm:gap-x-2">
                 {filters.map((filter) => {
@@ -549,12 +519,14 @@ export function SearchResultsPage({
             </div>
 
             {results.length === 0 ? (
-              <Card surface="dashed">
-                <p className="font-medium">No public results matched that search yet.</p>
-                <p className="mt-2 text-sm leading-6 text-muted">
-                  Try a community name, DJ alias, world name, event title, genre, or scene term.
-                </p>
-              </Card>
+              status === "live" && (
+                <Card surface="dashed">
+                  <p className="text-pretty font-medium">No public results matched that search yet.</p>
+                  <p className="mt-2 text-pretty text-sm leading-6 text-muted">
+                    Try a community name, DJ alias, world name, event title, genre, or scene term.
+                  </p>
+                </Card>
+              )
             ) : (
               <div className="grid gap-4">
                 {results.map((result) => <SearchResultCard key={`${result.entityType}-${result.slug}`} result={result} />)}

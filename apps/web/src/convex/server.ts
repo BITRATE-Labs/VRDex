@@ -635,6 +635,10 @@ export async function fetchDiscoverySearch(
 ) {
   const fixtureSearch = searchPlaywrightDiscoveryFixture(query);
 
+  if (fixtureSearch.kind === "error") {
+    return { kind: "error" as const, results: [] };
+  }
+
   if (fixtureSearch.kind === "handled") {
     return {
       kind: "live" as const,

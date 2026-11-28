@@ -1101,7 +1101,7 @@ test.describe("fixture lookup smoke", () => {
     await expect(logo.locator("img")).toHaveCSS("object-fit", "contain");
   });
 
-  test("verified profiles use the same compact mark across profile and search views", async ({ page }, testInfo) => {
+  test("verified profiles use the same compact mark across profile and search views", async ({ page }) => {
     await page.goto("/basicbit");
     const profileMark = page.getByLabel("Verified profile");
     await expect(profileMark).toBeVisible();
@@ -1111,19 +1111,11 @@ test.describe("fixture lookup smoke", () => {
     const searchRegion = page.getByRole("region", { name: "Search results" });
     const searchResult = searchRegion.getByRole("link", { name: /BASICBIT Verified profile/ });
     const searchMark = searchRegion.getByLabel("Verified profile");
-    const resultTypeIcon = searchRegion.getByRole("img", { name: "Person" });
-    const resultTypeTooltip = searchRegion.getByText("Person", { exact: true });
     await expect(searchMark).toBeVisible();
-    await expect(resultTypeIcon).toBeVisible();
-    await expect(resultTypeTooltip).toHaveCSS("opacity", "0");
-    if (testInfo.project.name === "desktop-chromium") {
-      await searchResult.hover({ position: { x: 200, y: 45 } });
-      await expect(resultTypeTooltip).toHaveCSS("opacity", "0");
-      await resultTypeIcon.hover();
-      await expect(resultTypeTooltip).toHaveCSS("opacity", "1");
-    }
+    await expect(searchResult.getByText("Person", { exact: true })).toBeVisible();
+    await expect(searchResult.getByText("BASICBIT", { exact: true })).toHaveCSS("text-decoration-line", "underline");
     await searchResult.focus();
-    await expect(resultTypeTooltip).toHaveCSS("opacity", "1");
+    await expect(searchResult).toBeFocused();
     const searchBox = await searchMark.boundingBox();
 
     await page.goto("/search?q=BASICBIT&view=dj");
