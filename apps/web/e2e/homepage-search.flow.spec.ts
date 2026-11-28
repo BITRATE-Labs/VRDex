@@ -1139,6 +1139,29 @@ test("selected Enter opens the canonical public profile @flow @fixture", async (
   await expect(page).toHaveURL(/\/basicbit$/, { timeout: 15_000 });
 });
 
+test("View all results opens the full search from each public suggestion footer @flow @fixture", async ({ page, isMobile }) => {
+  for (const [source, destination] of [
+    ["/", "/search?q=Aurora"],
+    ["/discovery", "/search?q=Aurora"],
+    ["/search?q=basic&type=person", "/search?q=Aurora&type=person"],
+  ]) {
+    await page.goto(source, { waitUntil: "networkidle" });
+    await waitForPublicSearchHydration(page);
+    const main = page.getByRole("main");
+    const input = main.getByRole("combobox", { name: "Search VRDex" });
+    await input.focus();
+    await input.fill("  Aurora  ");
+    await expect(main.getByRole("option", { name: /DJ Aurora/ })).toBeVisible();
+    const footer = main.getByRole("link", { name: "View all results", exact: true });
+    await expect(footer).toHaveAttribute("href", destination);
+    if (isMobile) await footer.tap();
+    else await footer.click();
+    await expect(page).toHaveURL((url) => url.pathname + url.search === destination);
+    await expect(main.getByRole("heading", { name: "Search results", exact: true })).toBeVisible();
+    await expect(input).toHaveValue("Aurora");
+  }
+});
+
 for (const submit of ["Enter", "View all results"]) test(`unselected ${submit} preserves trimmed query and filter @flow @fixture`, async ({ page }) => {
   await page.goto("/search?q=basic&type=person");
   const input = page.getByRole("combobox", { name: /Search/i });
