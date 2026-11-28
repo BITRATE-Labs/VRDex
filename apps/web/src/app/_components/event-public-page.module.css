@@ -38,6 +38,12 @@
   }
 }
 
+@media (scripting: none) {
+  .lineupTitle {
+    scroll-margin-top: 8rem;
+  }
+}
+
 .lineupTitle:focus-visible {
   position: relative;
   outline: none;

@@ -451,13 +451,14 @@ function EventPublicLineup({ event, lineup, listRef, rememberLineupRow }: {
         >
           Lineup
         </h2>
-        <a
+        <Link
           className={cn(styles.watchReturn, buttonVariants({ variant: "secondary", size: "sm" }), "min-h-11 min-w-11 shrink-0 gap-1.5 border-border-strong py-0 sm:min-h-7")}
           href="#event-watch"
+          data-managed-fragment
         >
           <ArrowUp aria-hidden="true" className="size-3.5" />
           Watch
-        </a>
+        </Link>
       </div>
       {scheduledRow ? (
         <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
@@ -501,7 +502,7 @@ function EventPublicLineup({ event, lineup, listRef, rememberLineupRow }: {
                   aria-describedby={metadataId}
                   className={cn(rowClassName, "group rounded-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent max-sm:min-h-11 sm:w-fit")}
                   href={`/${row.performer.slug}`}
-                  onNavigate={() => rememberLineupRow(row.key)}
+                  onClick={(event) => rememberLineupRow(row.key, event)}
                 >
                   {content}
                   <ChevronRight aria-hidden="true" className="ml-auto size-4 shrink-0 text-muted group-hover:text-accent-strong sm:hidden" />

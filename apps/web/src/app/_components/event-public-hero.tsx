@@ -75,12 +75,13 @@ export function EventPublicHero({
             {hasLineup ? (
               <div className={cn("flex flex-wrap items-center gap-x-4", event.scheduleKind !== "date_only" && "max-[360px]:gap-x-2")}>
                 {startTime}
-                <a
+                <Link
                   className="inline-flex min-h-11 min-w-11 items-center rounded-control text-sm font-medium underline decoration-current/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-current sm:min-h-8"
                   href="#event-lineup"
+                  data-managed-fragment
                 >
                   Lineup
-                </a>
+                </Link>
               </div>
             ) : startTime}
             {event.scheduleKind !== "date_only" && (event.doorsOpenAt !== undefined || event.endAt !== undefined) ? <div className={cn("mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-sm tabular-nums sm:mt-2 sm:gap-x-5", detailTextClassName)}>
@@ -122,10 +123,10 @@ export function EventPublicHero({
             <span role="tooltip" className={actionTooltipClassName}>Add to calendar</span>
           </span> : null}
           {linksLabel ? (
-            <a className={actionClassName} href="#event-links">
+            <Link className={actionClassName} href="#event-links" data-managed-fragment>
               <ArrowDown aria-hidden="true" className="block!" />
               {linksLabel}
-            </a>
+            </Link>
           ) : null}
           <span className="group relative inline-flex">
             <button
