@@ -246,7 +246,17 @@ function SearchControl({
                 );
               })}
             </div>
-            <Link className="block border-t border-border px-4 py-3 text-sm font-medium text-foreground underline underline-offset-4 hover:bg-surface-elevated focus-visible:ring-2 focus-visible:ring-focus" href={resultsHref} onClick={() => { captureSubmission(); dismiss(); }}>View all results</Link>
+            <Link
+              className="block border-t border-border px-4 py-3 text-sm font-medium text-foreground underline underline-offset-4 hover:bg-surface-elevated focus-visible:ring-2 focus-visible:ring-focus"
+              href={resultsHref}
+              onMouseDown={(event) => {
+                // Keep the input focused until the link receives its click.
+                if (event.button === 0) event.preventDefault();
+              }}
+              onClick={() => { captureSubmission(); dismiss(); }}
+            >
+              View all results
+            </Link>
           </div>
         ) : null}
       </div>
