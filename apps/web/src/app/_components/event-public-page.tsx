@@ -300,7 +300,8 @@ export function EventPreviewCard({
               className={cn(
                 "rounded-sm underline decoration-1 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current",
                 compactWithoutArtwork ? "underline-offset-[6px]" : "underline-offset-4",
-                variant === "community" && "max-sm:flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center",
+                variant === "default" && "sm:block",
+                !isSeries && "max-sm:flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center max-sm:[overflow-wrap:anywhere]",
               )}
               href={eventPath}
               id={hasDatedTitle ? titleId : undefined}

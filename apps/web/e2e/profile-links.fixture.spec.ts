@@ -269,6 +269,33 @@ test("populated person profiles give visitors keyboard shortcuts before ownershi
   ))).toBe(true);
 });
 
+test("person event titles open from anywhere on the title row @fixture", async ({ page, isMobile }) => {
+  await page.setViewportSize(isMobile ? { width: 320, height: 568 } : { width: 1280, height: 900 });
+  await page.route("**/api/profile-live/playwright-dj-aurora/vrcdn*", route => route.fulfill({ json: { states: {} } }));
+  expect((await page.goto("/playwright-dj-aurora"))?.status()).toBe(200);
+
+  const events = page.locator("#profile-events").locator("xpath=ancestor::section[1]");
+  const title = events.getByRole("heading", { name: "Afterglow Harbor Sessions", exact: true });
+  const link = title.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true });
+  const source = events.getByRole("link", { name: "Afterglow event listing", exact: true });
+  const eventPath = "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions";
+  await expect(link).toHaveAttribute("href", eventPath);
+  await expect(source).toHaveAttribute("href", "https://example.invalid/events/afterglow-harbor-sessions");
+  await expect(source).toHaveAttribute("target", "_blank");
+
+  await title.evaluate((element) => element.scrollIntoView({ block: "center" }));
+  await expect(title).toBeInViewport({ ratio: 1 });
+  const bounds = await title.boundingBox();
+  if (!bounds) throw new Error("Missing person event title row");
+  if (isMobile) expect((await link.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  const x = bounds.x + bounds.width - 6;
+  const y = bounds.y + bounds.height / 2;
+  if (isMobile) await page.touchscreen.tap(x, y);
+  else await page.mouse.click(x, y);
+  await expect(page).toHaveURL((url) => url.pathname === eventPath);
+  await expect(page.getByRole("heading", { level: 1, name: "Afterglow Harbor Sessions", exact: true })).toBeVisible();
+});
+
 test("a sparse person profile puts its identity and ownership together @fixture", async ({ page }) => {
   expect((await page.goto("/playwright-sparse-import"))?.status()).toBe(200);
   const identity = page.getByRole("region", { name: "Sparse Import", exact: true });
@@ -503,6 +530,24 @@ test.describe("artless card variants", () => {
         await expect(doors).toHaveCSS("padding-inline-start", "0px");
       }
     }
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 720 });
+      const wraps = await timedTitle.evaluate((link) => {
+        const original = link.textContent;
+        link.textContent = "Interstellar".repeat(7) + "XYZ";
+        try {
+          const bounds = link.getBoundingClientRect();
+          const text = document.createRange();
+          text.selectNodeContents(link);
+          const lines = Array.from(text.getClientRects());
+          return lines.length > 1 && lines.every((line) => line.right <= bounds.right + 1);
+        } finally {
+          link.textContent = original;
+        }
+      });
+      expect(wraps).toBe(true);
+    }
+
     for (const path of [externalEvent, timedEvent]) {
       expect((await request.get(path)).status()).toBe(200);
     }
