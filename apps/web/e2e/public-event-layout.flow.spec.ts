@@ -460,10 +460,19 @@ test("guest Event report can be dismissed at 200 percent text on a narrow screen
   const dialog = page.getByRole("dialog", { name: "Report event", exact: true });
   const close = dialog.getByRole("button", { name: "Close", exact: true });
 
-  await report.press("Enter");
+  for (let tabs = 0; tabs < 30 && !await report.evaluate((button) => button === document.activeElement); tabs++) {
+    await page.keyboard.press("Tab");
+  }
+  await expect(report).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Submit report", exact: true })).toBeDisabled();
   await expect(close).toBeFocused();
+  const focusOutline = await close.evaluate((button) => {
+    const style = getComputedStyle(button);
+    return { color: style.outlineColor, accent: style.getPropertyValue("--accent-strong").trim(), width: style.outlineWidth, offset: style.outlineOffset, style: style.outlineStyle };
+  });
+  expect(focusOutline).toMatchObject({ color: focusOutline.accent, width: "2px", offset: "2px", style: "solid" });
   const center = await close.evaluate((button) => {
     const dialog = button.closest("dialog")!;
     const buttonBounds = button.getBoundingClientRect();
