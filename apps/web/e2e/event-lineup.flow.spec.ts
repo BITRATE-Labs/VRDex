@@ -27,6 +27,59 @@ for (const timeZone of ["UTC", "America/Los_Angeles"]) test.describe(`standalone
 });
 
 
+test("public lineup follows the unique authored set window while open @flow @fixture", async ({ page }) => {
+  const startAt = Date.UTC(2029, 4, 20, 22);
+  const lineup = [
+    { key: "one", position: 0, displayLabel: "Opening set", startAt: startAt + 10_000, authoredEndAt: startAt + 20_000, endAt: startAt + 20_000 },
+    { key: "two", position: 1, displayLabel: "Second set", startAt: startAt + 20_000, authoredEndAt: startAt + 30_000, endAt: startAt + 30_000 },
+    { key: "derived", position: 2, displayLabel: "No published end", startAt: startAt + 35_000 },
+    { key: "three", position: 3, displayLabel: "Third set", startAt: startAt + 45_000, authoredEndAt: startAt + 60_000, endAt: startAt + 60_000 },
+    { key: "four", position: 4, displayLabel: "Fourth set", startAt: startAt + 55_000, authoredEndAt: startAt + 70_000, endAt: startAt + 70_000 },
+  ];
+  await page.clock.install({ time: startAt - 30_000 });
+  await page.addInitScript(event => localStorage.setItem("event-lineup-fixture-public", JSON.stringify(event)), {
+    id: "lineup-current", slug: "lineup-current", title: "Afterglow Harbor Sessions",
+    startAt, endAt: startAt + 80_000, status: "scheduled",
+    source: { sourceType: "community", label: "Fixture" },
+    slots: [], participants: [], worlds: [], mediaLinks: [], authoredMediaLinks: [], lineup,
+  });
+  await page.goto("/playwright/event-lineup");
+  const current = page.locator("li[aria-current=time]");
+  const summary = page.getByRole("heading", { name: "Lineup", exact: true }).locator("xpath=../following-sibling::p[1]");
+  const pendingEnd = page.locator('[data-lineup-row="derived"]');
+  await expect(pendingEnd.locator("time")).toHaveCount(2);
+  await page.clock.pauseAt(startAt - 900);
+  await expect(current).toHaveCount(0);
+
+  let offset = -900;
+  for (const [at, label] of [
+    [10_000, "Opening set"],
+    [20_000, "Second set"],
+    [30_000, null],
+    [35_000, null],
+    [45_000, "Third set"],
+    [55_000, null],
+    [60_000, "Fourth set"],
+    [70_000, null],
+  ] as const) {
+    await page.clock.runFor(at - offset);
+    offset = at;
+    if (label) {
+      await expect(current).toHaveCount(1);
+      await expect(current).toContainText(label);
+      await expect(summary.getByText("Scheduled now", { exact: true })).toBeVisible();
+      await expect(summary.getByText(label, { exact: true })).toBeVisible();
+      const scheduled = lineup.find(row => row.displayLabel === label)!;
+      await expect(summary.locator("time").first()).toHaveAttribute("datetime", new Date(scheduled.startAt).toISOString());
+      await expect(summary.locator("time").last()).toHaveAttribute("datetime", new Date(scheduled.authoredEndAt!).toISOString());
+      await expect(current.getByText("Scheduled now", { exact: true })).toBeVisible();
+    } else {
+      await expect(current).toHaveCount(0);
+      await expect(summary).toHaveCount(0);
+    }
+  }
+});
+
 for (const userTakesOver of [false, true]) {
   test(`Lineup Back ${userTakesOver ? "respects a new scroll" : "keeps the selected row"} when a cold poster loads @flow @fixture`, async ({ page }) => {
     const startAt = Date.UTC(2026, 10, 28, 2);

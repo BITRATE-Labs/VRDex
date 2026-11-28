@@ -19,10 +19,12 @@ import { safeImageBackground } from "@/lib/safe-image";
 import { publicEventPath } from "@/lib/event-path";
 import { avatarFrameStyle, type AvatarAppearance } from "@/lib/avatar-appearance";
 import { EventWatchForEvent } from "./event-live-watch";
+import { useCurrentTimestamp } from "./event-watch-surface";
 import { EventPublicHero } from "./event-public-hero";
 import { useEventLineupReturn } from "./event-lineup-return";
 import styles from "./event-public-page.module.css";
 import { parseVrcdnStreamLinks } from "../../../../../convex/_vrcdnLinks";
+import { authoredEventSchedule } from "../../../../../convex/_eventRuntime";
 import { ViewerLocalEventDateTime, ViewerLocalEventTimeRange } from "./viewer-local-event-times";
 
 type EventSourceType = "manual" | "community" | "partner" | "import" | "ai_suggested" | "contributor";
@@ -218,13 +220,16 @@ function EventAvatar({
   );
 }
 
-export function EventScheduleNowLabel({ onArtwork = false }: { onArtwork?: boolean }) {
+export function EventScheduleNowLabel({ onArtwork = false, label = "Now" }: {
+  onArtwork?: boolean;
+  label?: "Now" | "Scheduled now";
+}) {
   return (
     <span className={cn(
       "inline-block rounded-control border px-2 py-0.5 text-sm font-bold leading-5",
       onArtwork ? "border-sky-200 bg-sky-200 text-slate-950" : "border-accent/80 bg-accent-muted text-accent-strong",
     )}>
-      Now
+      {label}
     </span>
   );
 }
@@ -392,6 +397,7 @@ export type PublicEventLineupEntry = {
   roleLabel?: string;
   startAt?: number;
   endAt?: number;
+  authoredEndAt?: number;
   performer?: PublicEvent["slots"][number]["performer"];
 };
 
@@ -415,9 +421,101 @@ export function EventPublicPage({ event: initialEvent }: { event: PublicEvent })
   return event ? <EventPublicPageContent event={event} /> : null;
 }
 
+function EventPublicLineup({ event, lineup, listRef, rememberLineupRow }: {
+  event: PublicEvent;
+  lineup: PublicEventLineupEntry[];
+} & Pick<ReturnType<typeof useEventLineupReturn>, "listRef" | "rememberLineupRow">) {
+  const lineupMetadataId = useId();
+  const authoredRows = (event.lineup ?? []).flatMap(({ key, displayLabel, startAt, authoredEndAt: endAt }) => {
+    if (startAt === undefined || !Number.isFinite(startAt) || endAt === undefined || !Number.isFinite(endAt) || endAt <= startAt) return [];
+    return [{ key, displayLabel, startAt, endAt }];
+  });
+  const now = useCurrentTimestamp([
+    event.startAt ?? Infinity,
+    event.endAt === undefined ? Infinity : event.endAt + 1,
+    ...authoredRows.flatMap(row => [row.startAt, row.endAt]),
+  ]);
+  const scheduledRows = now !== null && authoredEventSchedule(event, now).scheduledNow
+    ? authoredRows.filter(row => row.startAt <= now && now < row.endAt)
+    : [];
+  const scheduledRow = scheduledRows.length === 1 ? scheduledRows[0] : undefined;
+
+  return (
+    <Card className={styles.lineup} surface="white">
+      <div className="flex items-center justify-between gap-2 sm:justify-start sm:gap-4">
+        <h2
+          className={cn(styles.lineupTitle, "scroll-mt-24 text-xl font-semibold tracking-tight")}
+          id="event-lineup"
+          tabIndex={-1}
+        >
+          Lineup
+        </h2>
+        <a
+          className={cn(styles.watchReturn, buttonVariants({ variant: "secondary", size: "sm" }), "min-h-11 min-w-11 shrink-0 gap-1.5 border-border-strong py-0 sm:min-h-7")}
+          href="#event-watch"
+        >
+          <ArrowUp aria-hidden="true" className="size-3.5" />
+          Watch
+        </a>
+      </div>
+      {scheduledRow ? (
+        <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+          <EventScheduleNowLabel label="Scheduled now" />
+          <strong className="min-w-0 [overflow-wrap:anywhere]">{scheduledRow.displayLabel}</strong>
+          <ViewerLocalEventTimeRange className="text-muted" endAt={scheduledRow.endAt} startAt={scheduledRow.startAt} />
+        </p>
+      ) : null}
+      <ol ref={listRef} className="mt-5 divide-y divide-border">
+        {lineup.map((row, index) => {
+          const isScheduledNow = row.key === scheduledRow?.key;
+          const roleLabel = row.roleLabel?.trim().toLowerCase() === "participant" ? undefined : row.roleLabel;
+          const hasMetadata = Boolean(roleLabel) || row.startAt !== undefined;
+          const metadataId = row.performer && hasMetadata ? `${lineupMetadataId}-${index}` : undefined;
+          const content = (
+            <>
+              <EventAvatar appearance={row.performer?.avatarAppearance} imageUrl={row.performer?.imageUrl} label={row.displayLabel} />
+              <div className="min-w-0">
+                <span className={cn(
+                  "font-semibold [overflow-wrap:anywhere]",
+                  row.performer && inlineActionClassName,
+                  row.performer && "group-hover:decoration-accent",
+                )}>{row.displayLabel}</span>
+                {hasMetadata ? (
+                  <div className="flow-root" id={metadataId}>
+                    {isScheduledNow ? <div className="mt-1"><EventScheduleNowLabel label="Scheduled now" /></div> : null}
+                    {roleLabel ? <div className="mt-1 text-sm text-muted">{roleLabel}</div> : null}
+                    {row.startAt !== undefined ? <ViewerLocalEventTimeRange className="mt-1 block text-sm text-muted" endAt={row.endAt} startAt={row.startAt} /> : null}
+                  </div>
+                ) : null}
+              </div>
+            </>
+          );
+          const rowClassName = "flex min-w-0 items-center gap-4";
+
+          return (
+            <li aria-current={isScheduledNow ? "time" : undefined} className="min-w-0 py-4 first:pt-0 last:pb-0" data-lineup-row={row.key} key={row.key}>
+              {row.performer ? (
+                <Link
+                  aria-label={row.displayLabel}
+                  aria-describedby={metadataId}
+                  className={cn(rowClassName, "group rounded-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent max-sm:min-h-11 sm:w-fit")}
+                  href={`/${row.performer.slug}`}
+                  onNavigate={() => rememberLineupRow(row.key)}
+                >
+                  {content}
+                  <ChevronRight aria-hidden="true" className="ml-auto size-4 shrink-0 text-muted group-hover:text-accent-strong sm:hidden" />
+                </Link>
+              ) : <div className={rowClassName}>{content}</div>}
+            </li>
+          );
+        })}
+      </ol>
+    </Card>
+  );
+}
+
 function EventPublicPageContent({ event }: { event: PublicEvent }) {
   const [reportOpen, setReportOpen] = useState(false);
-  const lineupMetadataId = useId();
   const canHost = useQuery(api.events.getHostAccess, event.communitySlug ? { slug: event.slug, communitySlug: event.communitySlug } : "skip");
   const lineup = eventLineupForDisplay(event);
   const { listRef, posterRef, rememberLineupRow } = useEventLineupReturn(event.slug, event.posterImageUrl);
@@ -553,67 +651,7 @@ function EventPublicPageContent({ event }: { event: PublicEvent }) {
           </section>
 
           {lineup.length > 0 ? (
-            <Card className={styles.lineup} surface="white">
-              <div className="flex items-center justify-between gap-2 sm:justify-start sm:gap-4">
-                <h2
-                  className={cn(styles.lineupTitle, "scroll-mt-24 text-xl font-semibold tracking-tight")}
-                  id="event-lineup"
-                  tabIndex={-1}
-                >
-                  Lineup
-                </h2>
-                <a
-                  className={cn(styles.watchReturn, buttonVariants({ variant: "secondary", size: "sm" }), "min-h-11 min-w-11 shrink-0 gap-1.5 border-border-strong py-0 sm:min-h-7")}
-                  href="#event-watch"
-                >
-                  <ArrowUp aria-hidden="true" className="size-3.5" />
-                  Watch
-                </a>
-              </div>
-              <ol ref={listRef} className="mt-5 divide-y divide-border">
-                {lineup.map((row, index) => {
-                  const roleLabel = row.roleLabel?.trim().toLowerCase() === "participant" ? undefined : row.roleLabel;
-                  const hasMetadata = Boolean(roleLabel) || row.startAt !== undefined;
-                  const metadataId = row.performer && hasMetadata ? `${lineupMetadataId}-${index}` : undefined;
-                  const content = (
-                    <>
-                      <EventAvatar appearance={row.performer?.avatarAppearance} imageUrl={row.performer?.imageUrl} label={row.displayLabel} />
-                      <div className="min-w-0">
-                        <span className={cn(
-                          "font-semibold [overflow-wrap:anywhere]",
-                          row.performer && inlineActionClassName,
-                          row.performer && "group-hover:decoration-accent",
-                        )}>{row.displayLabel}</span>
-                        {hasMetadata ? (
-                          <div className="flow-root" id={metadataId}>
-                            {roleLabel ? <div className="mt-1 text-sm text-muted">{roleLabel}</div> : null}
-                            {row.startAt !== undefined ? <ViewerLocalEventTimeRange className="mt-1 block text-sm text-muted" endAt={row.endAt} startAt={row.startAt} /> : null}
-                          </div>
-                        ) : null}
-                      </div>
-                    </>
-                  );
-                  const rowClassName = "flex min-w-0 items-center gap-4";
-
-                  return (
-                    <li className="min-w-0 py-4 first:pt-0 last:pb-0" data-lineup-row={row.key} key={row.key}>
-                      {row.performer ? (
-                        <Link
-                          aria-label={row.displayLabel}
-                          aria-describedby={metadataId}
-                          className={cn(rowClassName, "group rounded-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent max-sm:min-h-11 sm:w-fit")}
-                          href={`/${row.performer.slug}`}
-                          onNavigate={() => rememberLineupRow(row.key)}
-                        >
-                          {content}
-                          <ChevronRight aria-hidden="true" className="ml-auto size-4 shrink-0 text-muted group-hover:text-accent-strong sm:hidden" />
-                        </Link>
-                      ) : <div className={rowClassName}>{content}</div>}
-                    </li>
-                  );
-                })}
-              </ol>
-            </Card>
+            <EventPublicLineup event={event} lineup={lineup} listRef={listRef} rememberLineupRow={rememberLineupRow} />
           ) : null}
         </div>
 

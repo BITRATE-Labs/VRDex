@@ -184,6 +184,7 @@ it("shares inferred ends across public lineup, slots and active preview without 
   const event = await read();
   const expected = [now + 15 * minute, now + 60 * minute, now + 120 * minute];
   assert.deepEqual(event.lineup.map(row => row.endAt), expected);
+  assert.deepEqual(event.lineup.map(row => row.authoredEndAt), [expected[0], undefined, undefined]);
   assert.deepEqual(event.slots.map(row => row.endAt), expected);
   const previews = await t.run(async ({ db }) => getPublicEventPreviews(db, [(await db.get(eventId))!], { now: now + 45 * minute }));
   assert.deepEqual(previews[0]?.nextSlots.map(row => row.endAt), expected.slice(1));
