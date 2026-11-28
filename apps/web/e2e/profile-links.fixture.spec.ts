@@ -269,6 +269,43 @@ test("populated person profiles give visitors keyboard shortcuts before ownershi
   ))).toBe(true);
 });
 
+test("keyboard Back returns to the public profile section shortcut @fixture", async ({ page }) => {
+  await page.goto("/playwright-dj-aurora", { waitUntil: "networkidle" });
+  const nav = page.getByRole("navigation", { name: "Profile sections" });
+  const links = nav.getByRole("link", { name: "Links", exact: true });
+  const streams = nav.getByRole("link", { name: "VRCDN", exact: true });
+  const media = nav.getByRole("link", { name: "Media kit", exact: true });
+  const linksHeading = page.locator("#profile-links");
+  const mediaHeading = page.locator("#profile-media-kit");
+
+  await links.focus();
+  const origin = page.url();
+  const before = await page.evaluate(() => ({ length: history.length, y: scrollY }));
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(origin + "#profile-links");
+  await expect(linksHeading).toBeFocused();
+  expect(await page.evaluate(() => history.length)).toBe(before.length + 1);
+
+  await media.press("Enter");
+  await expect(page).toHaveURL(origin + "#profile-media-kit");
+  await expect(mediaHeading).toBeFocused();
+  await page.goBack();
+  await expect(page).toHaveURL(origin + "#profile-links");
+  await expect(media).toBeFocused();
+
+  await page.goBack();
+  await expect(page).toHaveURL(origin);
+  await expect(links).toBeFocused();
+  expect(await page.evaluate(() => scrollY)).toBe(before.y);
+  await page.keyboard.press("Tab");
+  await expect(streams).toBeFocused();
+
+  await page.goForward();
+  await expect(page).toHaveURL(origin + "#profile-links");
+  await page.goBack();
+  await expect(links).toBeFocused();
+});
+
 test("profile events identify the authored current window @fixture", async ({ page }) => {
   await page.clock.setFixedTime(Date.UTC(2026, 0, 2, 12));
   await page.route("**/api/profile-live/**/vrcdn*", route => route.fulfill({ json: { states: {} } }));
