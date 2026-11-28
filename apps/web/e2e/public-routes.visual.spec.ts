@@ -111,12 +111,16 @@ test("unified BASICBIT search views @visual", async ({ page }, testInfo) => {
 
 test("unified sparse import search views @visual", async ({ page }, testInfo) => {
   await page.goto("/search?q=Sparse%20Import");
-  await expect(page.getByText("Sparse Import", { exact: true })).toBeVisible();
+  const standardResult = page.getByRole("region", { name: "Search results" }).getByRole("link", { name: /^Sparse Import\b/ });
+  await expect(standardResult).toBeVisible();
+  await expect(standardResult).toHaveAttribute("href", "/playwright-sparse-import");
   await expect(page.getByText("Imported profile seed", { exact: true })).toHaveCount(0);
   await captureRouteScreenshot(page, testInfo, "search-sparse-import-standard");
 
   await page.goto("/search?q=Sparse%20Import&view=dj");
-  await expect(page.getByRole("link", { name: "Sparse Import", exact: true })).toBeVisible();
+  const djResult = page.getByRole("link", { name: "Sparse Import", exact: true });
+  await expect(djResult).toBeVisible();
+  await expect(djResult).toHaveAttribute("href", "/playwright-sparse-import");
   await expect(page.getByText(/Imported profile seed|Unclaimed/, { exact: true })).toHaveCount(0);
   await captureRouteScreenshot(page, testInfo, "search-sparse-import-dj");
 });

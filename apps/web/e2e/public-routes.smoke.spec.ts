@@ -6,6 +6,7 @@ import type { PublicEventShareCard } from "../../../convex/_eventShareCard";
 import { AUTH_UNAVAILABLE_COPY } from "../src/lib/auth-copy";
 import { eventShareRevision } from "../src/lib/event-share-card";
 import { toggleSiteTheme } from "./flow-navigation";
+import { waitForPublicSearchHydration } from "./public-search-fixture";
 import {
   capturedRoutes,
   expectEventPage,
@@ -1208,22 +1209,29 @@ test.describe("fixture lookup smoke", () => {
 
     await expect(page.getByRole("heading", { name: "Search results", exact: true })).toBeVisible();
     const standardResults = page.getByRole("region", { name: "Search results" });
-    await expect(standardResults.getByRole("link", { name: /BASICBIT/ })).toHaveCount(1);
-    await expect(standardResults.getByText("BASICBIT", { exact: true })).toBeVisible();
-    await expect(standardResults.getByText("Software Dev | 3D Designer | VRDJ")).toBeVisible();
-    await expect(standardResults.getByRole("img", { name: "BASICBIT" })).toBeVisible();
+    const standardResult = standardResults.getByRole("link", { name: /\bBASICBIT\b/ });
+    await expect(standardResult).toHaveCount(1);
+    await expect(standardResult).toBeVisible();
+    await expect(standardResult).toHaveAttribute("href", "/basicbit");
+    await expect(standardResult.getByText("Software Dev | 3D Designer | VRDJ")).toBeVisible();
+    const standardAvatar = standardResult.locator("img");
+    await expect(standardAvatar).toBeVisible();
+    await expect(standardAvatar).toHaveAttribute("src", /fixture-avatar-velvet-circuit\.svg/);
 
     await page.reload();
     await expect(page).toHaveURL(/\/search\?q=BASICBIT$/);
     await expect(page.getByRole("heading", { name: "Search results", exact: true })).toBeVisible();
-    await expect(page.getByRole("region", { name: "Search results" }).getByText("BASICBIT", { exact: true })).toBeVisible();
+    await expect(standardResult).toBeVisible();
+    await expect(standardResult).toHaveAttribute("href", "/basicbit");
 
     await expect(page.getByRole("link", { name: "DJ links", exact: true })).toHaveCount(0);
     await page.goto("/search?q=BASICBIT&view=dj");
     await expect(page).toHaveURL(/\/search\?q=BASICBIT&view=dj$/);
     await expect(page.getByRole("heading", { name: "DJ links", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Search results", exact: true })).toHaveAttribute("href", "/search?q=BASICBIT");
-    await expect(page.getByRole("link", { name: "BASICBIT", exact: true })).toBeVisible();
+    const djResult = page.getByRole("region", { name: "Lookup results" }).getByRole("link", { name: "BASICBIT", exact: true });
+    await expect(djResult).toBeVisible();
+    await expect(djResult).toHaveAttribute("href", "/basicbit");
     await expect(page.getByRole("link", { name: "Website: basicbit.net", exact: true })).toBeVisible();
     const djAvatar = page.locator(".lookup-avatar img").first();
     await expect(djAvatar).toBeVisible();
@@ -1232,7 +1240,8 @@ test.describe("fixture lookup smoke", () => {
     await page.reload();
     await expect(page).toHaveURL(/\/search\?q=BASICBIT&view=dj$/);
     await expect(page.getByRole("link", { name: "Search results", exact: true })).toHaveAttribute("href", "/search?q=BASICBIT");
-    await expect(page.getByRole("link", { name: "BASICBIT", exact: true })).toBeVisible();
+    await expect(djResult).toBeVisible();
+    await expect(djResult).toHaveAttribute("href", "/basicbit");
 
     await page.getByRole("link", { name: "Search results", exact: true }).click();
     await expect(page).toHaveURL(/\/search\?q=BASICBIT$/);
@@ -1311,6 +1320,7 @@ test.describe("fixture lookup smoke", () => {
     await page.goto("/search");
     const searchInput = page.getByRole("combobox", { name: /Search/i });
 
+    await waitForPublicSearchHydration(page);
     await searchInput.fill("basic");
     await expect(page.getByRole("option", { name: /BASICBIT/i })).toBeVisible();
     await searchInput.press("ArrowDown");
@@ -1321,8 +1331,10 @@ test.describe("fixture lookup smoke", () => {
 
     await page.goto("/search?q=Sparse%20Import");
     const sparseResult = page.getByRole("region", { name: "Search results" });
-    await expect(sparseResult.getByText("Sparse Import", { exact: true })).toBeVisible();
-    await expect(sparseResult.getByRole("img", { name: "Sparse Import" })).toHaveCount(0);
+    const sparseProfile = sparseResult.getByRole("link", { name: /^Sparse Import\b/ });
+    await expect(sparseProfile).toBeVisible();
+    await expect(sparseProfile).toHaveAttribute("href", "/playwright-sparse-import");
+    await expect(sparseProfile.locator("img")).toHaveCount(0);
     await expect(sparseResult.getByRole("link", { name: "Claim this profile" })).toHaveAttribute(
       "href",
       "/claim/playwright-sparse-import?source=search",
@@ -1330,7 +1342,9 @@ test.describe("fixture lookup smoke", () => {
     await expect(sparseResult.getByText("Imported profile seed", { exact: true })).toHaveCount(0);
 
     await page.goto("/search?q=Sparse%20Import&view=dj");
-    await expect(page.getByRole("link", { name: "Sparse Import", exact: true })).toBeVisible();
+    const djResult = page.getByRole("region", { name: "Lookup results" }).getByRole("link", { name: "Sparse Import", exact: true });
+    await expect(djResult).toBeVisible();
+    await expect(djResult).toHaveAttribute("href", "/playwright-sparse-import");
     await expect(page.getByText(/Imported profile seed|Unclaimed/, { exact: true })).toHaveCount(0);
 
     await page.goto("/search?q=DJ%20Aurora&view=dj");
