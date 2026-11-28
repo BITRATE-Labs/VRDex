@@ -41,6 +41,7 @@ export function EventPublicHero({
   const tooltipClassName = "pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden whitespace-nowrap rounded-control border border-border bg-surface px-2 py-1 text-xs text-foreground shadow-lg group-focus-within:block sm:top-full sm:right-0 sm:bottom-auto sm:left-auto sm:mt-2 sm:mb-0";
   const actionTooltipClassName = cn(tooltipClassName, "group-hover:block");
 
+  const seriesTitleId = seriesPath ? "public-event-title" : undefined;
   const detailTextClassName = bannerStyle ? "text-white/80" : "text-muted";
   const showWatchEndStatus = Boolean(linksLabel || seriesPath) && event.watchSurfaceEnabled && event.status !== "cancelled"
     && event.startAt !== undefined && Number.isFinite(event.endAt);
@@ -53,7 +54,7 @@ export function EventPublicHero({
   );
 
   return (
-    <section className={cn("overflow-hidden rounded-hero border border-border shadow-sm", bannerStyle ? "bg-media" : "bg-surface-strong")}>
+    <section aria-labelledby={seriesTitleId} className={cn("overflow-hidden rounded-hero border border-border shadow-sm", bannerStyle ? "bg-media" : "bg-surface-strong")}>
       <div
         className={cn(
           styles.heroLead,
@@ -82,7 +83,19 @@ export function EventPublicHero({
               {event.doorsOpenAt !== undefined ? <span><span>Doors open</span>{" "}<ViewerLocalEventDateTime timestamp={event.doorsOpenAt} compactRelativeTo={event.startAt} /></span> : null}
               {event.endAt !== undefined ? <span><span>{showWatchEndStatus ? <WatchEndLabel endAt={event.endAt} /> : "End"}</span>{" "}<ViewerLocalEventDateTime timestamp={event.endAt} compactRelativeTo={event.startAt} /></span> : null}
             </div> : null}
-            <h1 className="mt-3 text-4xl leading-[1.05] font-semibold tracking-[-0.05em] [overflow-wrap:anywhere] sm:mt-4 sm:text-7xl sm:leading-none">
+            {seriesPath ? (
+              <Link
+                className={cn(
+                  "flex min-h-11 min-w-11 w-fit items-center gap-1.5 rounded-control border border-accent/55 bg-accent/15 px-2.5 text-sm font-semibold transition-colors hover:border-accent hover:bg-accent/20 focus-visible:outline-2 focus-visible:outline-current sm:min-h-8",
+                  !bannerStyle && "text-accent-strong",
+                )}
+                href={seriesPath}
+              >
+                Upcoming nights
+                <ArrowRight aria-hidden="true" className="size-4 shrink-0" />
+              </Link>
+            ) : null}
+            <h1 id={seriesTitleId} className="mt-3 text-4xl leading-[1.05] font-semibold tracking-[-0.05em] [overflow-wrap:anywhere] sm:mt-4 sm:text-7xl sm:leading-none">
               {event.title}
             </h1>
             {event.summary ? <p className={cn(styles.heroSummary, "mt-3 max-w-2xl text-base leading-6 [overflow-wrap:anywhere] sm:mt-4 sm:text-lg sm:leading-7", bannerStyle && "text-white/82")}>{event.summary}</p> : null}
@@ -104,12 +117,6 @@ export function EventPublicHero({
             </a>
             <span role="tooltip" className={actionTooltipClassName}>Add to calendar</span>
           </span> : null}
-          {seriesPath ? (
-            <Link className={actionClassName} href={seriesPath}>
-              Upcoming nights
-              <ArrowRight aria-hidden="true" />
-            </Link>
-          ) : null}
           {linksLabel ? (
             <a className={actionClassName} href="#event-links">
               <ArrowDown aria-hidden="true" className="block!" />
