@@ -130,14 +130,21 @@ test("world retains a reference destination when it differs or stands alone", as
   const openWorld = main.getByRole("link", { name: "Open VRChat world", exact: true });
   const reference = main.getByRole("link", { name: "Reference link", exact: true });
 
+  await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/playwright-neon-harbor-distinct-reference");
   await expect(openWorld).toHaveAttribute("href", neonHarborWorldUrl);
+  await expect(reference).toHaveCount(1);
   await expect(reference).toHaveAttribute("href", neonHarborReferenceUrl);
+  await expect(reference).toHaveAttribute("target", "_blank");
+  await expect(reference).toHaveAttribute("rel", "noreferrer");
+  await expect(reference.getByText("example.invalid", { exact: true })).toBeVisible();
+  await expect(reference).toHaveAccessibleDescription("example.invalid");
+  await expect(reference.locator("svg")).toBeVisible();
+  expect((await reference.boundingBox())?.height).toBeGreaterThanOrEqual(44);
 
   await expect(main.getByRole("heading", { name: "Upcoming and active", exact: true })).toBeVisible();
   await expect(main.getByRole("heading", { name: "Recent", exact: true })).toHaveCount(0);
 
-  await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/playwright-neon-harbor-reference-only");
   await expect(openWorld).toHaveCount(0);
   await expect(reference).toHaveCount(1);
