@@ -222,7 +222,7 @@ export function useEventLineupReturn(eventSlug: string, posterUrl: string | unde
     };
     updateLineupReturn(entry);
     const position = eventEditorHistoryPosition(history.state);
-    if (location.hash === "#event-lineup" && position !== undefined) {
+    if (position !== undefined) {
       const visit = { position, destination: event.currentTarget.href, entry };
       performerVisits.set(position, visit);
       awaitingReturn = visit;

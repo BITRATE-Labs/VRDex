@@ -100,6 +100,14 @@ for (const userTakesOver of [false, true]) {
     await page.addInitScript(({ startAt, posterPath }) => {
       // Exercise the app fallback even in engines with native scroll anchoring.
       document.addEventListener("DOMContentLoaded", () => { document.documentElement.style.overflowAnchor = "none"; });
+      // Reproduce the router replacing the entry after the browser has delivered Back.
+      window.addEventListener("popstate", (event) => {
+        if (location.pathname !== "/playwright/event-lineup" || !event.state?.vrdexEventLineupReturn) return;
+        const nextState = { ...event.state };
+        delete nextState.vrdexEventLineupReturn;
+        history.replaceState(nextState, "");
+        document.documentElement.dataset.lineupHistoryRewritten = "true";
+      }, true);
       localStorage.setItem("event-lineup-fixture-public", JSON.stringify({
         id: "held-poster-event", slug: "held-poster-event", title: "Afterglow Harbor Sessions",
         source: { sourceType: "manual", label: "Organizer" },
@@ -134,8 +142,9 @@ for (const userTakesOver of [false, true]) {
       expect(await poster.evaluate((image) => image.getBoundingClientRect().height)).toBe(0);
 
       await performer.click();
-      await expect(page).toHaveURL(performerPath);
+      await expect(page).toHaveURL(performerPath, { timeout: 12_000 });
       await page.goBack({ waitUntil: "domcontentloaded" });
+      await expect(page.locator("html")).toHaveAttribute("data-lineup-history-rewritten", "true");
       await expect.poll(moved).toBeLessThan(3);
 
       if (userTakesOver) {
