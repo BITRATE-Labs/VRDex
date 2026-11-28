@@ -1228,6 +1228,7 @@ for (const submit of ["Enter", "View all results"]) test(`unselected ${submit} p
 
 test("clear, dismissal, focus, IME and pointer selection stay usable @flow @fixture", async ({ page, isMobile }) => {
   await page.goto("/discovery");
+  await waitForPublicSearchHydration(page);
   const input = page.getByRole("combobox", { name: /Search/i });
   await input.fill("basic");
   await expect(page.getByRole("option")).toHaveCount(1);
@@ -1240,6 +1241,7 @@ test("clear, dismissal, focus, IME and pointer selection stay usable @flow @fixt
   await input.press("Enter");
   await expect(page).toHaveURL(/\/search\?q=basic$/);
   await page.goto("/discovery");
+  await waitForPublicSearchHydration(page);
   await input.fill("basic");
   await expect(page.getByRole("option")).toHaveCount(1);
   await page.getByRole("heading", { name: "Discover VR", exact: true }).click();
@@ -1277,6 +1279,7 @@ test("old query responses and cleared requests cannot restore stale options @flo
     await route.fulfill({ response });
   });
   await page.goto("/discovery");
+  await waitForPublicSearchHydration(page);
   const input = page.getByRole("combobox", { name: /Search/i });
   await input.fill("basic");
   await oldStarted;
@@ -1451,6 +1454,7 @@ test("clearing an in-flight request invalidates it before the same query is rety
     }
   });
   await page.goto("/discovery");
+  await waitForPublicSearchHydration(page);
   const input = page.getByRole("combobox", { name: /Search/i });
   await input.fill("basic");
   await oldStarted;

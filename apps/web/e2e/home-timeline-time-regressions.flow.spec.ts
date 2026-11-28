@@ -142,10 +142,10 @@ test.describe("timeline time regressions @flow @fixture", () => {
     const panel = page.getByLabel("Event details", { exact: true });
     await expect(
       panel.locator('time[datetime="2026-10-26T21:00:00.000Z"]').first(),
-    ).toHaveText("Oct 26, 5:00 PM");
-    await expect(
-      panel.locator('time[datetime="2026-10-27T01:00:00.000Z"]'),
-    ).toHaveText("Oct 26, 9:00 PM");
+    ).toHaveText("Oct 26, 2026, 5:00 PM EDT");
+    const end = panel.locator('time[datetime="2026-10-27T01:00:00.000Z"]');
+    await expect(end.locator('[aria-hidden="true"]')).toHaveText("9:00 PM");
+    await expect(end).toHaveAttribute("title", "Oct 26, 9:00 PM EDT");
     const selected = panel.locator('[data-selected="true"]');
     await expect(selected).toHaveAttribute(
       "data-slot-id",
@@ -232,6 +232,14 @@ test.describe("timeline time regressions @flow @fixture", () => {
           expect(await placeholder.evaluate((element) => getComputedStyle(element, "::before").content)).toBe("none");
           const loading = await shell.boundingBox();
           expect(loading?.height).toBeGreaterThanOrEqual(376 + 56 + 48);
+          const discovery = page.getByRole("region", { name: "Discover", exact: true });
+          const discoveryHeading = discovery.getByRole("heading", { name: "Discover", exact: true });
+          const browse = discovery.locator("header").getByRole("link", { name: "Browse", exact: true });
+          if (!isMobile) {
+            await expect(discoveryHeading).toBeInViewport({ ratio: 1 });
+            await expect(browse).toBeInViewport({ ratio: 1 });
+          }
+          const loadingDiscovery = await discoveryHeading.boundingBox();
           await page.screenshot({ path: info.outputPath(`startup-${size.width}.png`) });
           release();
           await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready", { timeout: 20000 });
@@ -240,17 +248,23 @@ test.describe("timeline time regressions @flow @fixture", () => {
           const ready = await shell.boundingBox();
           const chart = page.getByRole("region", { name: "Timeline chart", exact: true });
           const lanes = page.getByTestId("public-timeline-lanes");
-          const artwork = page.getByTestId("discovery-event-card").first().locator("a").first();
+          const readyDiscovery = await discoveryHeading.boundingBox();
+          const artwork = page.getByTestId("discovery-event-card").first().getByRole("link", { name: /^Open / });
           const artworkBox = await artwork.boundingBox();
           const bar = page.getByTestId(`event-${timelineFixture.eventIds[0]}`);
           await expect(bar).toBeVisible();
           expect((await bar.boundingBox())?.height).toBe(78);
-          const metrics = { size, loading, ready, lanes: await lanes.boundingBox(), chart: await chart.boundingBox(), artwork: artworkBox, bar: await bar.boundingBox() };
+          const metrics = { size, loading, ready, loadingDiscovery, readyDiscovery, lanes: await lanes.boundingBox(), chart: await chart.boundingBox(), artwork: artworkBox, bar: await bar.boundingBox() };
           await info.attach(`startup-${size.width}.json`, { body: JSON.stringify(metrics), contentType: "application/json" });
           expect(ready?.height).toBe(loading?.height);
           expect((await lanes.boundingBox())?.height).toBe(376);
           await expect(page.getByRole("heading", { name: "My night", exact: true })).toHaveCount(0);
-          if (!isMobile) expect(artworkBox!.y).toBeLessThan(size.height - 12);
+          if (!isMobile) {
+            await expect(discoveryHeading).toBeInViewport({ ratio: 1 });
+            await expect(browse).toBeInViewport({ ratio: 1 });
+            expect(readyDiscovery!.y).toBeCloseTo(loadingDiscovery!.y, 0);
+            if (size.height === 900) expect(artworkBox!.y).toBeLessThan(size.height - 12);
+          }
           expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(size.width);
           await page.screenshot({ path: info.outputPath(`ready-${size.width}.png`) });
           await page.screenshot({ path: info.outputPath(`ready-full-${size.width}.png`), fullPage: true });

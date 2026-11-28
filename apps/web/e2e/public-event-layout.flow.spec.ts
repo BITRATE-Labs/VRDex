@@ -330,22 +330,31 @@ for (const timezoneId of ["UTC", "America/Los_Angeles"]) {
         await expect(actions.getByRole("link", { name: "Host view" })).toHaveCount(slug === watchSlug ? 1 : 0);
         await expect(actions.getByRole("link", { name: "Add to calendar" })).toHaveAttribute("href", path + slug + "/calendar.ics");
         await expect(actions.getByRole("button", { name: "Report event" })).toBeVisible();
+        await expect(actions.getByRole("link", { name: "Media links", exact: true })).toHaveCount(slug === sparseSlug ? 0 : 1);
 
         await expect(actions.getByText("Calendar", { exact: true })).toBeVisible();
         await expect(actions.getByText("Report", { exact: true })).toBeVisible();
 
         for (const width of [320, 360, 412, 640, 768]) {
           await page.setViewportSize({ width, height: 720 });
-          const actionLayout = await actions.evaluate((nav) => {
+          const { rows, ...actionLayout } = await actions.evaluate((nav) => {
             const container = nav.getBoundingClientRect();
             const buttons = [...nav.querySelectorAll("a, button")].map((button) => button.getBoundingClientRect());
             return {
-              contained: buttons.every((button) => button.left >= container.left && button.right <= container.right),
-              singleRow: buttons.every((button) => Math.abs(button.top - buttons[0].top) <= 1),
+              contained: buttons.every((button) => button.left >= container.left && button.right <= container.right
+                && button.top >= container.top && button.bottom <= container.bottom),
+              rows: new Set(buttons.map((button) => Math.round(button.top))).size,
               mobileTargets: window.innerWidth >= 640 || buttons.every((button) => button.height >= 44 && button.width >= 44),
             };
           });
-          expect(actionLayout).toEqual({ contained: true, singleRow: true, mobileTargets: true });
+          const layoutCase = `${slug} at ${width}px`;
+          expect(actionLayout, layoutCase).toEqual({ contained: true, mobileTargets: true });
+          // The host-only fourth action can wrap on phones without shrinking the touch targets.
+          if (width < 640 && slug === watchSlug) {
+            expect(rows, layoutCase).toBeLessThanOrEqual(2);
+          } else {
+            expect(rows, layoutCase).toBe(1);
+          }
           const [timeBox, actionsBox] = await Promise.all([time.boundingBox(), actions.boundingBox()]);
           if (!timeBox || !actionsBox) throw new Error("Missing event hero layout");
           if (width < 640) {
@@ -381,7 +390,16 @@ for (const timezoneId of ["UTC", "America/Los_Angeles"]) {
           const control = await play.locator("[data-watch-play-control]").boundingBox();
           expect(control && control.y + control.height).toBeLessThanOrEqual(620);
           const host = main.getByRole("link", { name: "Afterglow Social Host", exact: true });
-          await expect(host).toBeInViewport({ ratio: 1 });
+          await expect(host).toHaveAttribute("href", "/playwright-afterglow-social");
+          await expect(host).toBeVisible();
+          const poster = main.getByAltText(/ poster$/);
+          await expect(poster).toBeVisible();
+          const [hostBox, posterBox] = await Promise.all([host.boundingBox(), poster.boundingBox()]);
+          if (!hostBox || !posterBox) throw new Error("Missing mobile watch host or poster");
+          expect(hostBox.y + hostBox.height).toBeLessThanOrEqual(posterBox.y);
+          if (slug === guestWatchSlug) {
+            await expect(host).toBeInViewport({ ratio: 1 });
+          }
         }
         await expect(main.locator("video, iframe")).toHaveCount(0);
       }

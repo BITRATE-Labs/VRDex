@@ -59,15 +59,20 @@ test.describe("continuous schedule @flow @fixture", () => {
   });
 
   test("a just-ended event deliberately saved this visit stays removable outside My night", async ({ page, timelineFixture }) => {
-    const past = page.getByTestId(`event-${timelineFixture.eventIds[0]}`);
-    await past.getByRole("button", { name: "Interested: Soft Focus", exact: true }).click();
+    const openPast = page.getByTestId(`event-${timelineFixture.eventIds[0]}`)
+      .getByRole("button", { name: "Open Soft Focus", exact: true });
+    await activateTimelineEventPreference(page, openPast, "Interested: Soft Focus");
     await page.getByLabel("Schedule date", { exact: true }).fill("2026-11-02");
     await loadCompleteSchedule(page);
     await page.getByRole("button", { name: "Now", exact: true }).click();
     await loadCompleteSchedule(page);
-    await expect(past.getByRole("button", { name: "Remove interest: Soft Focus", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "My night", exact: true })).toHaveCount(0);
-    await past.getByRole("button", { name: "Remove interest: Soft Focus", exact: true }).click();
+    await openPast.click();
+    const details = page.getByLabel("Event details", { exact: true });
+    const interest = details.getByRole("button", { name: "Interested: Soft Focus", exact: true });
+    await expect(interest).toHaveAttribute("aria-pressed", "true");
+    await interest.click();
+    await expect(interest).toHaveAttribute("aria-pressed", "false");
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("vrdex.timeline.preferences.v1")!).plan)).toEqual([]);
   });
 
@@ -1184,9 +1189,14 @@ test.describe("continuous schedule @flow @fixture", () => {
     for (const title of [
       "ORBIT: Interstellar Bassline Orchestra",
       "Low Tide",
-      "Day Gathering",
     ])
       await saveInInspector(page, title);
+    const dayMarker = page.getByTestId(`date-marker-${timelineFixture.eventIds[7]}`);
+    await activateTimelineEventPreference(
+      page,
+      dayMarker.getByRole("button", { name: "Open Day Gathering, Time TBA", exact: true }),
+      "Interested: Day Gathering",
+    );
     const night = page.getByRole("region", { name: "My night", exact: true });
     const overlappingBars = page.getByTestId("night-lanes").locator("[data-night-reference]");
     await expect(overlappingBars).toHaveCount(2);
@@ -1194,7 +1204,7 @@ test.describe("continuous schedule @flow @fixture", () => {
       await expect(bar.getByRole("button", { name: /^Open/ }).first()).toHaveAccessibleDescription(/Overlap/);
     }
     await expect(
-      page.getByTestId(`date-marker-${timelineFixture.eventIds[7]}`).getByText("Time TBA", { exact: true }),
+      dayMarker.getByText("Time TBA", { exact: true }),
     ).toBeVisible();
 
     await page.getByLabel("Schedule date", { exact: true }).fill("2026-11-02");

@@ -6,7 +6,15 @@ test('fixture photos show synthetic linked provenance on demand @flow @fixture',
  await page.goto('/playwright-dj-aurora',{waitUntil:'networkidle'});
  const card=page.locator('#media-fixture-aurora-profile-image');
  expect(requests).toHaveLength(0);
- await card.locator('summary').click();
+ const [historyResponse] = await Promise.all([
+  page.waitForResponse(response =>
+   response.request().method() === 'GET' &&
+   new URL(response.url()).pathname === '/api/v0/profiles/playwright-dj-aurora/assets/fixture-aurora-profile-image',
+   { timeout: 15_000 },
+  ),
+  card.locator('summary').click(),
+ ]);
+ expect(historyResponse.ok()).toBe(true);
  await expect(card.getByText('Uploaded by',{exact:true})).toBeVisible();
  await expect(card.getByRole('link',{name:'Afterglow Social',exact:true}).first()).toHaveAttribute('href','/playwright-afterglow-social');
  for(const step of ['Uploaded','Approved','Published'])await expect(card.getByText(step,{exact:true})).toBeVisible();
