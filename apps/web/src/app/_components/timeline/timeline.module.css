@@ -275,11 +275,18 @@
   outline-offset: 1px;
 }
 .eventHeader {
+  --header-actions-size: 29px;
+  --header-actions-visible: 0;
+  --header-actions-pointer: none;
+  container-type: inline-size;
   height: 44px;
   display: flex;
   align-items: center;
   background: color-mix(in srgb, var(--foreground) 5%, var(--surface-elevated));
   position: relative;
+}
+.eventHeader:has(.headerAction:nth-last-child(2)) {
+  --header-actions-size: 58px;
 }
 .eventOpen {
   display: flex;
@@ -289,7 +296,8 @@
   flex: 1;
   min-width: min(100%, 100px);
   height: 100%;
-  padding: 6px 8px;
+  padding: 2px 8px;
+  padding-inline-end: calc(8px + var(--header-actions-size) * var(--header-actions-visible));
 }
 .logo,
 .logoFallback {
@@ -307,20 +315,27 @@
   font-weight: 600;
 }
 .identity {
+  font-family: system-ui, sans-serif;
   display: grid;
   gap: 2px;
   min-width: 0;
 }
 .identity strong {
-  font-size: 0.72rem;
-  font-weight: 600;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--foreground);
+  line-height: 1.04;
   overflow: hidden;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   text-overflow: ellipsis;
 }
 .identity small {
   font-size: 0.58rem;
-  color: var(--muted);
+  line-height: 1.15;
+  color: color-mix(in srgb, var(--foreground) 20%, var(--muted));
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -802,9 +817,33 @@
   cursor: default;
 }
 
-.headerAction {
+.eventHeader .headerAction {
+  position: absolute;
+  inset-inline-end: 3px;
+  opacity: var(--header-actions-visible);
+  pointer-events: var(--header-actions-pointer);
   background: transparent;
-  margin-right: 3px;
+}
+.eventHeader .headerAction:nth-last-child(2) {
+  inset-inline-end: 32px;
+}
+.eventHeader:has(.headerAction:focus-visible) {
+  --header-actions-visible: 1;
+  --header-actions-pointer: auto;
+}
+@media (any-hover: hover) {
+  .eventHeader:is(:hover, :focus-within) {
+    --header-actions-visible: 1;
+    --header-actions-pointer: auto;
+  }
+}
+@container (width <= 100px) {
+  .eventHeader .eventOpen {
+    padding-inline-end: 8px;
+  }
+  .eventHeader .headerAction {
+    display: none;
+  }
 }
 .set:hover,
 .set:focus-within {

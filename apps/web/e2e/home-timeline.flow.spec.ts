@@ -4,13 +4,16 @@ import {
   TIMELINE_NOW,
   changeTimelineFixture,
   loadCompleteSchedule,
+  activateTimelineEventPreference,
 } from "./home-timeline-fixture";
 import { waitForPublicSearchHydration } from "./public-search-fixture";
 async function saveInInspector(page: Page, title: string, performer?: string) {
-  await page.locator("[data-home-schedule]").getByRole("button", { name: `Open ${title}`, exact: true }).first().click();
-  const panel = page.getByLabel("Event details", { exact: true });
-  await panel.getByRole("button", { name: `Interested: ${performer ?? title}`, exact: true }).click();
-  await panel.getByRole("button", { name: "Close", exact: true }).click();
+  const opener = page.locator("[data-home-schedule]").getByRole("button", { name: `Open ${title}`, exact: true }).first();
+  await activateTimelineEventPreference(
+    page,
+    opener,
+    `Interested: ${performer ?? title}`,
+  );
 }
 async function toggleAuroraFavorite(page: Page, selected: boolean) {
   await page.locator("[data-home-schedule]").getByRole("button", { name: "Open ORBIT: Interstellar Bassline Orchestra", exact: true }).first().click();
@@ -449,10 +452,12 @@ test.describe("continuous schedule @flow @fixture", () => {
         "data-state",
         "ready",
       );
-      await page
-        .getByRole("button", { name: "Favorite: Prism Collective", exact: true })
-        .first()
-        .click();
+      const orbit = page.getByTestId(`event-${timelineFixture.eventIds[3]}`).getByRole("button", { name: /^Open ORBIT:/ });
+      await activateTimelineEventPreference(
+        page,
+        orbit,
+        "Favorite: Prism Collective",
+      );
       await expect(
         other
           .getByRole("button", {
@@ -461,13 +466,8 @@ test.describe("continuous schedule @flow @fixture", () => {
           })
           .first(),
       ).toBeVisible();
-      await other
-        .getByRole("button", {
-          name: "Remove favorite: Prism Collective",
-          exact: true,
-        })
-        .first()
-        .click();
+      const otherOrbit = other.getByTestId(`event-${timelineFixture.eventIds[3]}`).getByRole("button", { name: /^Open ORBIT:/ });
+      await activateTimelineEventPreference(other, otherOrbit, "Remove favorite: Prism Collective");
       await expect(
         page
           .getByRole("button", {
@@ -499,9 +499,7 @@ test.describe("continuous schedule @flow @fixture", () => {
         .getByRole("button", { name: "Favorites only", exact: true })
         .click();
       await toggleAuroraFavorite(page, true);
-      await page
-        .getByRole("button", { name: "Interested: Low Tide", exact: true })
-        .click();
+      await saveInInspector(page, "Low Tide");
       await page.reload();
       await expect(
         page
@@ -546,9 +544,7 @@ test.describe("continuous schedule @flow @fixture", () => {
       "ready",
     );
 
-    await page
-      .getByRole("button", { name: "Interested: Low Tide", exact: true })
-      .click();
+    await saveInInspector(page, "Low Tide");
     await expect(page.getByText("Not saved", { exact: true })).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "My night", exact: true }),
@@ -1062,12 +1058,7 @@ test.describe("continuous schedule @flow @fixture", () => {
         exact: true,
       }),
     ).toBeVisible();
-    await page
-      .getByRole("button", {
-        name: "Interested: ORBIT: Interstellar Bassline Orchestra",
-        exact: true,
-      })
-      .click();
+    await saveInInspector(page, "ORBIT: Interstellar Bassline Orchestra");
     await expect(
       page.getByRole("heading", { name: "My night", exact: true }),
     ).toBeVisible();
@@ -1079,10 +1070,11 @@ test.describe("continuous schedule @flow @fixture", () => {
       fullPage: true,
     });
 
-    await page
-      .getByRole("button", { name: "Favorite: Prism Collective", exact: true })
-      .first()
-      .click();
+    await activateTimelineEventPreference(
+      page,
+      bar.getByRole("button", { name: /^Open ORBIT:/ }),
+      "Favorite: Prism Collective",
+    );
     await page
       .getByRole("button", { name: "Favorites only", exact: true })
       .click();
@@ -1170,12 +1162,14 @@ test.describe("continuous schedule @flow @fixture", () => {
       await expect(open).toHaveAttribute("aria-pressed", "true");
     } else {
 
-      await page
-        .getByRole("button", {
-          name: "Interested: ORBIT: Interstellar Bassline Orchestra",
-          exact: true,
-        })
-        .tap();
+      const inlineInterest = bar.getByRole("button", { name: "Interested: ORBIT: Interstellar Bassline Orchestra", exact: true });
+      await expect(inlineInterest).toHaveCSS("opacity", "0");
+      await open.tap();
+      const panel = page.getByLabel("Event details", { exact: true });
+      await panel.getByRole("button", { name: "Interested: ORBIT: Interstellar Bassline Orchestra", exact: true }).tap();
+      await panel.getByRole("button", { name: "Close", exact: true }).tap();
+      await expect(open).toBeFocused();
+      await expect(bar.getByRole("button", { name: "Remove interest: ORBIT: Interstellar Bassline Orchestra", exact: true })).toHaveCSS("opacity", "0");
       await expect(
         page.getByTestId("night-lanes").getByRole("heading", { name: "My night", exact: true }),
       ).toBeVisible();
@@ -1192,9 +1186,7 @@ test.describe("continuous schedule @flow @fixture", () => {
       "Low Tide",
       "Day Gathering",
     ])
-      await page
-        .getByRole("button", { name: `Interested: ${title}`, exact: true })
-        .click();
+      await saveInInspector(page, title);
     const night = page.getByRole("region", { name: "My night", exact: true });
     const overlappingBars = page.getByTestId("night-lanes").locator("[data-night-reference]");
     await expect(overlappingBars).toHaveCount(2);
