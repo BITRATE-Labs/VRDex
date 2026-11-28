@@ -79,6 +79,7 @@ type ProfileEditFormProps = {
   mediaContributionsEnabled: boolean;
   mediaKitGalleryEnabled: boolean;
   profilePath: string;
+  returnTo: string;
   slug: string;
 };
 
@@ -97,7 +98,7 @@ function ConnectedProfileEditForm({
   mediaKitGalleryEnabled,
   profilePath,
   slug,
-}: ProfileEditFormProps) {
+}: Omit<ProfileEditFormProps, "returnTo">) {
   const router = useRouter();
   const convex = useConvex();
   const [preview, setPreview] = useState<PublicProfile | null>(null);
@@ -323,6 +324,7 @@ function AuthenticatedProfileEditForm({
   mediaContributionsEnabled,
   mediaKitGalleryEnabled,
   profilePath,
+  returnTo,
   slug,
 }: ProfileEditFormProps) {
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -342,9 +344,7 @@ function AuthenticatedProfileEditForm({
             helper the protected routes use, so it stays one format. */}
         <Link
           className={buttonVariants({ size: "lg", variant: "primary" })}
-          href={protectedRouteSignInPath(
-            `${profilePath}/edit${mediaContributionFocus ? "?section=media#media-contributions" : ""}`,
-          )}
+          href={protectedRouteSignInPath(returnTo)}
         >
           Sign in
         </Link>
@@ -368,6 +368,7 @@ export function ProfileEditForm({
   mediaContributionsEnabled,
   mediaKitGalleryEnabled,
   profilePath,
+  returnTo,
   slug,
 }: ProfileEditFormProps) {
   // Ahead of every Convex hook, not beside them. `ConvexClientProvider` renders
@@ -389,6 +390,7 @@ export function ProfileEditForm({
       mediaContributionsEnabled={mediaContributionsEnabled}
       mediaKitGalleryEnabled={mediaKitGalleryEnabled}
       profilePath={profilePath}
+      returnTo={returnTo}
       slug={slug}
     />
   );

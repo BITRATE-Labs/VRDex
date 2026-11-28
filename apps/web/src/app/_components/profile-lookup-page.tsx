@@ -2,15 +2,18 @@
 
 import { useConvex } from "convex/react";
 import type { FunctionReference } from "convex/server";
+import { ArrowDown } from "lucide-react";
 import Link from "next/link";
 import { usePostHog } from "posthog-js/react";
 import { type CSSProperties, useCallback, useEffect, useRef, useState, useTransition } from "react";
 
 import { api } from "@convex-generated-api";
-import { PublicProfileLinks } from "./public-profile-links";
+import { isVrcdnStreamLink, PublicProfileLinks } from "./public-profile-links";
 import { LookupSearchBox } from "./lookup-search-box";
 import { mergeLookupSuggestions } from "./lookup-suggestion-merge";
 import { SearchViewShell } from "./search-view-shell";
+import { searchHref } from "./search-view-state";
+import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EntityImage } from "@/components/ui/entity-image";
 import { ProfileAvatarImage } from "@/components/ui/profile-avatar-image";
@@ -300,13 +303,24 @@ function LookupResultRow({ profile }: { profile: PublicProfileLookupResult }) {
 }
 
 function LookupResultCard({ profile }: { profile: PublicProfileLookupResult }) {
+  const streamAnchor = profile.outboundLinks.some(isVrcdnStreamLink) ? `lookup-streams-${profile.slug}` : undefined;
+
   return (
     <Card className="lookup-result-card grid gap-2" padding="sm">
       <LookupIdentity profile={profile} />
+      {streamAnchor ? (
+        <a
+          aria-label={`VRCDN for ${profile.displayName}`}
+          className={cn(buttonVariants({ size: "sm" }), "hidden min-h-11 w-fit gap-1.5 max-sm:inline-flex")}
+          href={`#${streamAnchor}`}
+        >
+          VRCDN <ArrowDown aria-hidden="true" className="size-3.5" />
+        </a>
+      ) : null}
       <div className="text-xs">
         <LookupGenres genres={profile.genres} />
       </div>
-      <PublicProfileLinks links={profile.outboundLinks} />
+      <PublicProfileLinks links={profile.outboundLinks} streamAnchor={streamAnchor} />
     </Card>
   );
 }
@@ -438,6 +452,10 @@ async function fetchLookupResults(query: string): Promise<LookupResponse> {
   return data;
 }
 
+function lookupLocation() {
+  return `${window.location.pathname}${window.location.search}`;
+}
+
 function updateLookupUrl(query: string, routePath: "/" | "/lookup" | "/search", view?: "dj") {
   const params = new URLSearchParams();
   if (query) {
@@ -448,10 +466,10 @@ function updateLookupUrl(query: string, routePath: "/" | "/lookup" | "/search", 
   }
   const nextUrl = params.size > 0 ? `${routePath}?${params.toString()}` : routePath;
 
-  const currentUrl = `${window.location.pathname}${window.location.search}`;
-  if (currentUrl !== nextUrl) {
+  if (lookupLocation() !== nextUrl) {
     window.history.pushState(null, "", nextUrl);
   }
+  return nextUrl;
 }
 
 type ProfileLookupPageProps = {
@@ -514,11 +532,18 @@ function ProfileLookupPageContent({
   const [seedViewerAccess, setSeedViewerAccess] = useState(viewerAccess);
   const [lookupStatus, setLookupStatus] = useState<LookupStatus>(status);
   const [bulkEntries, setBulkEntries] = useState<BulkLookupEntry[]>([]);
-  const [pendingLabel, setPendingLabel] = useState<string | null>(null);
-  const requestVersionRef = useRef(0);
-  const privateLookupQueryRef = useRef<string | null>(
-    privateResults.length > 0 ? query : null,
+  const initialPrivateLookupQuery =
+    status === "live" && viewerAccess.allowed && privateResults.length === 0 && queryPrivateResults
+      ? query.trim()
+      : "";
+  const [pendingLabel, setPendingLabel] = useState<string | null>(
+    initialPrivateLookupQuery && results.length === 0 ? `Searching ${initialPrivateLookupQuery}` : null,
   );
+  const lookupLocationRef = useRef<string | null>(null);
+  const syncLookupUrl = useCallback((nextQuery: string) => {
+    lookupLocationRef.current = updateLookupUrl(nextQuery, routePath, view);
+  }, [routePath, view]);
+  const requestVersionRef = useRef(0);
   const [isPending, startTransition] = useTransition();
   const isSearching = pendingLabel !== null || isPending;
   const privateUiEnabled = seedViewerAccess.allowed;
@@ -533,9 +558,16 @@ function ProfileLookupPageContent({
   const seedViewerAccessAllowed = seedViewerAccess.allowed;
   const seedViewerAccessSource = seedViewerAccess.source;
   const hasQuery = Boolean(displayQuery.trim()) || bulkEntries.length > 0 || isSearching;
+  const isSingleMiss = lookupStatus === "live" && !isSearching &&
+    bulkEntries.length === 0 && !visibleResults.length && Boolean(displayQuery.trim());
 
   useEffect(() => {
-    const handleHistoryNavigation = () => window.location.reload();
+    lookupLocationRef.current = lookupLocation();
+    const handleHistoryNavigation = () => {
+      if (lookupLocation() !== lookupLocationRef.current) {
+        window.location.reload();
+      }
+    };
     window.addEventListener("popstate", handleHistoryNavigation);
     return () => window.removeEventListener("popstate", handleHistoryNavigation);
   }, []);
@@ -571,7 +603,6 @@ function ProfileLookupPageContent({
       return [];
     }
 
-    privateLookupQueryRef.current = nextQuery;
     try {
       return await queryPrivateResults(nextQuery);
     } catch (error) {
@@ -582,45 +613,32 @@ function ProfileLookupPageContent({
   }, [queryPrivateResults]);
 
   useEffect(() => {
-    const currentQuery = displayQuery.trim();
-
-    if (
-      bulkEntries.length > 0 ||
-      currentQuery.length < 1 ||
-      displayPrivateResults.length > 0 ||
-      !seedViewerAccess.allowed ||
-      !queryPrivateResults ||
-      privateLookupQueryRef.current === currentQuery
-    ) {
+    // Explicit single and bulk submissions handle their own private results.
+    if (!initialPrivateLookupQuery || !queryPrivateResults || requestVersionRef.current !== 0) {
       return;
     }
 
     let cancelled = false;
-    const requestVersion = requestVersionRef.current;
-    privateLookupQueryRef.current = currentQuery;
 
-    void queryPrivateResults(currentQuery)
-      .then((initialPrivateResults) => {
-        if (!cancelled && requestVersionRef.current === requestVersion) {
-          startTransition(() => setDisplayPrivateResults(initialPrivateResults));
-        }
-      })
+    void queryPrivateResults(initialPrivateLookupQuery)
       .catch((error: unknown) => {
         const message = error instanceof Error ? error.message : String(error);
         console.error(`Client-side private seed lookup failed: ${message}`);
+        return [];
+      })
+      .then((initialPrivateResults) => {
+        if (!cancelled && requestVersionRef.current === 0) {
+          startTransition(() => {
+            setDisplayPrivateResults(initialPrivateResults);
+            setPendingLabel(null);
+          });
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [
-    bulkEntries.length,
-    displayPrivateResults.length,
-    displayQuery,
-    queryPrivateResults,
-    seedViewerAccess.allowed,
-    seedViewerAccess.source,
-  ]);
+  }, [initialPrivateLookupQuery, queryPrivateResults]);
 
   const runLookup = useCallback(async (nextQuery: string) => {
     const normalizedQuery = nextQuery.trim();
@@ -659,7 +677,7 @@ function ProfileLookupPageContent({
         setSeedViewerAccess(nextLookup.viewerAccess);
         setLookupStatus("live");
         setBulkEntries([]);
-        updateLookupUrl(normalizedQuery, routePath, view);
+        syncLookupUrl(normalizedQuery);
       });
     } catch {
       if (requestVersionRef.current === requestVersion) {
@@ -670,20 +688,21 @@ function ProfileLookupPageContent({
         setPendingLabel(null);
       }
     }
-  }, [fetchAllowedPrivateResults, posthog, privateUiEnabled, routePath, seedViewerAccess.allowed, view]);
+  }, [fetchAllowedPrivateResults, posthog, privateUiEnabled, seedViewerAccess.allowed, syncLookupUrl]);
 
   const runBulkLookup = useCallback(async (
     lines: string[],
   ) => {
     if (lines.length === 0) {
       requestVersionRef.current += 1;
+      setPendingLabel(null);
       startTransition(() => {
         setBulkEntries([]);
         setDisplayQuery("");
         setDisplayResults([]);
         setDisplayPrivateResults([]);
         setLookupStatus("live");
-        updateLookupUrl("", routePath, view);
+        syncLookupUrl("");
       });
       return;
     }
@@ -742,7 +761,7 @@ function ProfileLookupPageContent({
         setDisplayPrivateResults(nextViewerAccess.allowed ? nextPrivateResults : []);
         setSeedViewerAccess(nextViewerAccess);
         setLookupStatus("live");
-        updateLookupUrl("", routePath, view);
+        syncLookupUrl("");
       });
     } catch {
       if (requestVersionRef.current === requestVersion) {
@@ -757,10 +776,9 @@ function ProfileLookupPageContent({
     fetchAllowedPrivateResults,
     posthog,
     privateUiEnabled,
-    routePath,
     seedViewerAccessAllowed,
     seedViewerAccessSource,
-    view,
+    syncLookupUrl,
   ]);
 
   const clearLookup = useCallback(() => {
@@ -772,18 +790,26 @@ function ProfileLookupPageContent({
       setBulkEntries([]);
       setLookupStatus("live");
       setPendingLabel(null);
-      updateLookupUrl("", routePath, view);
+      syncLookupUrl("");
     });
-  }, [routePath, view]);
+  }, [syncLookupUrl]);
 
   const canonicalView = view ?? "dj";
   const switcherQuery = bulkEntries.length > 0 ? undefined : displayQuery;
+  const searchNavigation = (
+    <Link
+      className="w-fit text-sm font-medium text-accent-strong underline underline-offset-4"
+      href={searchHref({ query: switcherQuery })}
+    >
+      Search results
+    </Link>
+  );
 
   return (
     <SearchViewShell
       activeView={canonicalView}
       className="lookup-theme"
-      query={switcherQuery}
+      searchNavigation={isSingleMiss ? null : searchNavigation}
       searchControl={(
         <LookupSearchBox
           actionPath={routePath}
@@ -804,39 +830,38 @@ function ProfileLookupPageContent({
           <section aria-label="Lookup results" className="grid gap-3">
             {isSearching ? <span className="sr-only">{pendingLabel ?? "Searching"}</span> : null}
             <BulkLookupSummary entries={bulkEntries} />
-            <div className={cn("lookup-results-wrap", isSearching ? "lookup-results-wrap--pending" : undefined)}>
-              {visiblePublicResults.length === 0 && visiblePrivateResults.length === 0 && !isSearching ? (
-                <Card className="lookup-panel" surface="dashed">
-                  <p className="font-medium">No matches found.</p>
-                </Card>
-              ) : visiblePublicResults.length > 0 || visiblePrivateResults.length > 0 ? (
-                <>
-                  <div className="grid gap-3 min-[1320px]:hidden">
-                    {visiblePublicResults.map((profile) => <LookupResultCard key={profile.slug} profile={profile} />)}
-                    {visiblePrivateResults.map((candidate) => (
-                      <PrivateSeedResultCard candidate={candidate} key={candidate.id} />
-                    ))}
-                  </div>
-                  <TableFrame className="lookup-table hidden min-[1320px]:block">
-                    <Table>
-                      <TableHead>
-                        <tr>
-                          <TableHeaderCell>Name</TableHeaderCell>
-                          <TableHeaderCell>Genres</TableHeaderCell>
-                          <TableHeaderCell>Links</TableHeaderCell>
-                        </tr>
-                      </TableHead>
-                      <tbody className="divide-y divide-border">
-                        {visiblePublicResults.map((profile) => <LookupResultRow key={profile.slug} profile={profile} />)}
-                        {visiblePrivateResults.map((candidate) => (
-                          <PrivateSeedResultRow candidate={candidate} key={candidate.id} />
-                        ))}
-                      </tbody>
-                    </Table>
-                  </TableFrame>
-                </>
-              ) : null}
-            </div>
+            {isSingleMiss ? (
+              <Card className="grid gap-2" surface="dashed">
+                <p className="font-medium">No matches found.</p>
+                {searchNavigation}
+              </Card>
+            ) : visibleResults.length > 0 ? (
+              <div className={cn("lookup-results-wrap", isSearching ? "lookup-results-wrap--pending" : undefined)}>
+                <div className="grid gap-3 min-[1320px]:hidden">
+                  {visiblePublicResults.map((profile) => <LookupResultCard key={profile.slug} profile={profile} />)}
+                  {visiblePrivateResults.map((candidate) => (
+                    <PrivateSeedResultCard candidate={candidate} key={candidate.id} />
+                  ))}
+                </div>
+                <TableFrame className="lookup-table hidden min-[1320px]:block">
+                  <Table>
+                    <TableHead>
+                      <tr>
+                        <TableHeaderCell>Name</TableHeaderCell>
+                        <TableHeaderCell>Genres</TableHeaderCell>
+                        <TableHeaderCell>Links</TableHeaderCell>
+                      </tr>
+                    </TableHead>
+                    <tbody className="divide-y divide-border">
+                      {visiblePublicResults.map((profile) => <LookupResultRow key={profile.slug} profile={profile} />)}
+                      {visiblePrivateResults.map((candidate) => (
+                        <PrivateSeedResultRow candidate={candidate} key={candidate.id} />
+                      ))}
+                    </tbody>
+                  </Table>
+                </TableFrame>
+              </div>
+            ) : null}
           </section>
         ) : null}
     </SearchViewShell>

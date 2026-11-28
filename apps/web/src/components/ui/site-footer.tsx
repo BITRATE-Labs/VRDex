@@ -15,16 +15,6 @@ import { AnalyticsSettingsButton } from "@/app/_components/analytics-preferences
  * link is here on the same grounds: the project is open source under MIT, and
  * the code is unreachable from anywhere else on the site.
  */
-const FOOTER_LINKS = [
-  { href: "/support", label: "Contact" },
-  // Same page, different topic already chosen. Opt-out and safety review are
-  // what someone arrives for when the word they have in mind is "privacy"
-  // rather than "contact", and neither would guess the other's name.
-  { href: "/support?topic=owner_opt_out", label: "Privacy request" },
-  { href: "/developers/api", label: "Developers" },
-  { href: "https://github.com/BASIC-BIT/VRDex", label: "GitHub" },
-];
-
 const FOOTER_LINK_CLASS = "text-muted underline-offset-4 transition hover:text-foreground hover:underline";
 
 export function SiteFooter() {
@@ -32,21 +22,16 @@ export function SiteFooter() {
     <footer className="mt-auto border-t border-border px-4 py-8 text-sm sm:px-10 lg:px-16">
       <nav
         aria-label="Site"
-        className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-x-6 gap-y-3"
+        className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-x-4 gap-y-3 sm:gap-x-6"
       >
         <span className="font-mono text-xs uppercase text-muted">VRDex</span>
         <AnalyticsSettingsButton />
-        {FOOTER_LINKS.map((link) =>
-          link.href.startsWith("http") ? (
-            <a className={FOOTER_LINK_CLASS} href={link.href} key={link.href} rel="noreferrer" target="_blank">
-              {link.label}
-            </a>
-          ) : (
-            <Link className={FOOTER_LINK_CLASS} href={link.href} key={link.href}>
-              {link.label}
-            </Link>
-          ),
-        )}
+        <Link className={FOOTER_LINK_CLASS} href="/support">Contact</Link>
+        <Link className={FOOTER_LINK_CLASS} href="/support?topic=owner_opt_out">Privacy request</Link>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 sm:contents">
+          <Link className={FOOTER_LINK_CLASS} href="/developers/api">Developers</Link>
+          <a className={FOOTER_LINK_CLASS} href="https://github.com/BASIC-BIT/VRDex" rel="noreferrer" target="_blank">GitHub</a>
+        </div>
       </nav>
     </footer>
   );

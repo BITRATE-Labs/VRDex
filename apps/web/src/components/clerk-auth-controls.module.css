@@ -1,0 +1,97 @@
+/* Clerk draws these boundaries with a shadow. Use the provider's own
+   foreground color to keep them visible in both themes. */
+.input[data-variant="default"]:not(:focus, :disabled, [aria-disabled="true"], [aria-invalid="true"], [data-feedback="error"]) {
+  box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 50%, transparent);
+}
+
+.socialButton[data-variant="outline"]:not(:focus, :disabled, [aria-disabled="true"]) {
+  box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 78%, transparent);
+}
+
+.input:focus-visible,
+.socialButton:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  .input:not(:focus),
+  .socialButton:not(:focus) {
+    outline: 1px solid ButtonText;
+  }
+}
+
+.journeyRoot,
+.journeyCardBox {
+  width: 100%;
+  max-width: 100%;
+}
+
+.journeyCardBox,
+.journeyCard {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.journeyCard {
+  padding: 1.25rem;
+}
+
+.journeyHeader {
+  align-items: flex-start;
+  text-align: start;
+}
+
+.journeyTarget {
+  min-height: 44px;
+}
+
+@media (min-width: 640px) {
+  .journeyCard {
+    padding-inline: 1.75rem;
+  }
+}
+
+.suggestionFooterAction {
+  align-items: center;
+}
+
+.suggestionFooterLink {
+  display: inline-flex;
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  align-items: center;
+  justify-content: center;
+}
+
+.suggestionPasswordToggle {
+  inset-block: 0;
+  inset-inline-end: 0;
+  width: 44px;
+  height: 44px;
+}
+
+.suggestionCard :global(.cl-formFieldInput__password) {
+  padding-inline-end: 52px;
+}
+
+@media (max-width: 639px) {
+  .suggestionCard {
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .suggestionCard :global(.cl-main) {
+    gap: 10px;
+  }
+
+  .suggestionCard :global(.cl-form),
+  .suggestionCard :global(.cl-form) > :has(> :global(.cl-formFieldRow)) {
+    gap: 12px;
+  }
+
+  .suggestionCard :global(.cl-socialButtons):has(> button:nth-child(2):last-child) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

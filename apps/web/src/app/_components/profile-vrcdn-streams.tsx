@@ -2,7 +2,7 @@
 
 import type { PlaybackStatus } from "@/lib/event-playback-owner";
 import { ExternalLink } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePostHog } from "posthog-js/react";
 
 import { PlaybackInlinePlaceholder } from "./playback-inline-placeholder";
@@ -10,9 +10,10 @@ import { WatchPlayPoster } from "./vrcdn-stream-player";
 import { useEventPlayback } from "./event-playback-provider";
 import { LinkTypeIcon, hostLabel } from "./public-profile-links";
 import { ProfileDestinationArtwork } from "./profile-destination-artwork";
+import styles from "./profile-vrcdn-streams.module.css";
 import { buttonVariants } from "@/components/ui/button";
 import { ConnectionVerification } from "@/components/ui/connection-verification";
-import { Card, SectionHeading } from "@/components/ui/card";
+import { Card, SectionHeading, SectionTitle } from "@/components/ui/card";
 import { CopyValueRow } from "@/components/ui/copy-value-row";
 import { cn } from "@/lib/cn";
 import {
@@ -29,6 +30,7 @@ import { captureProductEvent } from "@/lib/posthog";
 
 export type ProfileVrcdnStream = {
   claimable: boolean;
+  communitySubmitted?: boolean;
   key: string;
   label: string;
   pcUrl: string;
@@ -50,6 +52,7 @@ type ProfileVrcdnLink = {
   platform?: string;
   kind?: "vrchat_user" | "vrchat_group" | "discord_guild";
   artworkUrl?: string;
+  hideCaption?: boolean;
 };
 
 type ProfileDiscordHandle = {
@@ -58,6 +61,11 @@ type ProfileDiscordHandle = {
 };
 
 type ProfileVrcdnStreamsProps = {
+  compactLinks?: boolean;
+  compactMobileSpacing?: boolean;
+  linksColumnContent?: ReactNode;
+  linksHeadingId?: string;
+  streamsSectionId?: string;
   discordHandles: ProfileDiscordHandle[];
   initialLiveStates?: VrcdnLiveStates;
   links: ProfileVrcdnLink[];
@@ -66,6 +74,15 @@ type ProfileVrcdnStreamsProps = {
   displayName?: string;
   streams: ProfileVrcdnStream[];
 };
+
+function webPathname(href: string): string | undefined {
+  try {
+    const url = new URL(href);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.pathname : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 function responseStates(value: unknown): VrcdnLiveStates | null {
   if (typeof value !== "object" || value === null || !("states" in value)) {
@@ -76,6 +93,11 @@ function responseStates(value: unknown): VrcdnLiveStates | null {
 }
 
 export function ProfileVrcdnStreams({
+  compactLinks = false,
+  compactMobileSpacing = false,
+  linksColumnContent,
+  linksHeadingId,
+  streamsSectionId,
   discordHandles,
   initialLiveStates,
   links,
@@ -196,37 +218,83 @@ export function ProfileVrcdnStreams({
     sync();return playback.subscribe(sync);
   },[playback,profileId]);
 
+  const linkCards = links.map((link) => {
+    const vrchat = link.kind === "vrchat_user" || link.kind === "vrchat_group" || link.type === "vrchat_profile";
+    const service = vrchat ? link.platform ?? "VRChat" : link.type === "twitch" ? "Twitch" : null;
+    const label = vrchat ? link.label.replace(/^VRChat\s*:\s*/i, "").trim() || link.label : link.label;
+    const hostname = !service && !link.platform && link.verifiedAt === undefined ? hostLabel(link.href) : undefined;
+    const pathname = hostname ? webPathname(link.href) : undefined;
+    const labelKey = label.replace(/[ \t\n\f\r]+/g, " ").replace(/^ | $/g, "");
+    return { link, vrchat, service, label, labelKey, hostname, pathname };
+  });
+
   const hasLinks = links.length > 0 || discordHandles.length > 0;
   const hasWatchSurface = streams.length > 0;
+  const compactPhoneTransitions = Boolean(streamsSectionId) && hasLinks && hasWatchSurface;
+  const linkCardClassName = cn(profileLinkCardClassName, "focus-visible:ring-accent-strong", linksHeadingId && "max-sm:min-h-[4.25rem] max-sm:py-2");
 
   return (
-    <div className={cn("grid min-w-0 grid-cols-1 gap-x-10", hasWatchSurface ? "lg:grid-cols-[minmax(0,1fr)_24rem]" : undefined)}>
+    <div className={cn(
+      "grid min-w-0 grid-cols-1 gap-x-10",
+      hasWatchSurface && "lg:grid-cols-[minmax(0,1fr)_24rem]",
+      linksColumnContent && "lg:grid-rows-[min-content_1fr]",
+    )}>
       <div>
         {hasLinks ? (
-          <section className="py-8">
-            <SectionHeading>Links</SectionHeading>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              {links.map((link) => {
-                const vrchat = link.kind === "vrchat_user" || link.kind === "vrchat_group" || link.type === "vrchat_profile";
-                const service = vrchat ? link.platform ?? "VRChat" : link.type === "twitch" ? "Twitch" : null;
-                const label = vrchat ? link.label.replace(/^VRChat\s*:\s*/i, "").trim() || link.label : link.label;
+          <section
+            aria-label={compactLinks ? "Links" : undefined}
+            className={cn(
+              compactLinks ? "px-4 pb-4 sm:px-6" : "py-8",
+              compactMobileSpacing && "max-sm:py-4",
+              linksHeadingId && "max-sm:pt-3",
+              compactPhoneTransitions && "max-sm:pb-4",
+            )}
+          >
+            {!compactLinks ? (
+              linksHeadingId ? (
+                <SectionTitle className="scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent" id={linksHeadingId} tabIndex={-1}>
+                  Links
+                </SectionTitle>
+              ) : <SectionHeading>Links</SectionHeading>
+            ) : null}
+            <div className={cn(
+              compactLinks ? "grid" : "mt-5 grid gap-3 sm:grid-cols-2",
+              compactMobileSpacing && "max-sm:mt-3",
+              linksHeadingId && "max-sm:mt-2 max-sm:gap-2",
+            )}>
+              {linkCards.map(({ link, vrchat, service, label, labelKey, hostname, pathname }) => {
+                const showPath = pathname !== undefined && linkCards.some(other =>
+                  other.labelKey === labelKey && other.hostname === hostname &&
+                  other.pathname !== undefined && other.pathname !== pathname,
+                );
+                const destination = showPath ? <>{hostname}<wbr />{pathname}</> : link.platform ?? hostname;
                 return (
-                  <a className={cn(buttonVariants({ variant: "secondary" }), profileLinkCardClassName)} href={link.href} key={link.key} rel="noreferrer" target="_blank">
-                    <span aria-hidden="true" className={cn(profileLinkIconClassName, vrchat ? "[&>svg]:size-10" : "[&>svg]:size-6")}>
+                  <a
+                    className={cn(
+                      buttonVariants({ variant: compactLinks ? "primary" : "secondary" }),
+                      linkCardClassName,
+                      compactLinks && "min-h-12 rounded-control border border-transparent px-3 py-2",
+                    )}
+                    href={link.href}
+                    key={link.key}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <span aria-hidden="true" className={cn(profileLinkIconClassName, vrchat ? "[&>svg]:size-10" : "[&>svg]:size-6", compactLinks && "size-8 [&>svg]:size-8")}>
                       {link.kind && link.artworkUrl ? <ProfileDestinationArtwork kind={link.kind} src={link.artworkUrl} /> : <LinkTypeIcon type={link.kind === "discord_guild" ? "discord" : vrchat ? "vrchat_profile" : link.type ?? "website"} />}
                     </span>
-                    <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-                      <span className="block font-medium">{service ?? label}</span>
-                      {service ? <span className="mt-0.5 block text-xs font-normal text-muted">{label}</span> : null}
+                    <span className={cn("min-w-0 flex-1 [overflow-wrap:anywhere]", compactLinks && "[&_.text-muted]:text-inherit")}>
+                      <span className={cn("block", compactLinks ? "font-semibold" : "font-medium")}>{service ?? label}</span>
+                      {service && !link.hideCaption ? <span className="mt-0.5 block text-xs font-normal text-muted">{label}</span> : null}
                       {link.live ? <span className="mt-0.5 block text-xs font-normal text-success">Live now</span> : null}
-                      {link.verifiedAt !== undefined ? <ConnectionVerification at={link.verifiedAt} group={link.kind === "vrchat_group"} /> : !service ? <span className="mt-0.5 block text-xs font-normal text-muted">{link.platform ?? hostLabel(link.href)}</span> : null}
+                      {link.verifiedAt !== undefined ? <ConnectionVerification at={link.verifiedAt} group={link.kind === "vrchat_group"} /> : !service ? <span className="mt-0.5 block text-xs font-normal text-muted">{destination}</span> : null}
                     </span>
                     <ExternalLink aria-hidden="true" className="size-4 shrink-0" />
                   </a>
                 );
               })}
               {discordHandles.map(({ handle, key }) => (
-                <CopyValueRow actionOnly className={profileLinkCardClassName} key={key} label="Discord" value={handle}>
+                <CopyValueRow actionOnly className={linkCardClassName} key={key} label="Discord" value={handle}>
                   <span aria-hidden="true" className={cn(profileLinkIconClassName, "[&>svg]:size-6")}><LinkTypeIcon type="discord" /></span>
                   <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
                     <span className="block font-medium">Discord</span>
@@ -240,8 +308,18 @@ export function ProfileVrcdnStreams({
       </div>
 
       {hasWatchSurface ? (
-        <aside className="min-w-0 space-y-3 py-8">
-          {streams.map(({ claimable, key, label, pcUrl, questUrl, directVideoUrl, streamId }) => {
+        <aside
+          aria-label={streamsSectionId ? "VRCDN" : undefined}
+          className={cn(
+            "min-w-0 space-y-3 py-8",
+            streamsSectionId && "scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent",
+            linksColumnContent && "lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start",
+            compactPhoneTransitions && "max-sm:py-4",
+          )}
+          id={streamsSectionId}
+          tabIndex={streamsSectionId ? -1 : undefined}
+        >
+          {streams.map(({ claimable, communitySubmitted, key, label, pcUrl, questUrl, directVideoUrl, streamId }, index) => {
             const lifecycle = lifecycles[streamId];
             const live = claimable && lifecycle?.presentation === "live";
             const playbackActive = activePlaybackStreamIds.has(streamId);
@@ -249,22 +327,31 @@ export function ProfileVrcdnStreams({
               live || lifecycle?.status === "pending_offline" || playbackActive || retained?.streamId === streamId
             );
             const title = streams.length > 1 ? `${label} ${streamId}` : label;
+            const copyContext = streams.length > 1 ? title : undefined;
 
             return (
-              <Card className="min-w-0" padding="sm" aria-label={title} key={key}>
-                <div className="flex items-center gap-3 pb-2">
+              <Card
+                className="min-w-0 max-sm:px-3"
+                surface={communitySubmitted ? "dashed" : undefined}
+                padding="sm"
+                aria-label={title}
+                data-primary-vrcdn-live={index === 0 && !communitySubmitted && live ? "" : undefined}
+                key={key}
+              >
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pb-2">
                   <p className="font-medium">{label}</p>
+                  {communitySubmitted ? <span className="text-xs text-muted">Community-submitted</span> : null}
                   {live ? <span className="text-sm font-medium text-success">Live now</span> : null}
                 </div>
 
                 <div>
-                  <CopyValueRow className="grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-0 py-1 [&_code]:truncate [&_code]:break-normal" label="Quest" value={questUrl} />
-                  <CopyValueRow className="grid-cols-[3rem_minmax(0,1fr)] items-center gap-2 border-0 py-1 [&_code]:truncate [&_code]:break-normal" label="PC" value={pcUrl} />
+                  <CopyValueRow className={styles.copyRow} context={copyContext} showCopyTextOnMobile={Boolean(streamsSectionId)} wrapUrlPath label="Quest" value={questUrl} />
+                  <CopyValueRow className={styles.copyRow} context={copyContext} showCopyTextOnMobile={Boolean(streamsSectionId)} wrapUrlPath label="PC" value={pcUrl} />
                 </div>
                 {showPlayer ? (
-                  <div className="mt-3 overflow-hidden rounded-control border border-border">
+                  <div className={cn("mt-3 overflow-hidden rounded-control border border-border", styles.playerFrame)}>
                     <div data-event-playback-inline={`profile:${profileId}:${streamId}`}>
-                      {retained?.streamId === streamId ? <PlaybackInlinePlaceholder /> : <button type="button" aria-label={`Play ${title}`} className="block w-full" disabled={!playback || !profileId}
+                      {retained?.streamId === streamId ? <PlaybackInlinePlaceholder /> : <button type="button" aria-label={`Play ${title}`} className={cn("block w-full", styles.idlePlayer)} disabled={!playback || !profileId}
                         onClick={()=>{if(playback && profileId)void playback.play({kind:"vrcdn",profileId,profileSlug,title:`${displayName ?? profileSlug} - VRDex`,href:`/${profileSlug}`,sourceId:streamId,src:directVideoUrl??questUrl,transport:directVideoUrl?"video":"mpegts"});}}><WatchPlayPoster /></button>}
                     </div>
                   </div>
@@ -274,6 +361,7 @@ export function ProfileVrcdnStreams({
           })}
         </aside>
       ) : null}
+      {linksColumnContent ? <div className={cn("min-w-0 max-lg:mt-6 lg:col-start-1 lg:row-start-2", compactPhoneTransitions && "max-sm:mt-3")}>{linksColumnContent}</div> : null}
     </div>
   );
 }

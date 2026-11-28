@@ -16,6 +16,59 @@ See `docs/testing/playwright-image-diffing.md` for the committed-baseline image 
 - Run the mutation-backed flow against a hosted dev/staging target: set `PLAYWRIGHT_BASE_URL` and `VRDEX_E2E_BROWSER_TOKEN`, then run `pnpm test:e2e:hosted`
 - Run read-only smoke against a hosted production target: set `PLAYWRIGHT_BASE_URL`, then run `pnpm test:e2e:hosted:smoke`. Hosted smoke covers production-safe public routes only; fixture-backed profile/search expectations stay local because Vercel must not expose Playwright fixtures.
 
+Local smoke also checks that an event URL with the wrong community returns 404 and gives visitors Search and Discovery links in both themes.
+The watchable-event fixture checks that the labeled Play control precedes the
+poster on phones and that the page attaches no video before the viewer presses Play.
+The event layout flow checks guest and Host schedules and visible action labels
+at 320, 360, 412, 640, and 768 px
+in UTC and America/Los_Angeles. The guest fixtures verify that Host routes
+reject guests without changing the authorized fixture. A date-only fixture
+without outgoing links has no Links card, and a watchable fixture without a
+poster keeps the player and event details aligned in one desktop column. A
+watchable event with a poster pairs the stage with the poster and event
+details. The flow also checks a tall poster, the sparse Host link, the date-only
+calendar attachment, and keyboard dismissal of the Report dialog.
+
+The site footer flow checks the Developers and GitHub links share a row at
+320, 360, and 412 px, preserves link tab order, and verifies dismissal returns
+focus to Usage & privacy when analytics settings are enabled.
+
+The World presentation flow checks the VRChat action stays above artwork and
+fits on phones after platform compatibility. It covers duplicate, distinct,
+reference-only, and absent URLs, plus sparse and one-sided event fixtures.
+The sparse World fixture verifies centered placement at 320 px and a text
+status for the unlisted VRChat link.
+
+The Support flow checks the exact required field names, persistent Message
+instructions, conditional profile lookup, and mock submission and retry.
+Public Contact and Privacy request snapshots cover their initial topic states.
+
+The shared shell flow checks that the signed-out 320 px header uses two rows.
+It also checks that Search opens within the viewport and Escape restores focus.
+
+The public Series flow checks that an empty schedule shows its status rather
+than a download action. Its direct calendar URL still returns a valid empty
+feed. The populated fixture verifies four distinct occurrence routes, localized
+accessible link names, and complete start and end times in the calendar feed.
+It also checks that a note unique to one night remains visible when the
+shared series summary is shown only once.
+
+The public Person profile flow verifies that a sparse record keeps identity
+and ownership actions together at 320 px and on desktop. A separate
+multi-stream fixture checks the exact clipboard destinations and accessible
+control names for both playback devices. The media-kit flow covers keyboard
+disclosure, missing history, and a failed thumbnail on a 320 px layout.
+It verifies that Retry fits and that the asset keeps its download link.
+Profile event-card fixtures cover a date-only record with no artwork, host, or
+summary, plus a long title and earlier Doors in the viewer's timezone. They
+check natural card height, canonical and external links, and layout at 320 px.
+The event-only profile fixture checks that an occurrence with no artwork
+keeps its link and date legible in both themes.
+
+The signed-out contribution smoke checks how Sign in names recognized
+profile actions. Unknown or rejected return paths keep the generic heading
+and guidance, and the test never signs in or enters credentials.
+
 PowerShell data-flow run with video:
 
 ```powershell
@@ -131,6 +184,10 @@ records in the server response and five visible options. These cases work agains
 a fresh local backend without a separate `pnpm seed:local` step. Home/search
 cases carry `@fixture` and stay in the local `@flow` lane; hosted selection
 excludes them because they require this checkout's UI and local fixture data.
+
+The Search flow also checks an unbroken query at 320 px in both themes and uses
+the local-only `playwright-search-unavailable` fixture to distinguish an outage
+from a confirmed miss.
 
 ## Auth-backed E2E
 
@@ -401,7 +458,7 @@ Selected candidate preview acceptance requires a same-repository PR and nonempty
 
 Only selected jobs run. Storybook is not built for an unrelated timeline fix. Auth and media steps inside the data-flow job are selected independently; its ordinary flow invocation receives a quoted filename pattern. Main pushes skip PR-only browser jobs; production deployment controls remain unchanged.
 
-The local data-flow job has a 45-minute limit for its serial flow suite, composed-media acceptance and artifact upload. Its previous 30-minute limit canceled a run after 257 flow tests and 12 media tests had passed. Individual test timeouts and all selected coverage remain unchanged.
+The local data-flow job allows 70 minutes when it runs the full serial flow suite and composed-media acceptance together. Other selections have 45 minutes. A run of the combined suite reached the 45-minute limit after the serial flows and the first four playback tests passed.
 
 In browsers-only mode, selected Storybook component assertions run with `PLAYWRIGHT_CAPTURE_SCREENSHOTS=false`. Affected public-route assertions also run without review captures. Review captures and image-diff jobs require `ci:visuals` or `ci:full`. Functional flows keep their existing failure screenshots, traces, and videos; those do not establish that review screenshots were collected.
 
@@ -464,7 +521,8 @@ Current hosted mutation target: `https://staging.vrdex.net`, backed by the share
 local public events and profiles. `home-timeline.visual.spec.ts` compares desktop
 and mobile snapshots for ordinary browsing (long title, missing logo and original
 transparent 120×60 community artwork), selected poster, overlapping purple My
-night, empty range, failed range and the 81-slot detail fixture. The clock is fixed
+night, empty range, failed range and the 81-slot detail fixture. A settled empty
+range without saved plans uses a single 94px public row. The clock is fixed
 at October 26, 2026 21:30 UTC; configured browser timezone is UTC. Every case owns
 and exactly cleans its records through the gated helper. The default, prefetch
 and detail scenarios share that ownership boundary.
@@ -547,10 +605,11 @@ October 26, 2026. Run-owned IDs feed a test-only session seed that fixes visual
 ties; no production ranking input or whole-card mask is changed. Full-page
 captures start at the top so sticky mobile navigation does not cover Discover.
 
-`home-discovery-states.storybook.spec.ts` captures ten deterministic presentation
-states with the existing Storybook configuration: mixed, cold start, sparse,
-complete empty, partial, failed, loading, missing artwork, missing public genres,
-and long names/custom genre labels. These are explicitly visual-only fixtures,
+`home-discovery-states.storybook.spec.ts` covers mixed, cold-start, sparse,
+complete-empty, partial, failed, loading, missing-artwork, missing-public-genre,
+and long-label states. It also checks one or two clubs with no events, and two
+events with no clubs. On desktop the confirmed-empty group gets a narrower
+column, and on mobile the groups still stack. These are visual-only fixtures,
 not evidence of backend admission, privacy or actions. Live privacy and actions
 are covered by the actual Home flows. Both capture suites preserve threshold
 0.2 and maximum pixel difference ratio 0.002.

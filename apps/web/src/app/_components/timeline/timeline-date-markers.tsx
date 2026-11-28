@@ -34,7 +34,7 @@ export function TimelineDateMarkers({ records, range, origin, ...actions }: Time
             data-start-at={schedule.kind === "open_end" ? schedule.startAt : undefined}>
             <button aria-label={`Open ${event.title}, Time TBA`}
               aria-pressed={actions.selection?.eventId === event.id}
-              onClick={() => actions.onSelect({ eventId: event.id, slug: event.slug })}>
+              onClick={(click) => actions.onSelect({ eventId: event.id, slug: event.slug }, click.currentTarget)}>
               <strong>{event.title}</strong><span>Time TBA</span>
             </button>
             <InterestButton label={event.title} state={planSaveState(actions.plan, reference)} onToggle={() => actions.onSave(reference)} />

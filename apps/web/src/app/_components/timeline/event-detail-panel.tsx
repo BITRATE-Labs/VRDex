@@ -1,6 +1,5 @@
 "use client";
-import { useEffect, useEffectEvent, useRef, useSyncExternalStore } from "react";
-import { ExternalLink } from "lucide-react";
+import { useEffect, useEffectEvent, useRef, useSyncExternalStore, type MouseEventHandler } from "react";
 import { publicEventPath } from "@/lib/event-path";
 import { Button, buttonVariants } from "@/components/ui/button";
 import type { TimelineSelection } from "../home-browse-provider";
@@ -24,12 +23,14 @@ export function EventDetailPanel({
   timeZone,
   hour12,
   onClose,
+  onFollowLink,
   ...preferences
 }: {
   selection: TimelineSelection | null;
   timeZone: string;
   hour12: boolean;
   onClose(): void;
+  onFollowLink: MouseEventHandler<HTMLElement>;
 } & DetailPreferenceProps) {
   const detail = useEventDetail({ slug: selection?.slug ?? null });
   const event = detail.kind === "available" ? detail.event : null;
@@ -83,13 +84,12 @@ export function EventDetailPanel({
           <a
             href={href}
             aria-label="Open full event page"
-            title="Open full event page"
-            className={`${buttonVariants({ size: "sm", variant: "ghost" })} ${styles.fullPage}`}
+            className={`${buttonVariants({ size: "sm", variant: "secondary" })} ${styles.fullPage}`}
           >
-            <ExternalLink size={18} aria-hidden="true" />
+            Event page
           </a>
         ) : null}
-        <Button autoFocus={narrow} size="sm" variant="ghost" onClick={dismiss}>
+        <Button className={styles.close} autoFocus={narrow} size="sm" variant="ghost" onClick={dismiss}>
           Close
         </Button>
       </div>
@@ -176,8 +176,8 @@ export function EventDetailPanel({
     </>
   );
   return narrow ? (
-    <dialog ref={dialog} className={styles.panel} aria-label="Event details" onCancel={event => { event.preventDefault(); dismiss(); }}>
+    <dialog ref={dialog} className={styles.panel} aria-label="Event details" onClick={onFollowLink} onCancel={event => { event.preventDefault(); dismiss(); }}>
       {content}
     </dialog>
-  ) : <section className={styles.panel} aria-label="Event details">{content}</section>;
+  ) : <section className={styles.panel} aria-label="Event details" onClick={onFollowLink}>{content}</section>;
 }

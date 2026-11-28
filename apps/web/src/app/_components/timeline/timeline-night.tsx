@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { useId } from "react";
+import { useId, type MouseEvent } from "react";
 import { BookmarkCheck, Star, TriangleAlert, X } from "lucide-react";
 import { InterestButton } from "@/components/ui/interest-button";
 import { isPastSaved, planSaveState } from "@/lib/timeline/plan-actions";
@@ -14,6 +14,7 @@ import { scheduleGeometry } from "@/lib/timeline/geometry";
 import { Button } from "@/components/ui/button";
 import { scheduleLabel } from "@/lib/timeline/schedule-label";
 import type { TimelineActions } from "./timeline-event-bar";
+import { ViewerLocalEventTime } from "../viewer-local-event-times";
 import styles from "./timeline.module.css";
 export function nightLayout(saved: SavedResolution[]) {
   return packPlan({
@@ -30,6 +31,7 @@ export function TimelineNight({
   saved,
   range,
   origin,
+  hour12,
   onNext,
   records = [],
   slotCoverage = {},
@@ -42,6 +44,7 @@ export function TimelineNight({
   saved: SavedResolution[];
   range: TimelineRange;
   origin?: number;
+  hour12?: boolean;
   onNext: () => void;
   records?: TimelineEvent[];
   slotCoverage?: Record<string, "partial" | "complete">;
@@ -159,14 +162,20 @@ export function TimelineNight({
               favoriteClub,
             ].filter(Boolean).join(", ");
             const statusId = `${descriptionId}-${lane.key}`;
-            const select = () =>
+            const startTimeId = `${statusId}-start`;
+            const showStartTime = header && header.width >= 124;
+            const describedBy = [
+              showStartTime && startTimeId,
+              description && statusId,
+            ].filter(Boolean).join(" ");
+            const select = (click: MouseEvent<HTMLButtonElement>) =>
               actions.onSelect({
                 eventId: item.event.id,
                 slug: item.event.slug,
                 ...(item.reference.kind === "set"
                   ? { slotId: item.reference.slotId }
                   : {}),
-              });
+              }, click.currentTarget);
             return (
               <article
                 key={lane.key}
@@ -189,7 +198,7 @@ export function TimelineNight({
                   <button
                     className={styles.nightOpen}
                     aria-label={`Open ${item.event.title}`}
-                    aria-describedby={description ? statusId : undefined}
+                    aria-describedby={describedBy || undefined}
                     onClick={select}
                   >
                     <span id={statusId} hidden>{description}</span>
@@ -221,6 +230,15 @@ export function TimelineNight({
                         />
                       )}
                     </span>
+                    {showStartTime && (
+                      <span className={styles.nightStartTime} id={startTimeId}>
+                        <ViewerLocalEventTime
+                          timestamp={schedule.startAt}
+                          timeZone={range.timeZone}
+                          hour12={hour12}
+                        />
+                      </span>
+                    )}
                     <strong>{item.event.title}</strong>
                     {lane.overlapping && (
                       <TriangleAlert size={12} aria-hidden="true" />
@@ -273,12 +291,12 @@ export function TimelineNight({
                         title={slot.displayLabel}
                         aria-label={`Open ${slot.displayLabel} at ${item.event.title}`}
                         aria-describedby={favorite ? favoriteId : undefined}
-                        onClick={() =>
+                        onClick={(click) =>
                           actions.onSelect({
                             eventId: item.event.id,
                             slug: item.event.slug,
                             slotId: slot.id,
-                          })
+                          }, click.currentTarget)
                         }
                       >
                         {favorite && <span id={favoriteId} hidden>{favorite}</span>}
@@ -311,14 +329,14 @@ export function TimelineNight({
                   <span>Unavailable</span>
                 ) : (
                   <button
-                    onClick={() =>
+                    onClick={(click) =>
                       actions.onSelect({
                         eventId: item.event.id,
                         slug: item.event.slug,
                         ...(item.reference.kind === "set"
                           ? { slotId: item.reference.slotId }
                           : {}),
-                      })
+                      }, click.currentTarget)
                     }
                   >
                     {item.slot?.displayLabel ?? item.event.title}

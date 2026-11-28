@@ -17,8 +17,10 @@ import {
   getPlaywrightPublicProfileFixture,
   getPlaywrightPublicShortLinkFixture,
   getPlaywrightPublicWorldFixture,
+  isPlaywrightGuestEventFixture,
   searchPlaywrightDiscoveryFixture,
 } from "./playwright-fixtures";
+import { PROFILE_SUGGESTION_QUERY } from "@/lib/auth-copy";
 import { profileClaimPath } from "@/lib/profile-claim";
 import type { PublicProfileShareCard } from "../../../../convex/_profileShareCard";
 import type { PublicEventShareCard } from "../../../../convex/_eventShareCard";
@@ -39,6 +41,9 @@ const signedOutSeedAccess: SeedLookupViewerAccess = { allowed: false, source: "s
 
 type PublicProfileType = "person" | "community";
 
+// Keep the fixed 2026 public event fixtures independent of the test runner clock.
+const fixtureYearReferenceAt = Date.UTC(2026, 0, 2, 12);
+
 // `profileType` narrows to one of the two profile kinds. The root slug route omits it
 // because a bare /basicbit does not say which kind it is -- the slug itself decides.
 export async function fetchPublicProfileBySlug(
@@ -57,6 +62,7 @@ export async function fetchPublicProfileBySlug(
       kind: "live" as const,
       profile: fixtureProfile,
       shareCard: fixtureProfileShareCard(slug),
+      yearReferenceAt: fixtureYearReferenceAt,
     };
   }
 
@@ -65,10 +71,11 @@ export async function fetchPublicProfileBySlug(
   }
 
   try {
+    const yearReferenceAt = Date.now();
     const profile = await fetchQuery(api.profiles.getPublicBySlug, {
       slug,
       ...(profileType === undefined ? {} : { profileType }),
-      now: Date.now(),
+      now: yearReferenceAt,
       includeShareCard: true,
     });
 
@@ -99,6 +106,7 @@ export async function fetchPublicProfileBySlug(
           }
         : null,
       shareCard,
+      yearReferenceAt,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -187,6 +195,19 @@ export async function fetchPublicProfileShareCardBySlug(slug: string) {
   }
 }
 
+export async function fetchPublicProfileSuggestionName(returnTo: string) {
+  if (!returnTo.endsWith(PROFILE_SUGGESTION_QUERY)) return undefined;
+  const pathname = returnTo.slice(0, -PROFILE_SUGGESTION_QUERY.length);
+
+  const slug = /^\/([a-z0-9]+(?:-[a-z0-9]+)*)\/edit$/.exec(pathname)?.[1];
+  if (!slug) return undefined;
+
+  const { profile } = await fetchPublicProfileShareCardBySlug(slug);
+  if (profile?.trustLabel === "unclaimed" || profile?.trustLabel === "community_submitted") {
+    return profile.displayName;
+  }
+}
+
 export async function fetchClaimProfileBySlug(slug: string) {
   const fixtureProfile =
     getPlaywrightPublicProfileFixture(slug, "person") ??
@@ -251,7 +272,7 @@ export async function fetchPublicEventSeries(seriesId: string) {
   const fixtureSeries = getPlaywrightPublicEventSeriesFixture(seriesId);
 
   if (fixtureSeries !== null) {
-    return { kind: "live" as const, series: fixtureSeries };
+    return { kind: "live" as const, series: fixtureSeries, yearReferenceAt: fixtureYearReferenceAt };
   }
 
   if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
@@ -259,11 +280,13 @@ export async function fetchPublicEventSeries(seriesId: string) {
   }
 
   try {
+    const yearReferenceAt = Date.now();
     const series = await fetchQuery(api.eventSeries.getPublic, { seriesId });
 
     return {
       kind: "live" as const,
       series,
+      yearReferenceAt,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -279,7 +302,12 @@ export async function fetchPublicEventSeries(seriesId: string) {
 /** Request-scoped auth; private host content must never enter a shared cache. */
 export async function fetchHostEventBySlug(slug: string, communitySlug: string) {
   const fixture = getPlaywrightPublicEventFixture(slug);
-  if (fixture) return { kind: "live" as const, event: fixture.communitySlug === communitySlug ? fixture : null };
+  if (fixture) {
+    return {
+      kind: "live" as const,
+      event: fixture.communitySlug === communitySlug && !isPlaywrightGuestEventFixture(slug) ? fixture : null,
+    };
+  }
   const token = await convexAuthToken();
   if (!token) return { kind: "live" as const, event: null };
   if (!process.env.NEXT_PUBLIC_CONVEX_URL) return { kind: "missing-url" as const };
@@ -433,6 +461,7 @@ type PublicEntity =
       type: "profile";
       profile: NonNullable<Awaited<ReturnType<typeof fetchPublicProfileBySlug>>["profile"]>;
       shareCard: PublicProfileShareCard | null;
+      yearReferenceAt: number;
     }
   | { type: "world"; world: NonNullable<Awaited<ReturnType<typeof fetchPublicWorldBySlug>>["world"]> };
 
@@ -462,6 +491,7 @@ async function fetchPublicEntityBySlugUncached(
         type: "profile",
         profile: profileResult.profile,
         shareCard: profileResult.shareCard,
+        yearReferenceAt: profileResult.yearReferenceAt,
       },
     };
   }
@@ -628,6 +658,10 @@ export async function fetchDiscoverySearch(
   limit = 24,
 ) {
   const fixtureSearch = searchPlaywrightDiscoveryFixture(query);
+
+  if (fixtureSearch.kind === "error") {
+    return { kind: "error" as const, results: [] };
+  }
 
   if (fixtureSearch.kind === "handled") {
     return {

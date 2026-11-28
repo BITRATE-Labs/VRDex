@@ -31,9 +31,13 @@
   font-size: 0.75rem;
   min-height: 36px;
 }
-.toolbar button[aria-pressed="true"] {
-  color: var(--accent);
+.toolbar .favoritesToggle[aria-pressed="true"] {
+  border-color: var(--accent);
   background-color: var(--accent-muted);
+}
+.toolbar .favoritesToggle[aria-pressed="true"] svg {
+  color: var(--accent);
+  fill: currentColor;
 }
 .metadata {
   display: flex;
@@ -45,7 +49,7 @@
 .metadata[aria-hidden="true"] {
   visibility: hidden;
 }
-.metadata span {
+.metadata > span {
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -56,14 +60,68 @@
   align-items: center;
   gap: 0.3rem;
 }
-.navigation input {
+.dateControl,
+.pendingDate {
+  width: 140px;
+  min-width: 0;
+}
+.dateControl {
+  position: relative;
+}
+.dateControl input,
+.pendingDate {
+  min-height: 36px;
+  padding-inline: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-strong);
+}
+.pendingDate {
+  position: relative;
+  opacity: 0.6;
+}
+.pendingDate::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 0.5rem;
+  inline-size: 44%;
+  block-size: 0.5rem;
+  translate: 0 -50%;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--surface-strong) 85%, var(--foreground));
+}
+.dateControl input {
+  display: block;
+  width: 100%;
+  padding-inline-end: 2rem;
   color-scheme: inherit;
   color: var(--foreground);
   font-size: 0.8rem;
-  min-width: 0;
-  width: 140px;
-  border: 0;
-  background: transparent;
+}
+.dateControl input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block: 0;
+  width: 2rem;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.dateControl svg {
+  position: absolute;
+  inset-inline-end: 0.5rem;
+  inset-block-start: 50%;
+  translate: 0 -50%;
+  color: var(--foreground);
+  pointer-events: none;
+}
+@media (forced-colors: active) {
+  .dateControl svg {
+    color: ButtonText;
+  }
 }
 .scroller {
   width: 100%;
@@ -75,27 +133,53 @@
   background: var(--canvas-muted);
   scrollbar-color: var(--border-strong) var(--surface);
 }
+@media (width > 760px) {
+  :global(html[data-theme="light"]) .scroller {
+    border-color: var(--border-strong);
+  }
+}
+.scroller[data-pending-scroller] {
+  pointer-events: none;
+}
 .scroller:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
+.emptyState {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  padding: 0.75rem 1rem;
+}
+.emptyState p {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.emptyState button {
+  min-height: 44px;
+}
 .canvas {
+  --timeline-placeholder-fill: color-mix(in srgb, var(--canvas-muted) 89%, var(--foreground));
+  --timeline-day-axis-height: 24px;
+  --timeline-hour-axis-height: 2.5rem;
   position: relative;
   user-select: none;
 }
 .dayAxis {
-  height: 24px;
+  height: var(--timeline-day-axis-height);
   position: relative;
   background: var(--surface-elevated);
   border-bottom: 1px solid var(--border);
 }
 .dayAxis > div {
   position: absolute;
-  height: 24px;
+  height: var(--timeline-day-axis-height);
   border-left: 1px solid var(--border-strong);
   padding: 4px 12px;
   color: var(--muted);
-  font-size: 0.65rem;
+  font-size: 0.75rem;
+  line-height: 0.875rem;
 }
 .dayAxis span {
   position: sticky;
@@ -103,24 +187,73 @@
 }
 .hourAxis {
   position: relative;
-  height: 32px;
+  height: var(--timeline-hour-axis-height);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
 .hourAxis > span {
   position: absolute;
-  padding: 8px;
-  font-size: 0.65rem;
+  top: 0.0625rem;
+  padding-inline: 8px;
+  font-size: 0.75rem;
+  line-height: 0.875rem;
   color: var(--muted);
 }
+.canvas :is([data-axis-label], [data-current-time-label]):not([data-axis-label-visible]) {
+  visibility: hidden;
+}
+.dayAxis[data-loading-axis]::after,
+.hourAxis[data-loading-axis]::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 0.75rem;
+  block-size: 0.45rem;
+  translate: 0 -50%;
+}
+.dayAxis[data-loading-axis]::after {
+  inline-size: 4rem;
+  border-radius: 2px;
+  background: var(--timeline-placeholder-fill);
+}
+.hourAxis[data-loading-axis]::after {
+  inset-inline-end: 0;
+  background: repeating-linear-gradient(
+    to right, var(--timeline-placeholder-fill) 0 1.5rem, transparent 1.5rem 100px
+  );
+}
 .lanes {
+  --timeline-grid-line: var(--border);
   position: relative;
   background-image:
-    linear-gradient(to right, var(--border) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+    linear-gradient(to right, var(--timeline-grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--timeline-grid-line) 1px, transparent 1px);
   background-size:
     100px 100%,
     100% 94px;
+}
+.lanes[data-loading-placeholder] {
+  --timeline-grid-line: color-mix(in srgb, var(--border) 55%, transparent);
+}
+.lanes[data-viewport-loading] {
+  overflow: clip;
+}
+.chartLoadingStatus {
+  position: sticky;
+  z-index: 2;
+  inset-inline-start: 1.25rem;
+  inline-size: max-content;
+  transform: translateY(0.35rem);
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-strong);
+  color: var(--foreground);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.chartLoadingStatus svg {
+  color: var(--accent);
 }
 .event {
   position: absolute;
@@ -142,11 +275,18 @@
   outline-offset: 1px;
 }
 .eventHeader {
+  --header-actions-size: 29px;
+  --header-actions-visible: 0;
+  --header-actions-pointer: none;
+  container-type: inline-size;
   height: 44px;
   display: flex;
   align-items: center;
   background: color-mix(in srgb, var(--foreground) 5%, var(--surface-elevated));
   position: relative;
+}
+.eventHeader:has(.headerAction:nth-last-child(2)) {
+  --header-actions-size: 58px;
 }
 .eventOpen {
   display: flex;
@@ -156,7 +296,8 @@
   flex: 1;
   min-width: min(100%, 100px);
   height: 100%;
-  padding: 6px 8px;
+  padding: 2px 8px;
+  padding-inline-end: calc(8px + var(--header-actions-size) * var(--header-actions-visible));
 }
 .logo,
 .logoFallback {
@@ -174,20 +315,27 @@
   font-weight: 600;
 }
 .identity {
+  font-family: system-ui, sans-serif;
   display: grid;
   gap: 2px;
   min-width: 0;
 }
 .identity strong {
-  font-size: 0.72rem;
-  font-weight: 600;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--foreground);
+  line-height: 1.04;
   overflow: hidden;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   text-overflow: ellipsis;
 }
 .identity small {
   font-size: 0.58rem;
-  color: var(--muted);
+  line-height: 1.15;
+  color: color-mix(in srgb, var(--foreground) 20%, var(--muted));
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -250,7 +398,7 @@
 }
 .now {
   position: absolute;
-  top: 56px;
+  top: calc(var(--timeline-day-axis-height) + var(--timeline-hour-axis-height));
   bottom: 0;
   width: 1px;
   background: var(--accent);
@@ -269,10 +417,12 @@
 }
 .now > span {
   position: absolute;
-  bottom: calc(100% + 8px);
-  left: -26px;
-  font-size: 0.6rem;
+  bottom: calc(100% + 5px);
+  left: 0;
+  translate: -50%;
+  font-size: 0.6875rem;
   font-weight: 600;
+  line-height: 0.75rem;
   padding: 2px 5px;
   border: 1px solid var(--accent);
   border-radius: 3px;
@@ -396,6 +546,11 @@
 .nightOpen strong {
   min-width: 0;
 }
+.nightStartTime {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .nightOpen > svg {
   flex-shrink: 0;
 }
@@ -495,6 +650,11 @@
   font-size: 0.75rem;
   color: var(--muted);
 }
+.loadingMessage {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
 .schedule button {
   cursor: pointer;
 }
@@ -504,42 +664,134 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+@media (max-width: 999px) {
+  .schedule .eventOpen:focus-visible,
+  .schedule .setOpen:focus-visible {
+    /* Keep the outline inside the clipped event bar. */
+    outline-offset: -3px;
+  }
+}
 @media (max-width: 600px) {
   .schedule {
     margin-top: 1.25rem;
     padding-top: 1.5rem;
   }
   .toolbar {
+    --toolbar-side-width: min(50%, clamp(7.25rem, 43%, 9rem));
     gap: 0.5rem;
   }
   .toolbar h2 {
-    flex: 1;
+    flex-basis: 100%;
   }
   .navigation {
-    order: 3;
-    width: 100%;
-    justify-content: space-between;
-    flex-wrap: wrap;
+    display: contents;
   }
   .navigation > div {
-    margin-left: auto;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(max-content, 1fr));
+    flex: 1 1 max-content;
+    min-width: 0;
+    order: 2;
+    gap: 0;
+  }
+  .navigation > div button {
+    padding-inline: min(0.375rem, 10px);
+  }
+  .navigation > div button:not(:first-child) {
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+    border-inline-start: 0;
+  }
+  .navigation > div button:not(:last-child) {
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+  }
+  .navigation > div button:focus-visible {
+    z-index: 1;
+  }
+  .toolbar .favoritesToggle {
+    flex: 0 0 var(--toolbar-side-width);
+    min-width: max-content;
+    order: 2;
+    padding-inline: 0.375rem;
+  }
+  .dateControl,
+  .pendingDate {
+    flex: 0 0 calc(100% - var(--toolbar-side-width) - 0.5rem);
+  }
+  .dateControl input,
+  .pendingDate {
+    min-height: 44px;
+    padding-block: 0.5rem;
   }
   .status {
-    order: 4;
-    width: 100%;
-    min-height: 40px;
+    flex-basis: 100%;
+    order: 3;
+    flex-wrap: wrap;
+    min-height: 0;
+  }
+  .status[data-favorites-recovery] {
+    row-gap: 0.375rem;
+  }
+  .favoritesSummary {
+    text-wrap: balance;
+  }
+  .status:empty {
+    position: absolute;
   }
   .metadata {
-    order: 5;
-    width: 100%;
-    margin-left: 0;
+    flex: 0 0 var(--toolbar-side-width);
+    order: 1;
+    justify-content: end;
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: 0.125rem 0.5rem;
+    text-align: end;
+    font-size: 0.75rem;
+    line-height: 1.15;
+  }
+  .metadata > span {
+    max-width: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .metadata > span:first-child {
+    color: var(--foreground);
+  }
+  .metadata > span:first-child svg {
+    display: none;
+  }
+  .metadata > span:last-child svg {
+    flex-shrink: 0;
   }
   .toolbar button {
-    min-height: 40px;
+    min-width: 44px;
+    min-height: 44px;
   }
-  .navigation input,
   .savedList button {
     min-height: 44px;
+  }
+  .emptyState {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+  }
+  .emptyState p {
+    width: 100%;
+  }
+}
+@media (max-width: 420px) {
+  .navigation > div button[aria-label] svg {
+    display: none;
+  }
+}
+@media (max-width: 310px) {
+  .navigation > div {
+    flex-basis: 100%;
+  }
+  .toolbar .favoritesToggle {
+    flex-basis: auto;
   }
 }
 @media (hover: none) {
@@ -565,9 +817,33 @@
   cursor: default;
 }
 
-.headerAction {
+.eventHeader .headerAction {
+  position: absolute;
+  inset-inline-end: 3px;
+  opacity: var(--header-actions-visible);
+  pointer-events: var(--header-actions-pointer);
   background: transparent;
-  margin-right: 3px;
+}
+.eventHeader .headerAction:nth-last-child(2) {
+  inset-inline-end: 32px;
+}
+.eventHeader:has(.headerAction:focus-visible) {
+  --header-actions-visible: 1;
+  --header-actions-pointer: auto;
+}
+@media (any-hover: hover) {
+  .eventHeader:is(:hover, :focus-within) {
+    --header-actions-visible: 1;
+    --header-actions-pointer: auto;
+  }
+}
+@container (width <= 100px) {
+  .eventHeader .eventOpen {
+    padding-inline-end: 8px;
+  }
+  .eventHeader .headerAction {
+    display: none;
+  }
 }
 .set:hover,
 .set:focus-within {

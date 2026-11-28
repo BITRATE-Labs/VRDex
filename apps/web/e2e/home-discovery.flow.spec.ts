@@ -1,4 +1,4 @@
-import { expect } from "@playwright/test";
+import { expect, test as browserTest } from "@playwright/test";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api";
 import { loadCompleteSchedule } from "./home-timeline-fixture";
@@ -11,6 +11,24 @@ import {
   changeTimelineFixture,
   discoveryTransportFailure,
 } from "./home-discovery-fixture";
+
+browserTest("Discover Browse is reachable while loading at enlarged phone text sizes @flow", async ({ page, isMobile }) => {
+  browserTest.skip(!isMobile);
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.routeWebSocket("**/api/**/sync", () => {});
+  await page.goto("/");
+  await page.addStyleTag({ content: "html { font-size: 200%; }" });
+  const discover = page.getByRole("region", { name: "Discover", exact: true });
+  await expect(discover.getByRole("status")).toHaveText("Loading");
+  const browse = discover.getByRole("link", { name: "Browse", exact: true });
+
+  await expect.poll(() => browse.evaluate(link => {
+    const { left, right } = link.getBoundingClientRect();
+    return window.scrollX === 0 && left >= 0 && right <= window.innerWidth;
+  })).toBe(true);
+  await browse.tap();
+  await expect(page).toHaveURL(/\/discovery$/);
+});
 
 test.describe("Home discovery @flow @fixture", () => {
   test.use({ timelineScenario: "discovery" });
@@ -25,6 +43,140 @@ test.describe("Home discovery @flow @fixture", () => {
       { timeout: 20000 },
     );
   });
+  test("club name opens its profile and Favorite remains a separate action", async ({ page, timelineFixture, isMobile }) => {
+    if (isMobile) await page.setViewportSize({ width: 320, height: 740 });
+    const discover = await usableDiscovery(page);
+    const card = discover.getByTestId("discovery-club-card").filter({
+      has: page.getByRole("heading", { name: "Prism Collective", exact: true }),
+    });
+    const title = card.getByRole("link", { name: "Prism Collective", exact: true });
+    const favorite = card.getByRole("button");
+    await expect(card.getByRole("link")).toHaveCount(1);
+    await expect(card.getByRole("heading").getByRole("link")).toHaveAttribute("href", `/${timelineFixture.runId}-community`);
+    const wasFavorite = await favorite.getAttribute("aria-pressed");
+    if (isMobile) await favorite.tap();
+    else await favorite.click();
+    await expect(favorite).toHaveAttribute("aria-pressed", wasFavorite === "true" ? "false" : "true");
+    await expect(page).toHaveURL(/\/$/);
+
+    if (isMobile) await title.tap();
+    else await title.press("Enter");
+    await expect(page).toHaveURL(new RegExp(`/${timelineFixture.runId}-community$`));
+  });
+
+  test("Back restores the opened club's rail position", async ({ page, isMobile }) => {
+    const width = isMobile ? 320 : 390;
+    await page.setViewportSize({ width, height: 740 });
+    const discover = await usableDiscovery(page);
+    const clubs = discover.getByRole("group", { name: "Clubs", exact: true });
+    const rail = clubs.locator("#discovery-clubs-rail");
+    const next = clubs.getByRole("button", { name: "Next clubs", exact: true });
+    const previous = clubs.getByRole("button", { name: "Previous clubs", exact: true });
+    const link = rail.getByRole("link").last();
+    const href = await link.getAttribute("href");
+    if (!href) throw new Error("Expected the club profile link to have a destination");
+    const offset = () => rail.evaluate((element) => element.scrollLeft);
+    const openedClubInRail = () => rail.locator(`a[href="${href}"]`).evaluate((anchor) => {
+      const railBounds = anchor.closest("#discovery-clubs-rail")!.getBoundingClientRect();
+      const linkBounds = anchor.getBoundingClientRect();
+      return linkBounds.left >= railBounds.left - 1 && linkBounds.right <= railBounds.right + 1;
+    });
+
+    await expect(next).toHaveAttribute("aria-disabled", "false");
+    if (isMobile) await next.tap();
+    else await next.click();
+    await expect(next).toHaveAttribute("aria-disabled", "true");
+    const openedPosition = await offset();
+    expect(openedPosition).toBeGreaterThan(0);
+    await expect.poll(openedClubInRail).toBe(true);
+
+    if (isMobile) await link.tap();
+    else await link.press("Enter");
+    await expect(page).toHaveURL(new URL(href, page.url()).href);
+    const profileURL = page.url();
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await page.goBack();
+      await usableDiscovery(page);
+      await expect.poll(offset).toBe(openedPosition);
+      await expect.poll(openedClubInRail).toBe(true);
+      await expect(previous).toHaveAttribute("aria-disabled", "false");
+      await page.goForward();
+      await expect(page).toHaveURL(profileURL);
+    }
+
+    await page.setViewportSize({ width: isMobile ? 390 : 320, height: 740 });
+    await page.goBack();
+    await usableDiscovery(page);
+    await expect.poll(openedClubInRail).toBe(true);
+    expect(await offset()).not.toBe(openedPosition);
+    await page.goForward();
+    await expect(page).toHaveURL(profileURL);
+
+    await page.getByRole("navigation", { name: "Primary navigation" })
+      .getByRole("link", { name: "VRDex", exact: true }).click();
+    await usableDiscovery(page);
+    await expect.poll(offset).toBeLessThanOrEqual(4);
+    await expect(next).toHaveAttribute("aria-disabled", "false");
+  });
+
+  test("Back restores the event rail after opening a host or full event page", async ({ page, isMobile }) => {
+    await page.setViewportSize({ width: isMobile ? 320 : 390, height: 740 });
+    const discover = await usableDiscovery(page);
+    const events = discover.getByRole("group", { name: "Events", exact: true });
+    const rail = events.locator("#discovery-events-rail");
+    const next = events.getByRole("button", { name: "Next events", exact: true });
+    const card = rail.getByTestId("discovery-event-card").last();
+    const title = card.getByRole("heading").getByRole("link");
+    const host = card.locator("p a[href]");
+    const position = () => rail.evaluate(element => ({ left: element.scrollLeft, top: window.scrollY }));
+    const activate = (link: typeof title) => isMobile ? link.tap() : link.press("Enter");
+
+    await expect(next).toHaveAttribute("aria-disabled", "false");
+    if (isMobile) await next.tap();
+    else await next.click();
+    await expect(next).toHaveAttribute("aria-disabled", "true");
+    await host.scrollIntoViewIfNeeded();
+    const fromHost = await position();
+    expect(fromHost.left).toBeGreaterThan(0);
+    const hostURL = new URL((await host.getAttribute("href"))!, page.url()).href;
+    await activate(host);
+    await expect(page).toHaveURL(hostURL);
+    await expect(page.getByRole("main").getByRole("heading", { level: 1 })).toBeVisible();
+
+    await page.goBack();
+    await usableDiscovery(page);
+    await expect.poll(position).toEqual(fromHost);
+    await expect(next).toHaveAttribute("aria-disabled", "true");
+
+    const eventURL = new URL((await title.getAttribute("href"))!, page.url()).href;
+    const fromEvent = await position();
+    await activate(title);
+    const openEvent = page.getByRole("link", { name: "Open full event page", exact: true });
+    await expect(openEvent).toHaveAttribute("href", new URL(eventURL).pathname);
+    await activate(openEvent);
+    await expect(page).toHaveURL(eventURL);
+    await expect(page.getByRole("main").getByRole("heading", { level: 1 })).toBeVisible();
+
+    await page.goBack();
+    await usableDiscovery(page);
+    await expect.poll(position).toEqual(fromEvent);
+    await expect(next).toHaveAttribute("aria-disabled", "true");
+
+    const previous = events.getByRole("button", { name: "Previous events", exact: true });
+    if (isMobile) await previous.tap();
+    else await previous.click();
+    await expect.poll(async () => (await position()).left).toBeLessThanOrEqual(4);
+    const browse = discover.getByRole("link", { name: "Browse", exact: true });
+    if (isMobile) await browse.tap();
+    else await browse.press("Enter");
+    await expect(page).toHaveURL(/\/discovery$/);
+    await page.goBack();
+    await usableDiscovery(page);
+    await expect.poll(async () => (await position()).left).toBeLessThanOrEqual(4);
+    await expect(next).toHaveAttribute("aria-disabled", "false");
+  });
+
   test("favoriteChangeKeepsCandidatesAndCards", async ({ page }, info) => {
     const queries = observeDiscoveryQueries(page);
     await page.reload();
@@ -88,7 +240,8 @@ test.describe("Home discovery @flow @fixture", () => {
       const server = socket.connectToServer();
       server.onMessage(message => { if (held) messages.push(() => socket.send(message)); else socket.send(message); });
     });
-    await page.reload();
+    // Use the existing ORBIT range so Schedule's empty-range compaction is outside this geometry check.
+    await page.goto(`/?at=${TIMELINE_NOW + 7 * 86400000 - 3600000}`);
     const discover = page.getByRole("region", { name: "Discover", exact: true });
     await expect(discover).toHaveAttribute("aria-busy", "true");
     const shell = discover.getByTestId("discovery-placeholder").first();
@@ -97,7 +250,7 @@ test.describe("Home discovery @flow @fixture", () => {
     const geometry = () => page.evaluate(() => ({
       footerDocumentY: (document.querySelector("footer")?.getBoundingClientRect().top ?? 0) + scrollY,
       scheduleDocumentY: (document.querySelector("[data-home-schedule]")?.getBoundingClientRect().top ?? 0) + scrollY,
-      discoveryDocumentY: (document.querySelector('[aria-label="Discover"]')?.getBoundingClientRect().top ?? 0) + scrollY,
+      discoveryDocumentY: (document.querySelector('[aria-labelledby="discover-heading"]')?.getBoundingClientRect().top ?? 0) + scrollY,
       documentWidth: document.documentElement.scrollWidth,
       viewportWidth: innerWidth,
       scrollY,
@@ -112,6 +265,20 @@ test.describe("Home discovery @flow @fixture", () => {
     await usableDiscovery(page);
     await expect(discover).toHaveAttribute("aria-busy", "false");
     await expect(discover.getByTestId("discovery-placeholder")).toHaveCount(0);
+    for (const name of ["Open ORBIT", "Open Low Tide"]) {
+      await expect(
+        discover.getByRole("link", { name, exact: true }),
+      ).toHaveCount(1);
+    }
+    await expect(page.getByLabel("Schedule data state")).toHaveAttribute(
+      "data-state",
+      "ready",
+      { timeout: 20000 },
+    );
+    await expect(
+      page.getByRole("region", { name: "Schedule", exact: true })
+        .getByRole("button", { name: "Open ORBIT", exact: true }),
+    ).toBeVisible();
     const readyBounds = await discover.getByTestId("discovery-event-card").first().boundingBox();
     const after = await geometry();
     expect(Math.abs(after.footerDocumentY - before.footerDocumentY)).toBeLessThanOrEqual(1);
@@ -207,6 +374,11 @@ test.describe("Home discovery @flow @fixture", () => {
     ).toBeFocused();
     await discover.scrollIntoViewIfNeeded();
     await expect(discover.locator("img")).toHaveCount(4);
+    await discover.locator("img").evaluateAll((images) => {
+      for (const image of images) {
+        if (image instanceof HTMLImageElement) image.loading = "eager";
+      }
+    });
     await expect
       .poll(() =>
         discover
@@ -357,7 +529,12 @@ test.describe("Home discovery @flow @fixture", () => {
       name: "Interested: ORBIT",
       exact: true,
     });
-    await add.click();
+    const clickInterested = async () => {
+      // Hover the event header to expose its compact actions.
+      await bar.getByRole("button", { name: "Open ORBIT", exact: true }).hover();
+      await add.click();
+    };
+    await clickInterested();
     const warning = page.getByText("Limit reached", { exact: true });
     await expect(warning).toHaveCount(1);
     await expect(warning).toBeInViewport({ ratio: 1 });
@@ -376,7 +553,7 @@ test.describe("Home discovery @flow @fixture", () => {
       })
       .click();
     await expect(warning).toHaveCount(0);
-    await add.click();
+    await clickInterested();
     await expect(
       schedule
         .getByRole("button", {
@@ -818,7 +995,8 @@ test.describe("dense Home discovery @flow @fixture", () => {
     const queries = observeDiscoveryQueries(page);
     await page.goto("/");
     const discover = await usableDiscovery(page);
-    const open = discover.getByRole("link", { name: "Open Distant Horizons", exact: true });
+    // The card title is the keyboard stop. The poster only adds a pointer target.
+    const open = discover.getByRole("link", { name: "Distant Horizons", exact: true });
     const other = await context.newPage();
     await other.goto("/search");
     await page.bringToFront();

@@ -1,6 +1,8 @@
+import { closeSiteMenu, openSiteMenu } from "./flow-navigation";
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
+import { AUTH_UNAVAILABLE_COPY } from "../src/lib/auth-copy";
 import { expectDecodedImage } from "./image-readiness";
 
 const screenshotDir = path.join(process.cwd(), "playwright-artifacts", "screenshots");
@@ -225,8 +227,10 @@ export async function expectHomePage(page: Page) {
   await expect(page.getByLabel("DJ name")).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Search view" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "DJ links", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Discovery", exact: true })).toHaveAttribute("href", "/discovery");
-  await expect(page.getByRole("button", { name: "Toggle color theme" })).toBeVisible();
+  await openSiteMenu(page);
+  await expect(page.getByRole("banner").getByRole("link", { name: "Discovery", exact: true })).toHaveAttribute("href", "/discovery");
+  await expect(page.getByRole("banner").getByRole("button", { name: "Toggle color theme" })).toBeVisible();
+  await closeSiteMenu(page);
   await expect(page.getByText(/Start with a name, scene, world, genre, or event/i)).toHaveCount(0);
   await expect(page.getByText("Start with a name or genre.", { exact: true })).toHaveCount(0);
   // Checked on the busiest route, because the footer is the only thing that
@@ -238,7 +242,9 @@ export async function expectHomePage(page: Page) {
 export async function expectDiscoveryPage(page: Page) {
   await expect(page.getByRole("heading", { name: /Discover VR/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /Search VRDex/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Toggle color theme" })).toBeVisible();
+  await openSiteMenu(page);
+  await expect(page.getByRole("banner").getByRole("button", { name: "Toggle color theme" })).toBeVisible();
+  await closeSiteMenu(page);
   await expect(page.getByRole("heading", { name: /Upcoming events/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Featured worlds" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Neon Harbor", exact: true })).toBeVisible();
@@ -248,23 +254,27 @@ export async function expectDiscoveryPage(page: Page) {
 }
 
 export async function expectSearchPage(page: Page) {
+  const results = page.getByRole("region", { name: "Search results" });
+  const aurora = results.getByRole("link", { name: /DJ Aurora/i }).first();
   await expect(page.getByRole("heading", { name: "Search results", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Results for aurora/i })).toBeVisible();
+  await expect(results).toHaveAccessibleDescription("Results for aurora");
   await expect(page.getByRole("button", { name: /Search VRDex/i })).toBeVisible();
-  await expect(page.getByRole("link", { name: /DJ Aurora/i }).first()).toBeVisible();
-  await expect(page.locator('[title="Logo"]').first()).toBeVisible();
-  for (const image of await page.getByRole("region", { name: "Search results" }).locator("img").all()) {
+  await expect(aurora).toBeVisible();
+  await expect(aurora.locator("img")).toHaveAttribute("src", /\/api\/e2e\/fixture-assets\/fixture-aurora-profile-image$/);
+  for (const image of await results.locator("img").all()) {
     await expectDecodedImage(image);
   }
   await expect(page.getByRole("heading", { name: /Upcoming events/i })).toHaveCount(0);
 }
 
 export async function expectLookupPage(page: Page) {
-  await expect(page.getByRole("heading", { name: "Search VRDex" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "DJ links", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Search results", exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Search view" })).toHaveCount(0);
   await expect(page.getByLabel("DJ name")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Toggle color theme" })).toBeVisible();
+  await openSiteMenu(page);
+  await expect(page.getByRole("banner").getByRole("button", { name: "Toggle color theme" })).toBeVisible();
+  await closeSiteMenu(page);
   await expect(page.getByRole("link", { name: "BASICBIT", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Princess Starlight Interstellar Bassline Orchestra", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Velvet Circuit", exact: true })).toBeVisible();
@@ -281,7 +291,7 @@ export async function expectLookupPage(page: Page) {
 export async function expectPrivateSeedLookupPage(page: Page) {
   const privateResult = page.locator(".lookup-result-card.ph-no-capture:visible");
 
-  await expect(page.getByRole("heading", { name: "Search VRDex" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "DJ links", exact: true })).toBeVisible();
   await expect(privateResult).toHaveCount(1);
   await expect(privateResult.getByText("DJ Northstar", { exact: true })).toBeVisible();
   await expect(privateResult.getByText("Northstar", { exact: true })).toBeVisible();
@@ -292,24 +302,28 @@ export async function expectPrivateSeedLookupPage(page: Page) {
 }
 
 export async function expectSubmitPage(page: Page) {
-  await expectProtectedRouteRedirect(page, "/submit");
+  await expectProtectedRouteRedirect(page, "/submit", "Add profile");
 }
 
-export async function expectSignInPage(page: Page) {
-  // Only the heading belongs to VRDex now. The provider buttons and the
-  // email/password fields are rendered by Clerk's own `<SignIn />`, and asserting
-  // a vendor's DOM would break on any upstream markup change. Which of Clerk's UI
-  // or the unconfigured-environment notice appears depends on whether the
-  // environment has Clerk credentials, so neither is asserted here; the callers
-  // that care about reaching this page already check the URL.
-  await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
+export async function expectSignInPage(page: Page, journeyLabel?: string) {
+  // Assert the VRDex shell rather than the provider's step-specific heading.
+  const heading = page.locator("h1#sign-in-heading");
+  await expect(heading).toBeVisible();
+  if (!journeyLabel) {
+    await expect(heading).toHaveText("Sign in");
+    return;
+  }
+  const shell = page.locator('section[aria-labelledby="sign-in-heading"]');
+  const unavailable = await shell.getByText(AUTH_UNAVAILABLE_COPY, { exact: true }).count() > 0;
+  await expect(heading).toHaveText(unavailable ? "Sign in" : journeyLabel);
+  await expect(shell.getByText(journeyLabel, { exact: true })).toHaveCount(1);
 }
 
-async function expectProtectedRouteRedirect(page: Page, returnTo: string) {
+async function expectProtectedRouteRedirect(page: Page, returnTo: string, journeyLabel?: string) {
   await expect(page).toHaveURL((url) =>
     url.pathname === "/sign-in" && url.searchParams.get("returnTo") === returnTo,
   );
-  await expectSignInPage(page);
+  await expectSignInPage(page, journeyLabel);
 }
 
 export async function expectHandoffPage(page: Page) {
@@ -396,7 +410,7 @@ export async function expectFooterReachesSupport(page: Page) {
 }
 
 export async function expectNewEventPage(page: Page) {
-  await expectProtectedRouteRedirect(page, "/events/new");
+  await expectProtectedRouteRedirect(page, "/events/new", "Add event");
 }
 
 export async function expectDeveloperApiPage(page: Page) {
@@ -435,7 +449,7 @@ export async function expectPersonProfilePage(page: Page) {
   await expect(claimLink).toHaveAttribute("href", "/claim/playwright-dj-aurora?source=profile");
   await expect(ownershipAction.getByRole("link", { name: "Suggest an edit" })).toHaveAttribute(
     "href",
-    "/playwright-dj-aurora/edit",
+    "/playwright-dj-aurora/edit?intent=suggest",
   );
   await expect(ownershipAction.getByRole("link", { name: "Add media" })).toHaveCount(0);
   await expect(profileCard.getByRole("link", { name: "Claim profile" })).toHaveCount(0);
@@ -453,7 +467,7 @@ export async function expectPersonProfilePage(page: Page) {
   await expect(page.getByRole("heading", { name: "Watch", exact: true })).toHaveCount(0);
   // One badge per provider. The fixture is live on Twitch and on VRCDN, so a
   // single-match assertion would pass with either one of them missing.
-  const liveBadges = page.getByText("Live now", { exact: true });
+  const liveBadges = page.getByText("Live now", { exact: true }).and(page.locator(":not(nav *)"));
   await expect(liveBadges).toHaveCount(2);
   await expect(liveBadges.first()).toBeVisible();
   await expect(liveBadges.last()).toBeVisible();
@@ -476,7 +490,8 @@ export async function expectPersonProfilePage(page: Page) {
 export async function expectProfilePlaybackLinks(page: Page, count: number) {
   await expect(page.getByText("Playback links", { exact: true })).toHaveCount(0);
   for (const label of ["Quest", "PC"]) {
-    const buttons = page.getByRole("button", { name: `Copy ${label}`, exact: true });
+    const name = new RegExp(count > 1 ? `^Copy ${label} for .+$` : `^Copy ${label}$`);
+    const buttons = page.getByRole("button", { name });
     await expect(buttons).toHaveCount(count);
     for (const button of await buttons.all()) await expect(button).toBeVisible();
   }
@@ -529,7 +544,7 @@ export async function expectCommunityProfilePage(page: Page) {
 
 export async function expectEventPage(page: Page) {
   await expect(page.getByRole("heading", { name: "Afterglow Harbor Sessions" })).toBeVisible();
-  await expect(page.getByText(/Jun 15, 2:00 AM UTC/i).first()).toBeVisible();
+  await expect(page.locator('main time[datetime="2026-06-15T02:00:00.000Z"]').first()).toHaveText("Jun 15, 2026, 2:00 AM UTC");
   await expect(page.getByText(/Your time/i)).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Lineup", exact: true })).toBeVisible();
   const schedule = page.getByRole("list").filter({ has: page.getByRole("link", { name: "DJ Aurora", exact: true }) });
@@ -568,10 +583,18 @@ export async function expectEventWatchPage(page: Page) {
   // Deliberately not clicked through: this runs inside the snapshot spec too,
   // so a click would put a real connection to `stream.vrcdn.live` into CI and
   // capture a connecting player as the baseline.
-  await expect(
-    page.getByRole("button", { name: "Play Afterglow Watch Room", exact: true }),
-  ).toBeVisible();
+  const play = page.getByRole("button", { name: "Play Afterglow Watch Room", exact: true });
+  await expect(play.getByText("Play", { exact: true })).toBeVisible();
   await expect(page.locator("video")).toHaveCount(0);
+
+  const poster = page.getByAltText("Afterglow Watch Room poster", { exact: true });
+  await expect(poster).toBeVisible();
+  if ((page.viewportSize()?.width ?? Infinity) < 1024) {
+    await expect.poll(async () => {
+      const [playBox, posterBox] = await Promise.all([play.boundingBox(), poster.boundingBox()]);
+      return playBox !== null && posterBox !== null && playBox.y < posterBox.y;
+    }).toBe(true);
+  }
   // No open affordance for a VRCDN stream, because there is nowhere to open: the
   // service publishes no page for one. The player above is the whole surface.
   // This used to assert an `https://vrcdn.live/<id>` href, which answered 404.

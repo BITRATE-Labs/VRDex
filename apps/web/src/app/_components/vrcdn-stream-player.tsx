@@ -18,12 +18,13 @@ import {
  */
 export function WatchPlayPoster() {
   return (
-    <div className="flex aspect-video min-h-64 w-full items-center justify-center bg-[linear-gradient(135deg,var(--media),var(--surface-raised))] p-5 text-white">
-      <div className="flex size-16 items-center justify-center rounded-control border border-white/30 bg-white/16 shadow-panel">
+    <div data-watch-play-poster className="flex aspect-video min-h-64 w-full items-center justify-center bg-[linear-gradient(135deg,var(--media),var(--surface-raised))] p-5 text-white">
+      <div data-watch-play-control className="flex size-16 items-center justify-center rounded-control border border-white/30 bg-white/16 shadow-panel">
         <span
           aria-hidden="true"
-          className="ml-1 h-0 w-0 border-y-[9px] border-l-[14px] border-y-transparent border-l-white"
+          className="ml-1 h-0 w-0 border-y-[9px] border-l-[14px] border-y-transparent border-l-current"
         />
+        <span aria-hidden="true" className="hidden" data-watch-play-label>Play</span>
       </div>
     </div>
   );

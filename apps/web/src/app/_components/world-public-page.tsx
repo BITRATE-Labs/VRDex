@@ -1,14 +1,16 @@
+import { ArrowDown, ArrowRight, ChevronRight, ExternalLink, MapPin } from "lucide-react";
 import Link from "next/link";
 
 import { EntityImage } from "@/components/ui/entity-image";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { Card, Eyebrow, SectionHeading, SectionTitle } from "@/components/ui/card";
+import { Card, Eyebrow, SectionTitle } from "@/components/ui/card";
 import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { cn } from "@/lib/cn";
 import { publicEventPath } from "@/lib/event-path";
-import { safeImageBackground } from "@/lib/safe-image";
+import { safeImageBackground, safeImageUrl } from "@/lib/safe-image";
 import { ViewerLocalEventDateTime } from "./viewer-local-event-times";
+import { WorldEventsFocus } from "./world-events-focus";
 
 type WorldVisibilityStatus = "unknown" | "private" | "community_labs" | "public";
 type PlatformCompatibility = "pc" | "android" | "ios";
@@ -111,7 +113,9 @@ export type PublicWorld = {
   };
 };
 
-const worldHeroOverlay = "linear-gradient(135deg, color-mix(in srgb, var(--media) 72%, transparent), color-mix(in srgb, var(--accent) 12%, transparent))";
+// Keep event text legible over artwork in either theme.
+const worldEventArtworkOverlay =
+  "linear-gradient(135deg, var(--surface-strong) 30%, color-mix(in srgb, var(--surface-strong) 88%, transparent))";
 
 function safeHttpsUrl(url: string): string | null {
   try {
@@ -176,15 +180,11 @@ function linkSourceLabel(source: WorldLinkSource): string {
   return "Reviewed";
 }
 
-function PillList({ items }: { items: string[] }) {
-  if (items.length === 0) {
-    return <p className="text-sm leading-6 text-muted">No public entries yet.</p>;
-  }
-
+function PillList({ items, onArtwork }: { items: string[]; onArtwork?: boolean }) {
   return (
     <div className="flex flex-wrap gap-2">
       {items.map((item) => (
-        <Badge className="border-border text-sm" variant="accent" key={item}>
+        <Badge className="text-sm" variant={onArtwork ? "inverse" : "accent"} key={item}>
           {item}
         </Badge>
       ))}
@@ -192,70 +192,74 @@ function PillList({ items }: { items: string[] }) {
   );
 }
 
-function EventList({
-  emptyLabel,
-  events,
-}: {
-  emptyLabel: string;
-  events: PublicWorldEventPreview[];
-}) {
-  if (events.length === 0) {
-    return <p className="text-sm leading-6 text-muted">{emptyLabel}</p>;
-  }
-
+function WorldEventBucket({ heading, events }: { heading: string; events: PublicWorldEventPreview[] }) {
   return (
-    <div className="grid gap-3">
+    <section className="grid min-w-0 content-start gap-3">
+      <h3 className="text-base font-semibold text-foreground">{heading}</h3>
       {events.map((event) => {
         const sourceUrl = event.source.url ? safeHttpsUrl(event.source.url) : null;
         const eventPath = publicEventPath(event);
-        const posterStyle = safeImageBackground(event.thumbnailImageUrl, worldHeroOverlay);
-        const posterTextClass = posterStyle ? "text-white/76" : "text-muted";
+        const artworkStyle = safeImageBackground(event.thumbnailImageUrl, worldEventArtworkOverlay);
 
         return (
           <article
-            className="overflow-hidden rounded-card border border-border bg-surface text-sm"
+            className="min-w-0 rounded-card border border-border bg-surface-strong bg-cover bg-center p-3 text-sm sm:p-4"
             key={`${event.slug ?? event.title}-${event.eventDate ?? event.startAt}`}
+            style={artworkStyle}
           >
-            <div
-              className="bg-[linear-gradient(135deg,var(--surface),var(--surface-raised))] bg-cover bg-center px-4 py-4"
-              style={posterStyle}
-            >
-              <div className={`flex flex-wrap items-center gap-2 text-xs ${posterTextClass}`}>
-                <ViewerLocalEventDateTime timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />
-                <span aria-hidden="true">/</span>
-                <span>Confirmed venue</span>
-              </div>
-              <h3 className={`mt-3 text-lg font-semibold tracking-[-0.03em] ${posterStyle ? "text-white" : ""}`}>
-                {eventPath ? <Link href={eventPath}>{event.title}</Link> : event.title}
-              </h3>
-              {event.communityName ? <p className={`mt-1 ${posterTextClass}`}>Hosted by {event.communityName}</p> : null}
-            </div>
-            <div className="px-4 py-4">
-              {event.summary ? <p className="leading-6 text-muted">{event.summary}</p> : null}
-              <div className="mt-4 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+            <h4 className="break-words font-semibold leading-snug tracking-[-0.03em]">
+              {eventPath ? (
+                <Link
+                  className="inline-flex min-h-11 min-w-11 max-w-full items-center gap-2 rounded-control text-lg text-accent-strong underline decoration-accent/45 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent max-sm:flex max-sm:justify-between"
+                  href={eventPath}
+                >
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{event.title}</span>
+                  <ChevronRight aria-hidden="true" className="size-4 shrink-0" />
+                </Link>
+              ) : (
+                <span className="flex min-h-11 items-center text-base">{event.title}</span>
+              )}
+            </h4>
+            <div className="mt-1.5 grid gap-1">
+              <ViewerLocalEventDateTime
+                className="min-w-0 break-words text-sm font-semibold text-foreground"
+                timestamp={event.startAt}
+                eventDate={event.eventDate}
+                scheduleKind={event.scheduleKind}
+              />
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                <span className="inline-flex items-center gap-1">
+                  <MapPin aria-hidden="true" className="size-3.5 shrink-0" />
+                  Confirmed venue
+                </span>
                 {event.mediaLinks.length > 0 ? (
-                  <span>
+                  <span className="border-s border-border-strong ps-3">
                     {event.mediaLinks.length} media link{event.mediaLinks.length === 1 ? "" : "s"}
                   </span>
                 ) : null}
-                {sourceUrl ? (
-                  <a
-                    className="font-medium text-accent-strong underline decoration-accent/35 underline-offset-4"
-                    href={sourceUrl}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    {event.source.label}
-                  </a>
-                ) : (
-                  <span>{event.source.label}</span>
-                )}
               </div>
             </div>
+            {event.communityName ? <p className="mt-1 text-muted">Hosted by {event.communityName}</p> : null}
+            <div className="mt-2 break-words text-xs text-muted">
+              {sourceUrl ? (
+                <a
+                  className="inline-flex min-h-11 min-w-11 max-w-full items-center gap-1.5 rounded-control text-sm font-medium text-muted underline decoration-border-strong underline-offset-4 hover:text-accent-strong hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  href={sourceUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{event.source.label}</span>
+                  <ExternalLink aria-hidden="true" className="size-3.5 shrink-0" />
+                </a>
+              ) : (
+                <span>{event.source.label}</span>
+              )}
+            </div>
+            {event.summary ? <p className="mt-2 break-words leading-6 text-muted">{event.summary}</p> : null}
           </article>
         );
       })}
-    </div>
+    </section>
   );
 }
 
@@ -290,170 +294,270 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
     ? safeHttpsUrl(world.canonicalVrchatWorldUrl)
     : null;
   const sourceUrl = world.sourceUrl ? safeHttpsUrl(world.sourceUrl) : null;
+  const referenceUrl = sourceUrl === canonicalWorldUrl ? null : sourceUrl;
+  const heroDestinationUrl = canonicalWorldUrl ?? referenceUrl;
+  const lowerReferenceUrl = canonicalWorldUrl ? referenceUrl : null;
+  const heroImageUrl = safeImageUrl(world.heroImageUrl);
+  const { upcoming, recent } = world.eventContext;
+  const hasEvents = upcoming.length > 0 || recent.length > 0;
+  const hasTags = world.tags.length > 0;
+  const hasCredits = world.creatorAttributions.length > 0;
+  const description = world.description?.trim();
+  const outboundLinks = world.outboundLinks.flatMap((link) => {
+    const href = safeHttpsUrl(link.url);
+    return href ? [{ ...link, href }] : [];
+  });
+  const hasLowerLinks = lowerReferenceUrl || outboundLinks.length > 0;
+  const hasDetails = description || hasEvents || hasTags || hasCredits || referenceUrl || outboundLinks.length > 0;
+  const hasPlatforms = world.platformCompatibility.length > 0;
+  const isSparse = !heroImageUrl && !hasDetails && !canonicalWorldUrl
+    && !world.vrchatWorldId && !world.summary?.trim()
+    && !hasPlatforms && world.media.length === 0;
+  const hasLaunchDetails = hasPlatforms && Boolean(canonicalWorldUrl);
+  const heroMetaClassName = heroImageUrl ? "text-white/76" : "text-muted";
+  const platformDetails = (
+    <div className={cn(isSparse && "sm:ps-4")}>
+      <dt className={cn(
+        heroMetaClassName,
+        hasLaunchDetails && "max-sm:font-medium max-sm:text-inherit",
+      )}>Platforms</dt>
+      <dd className={cn("mt-1", isSparse ? "text-base font-semibold" : "font-medium")}>
+        {hasPlatforms ? <PillList items={world.platformCompatibility.map(platformLabel)} onArtwork={Boolean(heroImageUrl)} /> : "Unknown"}
+      </dd>
+    </div>
+  );
+  const visibilityDetails = (
+    <div className={cn(isSparse && "border-s border-border ps-4")}>
+      <dt className={heroMetaClassName}>{isSparse ? "World visibility" : "Visibility"}</dt>
+      <dd className={cn("mt-1", isSparse ? "text-base font-semibold" : "font-medium")}>{visibilityLabel(world.visibilityStatus)}</dd>
+    </div>
+  );
+  const referenceLinkClassName = "min-h-11 max-w-full flex-col items-start gap-0.5 whitespace-normal py-1.5 text-left";
+  const referenceLinkContent = referenceUrl ? (
+    <>
+      <span className="flex items-center gap-1.5">
+        Reference link
+        <ExternalLink aria-hidden="true" className="size-3.5 shrink-0" />
+      </span>
+      <span className="text-xs font-normal [overflow-wrap:anywhere]" id="world-reference-host">
+        {new URL(referenceUrl).hostname}
+      </span>
+    </>
+  ) : null;
+  const heroDestination = heroDestinationUrl ? (
+    <a
+      className={cn(
+        buttonVariants({ variant: "primary" }),
+        hasLaunchDetails && "max-sm:min-h-11",
+        !canonicalWorldUrl && referenceLinkClassName,
+        heroImageUrl
+          ? "focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-media"
+          : "focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-strong",
+      )}
+      aria-label={canonicalWorldUrl ? undefined : "Reference link"}
+      aria-describedby={canonicalWorldUrl ? undefined : "world-reference-host"}
+      href={heroDestinationUrl}
+      rel="noreferrer"
+      target="_blank"
+    >
+      {canonicalWorldUrl ? "Open VRChat world" : referenceLinkContent}
+    </a>
+  ) : null;
+  const navigationLinkClassName = "inline-flex min-h-11 items-center gap-1.5 rounded-control text-sm font-medium underline decoration-current/40 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2";
+  const actions = heroDestination || hasEvents ? (
+    <div className={cn(
+      "flex flex-wrap items-center gap-x-3 gap-y-1 lg:[@media(min-height:864px)]:block",
+      hasLaunchDetails ? "mt-3 sm:col-span-2 sm:row-start-4 sm:mt-5 sm:justify-self-start" : "mt-5",
+      !heroDestination && "lg:[@media(min-height:864px)]:hidden",
+    )}>
+      {heroDestination}
+      {hasEvents ? (
+        <Link
+          className={cn(navigationLinkClassName, "lg:[@media(min-height:864px)]:hidden", heroImageUrl ? "text-white/90 focus-visible:outline-white" : "text-accent-strong focus-visible:outline-accent")}
+          href="#world-events"
+        >
+          Events
+          <ArrowDown aria-hidden="true" className="size-3.5" />
+        </Link>
+      ) : null}
+    </div>
+  ) : null;
 
   return (
-    <PageShell tone="world">
-      <PageContainer>
-        <section className="overflow-hidden rounded-hero border border-border bg-media shadow-hero">
-          <div className="grid items-center gap-6 p-6 text-white sm:p-8 lg:grid-cols-[1.1fr_1fr] lg:p-10">
-            <div>
-              <h1 className="text-5xl leading-none font-semibold tracking-[-0.05em] sm:text-7xl">{world.displayName}</h1>
-              {world.summary ? <p className="mt-4 max-w-2xl text-base leading-7 text-white/82 sm:text-lg">{world.summary}</p> : null}
+    <PageShell tone="world" className={cn(isSparse && "sm:pt-[clamp(3rem,16vh,9rem)]")}>
+      <PageContainer max={!heroImageUrl && !hasDetails ? "3xl" : undefined}>
+        <section className={cn(
+          "overflow-hidden rounded-hero border border-border",
+          heroImageUrl ? "bg-media text-white shadow-hero" : "bg-surface-strong text-foreground shadow-sm",
+          isSparse && "border-border-strong sm:[html:not([data-theme=light])_&]:border-muted/55",
+        )}>
+          <div className={cn(
+            "p-6 sm:p-8",
+            isSparse && "sm:p-10",
+            heroImageUrl && "grid items-center gap-6 lg:grid-cols-[1.1fr_1fr] lg:p-10",
+            hasLaunchDetails && "max-sm:p-4",
+          )}>
+            <div className={cn("min-w-0", hasLaunchDetails && "sm:grid sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-x-6")}>
+              <h1 className={cn(
+                "font-semibold leading-none tracking-[-0.05em] [overflow-wrap:anywhere]",
+                heroImageUrl ? "text-5xl sm:text-7xl" : "text-4xl sm:text-5xl",
+                isSparse && "sm:text-[2.625rem]",
+                hasLaunchDetails && "sm:col-span-2 sm:row-start-1",
+                hasLaunchDetails && heroImageUrl && "max-sm:text-[2.625rem]",
+              )}>{world.displayName}</h1>
+              {hasLaunchDetails ? (
+                <div className="mt-4 sm:contents">
+                  <dl className="text-sm sm:col-start-2 sm:row-start-3 sm:mt-5">{platformDetails}</dl>
+                  {actions}
+                </div>
+              ) : null}
+              {!isSparse && world.summary ? <p className={cn(
+                "mt-4 max-w-2xl text-base leading-7 sm:text-lg",
+                hasLaunchDetails && "max-sm:leading-6 sm:col-span-2 sm:row-start-2",
+                heroImageUrl ? "text-white/82" : "text-muted",
+              )}>{world.summary}</p> : null}
+              {isSparse ? (
+                <dl className="mt-5 grid grid-cols-2 items-center gap-y-4 border-t border-border-strong pt-5 text-sm sm:mt-7 sm:grid-cols-[1.2fr_1fr_1fr] sm:pt-6">
+                  <div className="max-sm:col-span-2 max-sm:border-b max-sm:border-border max-sm:pb-4 sm:border-e sm:border-border sm:pe-4">
+                    <dt className="font-medium text-muted">VRChat link</dt>
+                    <dd className="mt-1 text-xl font-semibold max-sm:leading-7 sm:text-base">Not listed</dd>
+                  </div>
+                  {platformDetails}
+                  {visibilityDetails}
+                </dl>
+              ) : (
+                <dl className={cn(
+                  "flex flex-wrap items-start gap-x-6 gap-y-3 text-sm",
+                  hasLaunchDetails ? "mt-3 sm:col-start-1 sm:row-start-3 sm:mt-5" : "mt-5",
+                )}>
+                  {visibilityDetails}
+                  {hasPlatforms && !hasLaunchDetails ? platformDetails : null}
+                </dl>
+              )}
+              {hasLaunchDetails ? null : actions}
+              {isSparse ? (
+                <Link className={cn(navigationLinkClassName, "mt-2 text-accent-strong focus-visible:outline-accent sm:hidden [@media(scripting:none)]:hidden")} href="/discovery">
+                  Discovery
+                  <ArrowRight aria-hidden="true" className="size-3.5" />
+                </Link>
+              ) : null}
             </div>
-            <EntityImage label={world.displayName} src={world.heroImageUrl} className="aspect-video w-full rounded-card border border-white/20 text-4xl" sizes="(min-width: 1024px) 45vw, 100vw" priority />
+            {heroImageUrl ? (
+              <EntityImage label={world.displayName} src={heroImageUrl} className="aspect-video w-full rounded-card border border-white/20 text-4xl" sizes="(min-width: 1024px) 45vw, 100vw" priority />
+            ) : null}
           </div>
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+        {description ? (
           <Card surface="white">
             <SectionTitle>About this world</SectionTitle>
-            <div className="mt-4 space-y-4 text-sm leading-7 text-muted sm:text-base">
-              {world.description ? (
-                <p>{world.description}</p>
-              ) : (
-                <p>No public description yet.</p>
-              )}
+            <p className="mt-4 max-w-3xl text-sm leading-7 text-muted sm:text-base">{world.description}</p>
+          </Card>
+        ) : null}
+
+        {hasEvents ? (
+          <Card surface="white" className="max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:shadow-none">
+            <WorldEventsFocus />
+            <SectionTitle
+              className="scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent max-sm:[@media(scripting:none)]:scroll-mt-32"
+              id="world-events"
+              tabIndex={-1}
+            >
+              Events at this world
+            </SectionTitle>
+            <div className={cn(
+              "mt-4 grid gap-4 sm:mt-6",
+              upcoming.length > 0 && recent.length > 0
+                && "lg:grid-cols-2 max-lg:[&>section+section]:border-t max-lg:[&>section+section]:border-border max-lg:[&>section+section]:pt-4",
+            )}>
+              {upcoming.length > 0 ? (
+                <WorldEventBucket heading="Upcoming and active" events={upcoming} />
+              ) : null}
+              {recent.length > 0 ? (
+                <WorldEventBucket heading="Recent" events={recent} />
+              ) : null}
             </div>
           </Card>
+        ) : null}
 
-          <Card surface="white">
-            <dl className="space-y-4 text-sm">
-              <div className="border-b border-border pb-4">
-                <dt className="text-muted">Visibility</dt>
-                <dd className="mt-1 font-medium">{visibilityLabel(world.visibilityStatus)}</dd>
-              </div>
-              <div>
-                <dt className="text-muted">Platform hints</dt>
-                <dd className="mt-2">
-                  <PillList items={world.platformCompatibility.map(platformLabel)} />
-                </dd>
-              </div>
-            </dl>
-          </Card>
-        </section>
+        {hasTags || hasCredits ? (
+          <section className={cn("grid gap-4", hasTags && hasCredits && "lg:grid-cols-[1fr_2fr]")}>
+            {hasTags ? (
+              <Card surface="white">
+                <Eyebrow>Tags</Eyebrow>
+                <div className="mt-4">
+                  <PillList items={world.tags} />
+                </div>
+              </Card>
+            ) : null}
 
-        <Card surface="white">
-          <SectionHeading>Events at this world</SectionHeading>
-          <div className="mt-6 grid gap-4 lg:grid-cols-2">
-            <article>
-              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">
-                Upcoming and active
-              </h3>
-              <div className="mt-4">
-                <EventList
-                  emptyLabel="No confirmed upcoming events are linked to this world yet."
-                  events={world.eventContext.upcoming}
-                />
-              </div>
-            </article>
-            <article>
-              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted">Recent</h3>
-              <div className="mt-4">
-                <EventList
-                  emptyLabel="No confirmed recent events are linked to this world yet."
-                  events={world.eventContext.recent}
-                />
-              </div>
-            </article>
-          </div>
-        </Card>
+            {hasCredits ? (
+              <Card surface="white">
+                <Eyebrow>Creator attribution</Eyebrow>
+                <div className="mt-4 space-y-3">
+                  {world.creatorAttributions.map((attribution) => {
+                    const href = attribution.profileSlug && attribution.profileType
+                      ? `/${attribution.profileSlug}`
+                      : null;
+                    const content = (
+                      <>
+                        <EntityImage label={attribution.displayName} src={attribution.imageUrl} className="size-12 rounded-control" sizes="48px" />
+                        <span className="min-w-0">
+                          <span className="block break-words font-medium">{attribution.displayName}</span>
+                          <span className="block text-muted">{roleLabel(attribution.role)}</span>
+                        </span>
+                      </>
+                    );
 
-        <section className="grid gap-4 lg:grid-cols-3">
-          <Card surface="white">
-            <Eyebrow>Tags</Eyebrow>
-            <div className="mt-4">
-              <PillList items={world.tags} />
-            </div>
-          </Card>
+                    return href ? (
+                      <Link
+                        className="flex items-center gap-3 rounded-card border border-border bg-surface px-4 py-3 text-sm"
+                        href={href}
+                        key={`${attribution.role}-${attribution.displayName}`}
+                      >
+                        {content}
+                      </Link>
+                    ) : (
+                      <div
+                        className="flex items-center gap-3 rounded-card border border-border bg-surface px-4 py-3 text-sm"
+                        key={`${attribution.role}-${attribution.displayName}`}
+                      >
+                        {content}
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            ) : null}
+          </section>
+        ) : null}
 
-          <Card className="lg:col-span-2" surface="white">
-            <Eyebrow>Creator attribution</Eyebrow>
-            <div className="mt-4 space-y-3">
-              {world.creatorAttributions.length === 0 ? (
-                <p className="text-sm leading-6 text-muted">No public creator credits yet.</p>
-              ) : (
-                world.creatorAttributions.map((attribution) => {
-                  const href = attribution.profileSlug && attribution.profileType
-                    ? `/${attribution.profileSlug}`
-                    : null;
-                  const content = (
-                    <>
-                      <EntityImage label={attribution.displayName} src={attribution.imageUrl} className="size-12 rounded-control" sizes="48px" />
-                      <span className="min-w-0">
-                        <span className="block break-words font-medium">{attribution.displayName}</span>
-                        <span className="block text-muted">{roleLabel(attribution.role)}</span>
-                      </span>
-                    </>
-                  );
-
-                  return href ? (
-                    <Link
-                      className="flex items-center gap-3 rounded-card border border-border bg-surface px-4 py-3 text-sm"
-                      href={href}
-                      key={`${attribution.role}-${attribution.displayName}`}
-                    >
-                      {content}
-                    </Link>
-                  ) : (
-                    <div
-                      className="flex items-center gap-3 rounded-card border border-border bg-surface px-4 py-3 text-sm"
-                      key={`${attribution.role}-${attribution.displayName}`}
-                    >
-                      {content}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </Card>
-        </section>
-
-        <section className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-          <Card surface="white">
-            <Eyebrow>Primary links</Eyebrow>
-            <div className="mt-4 flex flex-wrap gap-3">
-              {canonicalWorldUrl ? (
+        {hasLowerLinks ? (
+          <section className={cn("grid gap-4", lowerReferenceUrl && outboundLinks.length > 0 && "lg:grid-cols-[0.9fr_1.1fr]")}>
+            {lowerReferenceUrl ? (
+              <Card surface="white">
+                <Eyebrow>Primary links</Eyebrow>
                 <a
-                  className={buttonVariants({ variant: "primary" })}
-                  href={canonicalWorldUrl}
+                  className={cn(buttonVariants({ variant: "secondary" }), referenceLinkClassName, "mt-4")}
+                  aria-label="Reference link"
+                  aria-describedby="world-reference-host"
+                  href={lowerReferenceUrl}
                   rel="noreferrer"
                   target="_blank"
                 >
-                  Open VRChat world
+                  {referenceLinkContent}
                 </a>
-              ) : null}
-              {sourceUrl ? (
-                <a
-                  className={buttonVariants({ variant: "secondary" })}
-                  href={sourceUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Reference link
-                </a>
-              ) : null}
-              {!canonicalWorldUrl && !sourceUrl ? (
-                <p className="text-sm leading-6 text-muted">No public world links yet.</p>
-              ) : null}
-            </div>
-          </Card>
+              </Card>
+            ) : null}
 
-          <Card surface="white">
-            <Eyebrow>Creator links</Eyebrow>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {world.outboundLinks.length === 0 ? (
-                <p className="text-sm leading-6 text-muted">No public creator/store links yet.</p>
-              ) : (
-                world.outboundLinks.map((link) => {
-                  const href = safeHttpsUrl(link.url);
-                  if (!href) {
-                    return null;
-                  }
-
-                  return (
+            {outboundLinks.length > 0 ? (
+              <Card surface="white">
+                <Eyebrow>Creator links</Eyebrow>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {outboundLinks.map((link) => (
                     <a
                       className="rounded-card border border-border bg-surface px-4 py-3 text-sm"
-                      href={href}
+                      href={link.href}
                       key={`${link.type}-${link.url}`}
                       rel="noreferrer"
                       target="_blank"
@@ -461,12 +565,12 @@ export function WorldPublicPage({ world }: { world: PublicWorld }) {
                       <span className="block font-medium">{link.label}</span>
                       <span className="mt-1 block text-xs text-muted">{linkSourceLabel(link.source)}</span>
                     </a>
-                  );
-                })
-              )}
-            </div>
-          </Card>
-        </section>
+                  ))}
+                </div>
+              </Card>
+            ) : null}
+          </section>
+        ) : null}
       </PageContainer>
     </PageShell>
   );

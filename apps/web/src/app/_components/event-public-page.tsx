@@ -1,9 +1,9 @@
 "use client";
 import { inferLineupEnds } from "@vrdex/api-contracts";
 import { useQuery } from "convex/react";
+import { ArrowUp, ChevronRight, ExternalLink, MapPin } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
-import { CalendarDays, Flag, ListMusic } from "lucide-react";
+import { type CSSProperties, useId, useState } from "react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@convex-generated-api";
 import { EventContributionControls } from "../events/event-contribution-controls";
@@ -12,14 +12,21 @@ import { actionCardVariants, actionLabelClassName, actionMetaClassName, inlineAc
 import { buttonVariants } from "@/components/ui/button";
 import { CopyValueRow } from "@/components/ui/copy-value-row";
 import { Card, Eyebrow } from "@/components/ui/card";
+import { EntityImage } from "@/components/ui/entity-image";
 import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { cn } from "@/lib/cn";
 import { safeImageBackground } from "@/lib/safe-image";
 import { publicEventPath } from "@/lib/event-path";
 import { avatarFrameStyle, type AvatarAppearance } from "@/lib/avatar-appearance";
 import { EventWatchForEvent } from "./event-live-watch";
+import { useCurrentTimestamp } from "./event-watch-surface";
+import { EventPublicHero } from "./event-public-hero";
+import { useEventLineupReturn } from "./event-lineup-return";
+import { useFragmentBackFocus } from "./use-fragment-back-focus";
+import styles from "./event-public-page.module.css";
 import { parseVrcdnStreamLinks } from "../../../../../convex/_vrcdnLinks";
-import { ViewerLocalEventDateTime, ViewerLocalEventTime, ViewerLocalEventTimeRange } from "./viewer-local-event-times";
+import { authoredEventSchedule } from "../../../../../convex/_eventRuntime";
+import { ViewerLocalEventDateTime, ViewerLocalEventTimeRange } from "./viewer-local-event-times";
 
 type EventSourceType = "manual" | "community" | "partner" | "import" | "ai_suggested" | "contributor";
 type EventMediaLinkType =
@@ -164,17 +171,18 @@ export type PublicEvent = Omit<PublicEventPreview, "worlds"> & {
   }>;
 };
 
-const eventPosterOverlay = "linear-gradient(135deg, color-mix(in srgb, var(--media) 72%, transparent), color-mix(in srgb, var(--accent) 12%, transparent))";
-const eventEntityImageOverlay = "linear-gradient(135deg, color-mix(in srgb, var(--media) 28%, transparent), color-mix(in srgb, var(--accent) 8%, transparent))";
+const eventPosterOverlay = "linear-gradient(135deg, color-mix(in srgb, var(--media) 72%, transparent), color-mix(in srgb, var(--media) 72%, transparent))";
+const eventPreviewOverlay = "linear-gradient(135deg, color-mix(in srgb, var(--media) 72%, transparent), color-mix(in srgb, var(--media) 69%, transparent))";
+const watchArtScrim = "linear-gradient(180deg, rgb(0 0 0 / 36%), rgb(0 0 0 / 68%))";
 
-function safeHttpsUrl(url: string | undefined): string | null {
+function parseHttpsUrl(url: string | undefined): URL | null {
   if (!url) {
     return null;
   }
 
   try {
     const parsed = new URL(url);
-    return parsed.protocol === "https:" ? parsed.href : null;
+    return parsed.protocol === "https:" ? parsed : null;
   } catch {
     return null;
   }
@@ -191,7 +199,7 @@ function initialsFor(name: string): string {
   return initials || "V";
 }
 
-function EntityImage({
+function EventAvatar({
   appearance,
   imageUrl,
   label,
@@ -200,57 +208,153 @@ function EntityImage({
   imageUrl?: string;
   label: string;
 }) {
-  const imageStyle = safeImageBackground(imageUrl, eventEntityImageOverlay);
-
   return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "flex size-14 flex-none items-center justify-center overflow-hidden rounded-control border border-accent/20 bg-cover bg-center text-xs font-semibold text-accent-strong",
-        imageStyle ? "bg-media" : "bg-accent/10",
-      )}
-      style={appearance ? avatarFrameStyle(imageStyle, appearance) : imageStyle}
-    >
-      {imageStyle ? null : initialsFor(label)}
+    <EntityImage
+      alt=""
+      className="size-14 rounded-control border border-accent/20 bg-accent/10 text-xs text-accent-strong"
+      fallback={initialsFor(label)}
+      label={label}
+      sizes="56px"
+      src={imageUrl}
+      style={appearance ? avatarFrameStyle(undefined, appearance) : undefined}
+    />
+  );
+}
+
+export function EventScheduleNowLabel({ onArtwork = false, label = "Now" }: {
+  onArtwork?: boolean;
+  label?: "Now" | "Scheduled now";
+}) {
+  return (
+    <span className={cn(
+      "inline-block rounded-control border px-2 py-0.5 text-sm font-bold leading-5",
+      onArtwork ? "border-sky-200 bg-sky-200 text-slate-950" : "border-accent/80 bg-accent-muted text-accent-strong",
+    )}>
+      {label}
     </span>
   );
 }
 
-export function EventPreviewCard({ event }: { event: PublicEventPreview }) {
-  const sourceUrl = safeHttpsUrl(event.source.url);
-  const thumbnailStyle = safeImageBackground(event.thumbnailImageUrl, eventPosterOverlay);
+export function EventPreviewCard({
+  event,
+  variant = "default",
+  seriesSummary,
+  scheduledNow = false,
+  yearReferenceAt,
+}: {
+  event: PublicEventPreview;
+  variant?: "default" | "series" | "community";
+  seriesSummary?: string;
+  scheduledNow?: boolean;
+  yearReferenceAt?: number;
+}) {
+  const titleId = useId();
+  const dateId = titleId + "-date";
+  const sourceUrl = parseHttpsUrl(event.source.url)?.href;
+  const thumbnailStyle = safeImageBackground(event.thumbnailImageUrl, eventPreviewOverlay);
   const details = event.worlds.map((world) => world.displayName);
   const eventPath = publicEventPath(event);
+  const isSeries = variant === "series";
+  const hasDate = event.startAt !== undefined || (event.scheduleKind === "date_only" && event.eventDate !== undefined);
+  const hasSeriesDate = isSeries && hasDate;
+  const hasDatedTitle = hasSeriesDate && Boolean(eventPath);
+  const summary = isSeries && event.summary === seriesSummary ? undefined : event.summary;
+  const dateTime = (
+    <ViewerLocalEventDateTime
+      timestamp={event.startAt}
+      eventDate={event.eventDate}
+      scheduleKind={event.scheduleKind}
+      yearReferenceAt={yearReferenceAt}
+    />
+  );
+  const useThemeColors = !thumbnailStyle;
+  const compactWithoutArtwork = !isSeries && useThemeColors;
 
   return (
-    <article className="group overflow-hidden rounded-card border border-border bg-surface-strong text-sm transition hover:-translate-y-0.5">
+    <article className={cn(
+      "group overflow-hidden rounded-card border border-border bg-surface-strong text-sm transition hover:-translate-y-0.5",
+      compactWithoutArtwork && "self-start",
+    )}>
       <div
-        className="min-h-28 bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] bg-cover bg-center px-4 py-4 text-white"
+        className={cn(
+          "px-4",
+          !compactWithoutArtwork && "bg-[linear-gradient(135deg,var(--canvas-muted),var(--surface-raised))] bg-cover bg-center",
+          isSeries ? "py-3" : compactWithoutArtwork ? "pt-4" : "min-h-28 py-4",
+          useThemeColors ? "text-foreground" : "bg-media text-white",
+        )}
         style={thumbnailStyle}
       >
-        <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-white/84">
-          <ViewerLocalEventDateTime timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />
-          {event.startAt !== undefined && event.doorsOpenAt !== undefined && event.doorsOpenAt < event.startAt ? <span>Doors <ViewerLocalEventTime timestamp={event.doorsOpenAt} /></span> : null}
-          {event.communityName ? <span>/ {event.communityName}</span> : null}
-        </div>
-        <h3 className="mt-4 text-2xl font-semibold tracking-[-0.04em]">
-          {eventPath ? <Link href={eventPath}>{event.title}</Link> : event.title}
+        {(!compactWithoutArtwork || hasDate) ? (
+          <div className={cn(
+            "flex flex-wrap items-center text-sm font-medium",
+            isSeries || compactWithoutArtwork ? "gap-x-3 gap-y-1" : "gap-x-4 gap-y-1",
+            useThemeColors ? "text-muted" : "text-white/84",
+          )}>
+            {scheduledNow ? <EventScheduleNowLabel onArtwork={!useThemeColors} /> : null}
+            {hasSeriesDate ? (
+              <span className={cn("text-lg font-semibold leading-tight", useThemeColors ? "text-foreground" : "text-white")} id={hasDatedTitle ? dateId : undefined}>
+                {dateTime}
+              </span>
+            ) : dateTime}
+            {event.startAt !== undefined && event.doorsOpenAt !== undefined && event.doorsOpenAt < event.startAt ? (
+              <span className={compactWithoutArtwork ? "sm:border-s sm:border-border-strong sm:ps-3" : undefined}>
+                Doors <ViewerLocalEventDateTime timestamp={event.doorsOpenAt} compactRelativeTo={event.startAt} />
+              </span>
+            ) : null}
+            {!compactWithoutArtwork && event.communityName ? (
+              <span className={isSeries ? undefined : "min-w-0 font-normal [overflow-wrap:anywhere]"}>{event.communityName}</span>
+            ) : null}
+          </div>
+        ) : null}
+        <h3 className={cn(
+          isSeries
+            ? "mt-2 text-base font-medium [overflow-wrap:anywhere]"
+            : "font-semibold tracking-[-0.04em]",
+          !isSeries && (compactWithoutArtwork ? "text-xl sm:text-2xl" : "text-2xl"),
+          compactWithoutArtwork && "break-words",
+          compactWithoutArtwork && hasDate && "mt-2",
+          !isSeries && !compactWithoutArtwork && "mt-4",
+        )}>
+          {eventPath ? (
+            <Link
+              className={cn(
+                "rounded-sm underline decoration-1 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current",
+                compactWithoutArtwork ? "underline-offset-[6px]" : "underline-offset-4",
+                variant === "default" && "sm:block",
+                !isSeries && "max-sm:flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center max-sm:[overflow-wrap:anywhere]",
+              )}
+              href={eventPath}
+              id={hasDatedTitle ? titleId : undefined}
+              aria-labelledby={hasDatedTitle ? titleId + " " + dateId : undefined}
+            >
+              {event.title}
+            </Link>
+          ) : event.title}
         </h3>
+        {compactWithoutArtwork && event.communityName ? <p className="mt-2 break-words text-sm font-medium text-muted">{event.communityName}</p> : null}
       </div>
-      <div className="grid gap-3 px-4 py-4">
-        {event.summary ? <p className="leading-6 text-muted">{event.summary}</p> : null}
-        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+      <div className={cn(
+        "grid px-4",
+        isSeries ? "gap-2 py-2.5" : compactWithoutArtwork ? "gap-2 pb-4 pt-3" : "gap-3 py-4",
+      )}>
+        {summary ? <p className="leading-6 text-muted">{summary}</p> : null}
+        <div className={cn("flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted", variant === "community" && "max-sm:items-center")}>
           {details.map((detail) => (
             <span key={detail}>{detail}</span>
           ))}
           {sourceUrl ? (
             <a
-              className="font-medium text-accent-strong underline decoration-accent/35 underline-offset-4"
+              className={cn(
+                "inline-flex min-w-0 items-center gap-1 font-medium text-accent-strong underline decoration-accent/35 underline-offset-4 [overflow-wrap:anywhere]",
+                compactWithoutArtwork && "min-h-6 text-sm",
+                variant === "community" && "max-sm:min-h-11 max-sm:min-w-11",
+              )}
               href={sourceUrl}
               rel="noreferrer"
               target="_blank"
             >
               {event.source.label}
+              <ExternalLink aria-hidden="true" className="size-3 shrink-0" />
             </a>
           ) : (
             <span>{event.source.label}</span>
@@ -294,6 +398,7 @@ export type PublicEventLineupEntry = {
   roleLabel?: string;
   startAt?: number;
   endAt?: number;
+  authoredEndAt?: number;
   performer?: PublicEvent["slots"][number]["performer"];
 };
 
@@ -317,163 +422,283 @@ export function EventPublicPage({ event: initialEvent }: { event: PublicEvent })
   return event ? <EventPublicPageContent event={event} /> : null;
 }
 
-function EventPublicPageContent({ event }: { event: PublicEvent }) {
-  const [reportOpen, setReportOpen] = useState(false);
-  const canHost = useQuery(api.events.getHostAccess, event.communitySlug ? { slug: event.slug, communitySlug: event.communitySlug } : "skip");
-  const lineup = eventLineupForDisplay(event);
-  const bannerStyle = safeImageBackground(event.bannerImageUrl, eventPosterOverlay);
-  const sourceUrl = safeHttpsUrl(event.source.url);
-  const eventPath = publicEventPath(event);
+function EventPublicLineup({ event, lineup, listRef, rememberLineupRow }: {
+  event: PublicEvent;
+  lineup: PublicEventLineupEntry[];
+} & Pick<ReturnType<typeof useEventLineupReturn>, "listRef" | "rememberLineupRow">) {
+  const lineupMetadataId = useId();
+  const authoredRows = (event.lineup ?? []).flatMap(({ key, displayLabel, startAt, authoredEndAt: endAt }) => {
+    if (startAt === undefined || !Number.isFinite(startAt) || endAt === undefined || !Number.isFinite(endAt) || endAt <= startAt) return [];
+    return [{ key, displayLabel, startAt, endAt }];
+  });
+  const now = useCurrentTimestamp([
+    event.startAt ?? Infinity,
+    event.endAt === undefined ? Infinity : event.endAt + 1,
+    ...authoredRows.flatMap(row => [row.startAt, row.endAt]),
+  ]);
+  const scheduledRows = now !== null && authoredEventSchedule(event, now).scheduledNow
+    ? authoredRows.filter(row => row.startAt <= now && now < row.endAt)
+    : [];
+  const scheduledRow = scheduledRows.length === 1 ? scheduledRows[0] : undefined;
 
   return (
-    <PageShell className="py-5 sm:py-6 lg:py-7" tone="event">
-      <PageContainer className="gap-5">
-
-
-        <section className="overflow-hidden rounded-hero border border-border bg-media shadow-hero">
-          <div
-            className="relative min-h-56 bg-[linear-gradient(135deg,var(--media),var(--surface-raised))] bg-cover bg-center p-5 text-white sm:p-6 lg:p-8"
-            style={bannerStyle}
-          >
-            <nav aria-label="Event actions" className="absolute right-4 top-4 flex gap-2">
-              {eventPath && canHost ? <span className="group relative inline-flex">
-                <Link aria-label="Host view" className={cn(buttonVariants({ variant: "secondary" }), "size-9 p-0")} href={`${eventPath}/host`}>
-                  <ListMusic aria-hidden="true" className="size-4" />
-                </Link>
-                <span role="tooltip" className="pointer-events-none absolute right-0 top-full z-20 mt-2 hidden whitespace-nowrap rounded-control border border-border bg-surface px-2 py-1 text-xs text-foreground shadow-lg group-hover:block group-focus-within:block">Host view</span>
-              </span> : null}
-              {eventPath ? <span className="group relative inline-flex">
-                <a aria-label="Add to calendar" className={cn(buttonVariants({ variant: "secondary" }), "size-9 p-0")} href={`${eventPath}/calendar.ics`}>
-                  <CalendarDays aria-hidden="true" className="size-4" />
-                </a>
-                <span role="tooltip" className="pointer-events-none absolute right-0 top-full z-20 mt-2 hidden whitespace-nowrap rounded-control border border-border bg-surface px-2 py-1 text-xs text-foreground shadow-lg group-hover:block group-focus-within:block">Add to calendar</span>
-              </span> : null}
-              <span className="group relative inline-flex">
-                <button type="button" aria-label="Report event" aria-haspopup="dialog" className={cn(buttonVariants({ variant: "secondary" }), "size-9 p-0")} onClick={() => setReportOpen(true)}>
-                  <Flag aria-hidden="true" className="size-4" />
-                </button>
-                <span role="tooltip" className="pointer-events-none absolute right-0 top-full z-20 mt-2 hidden whitespace-nowrap rounded-control border border-border bg-surface px-2 py-1 text-xs text-foreground shadow-lg group-hover:block group-focus-within:block">Report event</span>
-              </span>
-            </nav>
-            <div className="flex min-h-44 flex-col justify-end">
-              <div className="max-w-4xl">
-                {event.status === "cancelled" ? (
-                  <p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-white">Cancelled</p>
+    <Card className={styles.lineup} surface="white">
+      <div className="flex items-center justify-between gap-2 sm:justify-start sm:gap-4">
+        <h2
+          className={cn(styles.lineupTitle, "scroll-mt-24 text-xl font-semibold tracking-tight")}
+          id="event-lineup"
+          tabIndex={-1}
+        >
+          Lineup
+        </h2>
+        <Link
+          className={cn(styles.watchReturn, buttonVariants({ variant: "secondary", size: "sm" }), "min-h-11 min-w-11 shrink-0 gap-1.5 border-border-strong py-0 sm:min-h-7")}
+          href="#event-watch"
+          data-managed-fragment
+        >
+          <ArrowUp aria-hidden="true" className="size-3.5" />
+          Watch
+        </Link>
+      </div>
+      {scheduledRow ? (
+        <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+          <EventScheduleNowLabel label="Scheduled now" />
+          <strong className="min-w-0 [overflow-wrap:anywhere]">{scheduledRow.displayLabel}</strong>
+          <ViewerLocalEventTimeRange className="text-muted" endAt={scheduledRow.endAt} startAt={scheduledRow.startAt} />
+        </p>
+      ) : null}
+      <ol ref={listRef} className="mt-5 divide-y divide-border">
+        {lineup.map((row, index) => {
+          const isScheduledNow = row.key === scheduledRow?.key;
+          const roleLabel = row.roleLabel?.trim().toLowerCase() === "participant" ? undefined : row.roleLabel;
+          const hasMetadata = Boolean(roleLabel) || row.startAt !== undefined;
+          const metadataId = row.performer && hasMetadata ? `${lineupMetadataId}-${index}` : undefined;
+          const content = (
+            <>
+              <EventAvatar appearance={row.performer?.avatarAppearance} imageUrl={row.performer?.imageUrl} label={row.displayLabel} />
+              <div className="min-w-0">
+                <span className={cn(
+                  "font-semibold [overflow-wrap:anywhere]",
+                  row.performer && inlineActionClassName,
+                  row.performer && "group-hover:decoration-accent",
+                )}>{row.displayLabel}</span>
+                {hasMetadata ? (
+                  <div className="flow-root" id={metadataId}>
+                    {isScheduledNow ? <div className="mt-1"><EventScheduleNowLabel label="Scheduled now" /></div> : null}
+                    {roleLabel ? <div className="mt-1 text-sm text-muted">{roleLabel}</div> : null}
+                    {row.startAt !== undefined ? <ViewerLocalEventTimeRange className="mt-1 block text-sm text-muted" endAt={row.endAt} startAt={row.startAt} /> : null}
+                  </div>
                 ) : null}
-                <ViewerLocalEventDateTime className={cn("block text-sm uppercase tracking-[0.24em] text-white/70", canHost ? "pr-36" : "pr-24")} timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />
-                {event.scheduleKind !== "date_only" && (event.doorsOpenAt !== undefined || event.endAt !== undefined) ? <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-white/80">
-                  {event.doorsOpenAt !== undefined ? <span><span>Doors open</span>{" "}<ViewerLocalEventDateTime timestamp={event.doorsOpenAt} /></span> : null}
-                  {event.endAt !== undefined ? <span><span>End</span>{" "}<ViewerLocalEventDateTime timestamp={event.endAt} /></span> : null}
-                </div> : null}
-                <h1 className="mt-4 text-5xl leading-none font-semibold tracking-[-0.05em] sm:text-7xl">
-                  {event.title}
-                </h1>
-                {event.summary ? <p className="mt-4 max-w-2xl text-base leading-7 text-white/82 sm:text-lg">{event.summary}</p> : null}
-                {event.venueLabel ? <p className="mt-3 text-sm text-white/80">{event.venueLabel}</p> : null}
               </div>
-            </div>
-          </div>
-        </section>
+            </>
+          );
+          const rowClassName = "flex min-w-0 items-center gap-4";
+
+          return (
+            <li aria-current={isScheduledNow ? "time" : undefined} className="min-w-0 py-4 first:pt-0 last:pb-0" data-lineup-row={row.key} key={row.key}>
+              {row.performer ? (
+                <Link
+                  aria-label={row.displayLabel}
+                  aria-describedby={metadataId}
+                  className={cn(rowClassName, "group rounded-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent max-sm:min-h-11 sm:w-fit")}
+                  href={`/${row.performer.slug}`}
+                  onClick={(event) => rememberLineupRow(row.key, event)}
+                >
+                  {content}
+                  <ChevronRight aria-hidden="true" className="ml-auto size-4 shrink-0 text-muted group-hover:text-accent-strong sm:hidden" />
+                </Link>
+              ) : <div className={rowClassName}>{content}</div>}
+            </li>
+          );
+        })}
+      </ol>
+    </Card>
+  );
+}
+
+function EventPublicPageContent({ event }: { event: PublicEvent }) {
+  const [reportOpen, setReportOpen] = useState(false);
+  const fragmentScope = useFragmentBackFocus<HTMLDivElement>();
+  const canHost = useQuery(api.events.getHostAccess, event.communitySlug ? { slug: event.slug, communitySlug: event.communitySlug } : "skip");
+  const lineup = eventLineupForDisplay(event);
+  const { listRef, posterRef, rememberLineupRow } = useEventLineupReturn(event.slug, event.posterImageUrl);
+  const bannerStyle = safeImageBackground(event.bannerImageUrl, eventPosterOverlay);
+  const watchBannerArt = safeImageBackground(event.bannerImageUrl, watchArtScrim);
+  const watchPosterArt = safeImageBackground(event.posterImageUrl, watchArtScrim);
+  const watchArt = watchBannerArt ?? watchPosterArt;
+  const desktopWatchArt = watchBannerArt && watchBannerArt.backgroundImage !== watchPosterArt?.backgroundImage
+    ? watchBannerArt
+    : undefined;
+  const sourceUrl = parseHttpsUrl(event.source.url);
+  const seriesPath = event.seriesId && event.communitySlug ? `/${event.communitySlug}/series/${event.seriesId}` : null;
+  const publicLinks = event.mediaLinks.filter((link) => parseVrcdnStreamLinks(link.url) === null);
+  const isOpenMediaLink = (link: PublicEvent["mediaLinks"][number]) =>
+    link.presentation === "open" && (link.type === "watch" || link.type === "stream");
+  const hasMediaLinks = publicLinks.some(isOpenMediaLink);
+  const linksLabel = hasMediaLinks ? "Media links" : publicLinks.length > 0 ? "Links" : undefined;
+  const linksHeading = hasMediaLinks && (seriesPath || !publicLinks.every(isOpenMediaLink)) ? "Event links" : linksLabel;
+  const eventPath = publicEventPath(event);
+  const hasWorlds = event.worlds.length > 0;
+  const hasLocationLinks = hasWorlds || Boolean(sourceUrl);
+  const showHostBeforePoster = !hasLocationLinks && !event.watchSurfaceEnabled && Boolean(event.posterImageUrl && event.communitySlug);
+  const hasCompactHost = showHostBeforePoster || (hasLocationLinks && Boolean(event.communitySlug || event.communityName));
+  const standaloneHost = Boolean(event.communitySlug || event.communityName)
+    && !bannerStyle && !event.posterImageUrl && !event.watchSurfaceEnabled
+    && event.worlds.length === 0 && lineup.length === 0 && event.slots.length === 0
+    && !seriesPath && !sourceUrl && event.mediaLinks.length === 0;
+  const locationLinkClassName = cn(
+    actionCardVariants({ padding: "sm" }),
+    "min-h-11 min-w-0 [overflow-wrap:anywhere] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus max-sm:flex-1 max-sm:basis-32 max-sm:px-2 max-sm:py-1.5 max-sm:leading-4",
+  );
+
+  const hostDetails = event.communitySlug ? (
+    <Link
+      className={cn(
+        actionCardVariants({ variant: standaloneHost ? "surface" : "accent" }),
+        "flex items-center gap-3",
+        showHostBeforePoster && "max-sm:border-accent/50",
+        standaloneHost && "max-w-full justify-self-start focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+      )}
+      href={`/${event.communitySlug}`}
+    >
+      <EventAvatar appearance={event.communityAvatarAppearance} imageUrl={event.communityImageUrl} label={event.communityName ?? "Community profile"} />
+      <span className="min-w-0 [overflow-wrap:anywhere]">
+        <span className={actionLabelClassName}>
+          {event.communityName ?? "Community profile"}
+        </span>
+        <span className={actionMetaClassName}>Host</span>
+      </span>
+      {showHostBeforePoster ? <ChevronRight aria-hidden="true" className="ml-auto size-4 shrink-0 text-accent-strong sm:hidden" /> : null}
+    </Link>
+  ) : event.communityName ? (
+    <div className={cn(
+      "rounded-control border border-border bg-surface px-4 py-3 font-medium",
+      standaloneHost && "max-w-full justify-self-start [overflow-wrap:anywhere]",
+    )}>
+      {event.communityName}
+    </div>
+  ) : (
+    <Card surface="white"><p className="leading-6 text-muted">No host listed.</p></Card>
+  );
+
+  return (
+    <PageShell className={cn(styles.page, "pt-[var(--event-mobile-space,0.75rem)] pb-3 sm:py-6 lg:py-7")} tone="event">
+      <PageContainer className="gap-[var(--event-mobile-space,0.75rem)] sm:gap-5" ref={fragmentScope}>
+        <EventPublicHero
+          bannerStyle={bannerStyle}
+          canHost={canHost === true}
+          event={event}
+          eventPath={eventPath}
+          hasLineup={lineup.length > 0}
+          linksLabel={linksLabel}
+          seriesPath={seriesPath}
+          onReport={() => setReportOpen(true)}
+        />
 
         {event.source.sourceType === "contributor" ? <p className="text-sm text-muted">{event.source.label}</p> : null}
         <EventContributionControls eventId={event.id} reportOpen={reportOpen} onReportClose={() => setReportOpen(false)} />
-        <section className="grid items-start gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="lg:sticky lg:top-6">
-            {event.posterImageUrl ? (
-              <a href={event.posterImageUrl} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-card border border-border bg-surface">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={event.posterImageUrl} alt={event.title + " poster"} className="h-auto w-full object-contain" />
-              </a>
-            ) : null}
-          </div>
-
-          <div className="grid gap-4">
-            <EventWatchForEvent event={event} />
-
-            <Card surface="white">
-              <div className="grid gap-3 text-sm">
-                {event.communitySlug ? (
-                  <Link className={cn(actionCardVariants({ variant: "accent" }), "flex items-center gap-3")} href={`/${event.communitySlug}`}>
-                    <EntityImage appearance={event.communityAvatarAppearance} imageUrl={event.communityImageUrl} label={event.communityName ?? "Community profile"} />
-                    <span className="min-w-0">
-                      <span className={actionLabelClassName}>
-                        {event.communityName ?? "Community profile"}
-                      </span>
-                      <span className={actionMetaClassName}>Host</span>
-                    </span>
-                  </Link>
-                ) : event.communityName ? (
-                  <div className="rounded-control border border-border bg-surface px-4 py-3 font-medium">
-                    {event.communityName}
-                  </div>
-                ) : (
-                  <p className="leading-6 text-muted">No host listed.</p>
-                )}
-                {event.worlds.map((world) => (
-                  <Link className={cn(actionCardVariants({ variant: "accent" }), "flex items-center gap-3")} href={`/${world.slug}`} key={world.slug}>
-                    <EntityImage imageUrl={world.heroImageUrl} label={world.displayName} />
-                    <span className="min-w-0">
-                      <span className={actionLabelClassName}>
-                        {world.displayName}
-                      </span>
-                      {world.summary ? <span className="mt-1 block text-muted">{world.summary}</span> : null}
-                      <span className={actionMetaClassName}>World</span>
-                    </span>
-                  </Link>
-                ))}
+        <div className={styles.eventBody}>
+          <section className={cn(styles.media, "grid grid-cols-[minmax(0,1fr)] items-start gap-4")}>
+            <div className={styles.lead}>
+              <div
+                aria-label="Watch"
+                className={cn(styles.watch, "scroll-mt-24 focus-visible:rounded-card focus-visible:outline-2 focus-visible:outline-accent max-sm:scroll-mt-[4.5rem]")}
+                id="event-watch"
+                role="region"
+                tabIndex={-1}
+                style={watchArt ? {
+                  "--event-watch-art": watchArt.backgroundImage,
+                  "--event-watch-desktop-art": desktopWatchArt?.backgroundImage,
+                } as CSSProperties : undefined}
+              >
+                <EventWatchForEvent event={event} />
               </div>
-            </Card>
-          </div>
-        </section>
+              {hasLocationLinks ? (
+                <div className={cn(styles.locationLinks, "flex flex-wrap gap-2")}>
+                  {event.worlds.map((world) => (
+                    <Link className={cn(locationLinkClassName, styles.worldLink, "border-accent/50 bg-accent/10 hover:bg-accent/15")} href={`/${world.slug}`} key={world.slug}>
+                      <span className={cn(actionLabelClassName, "font-semibold")}>{world.displayName}</span>
+                      <span className={cn(actionMetaClassName, "flex items-center gap-1 max-sm:mt-0.5")}>
+                        <MapPin aria-hidden="true" className="size-3 shrink-0 text-accent-strong" />
+                        World
+                      </span>
+                    </Link>
+                  ))}
+                  {sourceUrl ? (
+                    <a className={locationLinkClassName} href={sourceUrl.href} rel="noreferrer" target="_blank">
+                      <span className="flex items-start gap-2">
+                        <span className={cn(actionLabelClassName, "font-semibold", hasWorlds && "text-foreground decoration-border-strong")}>{sourceUrl.hostname}</span>
+                        <ExternalLink aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent-strong" />
+                      </span>
+                      <span className={cn(actionMetaClassName, "max-sm:mt-0.5")}>
+                        {event.source.label} · Reference link
+                      </span>
+                    </a>
+                  ) : null}
+                </div>
+              ) : null}
+              {hasCompactHost ? <div className={cn(styles.mobileHost, "mt-2 sm:hidden")}>{hostDetails}</div> : null}
+            </div>
+            {event.posterImageUrl ? (
+              <div className={cn(styles.poster, "lg:sticky lg:top-6")}>
+                <a href={event.posterImageUrl} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-card border border-border bg-surface">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img ref={posterRef} src={event.posterImageUrl} alt={event.title + " poster"} className="h-auto w-full object-contain" />
+                </a>
+              </div>
+            ) : null}
 
-        {lineup.length > 0 ? (
-          <Card surface="white">
-            <h2 className="text-xl font-semibold tracking-tight">Lineup</h2>
-            <ol className="mt-5 divide-y divide-border">
-              {lineup.map((row) => (
-                <li className="flex min-w-0 items-center gap-4 py-4 first:pt-0 last:pb-0" key={row.key}>
-                  <EntityImage appearance={row.performer?.avatarAppearance} imageUrl={row.performer?.imageUrl} label={row.displayLabel} />
-                  <div className="min-w-0">
-                    {row.performer ? (
-                      <Link className={cn(inlineActionClassName, "[overflow-wrap:anywhere]")} href={`/${row.performer.slug}`}>{row.displayLabel}</Link>
-                    ) : <span className="font-semibold [overflow-wrap:anywhere]">{row.displayLabel}</span>}
-                    {row.roleLabel && row.roleLabel.trim().toLowerCase() !== "participant" ? <div className="mt-1 text-sm text-muted">{row.roleLabel}</div> : null}
-                    {row.startAt !== undefined ? <ViewerLocalEventTimeRange className="mt-1 block text-sm text-muted" endAt={row.endAt} startAt={row.startAt} /> : null}
-                  </div>
-                </li>
-              ))}
-            </ol>
+            {standaloneHost ? hostDetails : (
+              <div className={cn(styles.details, "text-sm", hasCompactHost && "max-sm:hidden")}>
+                {hostDetails}
+              </div>
+            )}
+          </section>
+
+          {lineup.length > 0 ? (
+            <EventPublicLineup event={event} lineup={lineup} listRef={listRef} rememberLineupRow={rememberLineupRow} />
+          ) : null}
+        </div>
+
+        {linksHeading ? (
+          <Card aria-labelledby="event-links" surface="white">
+            <h2
+              className="w-fit scroll-mt-24 text-xl font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current max-sm:scroll-mt-[4.5rem]"
+              id="event-links"
+              tabIndex={-1}
+            >
+              {linksHeading}
+            </h2>
+            <div className="mt-4 grid gap-3">
+              {publicLinks.map((link) => {
+                const key = `${link.type}-${link.url}`;
+                if (link.presentation === "copy") {
+                  return <CopyValueRow compact key={key} label={link.label} value={link.url} />;
+                }
+                const hostname = parseHttpsUrl(link.url)?.hostname;
+                return (
+                  <a
+                    className={cn(actionCardVariants({ variant: "accent" }), (link.type === "watch" || link.type === "stream") && styles.externalStreamLink)}
+                    href={link.url}
+                    key={key}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <span className={actionLabelClassName}>
+                      {link.label}
+                    </span>
+                    {hostname ? (
+                      <span className={cn(actionMetaClassName, styles.openLinkLabel, "[overflow-wrap:anywhere]")}>
+                        {hostname}
+                      </span>
+                    ) : null}
+                    <ExternalLink aria-hidden="true" className={cn(styles.outboundIcon, "size-3.5 shrink-0 text-muted")} />
+                  </a>
+                );
+              })}
+            </div>
           </Card>
         ) : null}
-
-        <Card surface="white">
-          <Eyebrow>Links</Eyebrow>
-          <div className="mt-4 grid gap-3">
-              {event.seriesId && event.communitySlug ? <Link className={actionCardVariants({ variant: "accent" })} href={`/${event.communitySlug}/series/${event.seriesId}`}>
-                <span className={actionLabelClassName}>Upcoming nights</span>
-              </Link> : null}
-              {sourceUrl ? (
-                <a className={actionCardVariants({ variant: "accent" })} href={sourceUrl} rel="noreferrer" target="_blank">
-                  <span className={actionLabelClassName}>
-                    {event.source.label}
-                  </span>
-                  <span className={actionMetaClassName}>Reference link</span>
-                </a>
-              ) : null}
-              {event.mediaLinks.filter(link => parseVrcdnStreamLinks(link.url) === null).map((link) => link.presentation === "copy" ? (
-                <CopyValueRow compact key={`${link.type}-${link.url}`} label={link.label} value={link.url} />
-              ) : (
-                <a className={actionCardVariants({ variant: "accent" })} href={link.url} key={`${link.type}-${link.url}`} rel="noreferrer" target="_blank">
-                  <span className={actionLabelClassName}>
-                    {link.label}
-                  </span>
-                  <span className="mt-1 block text-xs text-muted">
-                    Open link
-                  </span>
-                </a>
-              ))}
-          </div>
-        </Card>
       </PageContainer>
     </PageShell>
   );

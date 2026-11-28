@@ -19,9 +19,12 @@ import path from 'node:path';
 it('renders authored repeated/freeform/missing-link rows, selected source and all choices without players',()=>{
  execFileSync(process.execPath,['--import','tsx','--input-type=module','-e',`
  import assert from 'node:assert/strict';
+ import {createRequire} from 'node:module';
  import {createElement} from 'react';
  import {renderToStaticMarkup} from 'react-dom/server';
- import {EventHostContent} from './src/app/_components/event-host-view.tsx';
+ const require=createRequire(import.meta.url);
+ require.extensions['.css']=module=>{module.exports={};};
+ const {EventHostContent}=require('./src/app/_components/event-host-view.tsx');
  const person={slug:'one',displayName:'Aurora',outboundLinks:[{url:'vrcdn:aurora'}, {url:'vrcdn:alternate'}, {url:'https://twitch.tv/aurora'}]};
  const lineup=[{key:'first',displayLabel:'Aurora',position:0,performer:person},{key:'second',displayLabel:'Aurora',position:1,performer:person},{key:'guest',displayLabel:'Freeform guest',position:2}];
  const event={slug:'show',communitySlug:'club',title:'Show',lineup,slots:[{playbackKey:'first',stream:{streamId:'aurora'}}]};

@@ -223,6 +223,8 @@ featured flags, outbound link presentation and resolved destination metadata.
 `public-search-genres` provides readable labels and stable featured-first ordering
 without mutating results. The shared `PublicProfileLinks` board handles public
 link actions independently of legacy lookup queries or private seed access.
+Each VRCDN stream keeps its public label, browser preview, and Quest and PC
+addresses together. The playback addresses wrap on narrow screens.
 Standard public results show up to three readable genre names, with the rest
 behind an independent `+N` disclosure. Each person with public links has its own
 `Links` disclosure; opening one does not close another. Clipboard success and

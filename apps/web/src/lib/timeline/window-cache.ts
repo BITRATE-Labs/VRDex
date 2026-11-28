@@ -24,6 +24,8 @@ export type TimelineTransport = {
   resolve(args: { references: PlanReference[] }): Promise<SavedResolution[]>;
 };
 type Data = {
+  viewportKey: string | null;
+  revalidating: boolean;
   eventLanes: EventLane[];
   records: TimelineEvent[];
   slotCoverage: Record<string, "partial" | "complete">;
@@ -55,6 +57,13 @@ export function windowsForRange(range: TimelineRange): TimelineRange[] {
     endAt: startAt + WINDOW,
     timeZone: range.timeZone,
   }));
+}
+export function timelineViewportKey(
+  range: TimelineRange,
+  favoritesOnly: boolean,
+  favoriteProfileIds: ReadonlyArray<string>,
+): string {
+  return JSON.stringify([windowsForRange(range), favoritesOnly, favoriteProfileIds]);
 }
 export function referenceKey(reference: PlanReference): string {
   return reference.kind === "event"
@@ -121,6 +130,8 @@ export function sortEvents(events: TimelineEvent[]): TimelineEvent[] {
 export function createTimelineController(transport: TimelineTransport) {
   let state: TimelineDataState = {
     kind: "loading",
+    viewportKey: null,
+    revalidating: false,
     records: [],
     eventLanes: [],
     slotCoverage: {},
@@ -133,6 +144,7 @@ export function createTimelineController(transport: TimelineTransport) {
   let generation = 0;
   let savedGeneration = 0;
   let viewport: TimelineRange | null = null;
+  let viewportKey: string | null = null;
   let favoritesOnly = false;
   let favorites = new Set<string>();
   let plan: ReadonlyArray<PlanReference> = [];
@@ -145,6 +157,7 @@ export function createTimelineController(transport: TimelineTransport) {
   };
   function publish(
     status: Pick<TimelineDataState, "kind"> & { error?: unknown },
+    revalidating = false,
   ) {
     const records = new Map<string, TimelineEvent>();
     const slotCoverage: Data["slotCoverage"] = {};
@@ -203,6 +216,8 @@ export function createTimelineController(transport: TimelineTransport) {
       visibleIds.has(lane.eventId),
     );
     const data = {
+      viewportKey,
+      revalidating,
       records: visible,
       eventLanes,
       slotCoverage,
@@ -249,7 +264,7 @@ export function createTimelineController(transport: TimelineTransport) {
     entry.complete = false;
     entry.updatedAt = null;
   }
-  async function run(token: number) {
+  async function run(token: number, revalidating = false) {
     let pages = 0;
     const active = entries();
     try {
@@ -288,7 +303,7 @@ export function createTimelineController(transport: TimelineTransport) {
           }
           entry.cursor = result.cursor ?? undefined;
           entry.complete = result.complete;
-          publish({ kind: "loading" });
+          publish({ kind: "loading" }, revalidating);
         }
         for (const event of entry.records.values()) {
           let rosterPages = 0;
@@ -310,7 +325,7 @@ export function createTimelineController(transport: TimelineTransport) {
               ...result.performers,
             ]);
             event.rosterCursor = result.cursor;
-            publish({ kind: "loading" });
+            publish({ kind: "loading" }, revalidating);
           }
         }
         if (
@@ -374,6 +389,7 @@ export function createTimelineController(transport: TimelineTransport) {
       ids: ReadonlyArray<string>,
     ) {
       viewport = range;
+      viewportKey = timelineViewportKey(range, only, ids);
       favoritesOnly = only;
       favorites = new Set(ids);
       const token = ++generation;
@@ -395,9 +411,11 @@ export function createTimelineController(transport: TimelineTransport) {
     },
     async refresh() {
       const token = ++generation;
+      // A refresh can reuse the last confirmed viewport while replacement pages arrive.
+      const revalidating = state.kind === "ready" || state.revalidating;
       for (const entry of cache.values()) invalidate(entry);
-      publish({ kind: "loading" });
-      await Promise.all([run(token), setPlan(plan)]);
+      publish({ kind: "loading" }, revalidating);
+      await Promise.all([run(token, revalidating), setPlan(plan)]);
     },
     setPlan,
     async resolveRoster(

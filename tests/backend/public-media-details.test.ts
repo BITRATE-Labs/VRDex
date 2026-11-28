@@ -463,9 +463,12 @@ it("advertises only destinations rendered by the real public profile page", asyn
   execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", `
     import assert from "node:assert/strict";
     import { readFileSync } from "node:fs";
+    import { createRequire } from "node:module";
     import React from "./apps/web/node_modules/react/index.js";
     import { renderToStaticMarkup } from "./apps/web/node_modules/react-dom/server.node.js";
-    import { ProfilePublicPage } from "./apps/web/src/app/_components/profile-public-page.tsx";
+    const require = createRequire(import.meta.url);
+    require.extensions[".css"] = module => { module.exports = {}; };
+    const { ProfilePublicPage } = require("./apps/web/src/app/_components/profile-public-page.tsx");
     for (const scenario of JSON.parse(readFileSync(0, "utf8"))) {
       const profile = { profileType: "person", slug: "target", displayName: "Target", person: { roleTags: [] },
         aliases: [], tags: [], genres: [], outboundLinks: [], worldCredits: [], upcomingEvents: [], hostedEvents: [],

@@ -1,9 +1,10 @@
 "use client";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { readTimelineNavigation } from "@/lib/timeline/navigation";
 import { EventDetailPanel } from "./timeline/event-detail-panel";
 import { useTimelinePreferences } from "./timeline/use-timeline-preferences";
 import type { PreferenceAction } from "@/lib/timeline/preferences";
+import { isHomeRailNavigation, saveHomeRailPosition } from "./home-rail-history";
 import styles from "./home-browse.module.css";
 
 export type TimelineSelection = { eventId: string; slug: string; slotId?: string };
@@ -57,6 +58,9 @@ export function HomeBrowseProvider({ children }: { children: ReactNode }) {
     setSelection(null);
     restoreHomeFocus(invoker.current.element, invoker.current.headingId);
   }, []);
+  const followEventLink = (event: MouseEvent<HTMLElement>) => {
+    if (isHomeRailNavigation(event)) saveHomeRailPosition(invoker.current.element);
+  };
   const setDisplayTimeZone = useCallback((zone: string) => {
     // Validate before flushing navigation or committing an invalid display zone.
     new Intl.DateTimeFormat(undefined, { timeZone: zone });
@@ -78,7 +82,7 @@ export function HomeBrowseProvider({ children }: { children: ReactNode }) {
   const value = useMemo<HomeBrowse>(() => ({ ...runtime, selection, selectEvent, closeEvent, onPreferenceAction, setDisplayTimeZone, registerBeforeTimeZoneChange }), [runtime, selection, selectEvent, closeEvent, onPreferenceAction, setDisplayTimeZone, registerBeforeTimeZoneChange]);
   return <HomeBrowseContext.Provider value={value}>
     {children}
-    {runtime.kind === "ready" && <EventDetailPanel selection={selection} timeZone={runtime.timeZone} hour12={runtime.hour12} onClose={closeEvent} preferences={preference.preferences} onPreferenceAction={onPreferenceAction} />}
+    {runtime.kind === "ready" && <EventDetailPanel selection={selection} timeZone={runtime.timeZone} hour12={runtime.hour12} onClose={closeEvent} onFollowLink={followEventLink} preferences={preference.preferences} onPreferenceAction={onPreferenceAction} />}
     {limit && <span className={styles.actionStatus} role="status">Limit reached</span>}
   </HomeBrowseContext.Provider>;
 }

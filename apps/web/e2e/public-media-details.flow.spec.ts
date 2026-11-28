@@ -20,6 +20,8 @@ test("anonymous connected disclosure loads once and keeps attribution collapsed 
   await page.route(`**${endpoint}`, async route => { reads++; await route.fulfill({ json: details }); });
   await page.goto(`/${slug}`);
   const card = page.locator(`article#media-${assetId}`);
+  await expect(card.getByRole("link", { name: "Download Aurora press portrait" })).toHaveAccessibleDescription("PNG / 180 KB");
+  await expect(card.getByText("PNG / 180 KB", { exact: true })).toBeVisible();
   await expect(card.getByRole("link", { name: "View source" })).toHaveCount(0);
   await expect(card.getByText("Shared by Karly")).toHaveCount(0);
   expect(reads).toBe(0);
@@ -29,7 +31,7 @@ test("anonymous connected disclosure loads once and keeps attribution collapsed 
   await toggle.focus();
   await page.keyboard.press("Enter");
   await expect(card.locator("details").getByRole("link", { name: "View source" })).toHaveAttribute("href", "https://example.invalid/afterglow-studio");
-  await expect(card.locator("details").getByText("PNG / 180 KB", { exact: true })).toBeVisible();
+  await expect(card.locator("details").getByText("PNG / 180 KB", { exact: true })).toHaveCount(0);
   await expect(card.getByRole("link", { name: "BASICBIT" }).first()).toHaveAttribute("href", "/basicbit");
   await expect(card.getByText("Shared by Karly")).toBeVisible();
   await expect(card.getByText("Published", { exact: true })).toBeVisible();
@@ -69,8 +71,28 @@ test("missing actor stays unavailable without a fabricated contributor link @flo
   await expect(card.getByRole("link", { name: "BASICBIT" })).toHaveCount(0);
 });
 
-
-
-
-
-
+test("compact secondary artwork can retry a missing preview @flow @fixture", async ({ page }) => {
+  const assetId = "fixture-aurora-primary-logo";
+  let requests = 0;
+  await page.route(`**/api/e2e/fixture-assets/${assetId}`, (route) => {
+    requests++;
+    return requests === 1 ? route.fulfill({ status: 502, body: "" }) : route.continue();
+  });
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto(`/${slug}`);
+  const card = page.locator(`article#media-${assetId}`);
+  await card.scrollIntoViewIfNeeded();
+  const retry = card.getByRole("button", { name: "Retry", exact: true });
+  await expect(card.getByText("Preview unavailable.", { exact: true })).toBeVisible();
+  const preview = card.locator(":scope > div").first();
+  const [previewBox, buttonBox] = await Promise.all([preview.boundingBox(), retry.boundingBox()]);
+  if (!previewBox || !buttonBox) throw new Error("Missing preview or retry control");
+  expect(buttonBox.y).toBeGreaterThanOrEqual(previewBox.y);
+  expect(buttonBox.y + buttonBox.height).toBeLessThanOrEqual(previewBox.y + previewBox.height);
+  await retry.click();
+  await expect(card.locator("img")).toHaveClass(/opacity-100/);
+  expect(requests).toBe(2);
+  await expect(card.getByRole("link", { name: /^Download / })).toHaveAttribute(
+    "href", `/api/v0/profiles/${slug}/assets/${assetId}/file?download=1`,
+  );
+});

@@ -1,0 +1,219 @@
+.intro,
+.standardSearch {
+  container: public-search / inline-size;
+}
+
+.directory {
+  container: discovery-directory / inline-size;
+}
+
+.directoryTitle {
+  font-size: min(1.875rem, 17cqi);
+}
+
+@container discovery-directory (width < 12rem) {
+  .directoryCard {
+    display: grid;
+    gap: 0.5rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .directoryCard > :first-child {
+    grid-area: 1 / 1;
+    justify-self: start;
+  }
+
+  .directoryDetails {
+    grid-area: 2 / 1 / auto / -1;
+  }
+
+  .directoryArrow {
+    grid-area: 1 / 2;
+    align-self: center;
+    margin: 0;
+  }
+
+  .directoryCard > .directorySummary {
+    grid-area: 3 / 1 / auto / -1;
+  }
+}
+
+@container public-search (width < 13rem) {
+  .introTitle {
+    font-size: min(2.25rem, 24cqi);
+  }
+
+  .searchForm {
+    flex-direction: column;
+  }
+
+  .searchForm > div {
+    position: static;
+  }
+
+  .searchForm > div > :has(> [role="listbox"]) {
+    top: 100%;
+  }
+
+  .standardSearch input[role="combobox"]:not(:placeholder-shown) {
+    padding-inline: 12px 56px;
+  }
+
+  .standardSearch input[role="combobox"] + button {
+    inset-inline-end: 6px;
+    width: 44px;
+    height: 44px;
+  }
+
+  .standardSearch .searchForm > button[type="submit"] {
+    --foreground: var(--inverse);
+    background: var(--accent);
+    border-color: transparent;
+  }
+
+  .standardSearch .searchForm > button[type="submit"]:hover {
+    background: var(--accent-strong);
+  }
+
+  .searchForm input:placeholder-shown {
+    padding-inline: 12px;
+  }
+
+  .searchForm [role="listbox"] {
+    max-height: clamp(7.5rem, calc(100dvh - 16rem), 24rem);
+    overflow-y: auto;
+  }
+
+  .searchForm [role="option"] {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.125rem 0.5rem;
+    padding: 0.375rem;
+  }
+
+  .searchForm [role="option"] > :first-child {
+    grid-area: 1 / 1 / span 3;
+  }
+
+  .searchForm [role="option"] > :first-child > :first-child {
+    width: 1.375rem;
+    height: 1.375rem;
+  }
+
+  .searchForm [role="option"] > :nth-child(2) {
+    display: contents;
+  }
+
+  .searchForm [role="option"] > :nth-child(2) > span,
+  .searchForm [role="option"] > :last-child {
+    grid-area: auto / 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .searchForm [role="option"] > :nth-child(2) > :last-child:not(:first-child) {
+    font-size: 0.6875rem;
+    color: var(--foreground);
+  }
+
+  .searchForm [role="option"] > :last-child {
+    color: var(--foreground);
+  }
+
+  .searchForm > div > :has(> [role="listbox"]) > a {
+    padding: 0.5rem;
+  }
+
+  .searchForm > button[type="submit"] {
+    gap: 0.375rem;
+    width: 100%;
+  }
+
+  .searchForm > button[type="submit"] > span {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    clip-path: none;
+    white-space: normal;
+  }
+}
+
+.standardSearch input[role="combobox"]:focus {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.standardSearch input[role="combobox"]::selection {
+  background: var(--standard-search-selection, var(--accent));
+  color: var(--inverse);
+}
+
+:global([data-theme="dark"]) .standardSearch {
+  --standard-search-selection: var(--foreground);
+}
+
+@media (scripting: none) {
+  .directoryTitle[id],
+  .standardSearch input[role="combobox"] {
+    /* Leave room for the site header's unnested navigation without hydration. */
+    scroll-margin-top: 9.25rem;
+  }
+}
+
+.standardResults {
+  container: standard-results / inline-size;
+}
+
+@container standard-results (width < 12rem) {
+  .standardResultLink {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.375rem;
+  }
+
+  .standardResultLink > :first-child {
+    grid-row: auto;
+    justify-self: start;
+  }
+
+  .standardResultSummary {
+    grid-area: auto / 1;
+  }
+
+  .standardResultClaim {
+    margin-inline-start: 0.75rem;
+  }
+}
+
+.searchFilter:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
+@media (forced-colors: active) {
+  .standardSearch input[role="combobox"]:focus {
+    outline-color: Highlight;
+  }
+
+  .standardSearch input[role="combobox"]::selection {
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  .searchFilter {
+    border-bottom-color: Canvas;
+  }
+
+  .searchFilter[aria-current="page"] {
+    border-bottom-color: LinkText;
+  }
+
+  .searchFilter:focus-visible {
+    outline-color: Highlight;
+  }
+}

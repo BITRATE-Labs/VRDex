@@ -1,5 +1,6 @@
 "use client";
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
+import { LoaderCircle } from "lucide-react";
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 import type {
   PlanReference,
   TimelineRange,
@@ -28,6 +29,7 @@ import { TimelineNight } from "./timeline-night";
 import { type TimelineActions } from "./timeline-event-bar";
 import styles from "./timeline.module.css";
 import { HomeBrowseProvider, useHomeBrowse, useOptionalHomeBrowse, type TimelineSelection } from "../home-browse-provider";
+import { readHomeRailPosition } from "../home-rail-history";
 export type { TimelineSelection } from "../home-browse-provider";
 type Runtime = {
   now: number;
@@ -35,6 +37,21 @@ type Runtime = {
   timeZone: string;
   hour12: boolean;
 };
+function ScheduleLoadingMessage() {
+  return (
+    <span className={styles.loadingMessage}>
+      <LoaderCircle aria-hidden="true" className="shrink-0 motion-safe:animate-spin" size={14} />
+      Loading events
+    </span>
+  );
+}
+function ScheduleChartLoading() {
+  return (
+    <div className={styles.chartLoadingStatus} role="status">
+      <ScheduleLoadingMessage />
+    </div>
+  );
+}
 export function HomeSchedule(props: { onSelectionChange?: (selection: TimelineSelection | null) => void } = {}) {
   const browse = useOptionalHomeBrowse();
   return browse ? <HomeScheduleContent {...props} /> : <HomeBrowseProvider><HomeScheduleContent {...props} /></HomeBrowseProvider>;
@@ -44,6 +61,63 @@ function HomeScheduleContent({
 }: { onSelectionChange?: (selection: TimelineSelection | null) => void } = {}) {
   const browse = useHomeBrowse();
   const [runtime, setRuntime] = useState<Runtime | null>(null);
+  const releaseReturnScroll = useRef<(() => void) | null>(null);
+  useLayoutEffect(() => {
+    const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    const saved = readHomeRailPosition();
+    if (navigation?.type !== "back_forward" || !saved) return;
+
+    const root = document.documentElement;
+    const previous = root.style.overflowAnchor;
+    const interaction = new AbortController();
+    let frame = 0;
+    let observer: MutationObserver | undefined;
+    // The loading chart can shrink underneath the browser's restored page position.
+    root.style.overflowAnchor = "none";
+    function release() {
+      if (interaction.signal.aborted) return;
+      interaction.abort();
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+      root.style.overflowAnchor = previous;
+      releaseReturnScroll.current = null;
+    }
+    function restore() {
+      if (interaction.signal.aborted) return;
+      const top = saved?.top;
+      if (top === undefined || !Number.isFinite(top) || top < 0 ||
+        saved?.viewportWidth !== window.innerWidth || saved.viewportHeight !== window.innerHeight ||
+        Math.abs(top - window.scrollY) <= 1) {
+        release();
+        return;
+      }
+
+      const discover = document.getElementById("discover-heading")?.closest("section");
+      if (discover?.getAttribute("aria-busy") === "true") {
+        if (!observer) {
+          observer = new MutationObserver(restore);
+          observer.observe(discover, { attributeFilter: ["aria-busy"] });
+        }
+        return;
+      }
+
+      const rail = document.getElementById(`discovery-${saved.rail}-rail`);
+      const card = Array.from(rail?.children ?? []).find(item => item.getAttribute("data-home-rail-item") === saved.itemId);
+      const maxTop = (document.scrollingElement?.scrollHeight ?? 0) - root.clientHeight;
+      if (card && top <= maxTop) window.scrollTo({ top, behavior: "instant" });
+      release();
+    }
+    for (const event of ["wheel", "touchstart", "pointerdown", "keydown"]) {
+      window.addEventListener(event, release, { capture: true, passive: true, signal: interaction.signal });
+    }
+    releaseReturnScroll.current = () => {
+      if (frame) return;
+      // Keep anchoring off through the first paint of the settled lanes.
+      frame = requestAnimationFrame(() => { frame = requestAnimationFrame(restore); });
+    };
+    return release;
+  }, []);
+  const onScheduleSettled = useCallback(() => releaseReturnScroll.current?.(), []);
   useEffect(() => {
     if (browse.kind !== "ready") return;
     const frame = requestAnimationFrame(() => {
@@ -68,6 +142,7 @@ function HomeScheduleContent({
         <ScheduleContent
           runtime={runtime}
           onSelectionChange={onSelectionChange}
+          onScheduleSettled={onScheduleSettled}
         />
       ) : (
         <section
@@ -77,13 +152,15 @@ function HomeScheduleContent({
         >
           <TimelineToolbar navigation={{ anchor: null, timeZone: null, favoritesOnly: false }}
             date="" timeZone="" hour12 disabled onNavigate={() => {}} onDate={() => {}} onPan={() => {}} onNow={() => {}}>
-            <div className={styles.status} role="status">Loading events</div>
+            <div className={styles.status} />
           </TimelineToolbar>
-          <div aria-hidden="true" inert className={styles.scroller}>
+          <div tabIndex={-1} className={styles.scroller} data-pending-scroller>
             <div className={styles.canvas} style={{ width: 14400 }}>
-              <div className={styles.dayAxis} />
-              <div className={styles.hourAxis} />
-              <div className={styles.lanes} style={{ height: 376 }} />
+              <div className={styles.dayAxis} data-loading-axis aria-hidden="true" />
+              <div className={styles.hourAxis} data-loading-axis aria-hidden="true" />
+              <div className={styles.lanes} data-loading-placeholder style={{ height: 376 }}>
+                <ScheduleChartLoading />
+              </div>
             </div>
           </div>
         </section>
@@ -94,9 +171,11 @@ function HomeScheduleContent({
 function ScheduleContent({
   runtime,
   onSelectionChange,
+  onScheduleSettled,
 }: {
   runtime: Runtime;
   onSelectionChange?: (selection: TimelineSelection | null) => void;
+  onScheduleSettled: () => void;
 }) {
   const [navigation, setNavigation] = useState<TimelineNavigation>({
     ...runtime.navigation,
@@ -132,6 +211,11 @@ function ScheduleContent({
     favoriteProfileIds: preference.preferences.favoriteProfileIds,
     plan: preference.preferences.plan,
   });
+  useEffect(() => {
+    if (data.isCurrentViewport && data.kind !== "loading" && data.savedState !== "loading") {
+      onScheduleSettled();
+    }
+  }, [data.isCurrentViewport, data.kind, data.savedState, onScheduleSettled]);
   const cancelReplace = useCallback(() => {
     if (pending.current !== null) {
       clearTimeout(pending.current.timer);
@@ -144,7 +228,10 @@ function ScheduleContent({
       searchParams: new URLSearchParams(window.location.search),
       state,
     });
-    window.history[push ? "pushState" : "replaceState"](null, "", href);
+    const railPosition = push ? undefined : readHomeRailPosition();
+    window.history[push ? "pushState" : "replaceState"](
+      railPosition ? { vrdexHomeRailPosition: railPosition } : null, "", href,
+    );
   }, []);
   const flushReplace = useCallback(() => {
     const update = pending.current;
@@ -211,8 +298,8 @@ function ScheduleContent({
       document.removeEventListener("keydown", key, true);
     };
   }, [cancelReplace, flushReplace, setDisplayTimeZone]);
-  const onSelect = (next: TimelineSelection) => {
-    browse.selectEvent(next, document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  const onSelect = (next: TimelineSelection, invoker: HTMLButtonElement) => {
+    browse.selectEvent(next, invoker);
   };
   const onSave = (reference: PlanReference) => {
     const action = togglePlanAction(preference.preferences.plan, reference);
@@ -244,6 +331,29 @@ function ScheduleContent({
     ? data.records.filter((event) => !inRange(event, range) && recentEventTime(event, now) !== undefined)
     : [];
   const empty = visible.length === 0 && recent.length === 0;
+  const compactEmpty =
+    data.isCurrentViewport &&
+    (data.kind === "ready" || data.revalidating) &&
+    data.savedState === "ready" &&
+    empty &&
+    actions.plan.length === 0;
+  const noFavorites =
+    navigation.favoritesOnly && data.isCurrentViewport &&
+    data.kind === "ready" && !data.revalidating && empty;
+  const retainedRefresh = data.revalidating && data.isCurrentViewport;
+  const loadingWithoutContent = data.kind === "loading" && !retainedRefresh &&
+    data.records.length === 0 && actions.plan.length === 0;
+  const showFavoritesEmptyState = navigation.favoritesOnly && compactEmpty;
+  const showInlineFavoritesRecovery =
+    noFavorites && data.savedState === "ready" && actions.plan.length > 0;
+  const clearFilterFocused = useRef(false);
+  useLayoutEffect(() => {
+    // The browser moves focus to the body when a focused control is removed.
+    if (clearFilterFocused.current && document.activeElement === document.body) {
+      clearFilterFocused.current = false;
+      document.getElementById("schedule-favorites")?.focus();
+    }
+  }, [showFavoritesEmptyState, showInlineFavoritesRecovery]);
   const nextEvent = empty ? data.records.flatMap((event) => {
     const schedule = event.schedule;
     if (schedule.kind === "date_only") {
@@ -254,6 +364,23 @@ function ScheduleContent({
     }
     return schedule.startAt >= range.endAt ? [schedule.startAt] : [];
   }).sort((a, b) => a - b)[0] : undefined;
+  const clearFavoritesFilter = (
+    <Button
+      size="sm"
+      type="button"
+      variant="primary"
+      onFocus={() => { clearFilterFocused.current = true; }}
+      onBlur={() => { clearFilterFocused.current = false; }}
+      onClick={(event) => {
+        if (event.currentTarget === document.activeElement) {
+          document.getElementById("schedule-favorites")?.focus();
+        }
+        navigate({ favoritesOnly: false });
+      }}
+    >
+      Clear filter
+    </Button>
+  );
   return (
     <section
       data-home-schedule
@@ -279,7 +406,12 @@ function ScheduleContent({
             navigate({ anchor: Date.now() - HOUR });
           }
         }}
-        onPan={(hours) => navigate({ anchor: anchor + hours * HOUR })}
+        onPan={(hours) => {
+          const visibleHours = (range.endAt - range.startAt) / HOUR;
+          const overlappingHours = Math.max(1, Math.ceil(visibleHours) - 1);
+          const step = Math.min(Math.abs(hours), overlappingHours);
+          navigate({ anchor: anchor + Math.sign(hours) * step * HOUR });
+        }}
         onNow={() => navigate({ anchor: Date.now() - HOUR })}
       >
         <div
@@ -287,8 +419,11 @@ function ScheduleContent({
           role="status"
           aria-label="Schedule data state"
           data-state={data.kind}
+          data-favorites-recovery={showInlineFavoritesRecovery || undefined}
         >
-          {data.kind === "loading" && "Loading events"}
+          {data.kind === "loading" && !retainedRefresh && !loadingWithoutContent && (
+            <ScheduleLoadingMessage />
+          )}
           {data.kind === "error" && (
             <>
               Events unavailable{" "}
@@ -305,9 +440,10 @@ function ScheduleContent({
               </Button>
             </>
           )}
-          {data.kind === "ready" &&
-            empty &&
-            navigation.favoritesOnly && "No favorites in this range"}
+          {noFavorites && !showFavoritesEmptyState && (
+            <span className={styles.favoritesSummary}>No events from favorite communities or performers</span>
+          )}
+          {showInlineFavoritesRecovery && clearFavoritesFilter}
           {nextEvent !== undefined && (
             <Button size="sm" onClick={() => navigate({ anchor: nextEvent })}>Next event</Button>
           )}
@@ -317,7 +453,7 @@ function ScheduleContent({
               Clear past selections
             </Button>
           )}
-          {data.savedState === "loading" && <span>Loading events</span>}
+          {data.savedState === "loading" && !retainedRefresh && <span>Loading events</span>}
           {data.savedState === "error" && (
             <>
               <span>Events unavailable</span>
@@ -328,6 +464,9 @@ function ScheduleContent({
           )}
         </div>
       </TimelineToolbar>
+      <div className="sr-only" role="status" aria-label="Schedule refresh">
+        {retainedRefresh && (data.kind === "loading" || data.savedState === "loading") && "Loading events"}
+      </div>
       {preference.preferences.plan.length > 0 && (
         <TimelineNight
           saved={data.saved}
@@ -342,6 +481,16 @@ function ScheduleContent({
         records={data.records}
         lanes={data.eventLanes}
         saved={data.saved}
+        compactEmpty={compactEmpty || showInlineFavoritesRecovery}
+        hour12={runtime.hour12}
+        viewportLoading={!data.isCurrentViewport || data.kind === "loading"}
+        loadingStatus={loadingWithoutContent ? <ScheduleChartLoading /> : undefined}
+        emptyState={showFavoritesEmptyState ? (
+          <div className={styles.emptyState}>
+            <p role="status">No events from favorite communities or performers</p>
+            {clearFavoritesFilter}
+          </div>
+        ) : null}
         range={range}
         now={now}
         slotCoverage={data.slotCoverage}

@@ -121,7 +121,53 @@ for (const omission of ["telemetry", "populationSeries"] as const) test(`success
   await page.getByRole("button", { name: "Last 24 hours" }).click();
   await expect(page.getByRole("img", { name: "Population history" })).toHaveCount(0);
   await expect(page.getByText("0 people", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Stale", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Activity", exact: true })).toHaveCount(omission === "telemetry" ? 0 : 1);
+  await expect(page.getByText("Group members", { exact: true })).toHaveCount(omission === "telemetry" ? 0 : 1);
   if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") await page.screenshot({ path: testInfo.outputPath(`permission-refresh-${omission}.png`), fullPage: true });
+});
+
+for (const keepMembership of [true, false]) test(`refresh ${keepMembership ? "keeps" : "withdraws"} independently published membership @visual`, async ({ page }, testInfo) => {
+  await page.goto("/playwright-group-population-membership");
+  await expect(page.locator(".population-history").locator("..")).toHaveAttribute("aria-busy", "false");
+  await expect(page.getByText("0 people", { exact: true })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Total group membership" })).toBeVisible();
+  await page.route("**/api/v0/communities/playwright-group-population-membership", async route => {
+    const response = await route.fetch();
+    const profile = await response.json();
+    delete profile.telemetry;
+    if (!keepMembership) delete profile.groupMembership;
+    await route.fulfill({ response, json: profile });
+  });
+  await page.getByRole("button", { name: "Last 24 hours" }).click();
+  const activity = page.locator("section").filter({ has: page.getByRole("heading", { name: "Activity", exact: true }) });
+  await expect(page.getByRole("img", { name: "Population history" })).toHaveCount(0);
+  await expect(page.getByText("Stale", { exact: true })).toHaveCount(0);
+  await expect(activity).toHaveCount(keepMembership ? 1 : 0);
+  if (!keepMembership) return;
+  const memberCount = activity.getByText("Group members", { exact: true });
+  await expect(memberCount).toBeVisible();
+  await expect(memberCount.locator("..").getByText("125", { exact: true })).toBeVisible();
+  await expect(activity.getByRole("group", { name: "Total group membership" })).toBeVisible();
+  if (process.env.PLAYWRIGHT_CAPTURE_SCREENSHOTS !== "false") await page.screenshot({ path: testInfo.outputPath("permission-refresh-independent-membership.png"), fullPage: true });
+});
+
+test("a managed refresh replaces published instance and event recap entries @visual", async ({ page }) => {
+  await page.goto("/playwright-group-population-managed");
+  await expect(page.locator(".population-history").locator("..")).toHaveAttribute("aria-busy", "false");
+  await expect(page.getByRole("heading", { name: "Recent instances" })).toBeVisible();
+  await expect(page.getByText("Afterglow night", { exact: true })).toBeVisible();
+  await page.route("**/api/v0/communities/playwright-group-population-managed", async route => {
+    const response = await route.fetch();
+    const profile = await response.json();
+    profile.telemetry.instanceHistory = [];
+    profile.telemetry.eventRecaps[0].event.title = "Refreshed fixture recap";
+    await route.fulfill({ response, json: profile });
+  });
+  await page.getByRole("button", { name: "Last 24 hours" }).click();
+  await expect(page.getByText("Refreshed fixture recap", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Recent instances" })).toHaveCount(0);
+  await expect(page.getByText("Afterglow night", { exact: true })).toHaveCount(0);
 });
 
 test("empty, stale and managed-disabled population states remain usable at ordinary widths @visual", async ({ page }, testInfo) => {

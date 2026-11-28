@@ -10,6 +10,7 @@ function reader(fetchQuery: () => Promise<unknown>) {
     "@/lib/server/auth": {}, "@convex-generated-api": { api: { eventLive: { listPublic: "live" } } },
     "@/lib/server/public-search-query": {}, "@/lib/server/twitch-live": {},
     "@/lib/server/vrcdn-live": {}, "./playwright-fixtures": {}, "@/lib/profile-claim": {},
+    "@/lib/auth-copy": {},
   };
   const exports: { fetchPublicLiveEvents?: () => Promise<unknown[]> } = {};
   const code = ts.transpileModule(readFileSync("apps/web/src/convex/server.ts", "utf8"), {

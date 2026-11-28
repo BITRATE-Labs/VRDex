@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { PublicProfileMediaDetailsSchema, type PublicProfileMediaDetails, type PublicMediaActor } from "@vrdex/api-contracts";
 import { MediaPreviewImage } from "./media-preview-image";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 
 type PublicProfileAsset = PublicProfileMediaDetails["asset"];
-type CardProps = { asset: PublicProfileAsset; label: string; featured?: boolean };
+type CardProps = { asset: PublicProfileAsset; label: string; featured?: boolean; compactOnMobile?: boolean };
 export type PublicMediaDetailsState =
   | { kind: "closed" }
   | { kind: "loading" }
@@ -61,7 +62,7 @@ function MediaDetails({ state }: { state: PublicMediaDetailsState }) {
   }
 }
 
-export function PublicMediaAssetCardView({ asset, label, featured = false, state, open, onOpenChange }: CardProps & {
+export function PublicMediaAssetCardView({ asset, label, featured = false, compactOnMobile = false, state, open, onOpenChange }: CardProps & {
   state: PublicMediaDetailsState;
   open: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -69,21 +70,55 @@ export function PublicMediaAssetCardView({ asset, label, featured = false, state
   const title = asset.label?.trim() || label;
   const creditUrl = safeCreditUrl(asset.creditUrl);
   const mimeType = asset.downloadMimeType ?? asset.mimeType;
+  const format = mimeType?.replace(/^image\//, "").replace("svg+xml", "svg").toUpperCase();
   const byteSize = asset.downloadByteSize ?? asset.byteSize;
   const size = byteSize === undefined ? null : byteSize >= 1024 * 1024 ? `${(byteSize / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(byteSize / 1024))} KB`;
+  const fileInfo = [format, size].filter(Boolean).join(" / ");
+  const fileInfoId = useId();
   const hasHistory = publicDetailsSlug(asset) !== null;
-  return <article id={`media-${asset.assetId}`} className={cn("group grid min-w-0 scroll-mt-6 overflow-hidden rounded-card border border-border bg-surface-strong text-sm transition hover:-translate-y-0.5 hover:shadow-panel", featured ? "lg:grid-cols-[minmax(0,1.35fr)_minmax(16rem,0.65fr)]" : undefined)}>
-    <div className={cn("relative bg-canvas-muted", featured ? "min-h-72" : "aspect-[4/3]")}>
-      <MediaPreviewImage alt={asset.altText || title} className="absolute inset-0 size-full object-contain" src={asset.imageUrl ?? ""} />
+  const tiled = !featured;
+  const compact = compactOnMobile && tiled;
+  return <article id={`media-${asset.assetId}`} className={cn(
+    "group grid min-w-0 scroll-mt-6 overflow-hidden rounded-card border border-border bg-surface-strong text-sm transition hover:-translate-y-0.5 hover:shadow-panel",
+    featured && "lg:grid-cols-[18rem_minmax(0,1fr)]",
+    tiled && "sm:row-span-4 sm:grid-rows-subgrid sm:gap-y-0 sm:pb-4",
+    compact && "max-sm:grid-cols-[8.5rem_minmax(0,1fr)] max-sm:items-start",
+  )}>
+    <div className={cn(
+      "relative bg-canvas-muted",
+      featured ? "h-60 sm:h-72" : "aspect-[4/3]",
+      compact && "max-sm:m-3 max-sm:aspect-square max-sm:overflow-hidden max-sm:rounded-control",
+    )}>
+      <MediaPreviewImage
+        alt={asset.altText || title}
+        className={cn("absolute inset-0 size-full object-contain", compact && "max-sm:[&:is(div)]:p-2 max-sm:[&_button]:mt-2")}
+        src={asset.imageUrl ?? ""}
+      />
     </div>
-    <div className="grid min-w-0 content-start gap-2 p-4">
-      <h3 className={cn("break-words font-medium", featured ? "text-xl" : undefined)}>{title}</h3>
-      {asset.caption ? <p className="break-words leading-6 text-muted">{asset.caption}</p> : null}
-      <a aria-label={`Download ${title}`} className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "mt-2 w-fit")} download href={asset.downloadUrl}>Download</a>
-      {hasHistory || mimeType || size || creditUrl ? <details className="mt-3 min-w-0 border-t border-border pt-3" open={open}>
-        <summary onClick={onOpenChange ? event => { event.preventDefault(); onOpenChange(!open); } : undefined} className="cursor-pointer rounded-sm py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent">Details &amp; history</summary>
+    <div className={cn("grid min-w-0 content-start p-4", tiled && "sm:contents", compact && "max-sm:contents")}>
+      <div className={cn("grid min-w-0 gap-2", tiled && "sm:contents", compact && "max-sm:py-3 max-sm:pr-3")}>
+        <div className={cn("contents", tiled && "sm:row-start-2 sm:grid sm:min-w-0 sm:content-start sm:gap-2 sm:px-4 sm:pt-4")}>
+          <h3 className={cn("break-words font-medium", featured && "text-xl")}>{title}</h3>
+          {asset.caption ? <p className="break-words leading-6 text-muted">{asset.caption}</p> : null}
+        </div>
+        <div className={cn("mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5", tiled && "sm:row-start-3 sm:mx-4 sm:mt-4 sm:self-start")}>
+          <a aria-describedby={fileInfo ? fileInfoId : undefined} aria-label={`Download ${title}`} className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "shrink-0 max-sm:min-h-11")} download href={asset.downloadUrl}>Download</a>
+          {fileInfo ? <p id={fileInfoId} className="min-w-0 text-xs leading-4 font-medium text-muted [overflow-wrap:anywhere]">{fileInfo}</p> : null}
+        </div>
+      </div>
+      {hasHistory || creditUrl ? <details className={cn(
+        "group/details mt-5 min-w-0 border-t border-border sm:pt-3",
+        tiled && "sm:row-start-4 sm:mx-4 sm:self-start",
+        compact && "max-sm:col-span-full max-sm:mx-3 max-sm:mt-0 max-sm:mb-3",
+      )} open={open}>
+        <summary
+          onClick={onOpenChange ? event => { event.preventDefault(); onOpenChange(!open); } : undefined}
+          className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-sm py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent max-sm:min-h-11 max-sm:text-sm [&::-webkit-details-marker]:hidden"
+        >
+          Details &amp; history
+          <ChevronDown aria-hidden="true" className="size-4 shrink-0 text-muted group-open/details:rotate-180" />
+        </summary>
         {open ? <div className="grid gap-3 pt-4">
-        <p className="text-xs text-muted">{[mimeType?.replace(/^image\//, "").replace("svg+xml", "svg").toUpperCase(), size].filter(Boolean).join(" / ")}</p>
         {creditUrl ? <a className="w-fit text-xs text-muted underline underline-offset-4" href={creditUrl}>View source</a> : null}
         {hasHistory ? <MediaDetails state={state} /> : null}
         </div> : null}

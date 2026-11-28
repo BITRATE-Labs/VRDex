@@ -358,9 +358,9 @@ it("compact inspector preserves authored names and meaningful roles while omitti
       env: { ...process.env, TSX_TSCONFIG_PATH: "tsconfig.json" },
     },
   );
-  assert.match(markup, /UTC . 24h/);
-  assert.match(markup, />Nov 1, 21:00</);
-  assert.match(markup, />Nov 1, 23:00</);
+  assert.match(markup, />Nov 1, 2026, 21:00 UTC<\/time>/);
+  assert.match(markup, /<span aria-hidden="true">23:00<\/span>/);
+  assert.match(markup, /<span class="sr-only">Nov 1, 23:00 UTC<\/span>/);
   assert.match(markup, />21:45<\/time> - <time[^>]+>22:15<\/time>/);
   assert.doesNotMatch(markup, /aria-label="Timezone and hour format"| AM| PM/);
   assert.match(markup, />Authored guest</);

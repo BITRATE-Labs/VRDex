@@ -3,6 +3,7 @@
 import Link, { type LinkProps } from "next/link";
 import { useFeatureFlagEnabled, usePostHog } from "posthog-js/react";
 import { type ReactNode } from "react";
+import { isClerkDevelopmentStarting } from "@/lib/clerk-startup-navigation";
 
 import {
   type DiscoveryAnalyticsSurface,
@@ -53,6 +54,15 @@ export function TrackedDiscoveryLink<Event extends TrackedDiscoveryEvent>({
       {...props}
       onClick={() => {
         posthog?.capture(eventName, properties);
+      }}
+      onNavigate={event => {
+        if (properties.surface === "search_results" && typeof props.href === "string" && isClerkDevelopmentStarting()) {
+          // Clerk's development startup rewrites history while Next is navigating.
+          event.preventDefault();
+          window.location.assign(props.href);
+          return;
+        }
+        props.onNavigate?.(event);
       }}
     >
       {children}

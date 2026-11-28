@@ -1,5 +1,5 @@
 import { cva, type VariantProps } from "class-variance-authority";
-import type { ComponentPropsWithoutRef } from "react";
+import type { ComponentPropsWithRef, ComponentPropsWithoutRef } from "react";
 
 import { cn } from "@/lib/cn";
 
@@ -23,10 +23,21 @@ const pageShellVariants = cva("flex-1 px-4 py-8 text-foreground sm:px-10 lg:px-1
 export type PageShellProps = ComponentPropsWithoutRef<"main"> & VariantProps<typeof pageShellVariants>;
 
 export function PageShell({ className, tone, ...props }: PageShellProps) {
-  return <main className={cn(pageShellVariants({ tone }), className)} {...props} />;
+  return (
+    <main
+      className={cn(
+        pageShellVariants({ tone }),
+        "scroll-mt-20 focus-visible:outline-none focus-visible:shadow-[inset_0_2px_0_var(--accent)] forced-colors:focus-visible:[border-top:2px_solid_Highlight]",
+        className,
+      )}
+      id="main-content"
+      tabIndex={-1}
+      {...props}
+    />
+  );
 }
 
-export function PageContainer({ className, max = "6xl", ...props }: ComponentPropsWithoutRef<"div"> & { max?: "3xl" | "4xl" | "5xl" | "6xl" | "7xl" }) {
+export function PageContainer({ className, max = "6xl", ...props }: ComponentPropsWithRef<"div"> & { max?: "3xl" | "4xl" | "5xl" | "6xl" | "7xl" }) {
   return (
     <div
       className={cn(

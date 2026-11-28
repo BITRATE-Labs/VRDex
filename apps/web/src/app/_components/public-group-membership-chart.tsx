@@ -59,16 +59,40 @@ export function PublicGroupMembershipChart({ membership }: { membership: GroupMe
     observedLine.push(point);
   }
   const axisPoints = bridge ? [{ observedAt: membership.groupCreatedAt!, value: 1 }, ...observations] : observations;
+  const bridgeTicks = bridge
+    ? [...new Set([membership.groupCreatedAt!, first.observedAt, observations[observations.length - 1].observedAt])]
+    : undefined;
 
   return <div className="min-w-0">
-    <h3 className="text-sm font-semibold">Total group membership</h3>
-    {unobservedLine.length > 0 ? <p className="mt-2 text-xs text-muted"><span className="mr-1 inline-block w-5 border-t-2 border-dotted border-muted align-middle" />Unobserved</p> : null}
-    <div className="mt-3 h-64 min-w-0" role="group" aria-label="Total group membership">
+    <h3 className="flex items-center gap-2 text-sm font-semibold">
+      <span aria-hidden="true" className="w-4 border-t-2 border-accent" />
+      Total group membership
+    </h3>
+    {unobservedLine.length > 0 ? <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+      <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="w-4 border-t-2 border-dotted border-muted" />Unobserved</span>
+      {bridge ? <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="size-2 rotate-45 border border-accent" />Group founded · 1 member</span> : null}
+    </div> : null}
+    <div className="mt-3 h-64 min-w-0 pr-2 sm:pr-0" role="group" aria-label="Total group membership">
       <ResponsiveContainer width="100%" height="100%" minWidth={0}>
         <LineChart data={axisPoints} accessibilityLayer margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
           <CartesianGrid stroke="var(--border)" vertical={false} />
-          <XAxis dataKey="observedAt" type="number" domain={["dataMin", "dataMax"]} tickFormatter={date} tickCount={3} tickLine={false} axisLine={false} minTickGap={28} tick={{ fill: "var(--muted)", fontSize: 11 }} />
-          <YAxis width={48} allowDecimals={false} domain={[0, "dataMax"]} tickLine={false} axisLine={false} tick={{ fill: "var(--muted)", fontSize: 11 }} />
+          <XAxis
+            dataKey="observedAt"
+            type="number"
+            domain={["dataMin", "dataMax"]}
+            padding={{ left: 16, right: 8 }}
+            ticks={bridgeTicks}
+            interval={bridge ? "preserveStartEnd" : undefined}
+            tickFormatter={date}
+            tickCount={3}
+            tickLine={false}
+            axisLine={false}
+            height={35}
+            tickMargin={6}
+            minTickGap={bridge ? 10 : 28}
+            tick={{ fill: "var(--muted)", fontSize: 12 }}
+          />
+          <YAxis width={52} allowDecimals={false} domain={[0, "auto"]} tickLine={false} axisLine={false} tick={{ fill: "var(--muted)", fontSize: 12 }} />
           <Tooltip cursor={false} content={({ active, label }) => {
             if (!active || typeof label !== "number") return null;
             const isCreation = bridge && label === membership.groupCreatedAt;

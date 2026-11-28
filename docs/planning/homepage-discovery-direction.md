@@ -163,6 +163,9 @@ Locked direction from current implementation:
   lookup and explicitly authorized private seed workflows. Nonempty `/?q=...`
   bookmarks redirect there with their trimmed query.
 - `/discovery` retains the richer discovery surface and is linked from Home.
+- On `/discovery`, populated events and featured venues keep their priority.
+  An empty event list uses a compact row with Add event. When directory groups
+  have entries, the grid gives those groups the available room.
 - `/discover` remains a legacy redirect and must not be repurposed.
 
 Current recommendation:

@@ -765,16 +765,44 @@ test("public profile media kit @visual @fixture", async ({ page }, testInfo) => 
   await expect(mediaKit.getByRole("img", { name: "Aurora wordmark" })).toHaveCount(1);
   const portrait = mediaKit.getByRole("heading", { name: "Aurora press portrait" }).locator("xpath=ancestor::article");
   const logo = mediaKit.getByRole("heading", { name: "Primary logo" }).locator("xpath=ancestor::article");
-  await expect(portrait.getByRole("link", { name: "View source" })).toHaveCount(0);
+  const portraitDownload = portrait.getByRole("link", { name: "Download Aurora press portrait", exact: true });
+  const portraitFileInfo = portrait.getByText("PNG / 180 KB", { exact: true });
+  const desktopTiles = (page.viewportSize()?.width ?? 0) >= 1024;
+  const tileMetrics = () => mediaKit.locator("article").filter({
+    has: page.getByRole("heading", { name: /^(Primary logo|Square mark|Uncredited mark)$/ }),
+  }).evaluateAll(tiles => tiles.map(tile => {
+    const top = tile.getBoundingClientRect().top;
+    return {
+      preview: tile.firstElementChild?.getBoundingClientRect().height,
+      heading: (tile.querySelector("h3")?.getBoundingClientRect().top ?? NaN) - top,
+      download: (tile.querySelector("a[download]")?.getBoundingClientRect().top ?? NaN) - top,
+      history: (tile.querySelector("summary")?.getBoundingClientRect().top ?? NaN) - top,
+    };
+  }));
+  if (desktopTiles) {
+    const [first, ...others] = await tileMetrics();
+    expect(others).toHaveLength(2);
+    for (const tile of others) expect(tile).toEqual(first);
+  }
+  await expect(portraitFileInfo).toBeVisible();
+  await expect(portraitDownload).toHaveAccessibleDescription("PNG / 180 KB");
+  await expect(mediaKit.getByRole("link", { name: "View source" })).toHaveCount(0);
+  await expect(mediaKit.getByText(/^(Credit|Uploaded by)$/)).toHaveCount(0);
   await portrait.locator("summary").click();
-  await logo.locator("summary").click();
+  const peerMetrics = desktopTiles ? (await tileMetrics()).slice(1) : null;
+  const logoSummary = logo.locator("summary");
+  await logoSummary.focus();
+  await logoSummary.press("Enter");
+  await expect(logo.locator("details")).toHaveAttribute("open", "");
   await expect(
     mediaKit.locator('a[href="https://example.invalid/afterglow-studio"]'),
   ).toHaveAttribute("href", "https://example.invalid/afterglow-studio");
   await expect(
     mediaKit.locator('a[href="https://example.invalid/aurora-source"]'),
   ).toHaveAttribute("href", "https://example.invalid/aurora-source");
-  await expect(portrait.getByText("PNG / 180 KB", { exact: true })).toBeVisible();
+  await expect(portraitFileInfo).toBeVisible();
+  if (peerMetrics) expect((await tileMetrics()).slice(1)).toEqual(peerMetrics);
+  await expect(logoSummary).toBeFocused();
   await portrait.locator("summary").click();
   await logo.locator("summary").click();
   for (const title of [
@@ -794,7 +822,10 @@ test("public profile media kit @visual @fixture", async ({ page }, testInfo) => 
     .locator("xpath=ancestor::article");
   await expect(noCredit.getByRole("link")).toHaveCount(1);
   await expect(mediaKit.getByRole("link", { name: "Download" }).first()).toBeVisible();
-  await expect(mediaKit.getByText("PNG / 180 KB", { exact: true })).toHaveCount(0);
+  await expect(portraitFileInfo).toBeVisible();
+  await expect(portraitDownload).toHaveAccessibleDescription("PNG / 180 KB");
+  await expect(mediaKit.getByRole("link", { name: "View source" })).toHaveCount(0);
+  await expect(mediaKit.getByText(/^(Credit|Uploaded by)$/)).toHaveCount(0);
   await expect(mediaKit.locator("article")).toHaveCount(4);
   await mediaKit.locator("img").evaluateAll(async images => {
     await Promise.all(images.map(async image => {

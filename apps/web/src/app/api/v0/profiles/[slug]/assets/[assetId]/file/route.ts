@@ -39,8 +39,8 @@ function extensionForMimeType(mimeType: string, originalFileName?: string): stri
   return mimeType.split("/")[1] ?? "bin";
 }
 
-function safeFileName(value: string): string {
-  return value.trim().replace(/[^a-zA-Z0-9._ -]+/g, "-").replace(/^-+|-+$/g, "") || "profile-asset";
+function safeFileName(value: string, fallback = "profile-asset"): string {
+  return value.trim().replace(/[^a-zA-Z0-9._ -]+/g, "-").replace(/^-+|-+$/g, "") || fallback;
 }
 
 export async function GET(request: Request, context: RouteContext) {
@@ -89,9 +89,14 @@ export async function GET(request: Request, context: RouteContext) {
     return Response.json({ error: "Stored asset not found." }, { status: 404 });
   }
 
-  const baseName = safeFileName(
+  let baseName = safeFileName(
     asset.originalFileName ?? asset.label ?? `${asset.displayName} media`,
   ).replace(/\.[a-z0-9]+$/i, "");
+  const uuidName = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
+  if (download && asset.originalFileName && uuidName.test(baseName) && asset.label) {
+    const label = safeFileName(asset.label.trim().replace(/\.(?:jpe?g|png|webp|svg)$/i, ""), "");
+    if (/[a-z0-9]/i.test(label) && !uuidName.test(label)) baseName = label.replace(/ +/g, "_");
+  }
   const fileName = `${baseName}.${extensionForMimeType(mimeType, asset.originalFileName)}`;
   const body = object.body.buffer.slice(
     object.body.byteOffset,

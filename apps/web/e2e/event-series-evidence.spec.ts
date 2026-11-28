@@ -56,11 +56,124 @@ for (const color of ["light", "dark"] as const) test(`series editor evidence ${c
   await capture(page, info.outputPath(`series-page-${color}.png`));
 });
 
-test("an occurrence links its series @fixture", async ({ page }) => {
-  await page.goto("/playwright-afterglow-social/events/playwright-afterglow-series-night");
-  await page.getByRole("link", { name: "Upcoming nights", exact: true }).click();
-  await expect(page).toHaveURL(/\/playwright-afterglow-social\/series\/playwright-afterglow-series$/, { timeout: 20_000 });
+test("an empty public series shows its schedule status without a download action @fixture", async ({ page, request }) => {
+  const route = "/playwright-afterglow-social/series/playwright-afterglow-series-empty";
+  expect((await page.goto(route))?.status()).toBe(200);
+
+  const main = page.getByRole("main");
+  await expect(main.getByRole("heading", { name: "Upcoming nights", exact: true })).toBeVisible();
+  await expect(main.getByText("None scheduled", { exact: true })).toBeVisible();
+  await expect(main.getByRole("link", { name: "Add to calendar", exact: true })).toHaveCount(0);
+
+  const calendar = await request.get(route + "/calendar.ics");
+  expect(calendar.status()).toBe(200);
+  expect(calendar.headers()["content-type"]).toContain("text/calendar");
+  expect(await calendar.text()).not.toContain("BEGIN:VEVENT");
+});
+
+for (const suffix of ["", "-empty"]) {
+  test(`a public series with ${suffix ? "no" : "upcoming"} nights links its host @fixture`, async ({ page, isMobile }) => {
+    const community = "/playwright-afterglow-social";
+    const series = `${community}/series/playwright-afterglow-series${suffix}`;
+    if (isMobile) await page.setViewportSize({ width: 320, height: 720 });
+    expect((await page.goto(series))?.status()).toBe(200);
+
+    const header = page.getByRole("main").locator("header").filter({ has: page.getByRole("heading", { level: 1 }) });
+    const host = header.getByRole("link", { name: "Afterglow Social", exact: true });
+    await expect(host).toHaveAttribute("href", community);
+    await expect(host).toBeInViewport({ ratio: 1 });
+
+    if (isMobile) await host.tap();
+    else await host.press("Enter");
+
+    await expect(page).toHaveURL(community);
+    await expect(page.getByRole("heading", { name: "Afterglow Social", level: 1, exact: true })).toBeVisible();
+  });
+}
+
+test("public series occurrences have distinct destinations and dates @fixture", async ({ page, request }) => {
+  const route = "/playwright-afterglow-social/series/playwright-afterglow-series";
+  await page.setViewportSize({ width: 320, height: 720 });
+  expect((await page.goto(route))?.status()).toBe(200);
+  const main = page.getByRole("main");
+  const cards = main.getByRole("article");
+  await expect(cards).toHaveCount(4);
+  await expect(main.getByText("Late-night harbor club session with house, trance, and warm social energy.", { exact: true })).toHaveCount(1);
+  await expect(cards.last().getByText("Extended guest set with DJ Aurora.", { exact: true })).toBeVisible();
+  const destinations = new Set<string>();
+  const days = new Set<string>();
+  for (const card of await cards.all()) {
+    const link = card.getByRole("heading", { level: 3 }).getByRole("link");
+    const date = await card.locator("time").first().innerText();
+    const title = await link.innerText();
+    await expect(link).toHaveAccessibleName(title.trim() + " " + date.trim());
+    const href = await link.getAttribute("href");
+    expect(href).toMatch(/^\/playwright-afterglow-social\/events\//);
+    destinations.add(href!);
+    days.add(date);
+  }
+  expect(destinations.size).toBe(4);
+  expect(days.size).toBe(4);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+
+  const calendar = await request.get(route + "/calendar.ics");
+  expect(calendar.ok()).toBe(true);
+  const entries = (await calendar.text()).split("BEGIN:VEVENT").slice(1);
+  expect(entries).toHaveLength(4);
+  for (const entry of entries) {
+    const date = entry.match(/^DTSTART:(\d{8})T020000Z\r?$/m)?.[1];
+    expect(date).toBeTruthy();
+    expect(entry).toContain("DTEND:" + date + "T050000Z");
+  }
+  expect(calendar.headers()["content-disposition"]).toBe('attachment; filename="playwright-afterglow-series.ics"');
+  const dates = ["2026-06-14", "2026-06-21", "2026-06-28", "2026-07-05"];
+  for (const [index, href] of [...destinations].entries()) {
+    const attachment = await request.get(href + "/calendar.ics");
+    expect(attachment.ok()).toBe(true);
+    expect(attachment.headers()["content-disposition"]).toBe(
+      `attachment; filename="Afterglow-Harbor-Sessions-${dates[index]}.ics"`,
+    );
+    expect((await page.goto(href))?.status()).toBe(200);
+    await expect(main.getByRole("link", { name: "Upcoming nights", exact: true })).toHaveAttribute("href", route);
+  }
+});
+
+test("an occurrence links its series beside the event date @fixture", async ({ page, isMobile }) => {
+  const occurrence = "/playwright-afterglow-social/events/playwright-afterglow-series-night";
+  const series = "/playwright-afterglow-social/series/playwright-afterglow-series";
+  if (isMobile) await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto(occurrence);
+
+  const actions = page.getByRole("navigation", { name: "Event actions", exact: true });
+  const hero = page.getByRole("region", { name: "Afterglow Harbor Sessions", exact: true });
+  const upcoming = hero.getByRole("link", { name: "Upcoming nights", exact: true });
+  await expect(upcoming).toHaveAttribute("href", series);
+  await expect(upcoming.locator("svg")).toBeVisible();
+  await expect(actions.getByRole("link", { name: "Upcoming nights", exact: true })).toHaveCount(0);
+  await expect(upcoming).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole("link", { name: "Upcoming nights", exact: true })).toHaveCount(1);
+  await expect(actions.getByRole("link", { name: "Media links", exact: true })).toHaveAttribute("href", "#event-links");
+  await expect(page.locator("#event-links")).toBeVisible();
+
+  if (isMobile) await upcoming.tap();
+  else await upcoming.press("Enter");
+  await expect(page).toHaveURL(series, { timeout: 20_000 });
   await expect(page.getByRole("heading", { name: "Upcoming nights", exact: true })).toBeVisible();
+
+  const firstNight = page.locator(`main a[href="${occurrence}"]`);
+  if (isMobile) await firstNight.tap();
+  else await firstNight.press("Enter");
+  await expect(page).toHaveURL(occurrence);
+  await expect(upcoming).toBeVisible();
+});
+
+test("a series-only occurrence has no empty links section or jump @fixture", async ({ page }) => {
+  await page.goto("/playwright-afterglow-social/events/playwright-afterglow-series-only");
+  const actions = page.getByRole("navigation", { name: "Event actions", exact: true });
+  const hero = page.getByRole("region", { name: "Afterglow Harbor Sessions", exact: true });
+  await expect(hero.getByRole("link", { name: "Upcoming nights", exact: true })).toBeVisible();
+  await expect(actions.locator('a[href="#event-links"]')).toHaveCount(0);
+  await expect(page.locator("#event-links")).toHaveCount(0);
 });
 
 test("the series editor saves only what changed @fixture", async ({ page }) => {

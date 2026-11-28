@@ -89,6 +89,34 @@ it("discards out-of-order obsolete generations including filter changes", async 
   );
   assert.equal(c.getSnapshot().kind, "ready");
 });
+it("keeps confirmation during background refresh of an empty viewport", async () => {
+  const pending: Array<ReturnType<typeof Promise.withResolvers<TimelinePage>>> = [];
+  const nextPage = Promise.withResolvers<void>();
+  const c = createTimelineController(transport(() => {
+    const request = Promise.withResolvers<TimelinePage>();
+    pending.push(request);
+    if (pending.length === 3) nextPage.resolve();
+    return request.promise;
+  }));
+
+  const first = c.setViewport(range, false, []);
+  assert.equal(c.getSnapshot().revalidating, false);
+  pending[0].resolve(page());
+  await first;
+  const priorViewport = c.getSnapshot().viewportKey;
+
+  const refresh = c.refresh();
+  assert.equal(c.getSnapshot().kind, "loading");
+  assert.equal(c.getSnapshot().viewportKey, priorViewport);
+  assert.equal(c.getSnapshot().revalidating, true);
+  pending[1].resolve({ items: [], cursor: "next", complete: false });
+  await nextPage.promise;
+  assert.equal(c.getSnapshot().revalidating, true);
+  pending[2].reject(new Error("unavailable"));
+  await refresh;
+  assert.equal(c.getSnapshot().kind, "error");
+  assert.equal(c.getSnapshot().revalidating, false);
+});
 it("retains partial after ten empty candidates, More resumes cursor and finds later favorites", async () => {
   const cursors: Array<string | undefined> = [];
   const c = createTimelineController(

@@ -1,29 +1,38 @@
 import type { PublicVerifiedConnection } from "@vrdex/api-contracts";
 import { mergeVerifiedVrchatLinks, isVerifiedVrchatLink } from "@/lib/profile-link-verification";
 import Link from "next/link";
+import { ArrowDown, ChevronRight, ExternalLink } from "lucide-react";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { profileLinkHasCustomLabel,profileLinkPresentation,type ProfileLinkDestinationMetadata } from "../../../../../convex/_profileLinkPresentation";
 import { parseProfileLinkDestination } from "../../../../../convex/_profileLinkDestination";
+import { normalizeVrchatTargetId } from "../../../../../convex/_vrchatIdentity";
 import { Fragment, type CSSProperties, type ReactNode } from "react";
 
-import { EventPreviewCard, type PublicEventPreview } from "./event-public-page";
+import { authoredEventSchedule } from "../../../../../convex/_eventRuntime";
+import { EventPreviewCard, EventScheduleNowLabel, type PublicEventPreview } from "./event-public-page";
+import { EventScheduleRefresh } from "./discovery-schedule-refresh";
+import { ViewerLocalEventDateTime } from "./viewer-local-event-times";
 import { PublicMediaAssetCard } from "./public-media-asset-card";
 import { EntityImage } from "@/components/ui/entity-image";
 import { ProfileAvatarImage } from "./profile-avatar-image";
 import { HomeLiveNow } from "./home-live-now";
 import { ProfileVrcdnStreams } from "./profile-vrcdn-streams";
+import streamStyles from "./profile-vrcdn-streams.module.css";
 import { ProfilePrivateRecord } from "./profile-private-record";
+import { ProfileSectionNavigation } from "./profile-section-navigation";
 import { PublicGroupMembershipChart, type GroupMembership } from "./public-group-membership-chart";
 import { CommunityPopulationHistory } from "./public-group-population-chart";
+import { CommunityActivityDetails, CommunityActivitySection, CommunityActivitySummary } from "./community-activity-layout";
 import type { PopulationSeries } from "@/lib/public-group-statistics";
-import { ViewerLocalEventDateTime } from "./viewer-local-event-times";
 import { buttonVariants } from "@/components/ui/button";
-import { Card, Eyebrow, SectionHeading } from "@/components/ui/card";
+import { Card, Eyebrow, SectionHeading, SectionTitle } from "@/components/ui/card";
 import { PageContainer, PageShell } from "@/components/ui/page-shell";
 import { VerifiedTrustMark } from "@/components/ui/verified-trust-mark";
 import { avatarFrameStyle, defaultAvatarAppearance, type AvatarAppearance } from "@/lib/avatar-appearance";
 import { cn } from "@/lib/cn";
+import { publicEventPath } from "@/lib/event-path";
 import { uniqueProfileIdentityItems } from "@/lib/profile-identity-items";
+import { PROFILE_SUGGESTION_LABEL, PROFILE_SUGGESTION_QUERY } from "@/lib/auth-copy";
 import { profileClaimPath } from "@/lib/profile-claim";
 import { hasRenderableProfileMediaKit } from "@/lib/profile-media-kit";
 import { safeImageBackground, safeImageUrl } from "@/lib/safe-image";
@@ -31,21 +40,6 @@ import type { TwitchLiveState } from "@/lib/server/twitch-live";
 import type { VrcdnLiveState } from "@/lib/vrcdn-live";
 import { twitchLinkForLiveClaim, twitchLoginFromUrl } from "@/lib/twitch-url";
 import { parseVrcdnStreamLinks, vrcdnPlaybackHref } from "../../../../../convex/_vrcdnLinks";
-
-/**
- * Rendered on the server, so the viewer's locale is unavailable and a
- * locale-dependent format would differ between the server pass and hydration.
- * UTC for the same reason: a submission timestamp is a fact about the record,
- * not something to shift into whichever timezone happens to be reading it.
- */
-function formatSubmittedDate(value: number) {
-  return new Date(value).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "long",
-    timeZone: "UTC",
-    year: "numeric",
-  });
-}
 
 type ProfileTrustLabel =
   | "community_submitted"
@@ -286,25 +280,25 @@ function CommunityActivity({ profile }: { profile: PublicCommunityProfile }) {
   const { telemetry, groupMembership } = profile;
   const showCount = profile.appearance?.showMemberCount !== false;
   const showHistory = profile.appearance?.showMemberHistory !== false;
+  if (telemetry?.populationSeries) return <CommunityPopulationHistory
+    key={profile.slug}
+    slug={profile.slug}
+    initialActivity={{ telemetry, groupMembership, showCount, showHistory }}
+    now={telemetry.populationSeries.endAt}
+  />;
   const memberCount = showCount ? groupMembership?.latest ?? telemetry?.groupMemberCount : undefined;
   const automatic = telemetry?.publicationPolicy === "automatic_aggregate";
-  const history = telemetry?.populationSeries ? [] : telemetry?.populationHistory ?? [];
+  const membershipHistory = showHistory && groupMembership ? <div className="mt-6"><PublicGroupMembershipChart membership={groupMembership} /></div> : null;
+  const instanceHistory = automatic ? undefined : telemetry?.instanceHistory;
+  const eventRecaps = automatic ? undefined : telemetry?.eventRecaps;
+  const history = telemetry?.populationHistory ?? [];
   const historyMax = Math.max(1, ...history.map((point) => point.peakConcurrency));
-  const hasSummary = (!telemetry?.populationSeries && telemetry?.currentPopulation) || memberCount || telemetry?.groupMemberGrowth;
-  if (!hasSummary && !telemetry?.populationSeries && !(showHistory && groupMembership) && history.length === 0 && !telemetry?.instanceHistory?.length && !telemetry?.eventRecaps?.length) return null;
+  const hasPopulation = telemetry?.currentPopulation || history.length > 0;
+  if (!hasPopulation && !memberCount && !telemetry?.groupMemberGrowth && !membershipHistory && !instanceHistory?.length && !eventRecaps?.length) return null;
   return (
-    <section className="border-t border-border py-8">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <SectionHeading>Activity</SectionHeading>
-        {telemetry && !telemetry.populationSeries ? <p className="text-xs text-muted">{telemetry.freshness === "current" ? "Current" : "Stale"}</p> : null}
-      </div>
-      {hasSummary ? <div className="mt-5 grid gap-3 sm:grid-cols-3">
-        {telemetry?.currentPopulation && !telemetry.populationSeries ? <Card padding="sm" surface="strong"><p className="text-sm text-muted">In group instances</p><p className="mt-2 text-3xl font-semibold">{telemetry.currentPopulation.value}</p><p className="mt-1 text-xs text-muted">{telemetry.currentPopulation.activeInstanceCount} active instances</p></Card> : null}
-        {memberCount ? <Card padding="sm" surface="strong"><p className="text-sm text-muted">Group members</p><p className="mt-2 text-3xl font-semibold">{memberCount.value.toLocaleString()}</p><time className="mt-1 block text-xs text-muted" dateTime={new Date(memberCount.observedAt).toISOString()}>{formatSubmittedDate(memberCount.observedAt)}</time></Card> : null}
-        {telemetry?.groupMemberGrowth ? <Card padding="sm" surface="strong"><p className="text-sm text-muted">Member growth</p><p className="mt-2 text-3xl font-semibold">{telemetry.groupMemberGrowth.value > 0 ? "+" : ""}{telemetry.groupMemberGrowth.value.toLocaleString()}</p></Card> : null}
-      </div> : null}
-      {telemetry?.populationSeries ? <CommunityPopulationHistory key={profile.slug} slug={profile.slug} initialSeries={telemetry.populationSeries} currentPopulation={telemetry.currentPopulation} /> : null}
-      {showHistory && groupMembership ? <div className="mt-6"><PublicGroupMembershipChart membership={groupMembership} /></div> : null}
+    <CommunityActivitySection freshness={hasPopulation ? telemetry?.freshness : undefined}>
+      <CommunityActivitySummary currentPopulation={telemetry?.currentPopulation} memberCount={memberCount} memberGrowth={telemetry?.groupMemberGrowth} />
+      {membershipHistory}
       {history.length > 0 ? <div className="mt-6" aria-label="Hourly peak population history. Missing buckets are blank." role="img">
         <div className="flex h-32 items-end gap-1 border-b border-border" aria-hidden="true">
           {history.map((point) => {
@@ -314,19 +308,8 @@ function CommunityActivity({ profile }: { profile: PublicCommunityProfile }) {
         </div>
         <p className="mt-2 text-xs text-muted">Hourly peak population · gaps remain unfilled</p>
       </div> : null}
-      {!automatic && telemetry?.instanceHistory && telemetry.instanceHistory.length > 0 ? <div className="mt-7">
-        <h3 className="text-sm font-semibold">Recent instances</h3>
-        <ul className="mt-3 grid gap-3 sm:grid-cols-2">
-          {telemetry.instanceHistory.map((session, index) => <li key={`${session.openedAt}-${index}`}>
-            <Card padding="sm" surface="strong">
-              {session.world ? <Link className="font-medium hover:underline" href={`/${session.world.slug}`}>{session.world.displayName}</Link> : <p className="font-medium">VRChat instance</p>}
-              <p className="mt-2 text-sm text-muted"><ViewerLocalEventDateTime timestamp={session.openedAt} /></p>
-            </Card>
-          </li>)}
-        </ul>
-      </div> : null}
-      {!automatic && telemetry?.eventRecaps && telemetry.eventRecaps.length > 0 ? <div className="mt-7 grid gap-3 sm:grid-cols-2">{telemetry.eventRecaps.map((recap) => <Card key={`${recap.event?.slug ?? "event"}-${recap.startAt}`} padding="sm" surface="strong"><p className="font-medium">{recap.event?.title ?? "Event recap"}</p><p className="mt-2 text-sm text-muted">Peak {recap.peakConcurrency.toLocaleString()} · {recap.playerHours.toFixed(1)} player hours · {Math.round(recap.durationMinutes)} min · {Math.round(recap.coverageRatio * 100)}% coverage</p></Card>)}</div> : null}
-    </section>
+      <CommunityActivityDetails instanceHistory={instanceHistory} eventRecaps={eventRecaps} />
+    </CommunityActivitySection>
   );
 }
 
@@ -356,7 +339,17 @@ export function ProfileBackendNotice({ kind }: { kind: "missing-url" | "error" }
   );
 }
 
-export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = false }: { profile: PublicProfile; mediaKitGalleryEnabled: boolean; embedded?: boolean }) {
+export function ProfilePublicPage({
+  profile,
+  mediaKitGalleryEnabled,
+  embedded = false,
+  yearReferenceAt,
+}: {
+  profile: PublicProfile;
+  mediaKitGalleryEnabled: boolean;
+  embedded?: boolean;
+  yearReferenceAt?: number;
+}) {
   const isPerson = profile.profileType === "person";
   const bannerStyle = safeImageBackground(profile.bannerImageUrl);
   const avatarImageUrl = safeImageUrl(profile.avatarImageUrl);
@@ -370,6 +363,21 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
   const avatarAppearance = mediaKit.avatarAppearance ?? defaultAvatarAppearance;
   const avatarStyle: CSSProperties = avatarFrameStyle(undefined, avatarAppearance);
   const eventPreviews = isPerson ? profile.upcomingEvents : profile.hostedEvents;
+  const scheduleNow = embedded ? undefined : yearReferenceAt;
+  const eventSchedules = new Map(eventPreviews.map((event) => {
+    if (scheduleNow === undefined) return [event, undefined] as const;
+    const authored = authoredEventSchedule(event, scheduleNow);
+    const { startAt } = event;
+    const hasTimedStart = event.scheduleKind !== "date_only" && event.status !== "cancelled"
+      && startAt !== undefined && Number.isFinite(startAt);
+    return [event, {
+      scheduledNow: authored.scheduledNow,
+      started: hasTimedStart && startAt <= scheduleNow,
+      nextTransition: authored.nextTransition ?? (hasTimedStart && startAt > scheduleNow ? startAt : Infinity),
+    }] as const;
+  }));
+  const eventSectionLabel = [...eventSchedules.values()].some((schedule) => schedule?.started) ? "Events" : "Upcoming events";
+  const nextEventTransition = Math.min(...[...eventSchedules.values()].map((schedule) => schedule?.nextTransition ?? Infinity));
   const canClaim = profile.trustLabel === "community_submitted" || profile.trustLabel === "unclaimed";
   // Owner-authored personalization wins when present; the factual/community
   // bio remains the fallback instead of rendering two competing About blocks.
@@ -446,29 +454,136 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
     logoCount: mediaKit.logos.length,
   });
   const profileBasePath = `/${profile.slug}`;
-  const secondaryOrder = normalizeProfileSectionOrder(profile.appearance?.sectionOrder).filter((section) =>
-    ["events", "media_kit", "worlds"].includes(section),
-  );
+  const sectionOrder = normalizeProfileSectionOrder(profile.appearance?.sectionOrder);
+  const secondaryOrder = sectionOrder.filter((section) => section === "events" || section === "media_kit" || section === "worlds");
+  const hasDefaultAppearance = mediaKit.compactDisplay === "profile_image"
+    && Object.entries(defaultAvatarAppearance).every(([key, value]) => avatarAppearance[key as keyof AvatarAppearance] === value)
+    && sectionOrder.every((section, index) => section === defaultProfileSectionOrder[index]);
+  const hasSparseIdentity = !embedded && canClaim && hasDefaultAppearance
+    && !avatarImageUrl && !bannerStyle && !mediaKit.profileImage && !mediaKit.banner
+    && !profile.headline?.trim() && !profile.about?.trim() && !aboutCopy && !profile.timezone?.trim()
+    && aliases.length === 0 && focusItems.length === 0 && metadata.length === 0 && profile.genres.length === 0
+    && !profile.verifiedConnections?.length
+    && !hasMediaKit && !mediaKit.featuredAsset && mediaKit.assets.length === 0 && galleryAssets.length === 0
+    && eventPreviews.length === 0 && profile.worldCredits.length === 0;
+  const groupDestination = creatorLinks.length === 1 ? parseProfileLinkDestination(creatorLinks[0].link) : null;
+  const hasPrimaryGroupLink = groupDestination?.kind === "vrchat_group";
+  const useCompactCommunity = !isPerson && hasSparseIdentity && !profile.telemetry && !profile.groupMembership
+    && (visibleLinks.length === 0 || (visibleLinks.length === 1 && hasPrimaryGroupLink));
+  const useCompactIdentity = useCompactCommunity || (isPerson && hasSparseIdentity && visibleLinks.length === 0);
+  const isRichPublicCommunity = !isPerson && !embedded && !useCompactIdentity;
+  const hasSingleCommunityEvent = isRichPublicCommunity && eventPreviews.length === 1;
+  const hasCommunityEvents = isRichPublicCommunity && eventPreviews.length > 0;
+  const featuredEvent = hasCommunityEvents ? eventPreviews.find((event) => publicEventPath(event)) : undefined;
+  const featuredEventPath = featuredEvent ? publicEventPath(featuredEvent) : undefined;
+  const communityGroupLinks = featuredEventPath ? creatorLinks.flatMap(({ link, href }) => {
+    const destination = parseProfileLinkDestination(link);
+    if (destination?.kind !== "vrchat_group") return [];
+
+    const metadata = link.destination?.targetKey === destination.key && link.destination.kind === destination.kind
+      ? link.destination : undefined;
+    const resolvedGroupId = !destination.locator.startsWith("grp_") && metadata?.status === "resolved" && metadata.entityId
+      ? normalizeVrchatTargetId(metadata.entityId, "vrchat_group") : null;
+    const verified = link.verifiedAt !== undefined;
+    return [{
+      href,
+      key: resolvedGroupId ? `vrchat_group:${resolvedGroupId}` : destination.key,
+      verified,
+      eligible: (link.source === "owner_authored" || verified) && metadata?.status !== "invalid",
+    }];
+  }) : [];
+  const featuredGroupLink = new Set(communityGroupLinks.map(({ key }) => key)).size === 1
+    ? communityGroupLinks.find(({ eligible, verified }) => eligible && verified)
+      ?? communityGroupLinks.find(({ eligible }) => eligible)
+    : undefined;
+  const showCommunityEventListLink = hasCommunityEvents && (!featuredEventPath || eventPreviews.length > 1);
+  const isRichPublicPerson = isPerson && !embedded && !useCompactIdentity;
+  const useSideBySideMobileIdentity = isRichPublicCommunity || isRichPublicPerson;
+  const moveOwnershipBelowContent = !embedded && (!isPerson || isRichPublicPerson);
+  const visitorDestinations = {
+    links: { id: "profile-links", label: "Links", available: creatorLinks.length > 0 || discordHandles.length > 0 },
+    streams: { id: "profile-streams", label: "VRCDN", available: vrcdnStreams.length > 0 },
+    events: { id: "profile-events", label: eventSectionLabel, available: eventPreviews.length > 0 },
+    media_kit: { id: "profile-media-kit", label: "Media kit", available: hasMediaKit },
+    worlds: { id: "profile-worlds", label: "Worlds", available: profile.worldCredits.length > 0 },
+  };
+  const linksColumnSection = isRichPublicPerson && visitorDestinations.links.available && visitorDestinations.streams.available
+    ? secondaryOrder.find((section) => visitorDestinations[section].available)
+    : undefined;
+  const visitorLinks = isRichPublicPerson
+    ? (["links", "streams", ...secondaryOrder] as const)
+      .map((section) => visitorDestinations[section])
+      .filter(({ available }) => available)
+    : [];
+  function visitorHeading(section: "events" | "media_kit" | "worlds") {
+    const { id, label } = visitorDestinations[section];
+    return isRichPublicPerson ? (
+      <SectionTitle
+        className={cn("scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent", section === "worlds" && "[@media(scripting:none)]:scroll-mt-32")}
+        id={id}
+        tabIndex={-1}
+      >
+        {label}
+      </SectionTitle>
+    ) : <SectionHeading>{label}</SectionHeading>;
+  }
+  const quietContributionStyle = "!text-muted underline decoration-border-strong underline-offset-4 hover:decoration-current";
+  const ownershipActionClassName = cn("shrink-0 whitespace-nowrap max-sm:min-h-11", useCompactCommunity && quietContributionStyle);
   const secondarySections: Partial<Record<ProfilePublicSectionKey, ReactNode>> = {
     events: eventPreviews.length > 0 || !isPerson ? (
-      <section className="border-t border-border py-8">
+      <section className={cn(
+        "border-t border-border",
+        useCompactCommunity ? "pb-4 pt-5 lg:pt-3" : "py-8",
+        isRichPublicCommunity && "max-sm:py-5",
+        hasSingleCommunityEvent && "lg:grid lg:grid-cols-2 lg:gap-x-3",
+      )}>
+        {scheduleNow !== undefined && Number.isFinite(nextEventTransition) ? (
+          <EventScheduleRefresh nextTransition={nextEventTransition} serverNow={scheduleNow} />
+        ) : null}
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <SectionHeading>{isPerson ? "Upcoming events" : "Hosted events"}</SectionHeading>
-          {!isPerson ? <Link className={buttonVariants({ variant: "secondary", size: "sm" })} href={`/events/new?community=${encodeURIComponent(profile.slug)}`}>Add event</Link> : null}
+          {isPerson
+            ? visitorHeading("events")
+            : (
+              <SectionTitle
+                className={cn(
+                  useCompactCommunity ? "text-xl" : "max-sm:text-xl",
+                  hasCommunityEvents && "scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent [@media(scripting:none)]:scroll-mt-32",
+                )}
+                id={hasCommunityEvents ? "profile-events" : undefined}
+                tabIndex={hasCommunityEvents ? -1 : undefined}
+              >
+                Hosted events
+              </SectionTitle>
+            )}
+          {!isPerson ? (
+            <Link
+              className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "min-h-11 shrink-0 whitespace-nowrap", quietContributionStyle)}
+              href={`/events/new?community=${encodeURIComponent(profile.slug)}`}
+            >
+              Add event
+            </Link>
+          ) : null}
         </div>
-        <div className="mt-5 grid gap-3 lg:grid-cols-2">
-          {eventPreviews.map((event) => (
-            <EventPreviewCard event={event} key={`${event.slug ?? event.title}-${event.startAt}`} />
-          ))}
-        </div>
+        {eventPreviews.length > 0 ? (
+          <div className={cn(
+            "mt-5 grid gap-3",
+            isRichPublicCommunity && "max-sm:mt-3",
+            hasSingleCommunityEvent && "lg:col-start-1",
+            !hasSingleCommunityEvent && linksColumnSection !== "events" && "lg:grid-cols-2",
+          )}>
+            {eventPreviews.map((event) => (
+              <EventPreviewCard event={event} key={`${event.slug ?? event.title}-${event.startAt}`} variant={isRichPublicCommunity ? "community" : undefined} scheduledNow={eventSchedules.get(event)?.scheduledNow} yearReferenceAt={yearReferenceAt} />
+            ))}
+          </div>
+        ) : <p className="mt-2 text-sm font-medium text-foreground">No events</p>}
       </section>
     ) : null,
     media_kit: hasMediaKit ? (
       <section className="border-t border-border py-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <SectionHeading>Media kit</SectionHeading>
+          {visitorHeading("media_kit")}
           {mediaKit.logoZipUrl ? (
-            <a className={buttonVariants({ size: "sm", variant: "secondary" })} download href={mediaKit.logoZipUrl}>
+            <a className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "max-sm:min-h-11")} download href={mediaKit.logoZipUrl}>
               Download logos
             </a>
           ) : null}
@@ -478,12 +593,12 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
             <PublicMediaAssetCard asset={mediaKit.featuredAsset} featured label="Featured media" />
           </div>
         ) : null}
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className={cn("mt-5 grid gap-3 sm:grid-cols-2", linksColumnSection !== "media_kit" && "lg:grid-cols-3")}>
           {mediaKitGalleryEnabled ? (
             galleryAssets
               .filter((asset) => asset.assetId !== mediaKit.featuredAsset?.assetId)
               .map((asset, index) => (
-                <PublicMediaAssetCard asset={asset} key={asset.assetId} label={`Media ${index + 1}`} />
+                <PublicMediaAssetCard asset={asset} compactOnMobile key={asset.assetId} label={`Media ${index + 1}`} />
               ))
           ) : (
             <>
@@ -495,7 +610,7 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
           )}
           {mediaKitGalleryEnabled
             ? remainingLogos.map((asset, index) => (
-                <PublicMediaAssetCard asset={asset} key={asset.assetId} label={`Logo ${index + 1}`} />
+                <PublicMediaAssetCard asset={asset} compactOnMobile key={asset.assetId} label={`Logo ${index + 1}`} />
               ))
             : null}
         </div>
@@ -503,20 +618,29 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
     ) : null,
     worlds: profile.worldCredits.length > 0 ? (
       <section className="border-t border-border py-8">
-        <SectionHeading>Worlds</SectionHeading>
-        <div className="mt-5 grid gap-3 lg:grid-cols-2">
+        {visitorHeading("worlds")}
+        <div className={cn("mt-5 grid gap-3", linksColumnSection !== "worlds" && "lg:grid-cols-2")}>
           {profile.worldCredits.map((world) => (
             <Link
-              className="flex min-w-0 items-start gap-4 rounded-card border border-border bg-surface-strong p-4 text-sm transition hover:border-border-strong"
+              className="group grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-card border border-border bg-surface-strong p-4 text-sm transition hover:border-border-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:items-start sm:gap-x-4 sm:gap-y-3"
               href={`/${world.slug}`}
+              data-profile-world={isRichPublicPerson || undefined}
               key={world.slug}
             >
-              <EntityImage label={world.displayName} src={world.heroImageUrl} className="h-16 w-24 rounded-control" sizes="96px" />
-              <span className="min-w-0">
-              <span className="block text-lg font-semibold">{world.displayName}</span>
-              <span className="mt-1 block text-muted">{world.roles.map(roleLabel).join(", ")}</span>
-              {world.summary ? <span className="mt-3 line-clamp-2 block leading-6 text-muted">{world.summary}</span> : null}
+              <EntityImage
+                className={cn("h-11 w-16 rounded-control border border-border bg-canvas-muted text-foreground sm:h-16 sm:w-24", world.summary && "sm:row-span-2")}
+                label={world.displayName}
+                sizes="(min-width: 640px) 96px, 64px"
+                src={world.heroImageUrl}
+              />
+              <span className="min-w-0 break-words">
+                <span className="block text-lg font-semibold">{world.displayName}</span>
+                <span className="mt-1 block font-medium text-foreground">{world.roles.map(roleLabel).join(", ")}</span>
               </span>
+              <ChevronRight aria-hidden="true" className="size-4 text-muted group-hover:text-accent-strong sm:mt-1" />
+              {world.summary ? (
+                <span className="col-span-3 line-clamp-3 break-words leading-6 text-muted sm:col-span-2 sm:col-start-2 sm:line-clamp-2">{world.summary}</span>
+              ) : null}
             </Link>
           ))}
         </div>
@@ -524,144 +648,279 @@ export function ProfilePublicPage({ profile, mediaKitGalleryEnabled, embedded = 
     ) : null,
   };
 
+  const profileLinks = (
+    <ProfileVrcdnStreams
+      compactLinks={useCompactCommunity}
+      compactMobileSpacing={isRichPublicCommunity}
+      linksHeadingId={isRichPublicPerson ? visitorDestinations.links.id : undefined}
+      streamsSectionId={isRichPublicPerson ? visitorDestinations.streams.id : undefined}
+      linksColumnContent={linksColumnSection ? secondarySections[linksColumnSection] : undefined}
+      discordHandles={discordHandles.map(({ handle, item }) => ({
+        handle,
+        key: item.link.url,
+      }))}
+      initialLiveStates={profile.vrcdnLive}
+      links={creatorLinks.map(({ link, href }) => {
+        const connection = link.verifiedAt === undefined ? undefined : profile.verifiedConnections?.find(connection =>
+          isVerifiedVrchatLink(link.url, [{ ...connection, verified: true }]));
+        const display = profileLinkPresentation(link, connection?.assetExternalId);
+        const hideCaption = useCompactCommunity && !profileLinkHasCustomLabel(link)
+          && (display.label === profile.displayName || (groupDestination?.locator.startsWith("grp_")
+            && display.label === profileLinkPresentation({ type: link.type, url: link.url }).label));
+        return {
+          href, type: link.type, key: `${link.type}-${link.url}`, ...display,
+          hideCaption,
+          platform: link.type === "twitch" ? "Twitch" : display.platform,
+          label: link.type === "twitch" ? twitchLoginFromUrl(link.url) ?? display.label : connection && !profileLinkHasCustomLabel(link)
+            ? connection.displayName || display.label : display.label,
+          live: link === twitchLink?.link && profile.twitchLive?.status === "live",
+          verifiedAt: link.verifiedAt,
+        };
+      })}
+      profileSlug={profile.slug}
+      profileId={profile.id}
+      displayName={profile.displayName}
+      streams={vrcdnStreams.map(({ item, label, stream }) => ({
+        claimable: true,
+        communitySubmitted: item.link.source === "community_submitted",
+        key: `${item.link.type}-${item.link.url}`,
+        label,
+        pcUrl: stream.pcUrl,
+        questUrl: stream.questUrl,
+        directVideoUrl: stream.directVideoUrl,
+        streamId: stream.streamId,
+      }))}
+    />
+  );
+  const communityHeroLinkClassName = "inline-flex min-h-11 w-fit items-center gap-1.5 rounded-control text-sm font-medium text-white underline decoration-current/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
+  const communityEventEntry = hasCommunityEvents ? (
+    <div className={cn("grid min-w-0 gap-1", aboutCopy && "lg:col-start-1 lg:row-start-2")}>
+      {featuredEvent && featuredEventPath ? (
+        <Link
+          className="group grid min-h-11 w-full max-w-lg grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-control border border-white/45 bg-white/10 px-3 py-2 text-white hover:border-white/65 hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:gap-3"
+          href={featuredEventPath}
+        >
+          <span className="min-w-0">
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-4 font-medium text-white/85">
+              <span>Hosted event</span>
+              {eventSchedules.get(featuredEvent)?.scheduledNow ? <EventScheduleNowLabel onArtwork /> : null}
+            </span>
+            <span className="block wrap-anywhere text-base leading-5 font-bold group-hover:underline">{featuredEvent.title}</span>
+            <ViewerLocalEventDateTime
+              className="block text-sm leading-5 text-white/90"
+              eventDate={featuredEvent.eventDate}
+              scheduleKind={featuredEvent.scheduleKind}
+              timestamp={featuredEvent.startAt}
+              yearReferenceAt={yearReferenceAt}
+            />
+          </span>
+          <ChevronRight aria-hidden="true" className="size-4 text-white/90" />
+        </Link>
+      ) : null}
+      {featuredGroupLink ? (
+        <a
+          className={cn(buttonVariants({ variant: "inverse", size: "sm" }), "min-h-11 w-fit gap-2 border-white/50 bg-transparent px-3 hover:bg-white/10 focus-visible:ring-white")}
+          href={featuredGroupLink.href}
+          rel="noreferrer"
+          target="_blank"
+        >
+          VRChat group
+          <ExternalLink aria-hidden="true" className="size-4" />
+        </a>
+      ) : null}
+      {showCommunityEventListLink ? (
+        <a
+          className={communityHeroLinkClassName}
+          href="#profile-events"
+        >
+          Hosted events
+          <ArrowDown aria-hidden="true" className="size-3.5" />
+        </a>
+      ) : null}
+    </div>
+  ) : null;
+  const stackOwnershipPrompt = !embedded && isPerson && !useCompactIdentity;
+  const profileOwnership = canClaim ? (
+    <aside
+      aria-label="Profile ownership"
+      className={useCompactIdentity
+        ? cn("grid gap-2 border-t border-border py-4", useCompactCommunity ? "lg:py-2" : "px-4 sm:px-6")
+        : cn("flex flex-wrap items-center justify-between gap-x-6 gap-y-3 py-2", moveOwnershipBelowContent && "border-t border-border pt-4")}
+    >
+      {!moveOwnershipBelowContent
+        ? <p className={useCompactIdentity ? "text-sm font-medium text-foreground" : "text-sm text-muted"}>Unclaimed</p>
+        : null}
+      <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-2", stackOwnershipPrompt && "basis-full sm:basis-auto")}>
+        <p className={cn("text-sm text-muted", (useCompactIdentity || stackOwnershipPrompt) && "basis-full sm:basis-auto")}>
+          {isPerson ? "Is this your profile?" : "Manage this community?"}
+        </p>
+        <Link
+          className={cn(buttonVariants({ size: "sm", variant: useCompactCommunity ? "ghost" : "secondary" }), ownershipActionClassName)}
+          href={profileClaimPath(profile.slug, "profile")}
+        >
+          Claim profile
+        </Link>
+        {/* Offered to every reader of an unclaimed profile rather than
+            only to those who could act on it: this page is server
+            rendered with no viewer, and the editor handles sign-in. */}
+        <Link
+          className={cn(buttonVariants({ size: "sm", variant: "ghost" }), ownershipActionClassName)}
+          href={`${profileBasePath}/edit${PROFILE_SUGGESTION_QUERY}`}
+        >
+          {PROFILE_SUGGESTION_LABEL}
+        </Link>
+      </div>
+    </aside>
+  ) : null;
   const Shell = embedded ? Fragment : PageShell;
   return (
-    <Shell>
-      <PageContainer>
+    <Shell {...(isRichPublicPerson && visitorDestinations.links.available ? { className: "max-sm:pt-6" } : {})}>
+      <PageContainer className={cn(
+        useCompactCommunity && "max-w-2xl lg:gap-4",
+        isRichPublicCommunity && "max-sm:gap-3",
+        isRichPublicPerson && streamStyles.profile,
+      )}>
 
-        <section
-          aria-labelledby={`profile-title-${profile.slug}`}
-          className="overflow-hidden rounded-card border border-border bg-media shadow-panel"
-        >
-          <div
-            className="relative bg-media bg-cover bg-center p-5 text-white sm:p-6"
-            style={bannerStyle}
+        <div className={useCompactIdentity ? cn("mx-auto w-full max-w-2xl rounded-panel border border-border-strong bg-surface-strong", !useCompactCommunity && "shadow-panel") : "contents"}>
+          <section
+            aria-labelledby={`profile-title-${profile.slug}`}
+            className={useCompactIdentity ? undefined : cn(
+              "overflow-hidden rounded-card border border-border bg-media shadow-panel",
+              isRichPublicPerson && "max-sm:[html[data-theme=light]_&]:shadow-sm",
+            )}
           >
-            {bannerStyle ? <span aria-hidden="true" className="absolute inset-0 bg-black/60" /> : null}
             <div
-              className={cn(
-                "relative grid gap-7",
-                aboutCopy ? "lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)] lg:items-center" : undefined,
-              )}
+              className={useCompactIdentity ? "p-4 sm:p-6" : "relative bg-media bg-cover bg-center p-5 text-white sm:p-6"}
+              style={bannerStyle}
             >
-              <div className="flex min-w-0 flex-col gap-6 sm:flex-row sm:items-center">
-                <div className="relative w-fit shrink-0">
-                  <div
-                    className="relative flex size-24 items-center justify-center overflow-hidden bg-white/20 text-3xl font-semibold shadow-panel"
-                    style={avatarStyle}
-                  >
-                    <ProfileAvatarImage
-                      alt={`${profile.displayName} display image`}
-                      fallback={initialsFor(profile.displayName)}
-                      src={avatarImageUrl}
-                    />
+              {bannerStyle ? <span aria-hidden="true" className="absolute inset-0 bg-black/60" /> : null}
+              <div
+                className={cn(
+                  "relative grid gap-7",
+                  (isRichPublicCommunity || visitorLinks.length > 0) && "max-sm:gap-4",
+                  aboutCopy ? "lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)] lg:items-center" : undefined,
+                )}
+              >
+                <div className={cn(
+                  "flex min-w-0",
+                  useCompactIdentity ? "items-center gap-3 sm:gap-4" : "flex-col gap-6 sm:flex-row sm:items-center",
+                  useSideBySideMobileIdentity && "max-sm:grid max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:items-center max-sm:gap-x-3 max-sm:gap-y-0",
+                )}>
+                  <div className="relative w-fit shrink-0">
+                    <div
+                      className={cn(
+                        "relative flex items-center justify-center overflow-hidden font-semibold",
+                        useCompactIdentity
+                          ? "size-14 rounded-control border border-border-strong bg-surface-elevated text-xl text-foreground sm:size-16"
+                          : "size-24 bg-white/20 text-3xl shadow-panel",
+                        useSideBySideMobileIdentity && "max-sm:size-14 max-sm:text-xl",
+                      )}
+                      style={useCompactIdentity ? undefined : avatarStyle}
+                    >
+                      <ProfileAvatarImage
+                        alt={`${profile.displayName} display image`}
+                        fallback={initialsFor(profile.displayName)}
+                        src={avatarImageUrl}
+                      />
+                    </div>
+                    {profile.trustLabel === "claimed_verified" ? (
+                      <VerifiedTrustMark className="verified-trust-mark--avatar" />
+                    ) : null}
                   </div>
-                  {profile.trustLabel === "claimed_verified" ? (
-                    <VerifiedTrustMark className="verified-trust-mark--avatar" />
-                  ) : null}
-                </div>
-                <div className="min-w-0">
-                  <h1
-                    className="break-words text-4xl leading-none font-semibold sm:text-5xl"
-                    id={`profile-title-${profile.slug}`}
-                  >
-                    {profile.displayName}
-                  </h1>
-                  {aliases.length > 0 ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-white/75">
-                      <span>AKA {aliases.join(", ")}</span>
-                      {remainingAliases.length > 0 ? (
-                        <details>
-                          <summary className="cursor-pointer">+{remainingAliases.length} more</summary>
-                          <span className="mt-1 block">{remainingAliases.join(", ")}</span>
-                        </details>
+                  <div className={cn("min-w-0", useSideBySideMobileIdentity && "max-sm:contents")}>
+                    <div className="min-w-0">
+                      <h1
+                        className={cn(
+                          "break-words font-semibold",
+                          useCompactIdentity ? "text-3xl leading-tight sm:text-4xl" : "text-4xl leading-none sm:text-5xl",
+                          useSideBySideMobileIdentity && "max-sm:text-2xl max-sm:leading-tight",
+                        )}
+                        id={`profile-title-${profile.slug}`}
+                      >
+                        {profile.displayName}
+                      </h1>
+                      {canClaim && moveOwnershipBelowContent ? (
+                        <p className={cn("mt-1 text-sm font-semibold", useCompactCommunity ? "text-foreground" : "text-white/75")}>Unclaimed</p>
                       ) : null}
                     </div>
-                  ) : null}
-                  {profile.headline ? <p className="mt-3 max-w-2xl text-base leading-7 text-white/85">{profile.headline}</p> : null}
-                  {metadata.length > 0 ? <p className="mt-2 text-sm text-white/70">{metadata.join(" / ")}</p> : null}
+                    <div className={useSideBySideMobileIdentity ? "max-sm:col-span-2" : undefined}>
+                      {aliases.length > 0 ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-white/75">
+                          <span>AKA {aliases.join(", ")}</span>
+                          {remainingAliases.length > 0 ? (
+                            <details>
+                              <summary className="cursor-pointer">+{remainingAliases.length} more</summary>
+                              <span className="mt-1 block">{remainingAliases.join(", ")}</span>
+                            </details>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      {profile.headline ? <p className="mt-3 max-w-2xl text-base leading-7 text-white/85">{profile.headline}</p> : null}
+                      {metadata.length > 0 ? <p className="mt-2 text-sm text-white/70">{metadata.join(" / ")}</p> : null}
+                    </div>
+                  </div>
                 </div>
+                {visitorLinks.length > 0 ? (
+                  <ProfileSectionNavigation
+                    className={cn(
+                      "flex flex-wrap gap-x-1 max-sm:justify-center max-sm:rounded-control max-sm:px-1 max-sm:ring-1 max-sm:ring-white/20 max-sm:ring-inset",
+                      aboutCopy && "lg:col-span-2 lg:row-start-2",
+                    )}
+                  >
+                    {visitorLinks.map(({ id, label }) => {
+                      const streamShortcut = id === visitorDestinations.streams.id && vrcdnStreams[0]?.item.link.source !== "community_submitted";
+                      const link = (
+                        <Link
+                          className={cn(
+                            "inline-flex min-h-11 items-center rounded-control px-2 text-sm font-medium text-white underline decoration-white/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-white max-sm:min-w-11 max-sm:justify-center max-sm:px-1",
+                            streamShortcut && streamStyles.streamShortcut,
+                          )}
+                          href={"#" + id}
+                          data-managed-fragment
+                          key={id}
+                        >
+                          {label}
+                        </Link>
+                      );
+
+                      return streamShortcut ? (
+                        <span className="relative flex" key={id}>
+                          {link}
+                          <span className={streamStyles.shortcutStatus}>Live now</span>
+                        </span>
+                      ) : link;
+                    })}
+                  </ProfileSectionNavigation>
+                ) : null}
+                {communityEventEntry}
+                {aboutCopy ? (
+                  <div className={cn(
+                    "border-white/20 lg:border-l lg:pl-7",
+                    hasCommunityEvents && "lg:col-start-2 lg:row-span-2 lg:row-start-1",
+                  )}>
+                    <h2 className="text-sm font-semibold text-white/70">About</h2>
+                    <p className="mt-2 max-w-xl text-base leading-7 text-white/88">{aboutCopy}</p>
+                  </div>
+                ) : null}
               </div>
-              {aboutCopy ? (
-                <div className="border-white/20 lg:border-l lg:pl-7">
-                  <h2 className="text-sm font-semibold text-white/70">About</h2>
-                  <p className="mt-2 max-w-xl text-base leading-7 text-white/88">{aboutCopy}</p>
-                </div>
-              ) : null}
             </div>
-          </div>
-        </section>
+            {useCompactCommunity && creatorLinks.length > 0 ? profileLinks : null}
+          </section>
 
-        {canClaim ? (
-          <aside aria-label="Profile ownership" className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 py-2">
-            <p className="text-sm text-muted">Unclaimed</p>
-
-            {canClaim ? (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <p className="text-sm text-muted">
-                  {profile.profileType === "person" ? "Is this your profile?" : "Manage this community?"}
-                </p>
-                <Link
-                  className={cn(buttonVariants({ size: "sm", variant: "secondary" }), "shrink-0 whitespace-nowrap")}
-                  href={profileClaimPath(profile.slug, "profile")}
-                >
-                  Claim profile
-                </Link>
-                {/* Offered to every reader of an unclaimed profile rather than
-                    only to those who could act on it: this page is server
-                    rendered with no viewer, and the editor handles sign-in. */}
-                <Link
-                  className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "shrink-0 whitespace-nowrap")}
-                  href={`${profileBasePath}/edit`}
-                >
-                  Suggest an edit
-                </Link>
-              </div>
-            ) : null}
-          </aside>
-        ) : null}
+          {!moveOwnershipBelowContent ? profileOwnership : null}
+        </div>
 
         {profile.profileType === "person" && <HomeLiveNow key={profile.slug} performerSlug={profile.slug} />}
-        <ProfileVrcdnStreams
-          discordHandles={discordHandles.map(({ handle, item }) => ({
-            handle,
-            key: item.link.url,
-          }))}
-          initialLiveStates={profile.vrcdnLive}
-          links={creatorLinks.map(({ link, href }) => {
-            const connection = link.verifiedAt === undefined ? undefined : profile.verifiedConnections?.find(connection =>
-              isVerifiedVrchatLink(link.url, [{ ...connection, verified: true }]));
-            const display = profileLinkPresentation(link, connection?.assetExternalId);
-            return {
-              href, type: link.type, key: `${link.type}-${link.url}`, ...display,
-              platform: link.type === "twitch" ? "Twitch" : display.platform,
-              label: link.type === "twitch" ? twitchLoginFromUrl(link.url) ?? display.label : connection && !profileLinkHasCustomLabel(link)
-                ? connection.displayName || display.label : display.label,
-              live: link === twitchLink?.link && profile.twitchLive?.status === "live",
-              verifiedAt: link.verifiedAt,
-            };
-          })}
-          profileSlug={profile.slug}
-          profileId={profile.id}
-          displayName={profile.displayName}
-          streams={vrcdnStreams.map(({ item, label, stream }) => ({
-            claimable: true,
-            key: `${item.link.type}-${item.link.url}`,
-            label,
-            pcUrl: stream.pcUrl,
-            questUrl: stream.questUrl,
-            directVideoUrl: stream.directVideoUrl,
-            streamId: stream.streamId,
-          }))}
-
-        />
+        {!useCompactCommunity ? profileLinks : null}
 
         {!isPerson ? <CommunityActivity profile={profile} /> : null}
 
         {secondaryOrder.map((section) => {
-          const content = secondarySections[section];
+          const content = section === linksColumnSection ? null : secondarySections[section];
           return content ? <Fragment key={section}>{content}</Fragment> : null;
         })}
+
+        {moveOwnershipBelowContent ? profileOwnership : null}
 
         {!embedded ? <ProfilePrivateRecord profilePath={profileBasePath} slug={profile.slug} community={!isPerson} profileId={profile.id as Id<"profiles"> | undefined} /> : null}
       </PageContainer>

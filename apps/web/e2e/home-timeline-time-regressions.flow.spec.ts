@@ -47,6 +47,35 @@ test.describe("timeline time regressions @flow @fixture", () => {
     await page.clock.setFixedTime(TIMELINE_NOW);
   });
 
+  test("keeps a compact schedule steady while loading an uncached date", async ({ page }, info) => {
+    let hold = false;
+    const buffered: (() => void)[] = [];
+    await page.routeWebSocket("**/api/**/sync", (socket) => {
+      const server = socket.connectToServer();
+      server.onMessage((message) => {
+        if (hold) buffered.push(() => socket.send(message));
+        else socket.send(message);
+      });
+    });
+    await page.goto(`/?at=${Date.UTC(2026, 9, 27, 12)}&tz=UTC`);
+    const status = page.getByLabel("Schedule data state");
+    const lanes = page.getByTestId("public-timeline-lanes");
+    await expect(status).toHaveAttribute("data-state", "ready");
+    await expect(lanes).toHaveCSS("height", "94px");
+
+    hold = true;
+    try {
+      await page.getByLabel("Schedule date", { exact: true }).fill("2026-11-02");
+      await expect(status).toHaveAttribute("data-state", "loading");
+      await expect(lanes).toHaveCSS("height", "94px");
+      await page.screenshot({ path: info.outputPath("schedule-loading-uncached-date.png") });
+    } finally {
+      hold = false;
+      buffered.splice(0).forEach((send) => send());
+    }
+    await expect(status).toHaveAttribute("data-state", "ready");
+  });
+
   test("fractional zoom pan retains the viewed date and Back anchor", async ({
     page,
   }, info) => {
@@ -113,10 +142,10 @@ test.describe("timeline time regressions @flow @fixture", () => {
     const panel = page.getByLabel("Event details", { exact: true });
     await expect(
       panel.locator('time[datetime="2026-10-26T21:00:00.000Z"]').first(),
-    ).toHaveText("Oct 26, 5:00 PM");
-    await expect(
-      panel.locator('time[datetime="2026-10-27T01:00:00.000Z"]'),
-    ).toHaveText("Oct 26, 9:00 PM");
+    ).toHaveText("Oct 26, 2026, 5:00 PM EDT");
+    const end = panel.locator('time[datetime="2026-10-27T01:00:00.000Z"]');
+    await expect(end.locator('[aria-hidden="true"]')).toHaveText("9:00 PM");
+    await expect(end).toHaveAttribute("title", "Oct 26, 9:00 PM EDT");
     const selected = panel.locator('[data-selected="true"]');
     await expect(selected).toHaveAttribute(
       "data-slot-id",
@@ -146,7 +175,7 @@ test.describe("timeline time regressions @flow @fixture", () => {
             return rect.width > 0 && rect.right > bounds.left + 1 && rect.left < bounds.right - 1 && rect.bottom > bounds.top && rect.top < bounds.bottom;
           });
           const text = status.textContent ?? "";
-          const empty = /No favorites in this range/.test(text);
+          const empty = /No events from favorite communities or performers/.test(text);
           audit.sawVisibleContent ||= Boolean(visible);
           audit.sawEmpty ||= status.getAttribute("data-state") === "ready" && !visible;
           if (empty && visible && audit.contradictions.length < 40) audit.contradictions.push({ text, date: document.querySelector<HTMLInputElement>('[aria-label="Schedule date"]')?.value ?? null, anchor: new URL(location.href).searchParams.get("at"), content: visible.getAttribute("data-testid") });
@@ -193,26 +222,49 @@ test.describe("timeline time regressions @flow @fixture", () => {
           await page.goto("/", { waitUntil: "commit" });
           const shell = page.locator("[data-home-schedule]");
           await expect(shell).toBeVisible();
+          await expect(shell.getByRole("status").filter({ hasText: "Loading events" })).toBeVisible();
+          const placeholder = shell.locator("[data-loading-placeholder]");
+          await expect(placeholder).toBeVisible();
+          await expect(placeholder.getByRole("status")).toHaveText("Loading events");
+          await expect(shell.getByRole("status")).toHaveCount(1);
+          await expect(shell.locator("[data-loading-axis]")).toHaveCount(2);
+          await expect(shell.getByLabel("Schedule date", { exact: true })).toHaveCount(0);
+          expect(await placeholder.evaluate((element) => getComputedStyle(element, "::before").content)).toBe("none");
           const loading = await shell.boundingBox();
           expect(loading?.height).toBeGreaterThanOrEqual(376 + 56 + 48);
+          const discovery = page.getByRole("region", { name: "Discover", exact: true });
+          const discoveryHeading = discovery.getByRole("heading", { name: "Discover", exact: true });
+          const browse = discovery.locator("header").getByRole("link", { name: "Browse", exact: true });
+          if (!isMobile) {
+            await expect(discoveryHeading).toBeInViewport({ ratio: 1 });
+            await expect(browse).toBeInViewport({ ratio: 1 });
+          }
+          const loadingDiscovery = await discoveryHeading.boundingBox();
           await page.screenshot({ path: info.outputPath(`startup-${size.width}.png`) });
           release();
           await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready", { timeout: 20000 });
+          await expect(placeholder).toHaveCount(0);
           await expect(page.getByTestId("discovery-event-card").first()).toBeVisible();
           const ready = await shell.boundingBox();
           const chart = page.getByRole("region", { name: "Timeline chart", exact: true });
           const lanes = page.getByTestId("public-timeline-lanes");
-          const artwork = page.getByTestId("discovery-event-card").first().locator("a").first();
+          const readyDiscovery = await discoveryHeading.boundingBox();
+          const artwork = page.getByTestId("discovery-event-card").first().getByRole("link", { name: /^Open / });
           const artworkBox = await artwork.boundingBox();
           const bar = page.getByTestId(`event-${timelineFixture.eventIds[0]}`);
           await expect(bar).toBeVisible();
           expect((await bar.boundingBox())?.height).toBe(78);
-          const metrics = { size, loading, ready, lanes: await lanes.boundingBox(), chart: await chart.boundingBox(), artwork: artworkBox, bar: await bar.boundingBox() };
+          const metrics = { size, loading, ready, loadingDiscovery, readyDiscovery, lanes: await lanes.boundingBox(), chart: await chart.boundingBox(), artwork: artworkBox, bar: await bar.boundingBox() };
           await info.attach(`startup-${size.width}.json`, { body: JSON.stringify(metrics), contentType: "application/json" });
           expect(ready?.height).toBe(loading?.height);
           expect((await lanes.boundingBox())?.height).toBe(376);
           await expect(page.getByRole("heading", { name: "My night", exact: true })).toHaveCount(0);
-          if (!isMobile) expect(artworkBox!.y).toBeLessThan(size.height - 12);
+          if (!isMobile) {
+            await expect(discoveryHeading).toBeInViewport({ ratio: 1 });
+            await expect(browse).toBeInViewport({ ratio: 1 });
+            expect(readyDiscovery!.y).toBeCloseTo(loadingDiscovery!.y, 0);
+            if (size.height === 900) expect(artworkBox!.y).toBeLessThan(size.height - 12);
+          }
           expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(size.width);
           await page.screenshot({ path: info.outputPath(`ready-${size.width}.png`) });
           await page.screenshot({ path: info.outputPath(`ready-full-${size.width}.png`), fullPage: true });
@@ -227,10 +279,10 @@ test.describe("timeline time regressions @flow @fixture", () => {
     test.use({ locale: "en-GB" });
     test("toolbar and inspector share the viewer hour format", async ({ page, timelineFixture }, info) => {
       await page.goto(`/?at=${TIMELINE_NOW}&tz=UTC`);
-      await expect(page.getByLabel("Hour format", { exact: true }).locator("..")).toHaveText("24h");
+      await expect(page.getByText("Hour format", { exact: true }).locator("..")).toHaveText(/24h$/);
       await page.getByRole("button", { name: "Open Aurora at ORBIT: Interstellar Bassline Orchestra", exact: true }).click();
       const panel = page.getByLabel("Event details", { exact: true });
-      await expect(panel.getByText(/UTC . 24h/, { exact: true })).toBeVisible();
+      await expect(panel.getByText(/ (12|24)h$/, { exact: true })).toHaveCount(0);
       await expect(panel.locator('[data-selected="true"]')).toHaveAttribute("data-slot-id", timelineFixture.slotIds[6]);
       const times = await panel.locator("time").evaluateAll(elements => elements.map(element => ({ instant: element.getAttribute("datetime"), label: element.textContent })));
       expect(times.length).toBeGreaterThanOrEqual(4);
@@ -273,8 +325,9 @@ test.describe("timeline time regressions @flow @fixture", () => {
       const panel = page.getByLabel("Event details", { exact: true });
       await expect(
         panel.getByText(/ (12|24)h$/, { exact: true }),
-      ).toHaveText("America/New York · 12h");
-      await expect(panel.getByText(/GMT|EDT|EST/)).toHaveCount(0);
+      ).toHaveCount(0);
+      await expect(panel.locator("time").nth(0)).toContainText("EDT");
+      await expect(panel.locator("time").nth(1)).toContainText("EST");
       const selected = panel.locator('[data-selected="true"]');
       await expect(selected).toHaveAttribute(
         "data-slot-id",

@@ -139,6 +139,9 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Mixed: Story = {};
+export const OneEventTwoClubs: Story = {
+  args: { snapshot: { ...available, events: events.slice(0, 1) } },
+};
 export const ColdStart: Story = {
   args: {
     snapshot: { kind: "loading" },
@@ -156,6 +159,31 @@ export const Sparse: Story = {
 };
 export const Empty: Story = {
   args: { snapshot: { ...available, events: [], clubs: [] } },
+};
+export const OneClubNoEvents: Story = {
+  args: {
+    snapshot: {
+      ...available,
+      events: [],
+      clubs: clubs.slice(0, 1),
+      eventSignals: [],
+      eligibleEventIds: [],
+      eligibleClubIds: [clubs[0].id],
+    },
+  },
+};
+export const TwoClubsNoEvents: Story = {
+  args: {
+    snapshot: {
+      ...available,
+      events: [],
+      eventSignals: [],
+      eligibleEventIds: [],
+    },
+  },
+};
+export const TwoEventsNoClubs: Story = {
+  args: { snapshot: { ...available, clubs: [], eligibleClubIds: [] } },
 };
 export const Partial: Story = {
   args: {

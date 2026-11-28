@@ -1,3 +1,5 @@
+import { readEventSchedule, type StoredEventSchedule } from "../../../../../convex/_eventSchedule";
+
 export type PublicCalendarEvent = {
   id: string;
   slug: string;
@@ -88,9 +90,48 @@ export function formatIcsUtcTimestamp(timestamp: number): string {
 }
 
 export function publicEventIcsFilename(slug: string): string {
-  const basename = slug.replace(/[^a-z0-9-]/gi, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return `${sanitizeIcsBasename(slug) || "event"}.ics`;
+}
 
-  return `${basename || "event"}.ics`;
+export function publicEventIcsAttachment(title: string, slug: string, occurrence?: StoredEventSchedule): string {
+  let attachmentTitle = title;
+  let suffix = "";
+  if (occurrence !== undefined) {
+    try {
+      suffix = `-${readEventSchedule(occurrence).eventDate}`;
+    } catch {
+      // A legacy occurrence without a usable date still has its own public slug.
+      attachmentTitle = slug;
+    }
+  }
+
+  const asciiTitle = sanitizeIcsBasename(attachmentTitle) || sanitizeIcsBasename(slug) || "event";
+  const attachment = `attachment; filename="${safeIcsBasename(asciiTitle, suffix)}.ics"`;
+  const internationalTitle = safeIcsBasename(
+    sanitizeIcsBasename(attachmentTitle.normalize("NFC"), /[^\p{L}\p{M}\p{N}\p{Extended_Pictographic}-]/gu),
+    suffix,
+  );
+
+  return /[^\u0020-\u007e]/.test(internationalTitle)
+    ? `${attachment}; filename*=UTF-8''${encodeURIComponent(internationalTitle)}.ics`
+    : attachment;
+}
+
+function sanitizeIcsBasename(value: string, unsafe = /[^a-z0-9-]/gi): string {
+  return value.replace(unsafe, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+}
+
+function safeIcsBasename(value: string, suffix: string): string {
+  let bounded = "";
+  let bytes = suffix.length; // The suffix is an ASCII calendar date with a leading hyphen.
+  for (const character of value) {
+    bytes += textEncoder.encode(character).length;
+    if (bytes > 251) break; // Keep the UTF-8 filename, including .ics, within 255 bytes.
+    bounded += character;
+  }
+
+  const basename = bounded.replace(/-$/, "") + suffix;
+  return /^(?:con|prn|aux|nul|(?:com|lpt)[1-9¹²³])$/i.test(basename) ? `_${basename}` : basename;
 }
 
 export function createPublicEventIcs(event: PublicCalendarEvent, options: CreatePublicEventIcsOptions): string {

@@ -6,7 +6,10 @@ import { it } from "node:test";
 it("merges a legacy event into one lineup while preserving two distinct sets", () => {
   const output = execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", `
     import assert from "node:assert/strict";
-    import * as page from "./src/app/_components/event-public-page.tsx";
+    import { createRequire } from "node:module";
+    const require = createRequire(import.meta.url);
+    require.extensions[".css"] = module => { module.exports = {}; };
+    const page = require("./src/app/_components/event-public-page.tsx");
     assert.equal(typeof page.eventLineupForDisplay, "function");
     const person = { slug: "aurora", displayName: "Aurora" };
     const slots = [0, 1].map(position => ({ position, startAt: position + 1, displayLabel: "Aurora", performer: person }));

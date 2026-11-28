@@ -37,17 +37,33 @@ const timeOptions: Intl.DateTimeFormatOptions = {
   minute: "2-digit",
 };
 
-function formatTimestamp(
-  timestamp: number,
+function timestampFormatter(
   timeZone: string,
   options: Intl.DateTimeFormatOptions,
-): string {
+): Intl.DateTimeFormat {
   try {
-    return new Intl.DateTimeFormat("en", { ...options, timeZone }).format(
-      new Date(timestamp),
-    );
+    return new Intl.DateTimeFormat("en", { ...options, timeZone });
   } catch {
-    return new Intl.DateTimeFormat("en", options).format(new Date(timestamp));
+    return new Intl.DateTimeFormat("en", options);
+  }
+}
+
+function formatTimestamp(timestamp: number, timeZone: string, options: Intl.DateTimeFormatOptions): string {
+  return timestampFormatter(timeZone, options).format(timestamp);
+}
+
+function shareLocalDateAndOffset(timestamp: number, reference: number, timeZone: string): boolean {
+  try {
+    const format = new Intl.DateTimeFormat("en", {
+      timeZone,
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      timeZoneName: "shortOffset",
+    });
+    return format.format(timestamp) === format.format(reference);
+  } catch {
+    return false;
   }
 }
 
@@ -83,6 +99,10 @@ export function ViewerLocalEventDateTime({
   timestamp,
   eventDate,
   scheduleKind,
+  compactRelativeTo,
+  groupTime = false,
+  showYear = false,
+  yearReferenceAt,
   timeZone: explicitTimeZone,
   showTimeZone = true,
   hour12,
@@ -91,6 +111,10 @@ export function ViewerLocalEventDateTime({
   timestamp?: number;
   eventDate?: string;
   scheduleKind?: "timed" | "date_only";
+  compactRelativeTo?: number;
+  groupTime?: boolean;
+  showYear?: boolean;
+  yearReferenceAt?: number;
   timeZone?: string;
   hour12?: boolean;
   showTimeZone?: boolean;
@@ -105,20 +129,43 @@ export function ViewerLocalEventDateTime({
     );
   }
   if (timestamp === undefined) return null;
+  if (compactRelativeTo !== undefined && shareLocalDateAndOffset(timestamp, compactRelativeTo, timeZone)) {
+    const fullTime = formatTimestamp(timestamp, timeZone, { ...dateTimeOptions, hour12 });
+    return (
+      <time className={className} dateTime={new Date(timestamp).toISOString()} title={fullTime}>
+        <span aria-hidden="true">{formatTimestamp(timestamp, timeZone, { ...timeOptions, hour12 })}</span>
+        <span className="sr-only">{fullTime}</span>
+      </time>
+    );
+  }
 
-  return (
-    <time className={className} dateTime={new Date(timestamp).toISOString()}>
-      {formatTimestamp(
-        timestamp,
-        timeZone,
-        {
-          ...dateTimeOptions,
-          hour12,
-          timeZoneName: showTimeZone ? dateTimeOptions.timeZoneName : undefined,
-        },
-      )}
-    </time>
-  );
+  let includeYear = showYear;
+  if (!includeYear && yearReferenceAt !== undefined) {
+    const yearFormatter = timestampFormatter(timeZone, { year: "numeric" });
+    includeYear = yearFormatter.format(timestamp) !== yearFormatter.format(yearReferenceAt);
+  }
+  const formatter = timestampFormatter(timeZone, {
+    ...dateTimeOptions,
+    year: includeYear ? "numeric" : undefined,
+    hour12,
+    timeZoneName: showTimeZone ? dateTimeOptions.timeZoneName : undefined,
+  });
+  const dateTime = new Date(timestamp).toISOString();
+  if (groupTime) {
+    const parts = formatter.formatToParts(timestamp);
+    const timeStart = parts.findIndex((part) => part.type === "hour");
+    const separator = parts[timeStart - 1];
+    if (separator?.type === "literal") {
+      return (
+        <time className={className} dateTime={dateTime}>
+          {parts.slice(0, timeStart - 1).map((part) => part.value).join("")}
+          <span className="sm:sr-only">{separator.value}</span>
+          <span className="whitespace-nowrap sm:block">{parts.slice(timeStart).map((part) => part.value).join("")}</span>
+        </time>
+      );
+    }
+  }
+  return <time className={className} dateTime={dateTime}>{formatter.format(timestamp)}</time>;
 }
 
 export function ViewerLocalEventTime({

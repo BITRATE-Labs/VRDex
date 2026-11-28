@@ -68,7 +68,16 @@ export function EventContributionControls({ eventId, reportOpen, onReportClose }
     </section> : null}
     {reportOpen === undefined ? <Button variant="secondary" onClick={() => setLocalReportOpen(true)}>Report event</Button> : null}
     <dialog ref={dialog} aria-labelledby={reportTitle} onCancel={event => { event.preventDefault(); closeReport(); }} onClose={closeReport} className="ph-no-capture fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-panel border border-border bg-background p-5 text-foreground backdrop:bg-black/60" data-ph-no-capture>
-      <div className="flex items-center justify-between gap-4"><h2 id={reportTitle} className="text-xl font-semibold">{access?.canSuggest ? "Suggest correction" : "Report event"}</h2><Button variant="ghost" onClick={closeReport}>Close</Button></div>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h2 id={reportTitle} className="min-w-0 wrap-anywhere text-xl font-semibold">{access?.canSuggest ? "Suggest correction" : "Report event"}</h2>
+        <Button
+          variant="secondary"
+          className="border-border-strong outline-accent-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:ring-0"
+          onClick={closeReport}
+        >
+          Close
+        </Button>
+      </div>
       <div className="mt-4 grid gap-3"><Field>{access?.canSuggest ? "Proposed correction" : "Reason"}<Textarea value={reason} minLength={5} maxLength={500} onChange={event => setReason(event.target.value)} /></Field>
         <div className="flex flex-wrap gap-2"><Button disabled={busy || reason.trim().length < 5} onClick={() => void run(() => report({ eventId: id, reason }))}>{access?.canSuggest ? "Submit correction" : "Submit report"}</Button>
           {access?.canRemove ? <Button variant="secondary" disabled={busy || reason.trim().length < 5} onClick={() => { if (window.confirm("Remove event?")) void run(() => remove({ eventId: id, reason }), true); }}>Remove event</Button> : null}</div>

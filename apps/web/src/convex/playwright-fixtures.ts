@@ -12,15 +12,22 @@ import type {
 } from "@/app/_components/discovery-public-page";
 import type { PublicEvent } from "@/app/_components/event-public-page";
 import type { PublicWorld } from "@/app/_components/world-public-page";
+import { createDiscordTimestampSet } from "../../../../convex/_discordTimestamps";
 import { buildGroupPopulationSeries } from "../../../../convex/_groupPopulationSeries";
 import type { PublicProfileMediaDetails } from "@vrdex/api-contracts";
 import { PublicCommunityTelemetrySchema } from "@vrdex/api-contracts";
+import { playwrightGuestEventSlugs } from "@/convex/playwright-event-access";
+
+export { isPlaywrightGuestEventFixture } from "@/convex/playwright-event-access";
 
 const personSlug = "playwright-dj-aurora";
 const basicBitSlug = "basicbit";
 const longNameSlug = "playwright-princess-starlight-interstellar-bassline";
 const communitySlug = "playwright-afterglow-social";
 const worldSlug = "playwright-neon-harbor";
+const sparseWorldSlug = "playwright-lantern-cove";
+const distinctWorldReferenceSlug = "playwright-neon-harbor-distinct-reference";
+const referenceOnlyWorldSlug = "playwright-neon-harbor-reference-only";
 const eventSlug = "playwright-afterglow-harbor-sessions";
 const eventShortLinkCode = "afh2x67";
 const eventWatchSlug = "playwright-afterglow-watch-room";
@@ -848,6 +855,7 @@ const worldProfile: PublicWorld = {
     upcoming: [
       {
         slug: eventSlug,
+        communitySlug,
         title: "Afterglow Harbor Sessions",
         startAt: eventStartAt,
         doorsOpenAt: eventDoorsOpenAt,
@@ -1036,6 +1044,81 @@ const publicEvent: PublicEvent = {
     },
   ],
 };
+
+const profileScheduleEventFixtures: PublicEvent[] = [
+  { slug: "playwright-harbor-current", title: "Harbor Current Sessions", startAt: Date.UTC(2026, 0, 2, 10), endAt: Date.UTC(2026, 0, 2, 15) },
+  { slug: "playwright-harbor-next", title: "Harbor Next Sessions", startAt: Date.UTC(2026, 0, 2, 16), endAt: Date.UTC(2026, 0, 2, 19) },
+  { slug: "playwright-harbor-open-end", title: "Harbor Open End", startAt: Date.UTC(2026, 0, 2, 11), endAt: undefined },
+].map((event) => ({
+  ...publicEvent,
+  ...event,
+  id: `event-${event.slug}`,
+  doorsOpenAt: undefined,
+  slots: [],
+  nextSlots: [],
+}));
+
+const sparseDateEvent: PublicEvent = {
+  ...publicEvent,
+  id: "event-" + playwrightGuestEventSlugs.sparseDate,
+  slug: playwrightGuestEventSlugs.sparseDate,
+  title: "July Fourth Sessions",
+  scheduleKind: "date_only",
+  eventDate: "2026-07-04",
+  startAt: undefined,
+  doorsOpenAt: undefined,
+  endAt: undefined,
+  posterImageUrl: undefined,
+  bannerImageUrl: undefined,
+  thumbnailImageUrl: undefined,
+  authoredBannerImageUrl: undefined,
+  authoredThumbnailImageUrl: undefined,
+  source: { sourceType: publicEvent.source.sourceType, label: publicEvent.source.label },
+  worlds: [],
+  lineup: [],
+  participants: [],
+  participantCount: 0,
+  slots: [],
+  slotCount: 0,
+  nextSlots: [],
+  watchSurfaceEnabled: false,
+  authoredMediaLinks: [],
+  mediaLinks: [],
+};
+
+const artlessDateExternalSlug = "playwright-artless-date-external";
+const artlessTimedLongSlug = "playwright-artless-timed-long";
+const artlessEventCardVariants: PublicEvent[] = [
+  {
+    ...sparseDateEvent,
+    id: "event-" + artlessDateExternalSlug,
+    slug: artlessDateExternalSlug,
+    title: "Independence Day Guest Sessions",
+    communityName: undefined,
+    communityImageUrl: undefined,
+    communityAvatarAppearance: undefined,
+    summary: undefined,
+    source: {
+      sourceType: "manual",
+      label: "Guest event listing",
+      url: "https://example.invalid/events/independence-day-guest-sessions",
+    },
+  },
+  {
+    ...sparseDateEvent,
+    id: "event-" + artlessTimedLongSlug,
+    slug: artlessTimedLongSlug,
+    title: "Harbor Sound System Presents the Late Night Interstellar Bassline Sessions",
+    scheduleKind: "timed",
+    eventDate: undefined,
+    startAt: eventStartAt,
+    doorsOpenAt: eventDoorsOpenAt,
+    endAt: eventEndAt,
+    communityName: "Afterglow Social and the Interstellar Sound System Collective",
+    communityImageUrl: undefined,
+    communityAvatarAppearance: undefined,
+  },
+];
 
 const publicWatchEvent: PublicEvent = {
   ...publicEvent,
@@ -1238,6 +1321,7 @@ const discoveryData: PublicDiscoveryData = {
 type PlaywrightDiscoverySearchFixture =
   | { kind: "disabled" }
   | { kind: "fallthrough" }
+  | { kind: "error" }
   | { kind: "handled"; results: PublicSearchResult[] };
 type PlaywrightProfileLookupFixture =
   | { kind: "disabled" }
@@ -1324,15 +1408,120 @@ export function getPlaywrightPublicProfileFixture(
   }
 
   if (profileType === "person") {
+    if (slug === "playwright-person-open-end-event") {
+      return { ...toPublicFixturePersonProfile(personProfile), slug, upcomingEvents: profileScheduleEventFixtures.slice(2) };
+    }
+    if (slug === "playwright-person-current-events") {
+      return { ...toPublicFixturePersonProfile(personProfile), slug, upcomingEvents: profileScheduleEventFixtures };
+    }
+    if (slug === "playwright-event-only-profile") {
+      const event = getPlaywrightPublicEventFixture(playwrightGuestEventSlugs.sparseDate);
+      return event && {
+        ...toPublicFixturePersonProfile(sparseImportedProfile),
+        slug,
+        displayName: "Sparse Profile with Event",
+        upcomingEvents: [event],
+      };
+    }
+    if (slug === "playwright-event-card-variants") {
+      return {
+        ...toPublicFixturePersonProfile(sparseImportedProfile),
+        slug,
+        displayName: "Event Card Variants",
+        upcomingEvents: artlessEventCardVariants,
+      };
+    }
     const profile = personProfiles.find((entry) => entry.slug === slug);
 
     return profile ? toPublicFixturePersonProfile(profile) : null;
   }
 
+  if (profileType === "community" && slug === "playwright-community-current-events") {
+    return { ...communityProfile, slug, hostedEvents: profileScheduleEventFixtures };
+  }
+
   if (profileType === "community" && slug === communitySlug) {
     return communityProfile;
   }
-  if (profileType === "community" && /^playwright-group-population(?:-empty|-stale|-managed-disabled|-managed|-dense)?$/.test(slug)) {
+  if (profileType === "community" && slug === "playwright-afterglow-social-group") {
+    return {
+      ...communityProfile,
+      outboundLinks: [{
+        type: "vrchat_profile",
+        label: "VRChat group",
+        labelMode: "automatic",
+        url: "https://vrchat.com/home/group/grp_12345678-1234-1234-1234-123456789abc",
+        source: "owner_authored",
+      }],
+    };
+  }
+  if (profileType === "community" && (slug === "playwright-afterglow-group-alias" || slug === "playwright-afterglow-group-ambiguous")) {
+    const groupId = "grp_12345678-1234-1234-1234-123456789abc";
+    const aliasLink = {
+      type: "vrchat_profile",
+      label: "Afterglow meetup",
+      url: "https://vrc.group/TEST.1234",
+      source: "owner_authored",
+      destination: { kind: "vrchat_group", status: "resolved", targetKey: "vrchat_group:TEST.1234", entityId: groupId },
+    } as const;
+    return {
+      ...communityProfile,
+      outboundLinks: [
+        ...communityProfile.outboundLinks,
+        aliasLink,
+        ...(slug === "playwright-afterglow-group-ambiguous" ? [{
+          type: "vrchat_profile",
+          label: "Afterglow partner group",
+          url: "https://vrchat.com/home/group/grp_87654321-1234-1234-1234-123456789abc",
+          source: "owner_authored",
+        } as const] : []),
+      ],
+      verifiedConnections: [{
+        assetType: "vrchat_group", assetExternalId: groupId, url: `https://vrchat.com/home/group/${groupId}`,
+        displayName: "Afterglow Social", verifiedAt: Date.UTC(2026, 7, 26), linkRole: "primary",
+      }],
+    };
+  }
+  if (slug === "playwright-website-destinations") {
+    return {
+      ...communityProfile,
+      slug,
+      displayName: "Afterglow Social",
+      outboundLinks: [
+        { type: "website", label: "Website", url: "https://temple.example.invalid/face", source: "owner_authored" },
+        { type: "website", label: " Website ", url: "https://temple.example.invalid/donate?campaign=fixture#form", source: "owner_authored" },
+        { type: "website", label: "Homepage", url: "https://temple.example.invalid/", source: "owner_authored" },
+        { type: "website", label: "Notes", url: "https://example.invalid/notes?view=1", source: "owner_authored" },
+        { type: "website", label: "Notes", url: "https://example.invalid/notes?view=2", source: "owner_authored" },
+        { type: "website", label: "Archive", url: "https://archive.example.invalid/", source: "owner_authored" },
+        { type: "website", label: "Archive", url: `https://archive.example.invalid/${"collection".repeat(20)}`, source: "owner_authored" },
+      ],
+    };
+  }
+  if (slug === "playwright-sparse-community" || slug === "playwright-sparse-community-custom") {
+    const customLabel = slug.endsWith("-custom");
+    return {
+      profileType: "community",
+      displayName: "Sparse Community",
+      slug,
+      trustLabel: "unclaimed",
+      aliases: [],
+      tags: [],
+      genres: [],
+      community: { categoryTags: [] },
+      outboundLinks: [{
+        type: "vrchat_profile",
+        label: customLabel ? "Official meetup group" : "VRChat group",
+        labelMode: customLabel ? "custom" : "automatic",
+        url: "https://vrchat.com/home/group/grp_12345678-1234-1234-1234-123456789abc",
+        source: "community_submitted",
+      }],
+      worldCredits: [],
+      upcomingEvents: [],
+      hostedEvents: [],
+    };
+  }
+  if (profileType === "community" && /^playwright-group-population(?:-empty|-stale|-managed-disabled|-managed|-dense|-membership|-events|-multiple-events)?$/.test(slug)) {
     const now = Date.now();
     const stale = slug.endsWith("-stale");
     const count = slug.endsWith("-dense") ? 720 : 181;
@@ -1365,7 +1554,60 @@ export function getPlaywrightPublicProfileFixture(
           durationMinutes: 360, activeInstanceCount: 2, peakConcurrency: 45, playerHours: 123, coverageRatio: 0.9, worldDistribution: [] }],
       } : {}),
     });
-    return { ...communityProfile, profileType: "community", community: { categoryTags: [] }, id: `fixture-${slug}`, slug, displayName: "Afterglow Social", hostedEvents: [], worldCredits: [], telemetry };
+    const memberObservation = { value: 125, observedAt: now };
+    const withEvents = slug.endsWith("-events");
+    return {
+      ...communityProfile,
+      profileType: "community",
+      community: { categoryTags: [] },
+      id: `fixture-${slug}`,
+      slug,
+      displayName: "Afterglow Social",
+      hostedEvents: withEvents ? [
+        eventPreview,
+        ...(slug.endsWith("-multiple-events") ? [{
+          ...eventPreview,
+          slug: "playwright-date-only-event",
+          title: "July Fourth Sessions",
+          scheduleKind: "date_only" as const,
+          eventDate: "2026-07-04",
+          startAt: undefined,
+          doorsOpenAt: undefined,
+          endAt: undefined,
+        }] : []),
+      ] : [],
+      ...(withEvents ? {
+        outboundLinks: [
+          {
+            type: "vrchat_profile",
+            label: "VRChat group",
+            url: "https://vrchat.com/home/group/grp_12345678-1234-1234-1234-123456789abc",
+            source: "owner_authored" as const,
+          },
+          ...communityProfile.outboundLinks,
+          {
+            type: "website",
+            label: "Bluesky",
+            url: "https://bsky.app/profile/afterglow.example.invalid",
+            source: "owner_authored" as const,
+          },
+          {
+            type: "twitch",
+            label: "Twitch",
+            url: "https://www.twitch.tv/afterglow",
+            source: "owner_authored" as const,
+          },
+        ],
+        appearance: { sectionOrder: ["worlds", "events", "media_kit", "links", "about", "details"] },
+      } : { worldCredits: [] }),
+      telemetry,
+      ...(withEvents || slug.endsWith("-membership") ? {
+        groupMembership: {
+          latest: memberObservation,
+          points: [{ value: 120, observedAt: now - 86_400_000 }, memberObservation],
+        },
+      } : {}),
+    };
   }
 
   return null;
@@ -1392,6 +1634,45 @@ export function searchPlaywrightDiscoveryFixture(query: string): PlaywrightDisco
 
   const normalized = query.trim().toLowerCase();
 
+  if (normalized === "afterglow event schedule") {
+    const now = Date.now();
+    const hour = 60 * 60 * 1000;
+    const ended: PublicSearchResult = {
+      entityType: "event",
+      slug: eventSlug,
+      routePath: `/${communitySlug}/events/${eventSlug}`,
+      title: eventPreview.title,
+      subtitle: eventPreview.communityName,
+      summary: eventPreview.summary,
+      imageUrl: eventPreview.thumbnailImageUrl,
+      startsAt: eventStartAt,
+      endAt: eventEndAt,
+      score: 260,
+    };
+    const event = (slug: string, title: string): PublicSearchResult => ({
+      entityType: "event",
+      slug,
+      title,
+      routePath: `/${communitySlug}/events/${slug}`,
+      subtitle: eventPreview.communityName,
+      score: 250,
+    });
+    return { kind: "handled", results: [
+      { ...event("playwright-afterglow-summer-signal", "Afterglow Summer Signal"), summary: "A night of melodic house and trance in Neon Harbor.", startsAt: now + 24 * hour, endAt: now + 27 * hour, score: 280 },
+      ended,
+      { ...event(eventWatchSlug, "Afterglow Watch Room"), startsAt: watchEventStartAt, endAt: watchEventEndAt },
+      { ...event("playwright-afterglow-live-session", "Afterglow Live Session"), startsAt: now - hour, endAt: now + hour },
+      { ...event("playwright-afterglow-late-shift", "Afterglow Late Shift"), startsAt: now - 72 * hour },
+      { ...event("playwright-date-only-event", "Afterglow Open Decks"), scheduleKind: "date_only", eventDate: "2026-07-04" },
+      { ...event("playwright-afterglow-studio-session", "Afterglow Studio Session"), startsAt: now - hour, endAt: now - 2 * hour },
+      ...discoveryResults.filter((result) => result.slug === communitySlug),
+    ] };
+  }
+
+  if (normalized === "playwright-search-unavailable") {
+    return { kind: "error" };
+  }
+
   if (!normalized) {
     return { kind: "handled", results: [] };
   }
@@ -1415,7 +1696,14 @@ export function searchPlaywrightDiscoveryFixture(query: string): PlaywrightDisco
   );
 
   if (matches.length > 0) {
-    return { kind: "handled", results: matches };
+    return {
+      kind: "handled",
+      results: matches.map((result) =>
+        result.slug === personSlug
+          ? { ...result, person: toProfileLookupFixture(personProfile)! }
+          : result,
+      ),
+    };
   }
 
   if (process.env.VRDEX_ALLOW_PLAYWRIGHT_FIXTURE_SEARCH_FALLTHROUGH === "true") {
@@ -1591,18 +1879,52 @@ export function getPlaywrightPublicWorldFixture(slug: string): PublicWorld | nul
     return worldProfile;
   }
 
+  if (slug === sparseWorldSlug) {
+    return {
+      slug,
+      displayName: "Lantern Cove",
+      visibilityStatus: "public",
+      tags: [],
+      platformCompatibility: [],
+      media: [],
+      creatorAttributions: [],
+      outboundLinks: [],
+      eventContext: { upcoming: [], recent: [] },
+    };
+  }
+
+  if (slug === distinctWorldReferenceSlug || slug === referenceOnlyWorldSlug) {
+    return {
+      ...worldProfile,
+      slug,
+      sourceUrl: "https://example.invalid/neon-harbor-notes",
+      eventContext: { upcoming: worldProfile.eventContext.upcoming, recent: [] },
+      ...(slug === referenceOnlyWorldSlug ? { canonicalVrchatWorldUrl: undefined, vrchatWorldId: undefined } : {}),
+    };
+  }
+
   return null;
 }
 
 const seriesId = "playwright-afterglow-series";
+const emptySeriesId = "playwright-afterglow-series-empty";
 const seriesNightSlug = "playwright-afterglow-series-night";
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const seriesNights = [0, 1, 2, 3].map((week) => ({
+  ...eventPreview,
+  id: `${seriesNightSlug}-${week}`,
+  slug: week === 0 ? seriesNightSlug : `${seriesNightSlug}-${week}`,
+  startAt: eventStartAt + week * WEEK_MS,
+  doorsOpenAt: eventDoorsOpenAt + week * WEEK_MS,
+  endAt: eventEndAt + week * WEEK_MS,
+  ...(week === 3 ? { summary: "Extended guest set with DJ Aurora." } : {}),
+}));
 
 export function getPlaywrightPublicEventSeriesFixture(id: string) {
   if (
     process.env.NODE_ENV === "production" ||
     process.env.VRDEX_ENABLE_PLAYWRIGHT_FIXTURES !== "true" ||
-    id !== seriesId
+    (id !== seriesId && id !== emptySeriesId)
   ) {
     return null;
   }
@@ -1613,13 +1935,7 @@ export function getPlaywrightPublicEventSeriesFixture(id: string) {
     summary: eventPreview.summary,
     communitySlug,
     communityName: eventPreview.communityName,
-    nights: [0, 1, 2, 3].map(week => ({
-      ...eventPreview,
-      id: `${seriesNightSlug}-${week}`,
-      slug: week === 0 ? seriesNightSlug : `${seriesNightSlug}-${week}`,
-      startAt: eventStartAt + week * WEEK_MS,
-      doorsOpenAt: eventDoorsOpenAt + week * WEEK_MS,
-    })),
+    nights: id === emptySeriesId ? [] : seriesNights,
   };
 }
 
@@ -1648,6 +1964,32 @@ export function getPlaywrightPublicEventFixture(slug: string): PublicEvent | nul
     return { ...publicEvent, slug, seriesId };
   }
 
+  if (slug === "playwright-afterglow-series-only") {
+    return { ...publicEvent, id: `event-${slug}`, slug, seriesId, bannerImageUrl: undefined, mediaLinks: [] };
+  }
+
+  const seriesNight = seriesNights.find((night) => night.slug === slug);
+  if (seriesNight) {
+    const { id, startAt, doorsOpenAt, endAt, summary } = seriesNight;
+    const offset = startAt - eventStartAt;
+    return {
+      ...publicEvent,
+      id,
+      slug,
+      seriesId,
+      startAt,
+      doorsOpenAt,
+      endAt,
+      summary,
+      slots: publicEvent.slots.map((slot) => ({
+        ...slot,
+        startAt: slot.startAt + offset,
+        endAt: slot.endAt === undefined ? undefined : slot.endAt + offset,
+        discord: createDiscordTimestampSet(slot.startAt + offset),
+      })),
+    };
+  }
+
   if (slug === "playwright-date-only-event") {
     return { ...publicEvent, slug, title: "July Fourth Sessions", scheduleKind: "date_only", eventDate: "2026-07-04",
       startAt: undefined, doorsOpenAt: undefined, endAt: undefined, slots: [], nextSlots: [], watchSurfaceEnabled: false };
@@ -1657,11 +1999,30 @@ export function getPlaywrightPublicEventFixture(slug: string): PublicEvent | nul
     return publicEvent;
   }
 
+  if (slug === playwrightGuestEventSlugs.listed) {
+    return { ...publicEvent, id: "event-" + slug, slug };
+  }
+
   if (slug === eventWatchSlug) {
     return publicWatchEvent;
   }
 
-  return null;
+  if (slug === playwrightGuestEventSlugs.watch || slug === playwrightGuestEventSlugs.watchWithoutPoster) {
+    return {
+      ...publicWatchEvent,
+      id: "event-" + slug,
+      slug,
+      posterImageUrl: slug === playwrightGuestEventSlugs.watch ? publicWatchEvent.posterImageUrl : undefined,
+    };
+  }
+
+  if (slug === playwrightGuestEventSlugs.sparseDate) {
+    return sparseDateEvent;
+  }
+
+  return profileScheduleEventFixtures.find((event) => event.slug === slug)
+    ?? artlessEventCardVariants.find((event) => event.slug === slug)
+    ?? null;
 }
 
 export function getPlaywrightPublicShortLinkFixture(

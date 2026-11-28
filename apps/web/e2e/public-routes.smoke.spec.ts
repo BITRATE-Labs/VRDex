@@ -3,12 +3,16 @@ import { writeFile } from "node:fs/promises";
 import sharp from "sharp";
 
 import type { PublicEventShareCard } from "../../../convex/_eventShareCard";
+import { AUTH_UNAVAILABLE_COPY } from "../src/lib/auth-copy";
 import { eventShareRevision } from "../src/lib/event-share-card";
+import { toggleSiteTheme } from "./flow-navigation";
+import { waitForPublicSearchHydration } from "./public-search-fixture";
 import {
   capturedRoutes,
   expectEventPage,
   expectProfilePlaybackLinks,
   expectSearchPage,
+  expectSignInPage,
   prepareVisualPage,
   productionSmokeRoutes,
   visualProfilePaths,
@@ -67,6 +71,185 @@ for (const route of routes) {
   });
 }
 
+test("public world artwork loads without JavaScript", async ({ browser, baseURL }) => {
+  test.skip(isHostedRun, "The world artwork uses a local fixture.");
+  const context = await browser.newContext({ baseURL, javaScriptEnabled: false });
+  try {
+    const page = await context.newPage();
+    await page.goto("/playwright-neon-harbor");
+    const artwork = page.locator('img[src="/api/e2e/fixture-assets/fixture-neon-harbor-world-image"]').first();
+    await expect.poll(() => artwork.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+    await expect(artwork).toHaveCSS("opacity", "1");
+  } finally {
+    await context.close();
+  }
+});
+
+test("featured world fits the narrow discovery viewport", async ({ page }) => {
+  test.skip(isHostedRun, "The featured world card uses a local fixture.");
+
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.goto("/discovery");
+
+  const card = page.getByRole("article").filter({
+    has: page.getByRole("heading", { name: "Neon Harbor", exact: true }),
+  });
+  await expect(card.getByRole("link", { name: "Neon Harbor", exact: true })).toHaveAttribute("href", "/playwright-neon-harbor");
+  await expect(card.getByText("Next event", { exact: true })).toBeVisible();
+  const nextEvent = card.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true });
+  await expect(nextEvent).toHaveAttribute("href", "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions");
+  await expect.poll(async () => (await nextEvent.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await expect(card.locator("time")).toBeHidden();
+  expect(await card.evaluate((link) => link.getBoundingClientRect().right)).toBeLessThanOrEqual(320);
+  const synopsis = card.locator("p").first();
+  await expect(synopsis).toBeInViewport();
+  expect(await synopsis.evaluate((element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    return range.getClientRects()[0].bottom;
+  })).toBeLessThanOrEqual(760);
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
+    .toBe(320);
+
+  await nextEvent.click();
+  await expect(page).toHaveURL("/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions");
+  await page.goBack();
+  await card.click({ position: { x: 8, y: 8 } });
+  await expect(page).toHaveURL("/playwright-neon-harbor");
+  await page.goBack();
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const search = page.getByRole("main").getByRole("button", { name: "Search VRDex", exact: true });
+  await expect(search.locator("svg")).toBeVisible();
+  expect((await search.boundingBox())?.width).toBe(44);
+  await expect(card.locator("time")).toBeVisible();
+  await expect(card.getByText(/by Afterglow Social/)).toBeVisible();
+});
+
+test("mobile discovery keeps Add event alongside the populated upcoming heading", async ({ page }) => {
+  test.skip(isHostedRun, "The populated event schedule uses a local fixture.");
+
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.goto("/discovery");
+
+  const heading = page.getByRole("heading", { name: "Upcoming events", exact: true });
+  const section = heading.locator("xpath=ancestor::section[1]");
+  const addEvent = section.getByRole("link", { name: "Add event", exact: true });
+  const event = section.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true });
+  const performer = section.getByRole("link", { name: "DJ Aurora", exact: true });
+  await expect(addEvent).toHaveAttribute("href", "/events/new");
+  await expect(event).toBeVisible();
+  const localStart = event.locator("xpath=ancestor::article[1]").locator("time").first();
+  await expect(localStart).toHaveAttribute("datetime", "2026-06-15T02:00:00.000Z");
+  await expect(localStart.locator("span").last()).toHaveCSS("white-space", "nowrap");
+
+  const [headingBounds, actionBounds] = await Promise.all([heading.boundingBox(), addEvent.boundingBox()]);
+  if (!headingBounds || !actionBounds) throw new Error("Missing Discovery event header bounds");
+  expect(actionBounds.height).toBeGreaterThanOrEqual(44);
+  expect(actionBounds.x).toBeGreaterThanOrEqual(headingBounds.x + headingBounds.width);
+  expect(actionBounds.y).toBeLessThan(headingBounds.y + headingBounds.height);
+  expect(headingBounds.y).toBeLessThan(actionBounds.y + actionBounds.height);
+
+  const [eventBounds, performerBounds] = await Promise.all([event.boundingBox(), performer.boundingBox()]);
+  if (!eventBounds || !performerBounds) throw new Error("Missing Discovery event link bounds");
+  expect(eventBounds.width).toBeGreaterThanOrEqual(44);
+  expect(eventBounds.height).toBeGreaterThanOrEqual(44);
+  expect(performerBounds.width).toBeGreaterThanOrEqual(44);
+  expect(performerBounds.height).toBeGreaterThanOrEqual(44);
+  expect(eventBounds.y + eventBounds.height).toBeLessThanOrEqual(performerBounds.y);
+  await addEvent.focus();
+  await page.keyboard.press("Tab");
+  await expect(event).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(performer).toBeFocused();
+});
+
+test("mobile discovery jumps to the directory without hiding the heading", async ({ page }) => {
+  test.skip(isHostedRun, "The populated discovery directory uses a local fixture.");
+
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.goto("/discovery");
+
+  const shortcuts = page.getByRole("navigation", { name: "Discovery categories" });
+  await expect(shortcuts.getByRole("link")).toHaveText(["People", "Communities", "Worlds"]);
+  const communities = shortcuts.getByRole("link", { name: "Communities" });
+  const heading = page.getByRole("heading", { name: "Communities", exact: true });
+  const header = page.getByRole("banner");
+  const firstProfile = heading.locator("..").getByRole("link").first();
+
+  await communities.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#communities$/);
+  await expect(heading).toBeFocused();
+  await expect(heading).toBeInViewport();
+  const [headingBounds, headerBounds] = await Promise.all([heading.boundingBox(), header.boundingBox()]);
+  if (!headingBounds || !headerBounds) throw new Error("Missing discovery heading or header bounds");
+  expect(headingBounds.y).toBeGreaterThanOrEqual(headerBounds.y + headerBounds.height);
+
+  await page.keyboard.press("Tab");
+  await expect(firstProfile).toBeFocused();
+
+  await page.setViewportSize({ width: 1279, height: 900 });
+  await expect(shortcuts).toBeVisible();
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(shortcuts).toBeHidden();
+});
+
+test("mobile discovery aligns directory titles while showing both artwork assets", async ({ page }) => {
+  test.skip(isHostedRun, "The populated discovery directory uses a local fixture.");
+
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.goto("/discovery");
+
+  const people = page.getByRole("heading", { name: "People", exact: true }).locator("xpath=ancestor::section[1]");
+  const aurora = people.getByText("DJ Aurora", { exact: true });
+  const card = aurora.locator("xpath=ancestor::a[1]");
+  await expect(card).toHaveAttribute("href", "/playwright-dj-aurora");
+  await expect(card.getByRole("img", { name: "DJ Aurora", exact: true })).toBeVisible();
+  await expect(card.getByRole("img", { name: "DJ Aurora logo", exact: true })).toBeVisible();
+
+  const titles = [aurora, ...["BASICBIT", "Moth"].map((name) => people.getByText(name, { exact: true }))];
+  const leftEdges = await Promise.all(titles.map((title) => title.evaluate((node) => node.getBoundingClientRect().left)));
+  expect(new Set(leftEdges).size).toBe(1);
+});
+
+test("discovery puts a single event and featured world beside each other at xl", async ({ page }) => {
+  test.skip(isHostedRun, "The single event and featured world use a local fixture.");
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/discovery");
+
+  const events = page.getByRole("heading", { name: "Upcoming events", exact: true }).locator("xpath=ancestor::section[1]");
+  const worlds = page.getByRole("heading", { name: "Featured worlds", exact: true }).locator("xpath=ancestor::section[1]");
+  const event = events.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true });
+  const performer = events.getByRole("link", { name: "DJ Aurora", exact: true });
+  const world = worlds.getByRole("link", { name: "Neon Harbor", exact: true });
+  const nextEvent = worlds.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true });
+  await expect(event).toHaveAttribute("href", "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions");
+  await expect(performer).toHaveAttribute("href", "/playwright-dj-aurora");
+  await expect(world).toHaveAttribute("href", "/playwright-neon-harbor");
+  await expect(performer).toHaveCSS("text-decoration-line", "underline");
+  await expect(world.getByText("Neon Harbor", { exact: true })).toHaveCSS("text-decoration-line", "underline");
+  await world.focus();
+  await page.keyboard.press("Tab");
+  await expect(nextEvent).toBeFocused();
+
+  const [eventSection, worldSection] = await Promise.all([events.boundingBox(), worlds.boundingBox()]);
+  if (!eventSection || !worldSection) throw new Error("Missing Discovery section bounds");
+  expect(worldSection.y).toBe(eventSection.y);
+  expect(worldSection.x).toBeGreaterThan(eventSection.x + eventSection.width);
+  expect(eventSection.width).toBeGreaterThan(worldSection.width);
+
+  await page.setViewportSize({ width: 320, height: 760 });
+  const [mobileEvents, mobileWorlds] = await Promise.all([events.boundingBox(), worlds.boundingBox()]);
+  if (!mobileEvents || !mobileWorlds) throw new Error("Missing mobile Discovery section bounds");
+  expect(mobileWorlds.y).toBeGreaterThanOrEqual(mobileEvents.y + mobileEvents.height);
+  expect(mobileWorlds.x).toBe(mobileEvents.x);
+  expect(mobileWorlds.width).toBe(mobileEvents.width);
+});
+
 test("sign-in offers a route to create an account", async ({ page }) => {
   await page.goto("/sign-in");
 
@@ -79,9 +262,15 @@ test("sign-in offers a route to create an account", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
 
   await page.goto("/sign-up");
-  await expect(
-    page.getByRole("heading", { name: "Create account", exact: true }),
-  ).toBeVisible();
+  const shell = page.getByRole("region", { name: "Create account", exact: true });
+  const title = shell.getByRole("heading", { name: "Create account", exact: true, level: 1 });
+  await expect(shell).toBeVisible();
+  if (await shell.getByText(AUTH_UNAVAILABLE_COPY, { exact: true }).count()) {
+    await expect(title).toBeVisible();
+    await expect(title).not.toHaveClass(/\bsr-only\b/);
+  } else {
+    await expect(title).toHaveClass(/\bsr-only\b/);
+  }
 });
 
 test("legacy discovery query redirects to search", async ({ page }) => {
@@ -90,7 +279,7 @@ test("legacy discovery query redirects to search", async ({ page }) => {
 
   if (process.env.PLAYWRIGHT_BASE_URL) {
     await expect(page.getByRole("heading", { name: "Search results", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: /Results for aurora/i })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Search results" })).toHaveAccessibleDescription("Results for aurora");
     await expect(page.getByRole("button", { name: /Search VRDex/i })).toBeVisible();
     return;
   }
@@ -104,8 +293,41 @@ test("legacy root query and lookup URL keep the DJ lookup destination", async ({
     await expect(page).toHaveURL(/\/search\?q=BASICBIT&view=dj$/);
     await expect(page.getByLabel("DJ name")).toHaveValue("BASICBIT");
     await expect(page.getByRole("navigation", { name: "Search view" })).toHaveCount(0);
+    await expect(page.getByRole("banner").getByRole("button", { name: "Search", exact: true })).toBeVisible();
   }
 });
+
+test("missing public event offers themed recovery", async ({ page }) => {
+  test.skip(isHostedRun, "The invalid canonical route uses a local public event fixture.");
+
+  const wrongCommunityPath = visualProfilePaths.eventPath.replace(
+    "/playwright-afterglow-social/",
+    "/playwright-wrong-community/",
+  );
+  const response = await page.goto(wrongCommunityPath);
+  expect(response?.status()).toBe(404);
+
+  const main = page.getByRole("main");
+  await expect(main.getByRole("heading", { name: "404", exact: true })).toBeVisible();
+  await expect(main.getByText("This page could not be found.", { exact: true })).toBeVisible();
+  await expect(main.getByRole("link", { name: "Search", exact: true })).toHaveAttribute("href", "/search");
+  const discovery = main.getByRole("link", { name: "Discovery", exact: true });
+  await expect(discovery).toHaveAttribute("href", "/discovery");
+
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  const lightBackground = await page.locator("body").evaluate((body) => getComputedStyle(body).backgroundColor);
+  await expect(main).toHaveCSS("background-color", lightBackground);
+
+  await toggleSiteTheme(page);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  const darkBackground = await page.locator("body").evaluate((body) => getComputedStyle(body).backgroundColor);
+  expect(darkBackground).not.toBe(lightBackground);
+  await expect(main).toHaveCSS("background-color", darkBackground);
+
+  await discovery.click();
+  await expect(page).toHaveURL("/discovery");
+});
+
 
 test("legacy media contribution route rejects claimed profiles", async ({ page }) => {
   test.skip(isHostedRun, "The Playwright-only media contribution flag is local-only.");
@@ -131,6 +353,126 @@ test("private profile claim actions stay on owner-aware routes", async ({ page }
   await page.getByRole("link", { name: "Manage profile" }).click();
   await expect(page).toHaveURL(/\/account\/appearance\?profileId=playwright-profile$/);
   await expect(page.getByRole("link", { name: "View profile" })).toHaveCount(0);
+});
+
+test("sign-in describes recognized contribution return paths without echoing them", async ({ page }) => {
+  const cases = [
+    ["/submit", "Add profile"],
+    ["/claim/playwright-sparse-import?source=profile", "Claim profile"],
+    ["/playwright-sparse-import/edit?section=media#media-contributions", "Edit profile"],
+    ["/account"],
+    ["https://example.invalid/submit"],
+    ["https://example.invalid/events/new"],
+    ["/events/newer"],
+    ["/claim/"],
+  ] as const;
+  for (const [returnTo, journeyLabel] of cases) {
+    expect((await page.goto("/sign-in?" + new URLSearchParams({ returnTo })))?.status()).toBe(200);
+    await expectSignInPage(page, journeyLabel);
+    if (!journeyLabel) {
+      await expect(page.getByText("Manage your VRDex profile and events.", { exact: true })).toBeVisible();
+    }
+  }
+});
+
+test("the public suggestion keeps the profile and task through account entry", async ({ page }) => {
+  const path = "/playwright-sparse-community";
+  const returnTo = `${path}/edit?intent=suggest`;
+  const main = page.getByRole("main");
+  await page.goto(path);
+  await main.getByRole("link", { name: "Suggest an edit", exact: true }).click();
+  await expect(page).toHaveURL((url) => url.pathname === `${path}/edit` || url.pathname === "/sign-in");
+
+  if (new URL(page.url()).pathname === `${path}/edit`) {
+    await expect(main.getByRole("heading", { name: "Suggest an edit", exact: true })).toBeVisible();
+    await expect(main.getByText("Sparse Community", { exact: true })).toBeVisible();
+    await main.getByRole("link", { name: "Sign in", exact: true }).click();
+  }
+  await expect(page).toHaveURL((url) => url.pathname === "/sign-in" && url.searchParams.get("returnTo") === returnTo);
+  await expect(main.getByRole("heading", { name: "Suggest an edit", exact: true })).toBeVisible();
+  await expect(main.getByText("Sparse Community", { exact: true })).toBeVisible();
+
+  await page.goto("/sign-up?" + new URLSearchParams({ returnTo }));
+  await expect(main.getByRole("heading", { name: "Suggest an edit", exact: true })).toBeVisible();
+  await expect(main.getByText("Sparse Community", { exact: true })).toBeVisible();
+});
+
+test("direct and ineligible profile edits keep the ordinary editor entry", async ({ page }) => {
+  const paths = [
+    "/playwright-sparse-community/edit",
+    "/playwright-sparse-community/edit?intent=suggest&intent=suggest",
+    "/basicbit/edit?intent=suggest",
+    "/playwright-missing-contribution/edit?intent=suggest",
+  ];
+  for (const path of paths) {
+    await page.goto(path);
+    const main = page.getByRole("main");
+    await expect(main.getByRole("heading", { name: "Edit profile", exact: true })).toBeVisible();
+    await expect(main.getByRole("heading", { name: "Suggest an edit", exact: true })).toHaveCount(0);
+    await expect(main.getByText("Sparse Community", { exact: true })).toHaveCount(0);
+  }
+
+  for (const returnTo of paths.slice(1)) {
+    await page.goto("/sign-in?" + new URLSearchParams({ returnTo }));
+    await expectSignInPage(page, "Edit profile");
+    await expect(page.getByRole("main").getByText("Sparse Community", { exact: true })).toHaveCount(0);
+  }
+});
+
+test("Clerk account switches retain the contribution return target", async ({ page }) => {
+  const returnTo = "/submit";
+  await page.goto("/sign-in?" + new URLSearchParams({ returnTo }));
+  await expectSignInPage(page, "Add profile");
+  const providerUnavailable = await page.getByText(AUTH_UNAVAILABLE_COPY, { exact: true }).count() > 0;
+
+  async function switchTo(label: string, pathname: string) {
+    const link = page.getByRole("main").getByRole("link", { name: label, exact: true });
+    await expect(link).toBeVisible();
+    const url = new URL((await link.getAttribute("href"))!, page.url());
+    expect(url.pathname).toBe(pathname);
+    expect(url.searchParams.get("returnTo")).toBe(returnTo);
+    await link.focus();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL((next) => next.pathname === pathname);
+  }
+
+  if (providerUnavailable) {
+    await page.goto("/sign-up?" + new URLSearchParams({ return_to: returnTo }));
+  } else {
+    await switchTo("Sign up", "/sign-up");
+  }
+  const signUpShell = page.locator('section[aria-labelledby="sign-up-heading"]');
+  await expect(signUpShell.getByText("Add profile", { exact: true })).toBeVisible();
+
+  if (!providerUnavailable) {
+    await switchTo("Sign in", "/sign-in");
+    await expectSignInPage(page, "Add profile");
+  }
+
+  await page.goto("/sign-in?" + new URLSearchParams({ return_to: returnTo }));
+  await expectSignInPage(page, "Add profile");
+  await page.goto("/sign-in?" + new URLSearchParams({ returnTo: "/events/new", return_to: returnTo }));
+  await expectSignInPage(page, "Add event");
+
+  await page.goto("/sign-up?" + new URLSearchParams({ return_to: "https://example.invalid/submit" }));
+  await expect(page.locator("h1#sign-up-heading")).toHaveText("Create account");
+  await expect(page.getByRole("main").getByText("Add profile", { exact: true })).toHaveCount(0);
+});
+
+test("add event sign-in keeps the contribution context and full return target", async ({ page }) => {
+  for (const returnTo of [
+    "/events/new",
+    "/events/new?community=playwright-afterglow-social",
+    "/events/new?draft=fixture-draft",
+    "/events/new?community=playwright-afterglow-social&draft=fixture-draft",
+  ]) {
+    expect((await page.goto(returnTo))?.status()).toBe(200);
+    await expect(page).toHaveURL(
+      (url) => url.pathname === "/sign-in" && url.searchParams.get("returnTo") === returnTo,
+    );
+    await expectSignInPage(page, "Add event");
+    await expect(page.locator('section[aria-labelledby="sign-in-heading"]')).not.toContainText(returnTo);
+  }
 });
 
 test("OpenAPI YAML document is served", async ({ page }) => {
@@ -362,7 +704,7 @@ test.describe("hosted lookup smoke", () => {
 
   test("lookup route and suggest endpoint render", async ({ page }) => {
     await page.goto("/lookup");
-    await expect(page.getByRole("heading", { name: "Search VRDex" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "DJ links", exact: true })).toBeVisible();
     await expect(page).toHaveURL(/\/search\?view=dj$/);
     await expect(page.getByLabel("DJ name")).toBeVisible();
     await expect(page.getByRole("button", { name: "Lookup", exact: true })).toBeVisible();
@@ -467,7 +809,7 @@ test.describe("fixture lookup smoke", () => {
     await expect(page.getByRole("heading", { name: "Watch", exact: true })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Open preview" })).toHaveCount(0);
     await expectProfilePlaybackLinks(page, 1);
-    await expect(page.getByText("Live now", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Live now", { exact: true }).and(page.locator(":not(nav *)"))).toHaveCount(0);
 
     await page.clock.install();
     const firstResponse = page.waitForResponse((response) =>
@@ -478,7 +820,7 @@ test.describe("fixture lookup smoke", () => {
     await page.clock.fastForward(17_000);
 
     await expect(page.getByText("VRCDN stream", { exact: true })).toBeVisible();
-    await expect(page.getByText("Live now", { exact: true })).toBeVisible();
+    await expect(page.getByText("Live now", { exact: true }).and(page.locator(":not(nav *)"))).toBeVisible();
     await expect(page.getByRole("button", { name: "Play VRCDN stream" })).toBeVisible();
     await expect(page.locator("video")).toHaveCount(0);
     expect(attempts).toBe(2);
@@ -520,10 +862,11 @@ test.describe("fixture lookup smoke", () => {
       await expect.poll(() => copiedPlayback).toBe(value);
     }
     await expect(page.getByRole("link", { exact: true, name: "VRCDN stream" })).toHaveCount(0);
-    await expect(page.getByText("Live now", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Live now", { exact: true }).and(page.locator(":not(nav *)"))).toHaveCount(0);
   });
 
   test("confirmed live VRCDN waits for two offline observations", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 760 });
     let attempts = 0;
     let releaseFirstResponse: () => void = () => {};
     const firstResponseHold = new Promise<void>((resolve) => {
@@ -541,9 +884,8 @@ test.describe("fixture lookup smoke", () => {
     });
 
     await page.goto("/playwright-dj-aurora");
-    const vrcdnBlock = page
-      .getByText("VRCDN", { exact: true })
-      .locator("xpath=ancestor::section[1]");
+    const vrcdnBlock = page.getByRole("region", { name: "VRCDN dj-aurora", exact: true });
+    const shortcutStatus = page.getByRole("navigation", { name: "Profile sections" }).getByText("Live now", { exact: true });
     const player = page.getByRole("button", { name: "Play VRCDN" });
     const preview = page.getByRole("link", { name: "Open preview" });
     await expect(player).toBeVisible();
@@ -551,7 +893,7 @@ test.describe("fixture lookup smoke", () => {
     await expect(preview).toHaveCount(0);
     await waitForVisualReady(page);
     const copyPosition = () => vrcdnBlock.evaluate((block) => {
-      const link = block.querySelector('button[aria-label="Copy Quest"]')!;
+      const link = block.querySelector('button[aria-label="Copy Quest for VRCDN dj-aurora"]')!;
       const linkRect = link.getBoundingClientRect();
       const blockRect = block.getBoundingClientRect();
       return { x: linkRect.x - blockRect.x, y: linkRect.y - blockRect.y,
@@ -572,13 +914,15 @@ test.describe("fixture lookup smoke", () => {
     await expect(player).toHaveAttribute("data-lifecycle-marker", "original");
     await expect(player).toBeVisible();
     await expect(vrcdnBlock.getByText("Live now", { exact: true })).toBeVisible();
+    await expect(shortcutStatus).toBeVisible();
 
     await page.clock.fastForward(10_000);
 
     await expect.poll(() => attempts).toBe(2);
     await expect(player).toHaveCount(0);
     await expect(vrcdnBlock.getByText("Live now", { exact: true })).toHaveCount(0);
-    await expect(vrcdnBlock.getByRole("button", { name: "Copy Quest", exact: true })).toBeVisible();
+    await expect(shortcutStatus).toBeHidden();
+    await expect(vrcdnBlock.getByRole("button", { name: "Copy Quest for VRCDN dj-aurora", exact: true })).toBeVisible();
     expect(await copyPosition()).toEqual(copyBefore);
   });
 
@@ -632,9 +976,7 @@ test.describe("fixture lookup smoke", () => {
     });
 
     await page.goto("/playwright-dj-aurora");
-    const vrcdnBlock = page
-      .getByText("VRCDN", { exact: true })
-      .locator("xpath=ancestor::section[1]");
+    const vrcdnBlock = page.getByRole("region", { name: "VRCDN dj-aurora", exact: true });
     const player = page.getByRole("button", { name: "Play VRCDN" });
     await expect(player).toBeVisible();
     await player.click();
@@ -683,9 +1025,7 @@ test.describe("fixture lookup smoke", () => {
     });
 
     await page.goto("/playwright-dj-aurora");
-    const vrcdnBlock = page
-      .getByText("VRCDN", { exact: true })
-      .locator("xpath=ancestor::section[1]");
+    const vrcdnBlock = page.getByRole("region", { name: "VRCDN dj-aurora", exact: true });
     await expect.poll(() => attempts).toBe(1);
     const player = page.getByRole("button", { name: "Play VRCDN" });
     await player.click();
@@ -774,11 +1114,11 @@ test.describe("fixture lookup smoke", () => {
     await expect(page).toHaveURL(/\/search\?q=BASICBIT&view=dj$/);
     await expect(page.getByRole("link", { name: "BASICBIT", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Website: basicbit.net", exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "VRCDN preview", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "VRCDN stream preview", exact: true })).toBeVisible();
     await expect(page.locator('input[value="basic_bit"]')).toHaveCount(2);
     await expect(page.getByRole("link", { name: /Discord:/ })).toHaveCount(0);
-    await expect(page.locator('input[value="https://stream.vrcdn.live/live/basicbit.live.ts"]')).toHaveCount(2);
-    await expect(page.locator('input[value="rtspt://stream.vrcdn.live/live/basicbit"]')).toHaveCount(2);
+    await expect(page.locator("code").filter({ hasText: "https://stream.vrcdn.live/live/basicbit.live.ts" })).toHaveCount(2);
+    await expect(page.locator("code").filter({ hasText: "rtspt://stream.vrcdn.live/live/basicbit" })).toHaveCount(2);
     await expect(page.locator('input[value="https://www.twitch.tv/basic_bit"]')).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Twitch: twitch.tv", exact: true })).toBeVisible();
     await expect(page.getByText("BASIC", { exact: true })).toHaveCount(2);
@@ -869,22 +1209,29 @@ test.describe("fixture lookup smoke", () => {
 
     await expect(page.getByRole("heading", { name: "Search results", exact: true })).toBeVisible();
     const standardResults = page.getByRole("region", { name: "Search results" });
-    await expect(standardResults.getByRole("link", { name: /BASICBIT/ })).toHaveCount(1);
-    await expect(standardResults.getByText("BASICBIT", { exact: true })).toBeVisible();
-    await expect(standardResults.getByText("Software Dev | 3D Designer | VRDJ")).toBeVisible();
-    await expect(standardResults.getByRole("img", { name: "BASICBIT" })).toBeVisible();
+    const standardResult = standardResults.getByRole("link", { name: /\bBASICBIT\b/ });
+    await expect(standardResult).toHaveCount(1);
+    await expect(standardResult).toBeVisible();
+    await expect(standardResult).toHaveAttribute("href", "/basicbit");
+    await expect(standardResult.getByText("Software Dev | 3D Designer | VRDJ")).toBeVisible();
+    const standardAvatar = standardResult.locator("img");
+    await expect(standardAvatar).toBeVisible();
+    await expect(standardAvatar).toHaveAttribute("src", /fixture-avatar-velvet-circuit\.svg/);
 
     await page.reload();
     await expect(page).toHaveURL(/\/search\?q=BASICBIT$/);
     await expect(page.getByRole("heading", { name: "Search results", exact: true })).toBeVisible();
-    await expect(page.getByRole("region", { name: "Search results" }).getByText("BASICBIT", { exact: true })).toBeVisible();
+    await expect(standardResult).toBeVisible();
+    await expect(standardResult).toHaveAttribute("href", "/basicbit");
 
     await expect(page.getByRole("link", { name: "DJ links", exact: true })).toHaveCount(0);
     await page.goto("/search?q=BASICBIT&view=dj");
     await expect(page).toHaveURL(/\/search\?q=BASICBIT&view=dj$/);
-    await expect(page.getByRole("heading", { name: "Search VRDex" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "DJ links", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Search results", exact: true })).toHaveAttribute("href", "/search?q=BASICBIT");
-    await expect(page.getByRole("link", { name: "BASICBIT", exact: true })).toBeVisible();
+    const djResult = page.getByRole("region", { name: "Lookup results" }).getByRole("link", { name: "BASICBIT", exact: true });
+    await expect(djResult).toBeVisible();
+    await expect(djResult).toHaveAttribute("href", "/basicbit");
     await expect(page.getByRole("link", { name: "Website: basicbit.net", exact: true })).toBeVisible();
     const djAvatar = page.locator(".lookup-avatar img").first();
     await expect(djAvatar).toBeVisible();
@@ -893,7 +1240,8 @@ test.describe("fixture lookup smoke", () => {
     await page.reload();
     await expect(page).toHaveURL(/\/search\?q=BASICBIT&view=dj$/);
     await expect(page.getByRole("link", { name: "Search results", exact: true })).toHaveAttribute("href", "/search?q=BASICBIT");
-    await expect(page.getByRole("link", { name: "BASICBIT", exact: true })).toBeVisible();
+    await expect(djResult).toBeVisible();
+    await expect(djResult).toHaveAttribute("href", "/basicbit");
 
     await page.getByRole("link", { name: "Search results", exact: true }).click();
     await expect(page).toHaveURL(/\/search\?q=BASICBIT$/);
@@ -908,12 +1256,15 @@ test.describe("fixture lookup smoke", () => {
     await expect(page.getByRole("heading", { name: "Search results", exact: true })).toBeVisible();
   });
 
-  test("search views share empty states and legacy lookup preserves its query", async ({ page }) => {
+  test("DJ links preserves the legacy lookup query and offers search recovery", async ({ page }) => {
     await page.goto("/lookup?q=No%20Matching%20Fixture");
     await expect(page).toHaveURL(/\/search\?q=No(?:%20|\+)Matching(?:%20|\+)Fixture&view=dj$/);
-    await expect(page.getByText("No matches found.", { exact: true })).toBeVisible();
+    const lookupResults = page.getByRole("region", { name: "Lookup results" });
+    await expect(lookupResults.getByText("No matches found.", { exact: true })).toBeVisible();
+    const searchRecovery = lookupResults.getByRole("link", { name: "Search results", exact: true });
+    await expect(page.getByRole("link", { name: "Search results", exact: true })).toHaveCount(1);
 
-    await page.getByRole("link", { name: "Search results", exact: true }).click();
+    await searchRecovery.click();
     await expect(page).toHaveURL(/\/search\?q=No(?:%20|\+)Matching(?:%20|\+)Fixture$/);
     await expect(page.getByText("No public results matched that search yet.", { exact: true })).toBeVisible();
 
@@ -922,10 +1273,54 @@ test.describe("fixture lookup smoke", () => {
     await expect(page.getByRole("link", { name: "Search results", exact: true })).toHaveAttribute("href", "/search?q=BASICBIT");
   });
 
+  test("DJ links recovers a community miss and keeps its clear control usable on phones", async ({ page }) => {
+    await page.goto("/search?q=Afterglow+Social&view=dj");
+    const lookupResults = page.getByRole("region", { name: "Lookup results" });
+    await expect(lookupResults.getByText("No matches found.", { exact: true })).toBeVisible();
+
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      const clearControl = page.getByRole("button", { name: "Clear lookup" });
+      await expect(clearControl).toBeVisible();
+      const bounds = await clearControl.boundingBox();
+      expect(bounds?.width).toBeGreaterThanOrEqual(40);
+      expect(bounds?.height).toBeGreaterThanOrEqual(40);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    }
+
+    await lookupResults.getByRole("link", { name: "Search results", exact: true }).click();
+    await expect(page).toHaveURL("/search?q=Afterglow+Social");
+    await expect(page.getByRole("region", { name: "Search results" })
+      .getByText("Afterglow Social", { exact: true }).first()).toBeVisible();
+  });
+
+  test("DJ links distinguishes unavailable lookup and all-miss bulk results", async ({ page }) => {
+    await page.route("**/lookup/suggest?q=Unavailable%20Lookup", async (route) => {
+      await route.fulfill({ status: 503, json: { results: [], privateResults: [] } });
+    });
+    await page.goto("/search?q=Afterglow+Social&view=dj");
+    await expect(page.getByText("No matches found.", { exact: true })).toBeVisible();
+    await page.getByLabel("DJ name").fill("Unavailable Lookup");
+    await page.getByRole("button", { name: "Lookup", exact: true }).click();
+    await expect(page.getByText("Lookup data is temporarily unavailable.")).toBeVisible();
+    await expect(page.getByText("No matches found.", { exact: true })).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Bulk", exact: true }).click();
+    await page.getByLabel("Lineup text").fill("No Artist Alpha Fixture\nNo Artist Beta Fixture");
+    await expect(page.getByText("No match", { exact: true })).toHaveCount(2);
+    await expect(page.getByText("No matches found.", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Lookup data is temporarily unavailable.")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Search results", exact: true })).toHaveAttribute(
+      "href",
+      "/search",
+    );
+  });
+
   test("standard search supports keyboard typeahead and sparse profile fallbacks", async ({ page }) => {
     await page.goto("/search");
     const searchInput = page.getByRole("combobox", { name: /Search/i });
 
+    await waitForPublicSearchHydration(page);
     await searchInput.fill("basic");
     await expect(page.getByRole("option", { name: /BASICBIT/i })).toBeVisible();
     await searchInput.press("ArrowDown");
@@ -936,8 +1331,10 @@ test.describe("fixture lookup smoke", () => {
 
     await page.goto("/search?q=Sparse%20Import");
     const sparseResult = page.getByRole("region", { name: "Search results" });
-    await expect(sparseResult.getByText("Sparse Import", { exact: true })).toBeVisible();
-    await expect(sparseResult.getByRole("img", { name: "Sparse Import" })).toHaveCount(0);
+    const sparseProfile = sparseResult.getByRole("link", { name: /^Sparse Import\b/ });
+    await expect(sparseProfile).toBeVisible();
+    await expect(sparseProfile).toHaveAttribute("href", "/playwright-sparse-import");
+    await expect(sparseProfile.locator("img")).toHaveCount(0);
     await expect(sparseResult.getByRole("link", { name: "Claim this profile" })).toHaveAttribute(
       "href",
       "/claim/playwright-sparse-import?source=search",
@@ -945,7 +1342,9 @@ test.describe("fixture lookup smoke", () => {
     await expect(sparseResult.getByText("Imported profile seed", { exact: true })).toHaveCount(0);
 
     await page.goto("/search?q=Sparse%20Import&view=dj");
-    await expect(page.getByRole("link", { name: "Sparse Import", exact: true })).toBeVisible();
+    const djResult = page.getByRole("region", { name: "Lookup results" }).getByRole("link", { name: "Sparse Import", exact: true });
+    await expect(djResult).toBeVisible();
+    await expect(djResult).toHaveAttribute("href", "/playwright-sparse-import");
     await expect(page.getByText(/Imported profile seed|Unclaimed/, { exact: true })).toHaveCount(0);
 
     await page.goto("/search?q=DJ%20Aurora&view=dj");
@@ -1007,7 +1406,7 @@ test.describe("fixture lookup smoke", () => {
     await expect(logo.locator("img")).toHaveCSS("object-fit", "contain");
   });
 
-  test("verified profiles use the same compact mark across profile and search views", async ({ page }, testInfo) => {
+  test("verified profiles use the same compact mark across profile and search views", async ({ page }) => {
     await page.goto("/basicbit");
     const profileMark = page.getByLabel("Verified profile");
     await expect(profileMark).toBeVisible();
@@ -1015,21 +1414,13 @@ test.describe("fixture lookup smoke", () => {
 
     await page.goto("/search?q=BASICBIT");
     const searchRegion = page.getByRole("region", { name: "Search results" });
-    const searchResult = searchRegion.getByRole("link", { name: /BASICBIT Verified profile/ });
-    const searchMark = searchRegion.getByLabel("Verified profile");
-    const resultTypeIcon = searchRegion.getByRole("img", { name: "Person" });
-    const resultTypeTooltip = searchRegion.getByText("Person", { exact: true });
+    const searchResult = searchRegion.getByRole("link", { name: /\bBASICBIT\b/ });
+    const searchMark = searchResult.getByLabel("Verified profile");
     await expect(searchMark).toBeVisible();
-    await expect(resultTypeIcon).toBeVisible();
-    await expect(resultTypeTooltip).toHaveCSS("opacity", "0");
-    if (testInfo.project.name === "desktop-chromium") {
-      await searchResult.hover({ position: { x: 200, y: 45 } });
-      await expect(resultTypeTooltip).toHaveCSS("opacity", "0");
-      await resultTypeIcon.hover();
-      await expect(resultTypeTooltip).toHaveCSS("opacity", "1");
-    }
+    await expect(searchResult.getByText("Person", { exact: true })).toBeVisible();
+    await expect(searchResult.getByText("BASICBIT", { exact: true })).toHaveCSS("text-decoration-line", "underline");
     await searchResult.focus();
-    await expect(resultTypeTooltip).toHaveCSS("opacity", "1");
+    await expect(searchResult).toBeFocused();
     const searchBox = await searchMark.boundingBox();
 
     await page.goto("/search?q=BASICBIT&view=dj");

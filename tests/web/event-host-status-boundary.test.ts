@@ -10,10 +10,12 @@ import { createSourceStatusReader } from '../../apps/web/src/lib/event-source-ob
 import { buildGroupPopulationSeries } from '../../convex/_groupPopulationSeries';
 const webRequire=createRequire(path.resolve('apps/web/package.json'));
 function load(relative:string,dependencies:Record<string,unknown>,globals:Record<string,unknown>={}) {
- const source=readFileSync(path.resolve('apps/web/src',relative),'utf8');
+ const filename=path.resolve('apps/web/src',relative);
+ const source=readFileSync(filename,'utf8');
+ const sourceRequire=createRequire(filename);
  const {outputText}=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}});
  const exports:Record<string,any>={};
- vm.runInNewContext(outputText,{exports,require:(name:string)=>name in dependencies?dependencies[name]:name.startsWith('@/')?webRequire(path.resolve('apps/web/src',name.slice(2))):webRequire(name),Date,Response,URL,AbortController,AbortSignal,setTimeout,clearTimeout,setInterval,clearInterval,...globals});
+ vm.runInNewContext(outputText,{exports,require:(name:string)=>name in dependencies?dependencies[name]:name.startsWith('@/')?sourceRequire(path.resolve('apps/web/src',name.slice(2))):sourceRequire(name),Date,Response,URL,AbortController,AbortSignal,setTimeout,clearTimeout,setInterval,clearInterval,...globals});
  return exports;
 }
 it('known fixture profiles omit unrelated world reads only while fixtures are enabled',async()=>{

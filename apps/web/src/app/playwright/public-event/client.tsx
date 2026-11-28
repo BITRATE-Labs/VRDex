@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { ConvexProvider, type ConvexReactClient } from "convex/react";
 import { getFunctionName, type FunctionReference } from "convex/server";
+import { isPlaywrightGuestEventFixture } from "@/convex/playwright-event-access";
 import { EventPublicPage, type PublicEvent } from "../../_components/event-public-page";
 
 import { EventHostView } from "../../_components/event-host-view";
@@ -12,7 +13,7 @@ export function PublicEventFixture({ event, host = false }: { event: PublicEvent
   const client = useMemo(() => ({
     watchQuery(query: FunctionReference<"query">, args: { slug: string; communitySlug?: string }) {
       if (getFunctionName(query) === "events:getHostAccess") return {
-        localQueryResult: () => true,
+        localQueryResult: () => !isPlaywrightGuestEventFixture(event.slug),
         onUpdate: () => () => {},
         journal: () => undefined,
       };

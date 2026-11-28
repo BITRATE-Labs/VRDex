@@ -1,5 +1,5 @@
 "use client";
-import { useLayoutEffect, useRef } from "react";
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type {
   SavedResolution,
   TimelineEvent,
@@ -12,10 +12,72 @@ import { TimelineEventBar, type TimelineActions } from "./timeline-event-bar";
 import { TimelineDateMarkers } from "./timeline-date-markers";
 import { TimelineNight, nightLayout } from "./timeline-night";
 import styles from "./timeline.module.css";
+
+const minTabTargetWidth = 44;
+
+function syncChartTabStops(root: HTMLDivElement, clipped: WeakSet<HTMLButtonElement>) {
+  const left = root.getBoundingClientRect().left + root.clientLeft;
+  const right = left + root.clientWidth;
+  const clips = new Map<Element, { left: number; right: number; top: number; bottom: number }>();
+  const clipBounds = (element: Element) => {
+    let bounds = clips.get(element);
+    if (!bounds) {
+      const box = element.getBoundingClientRect();
+      const left = box.left + element.clientLeft;
+      const top = box.top + element.clientTop;
+      bounds = { left, right: left + element.clientWidth, top, bottom: top + element.clientHeight };
+      clips.set(element, bounds);
+    }
+    return bounds;
+  };
+  const buttons = Array.from(root.querySelectorAll("button"), (button) => {
+    const bounds = button.getBoundingClientRect();
+    let paintedLeft = bounds.left;
+    let paintedRight = bounds.right;
+    let paintedTop = bounds.top;
+    let paintedBottom = bounds.bottom;
+    const card = button.closest(`.${styles.event}, .${styles.nightBar}`);
+    // A button can extend beyond its card or a clipped loading lane.
+    for (const clip of [card, button.closest(`.${styles.lanes}[data-viewport-loading]`)]) {
+      if (!clip) continue;
+      const box = clipBounds(clip);
+      paintedLeft = Math.max(paintedLeft, box.left);
+      paintedRight = Math.min(paintedRight, box.right);
+      paintedTop = Math.max(paintedTop, box.top);
+      paintedBottom = Math.min(paintedBottom, box.bottom);
+    }
+    const paintedWidth = paintedRight - paintedLeft;
+    const visibleWidth = Math.min(paintedRight, right) - Math.max(paintedLeft, left);
+    const buttonOverlap = Math.min(bounds.right, right) - Math.max(bounds.left, left);
+    const cardBounds = card && clipBounds(card);
+    const cardFits = cardBounds && cardBounds.left >= left && cardBounds.right <= right;
+    // WebKit scrolls the entire control into view when focus hits only a sliver.
+    // A fully contained short card can expose a smaller target by design.
+    const visible = paintedWidth > 0 && paintedBottom > paintedTop
+      && visibleWidth >= Math.min(minTabTargetWidth, cardFits ? paintedWidth : bounds.width)
+      && buttonOverlap >= Math.min(minTabTargetWidth, bounds.width);
+    return { button, visible };
+  });
+
+  for (const { button, visible } of buttons) {
+    if (visible && clipped.delete(button)) {
+      button.removeAttribute("tabindex");
+    } else if (!visible && button.tabIndex === 0) {
+      button.tabIndex = -1;
+      clipped.add(button);
+    }
+  }
+}
+
 export function TimelineChart({
   records,
   lanes,
   saved,
+  compactEmpty,
+  loadingStatus,
+  viewportLoading,
+  emptyState,
+  hour12,
   range,
   now,
   slotCoverage,
@@ -27,6 +89,11 @@ export function TimelineChart({
   records: TimelineEvent[];
   lanes: ReadonlyArray<EventLane>;
   saved: SavedResolution[];
+  compactEmpty: boolean;
+  loadingStatus?: ReactNode;
+  viewportLoading: boolean;
+  emptyState?: ReactNode;
+  hour12: boolean;
   range: TimelineRange;
   now: number;
   slotCoverage: Record<string, "partial" | "complete">;
@@ -35,6 +102,8 @@ export function TimelineChart({
   onNext: () => void;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
+  const clippedButtons = useRef(new WeakSet<HTMLButtonElement>());
+  const rangeDescriptionId = useId();
   const drag = useRef<{ x: number; scroll: number; moved: boolean } | null>(
     null,
   );
@@ -46,6 +115,7 @@ export function TimelineChart({
     endAt: origin + 144 * HOUR,
     timeZone: range.timeZone,
   };
+  const markCurrentTime = now >= origin && now < canvasRange.endAt;
   const visibleSaved = saved.filter((item) => {
     if (item.kind !== "available" || item.status === "cancelled") return false;
     const schedule = item.slot?.schedule ?? item.event.schedule;
@@ -59,10 +129,18 @@ export function TimelineChart({
   const nightHeight = nightLanes.length
     ? (Math.max(...nightLanes.map((l) => l.lane)) + 1) * 50
     : 0;
-  const height = Math.max(4, ...lanes.map((l) => l.lane + 1)) * 94;
+  const publicLanes = compactEmpty ? [] : lanes;
+  const viewportHeight = Math.max(compactEmpty ? 1 : 4, ...publicLanes.map((l) => l.lane + 1)) * 94;
+  const [settledHeight, setSettledHeight] = useState(viewportHeight);
+  if (!viewportLoading && viewportHeight !== settledHeight) {
+    setSettledHeight(viewportHeight);
+  }
+  const height = viewportLoading ? settledHeight : viewportHeight;
+  const showEmptyState = Boolean(emptyState);
+  const compactQuietPlot = compactEmpty && !viewportLoading && actions.plan.length === 0;
   useLayoutEffect(() => {
     const el = scroller.current;
-    if (!el) return;
+    if (!el || showEmptyState) return;
     const target = timeToX({
       instant: range.startAt,
       origin,
@@ -72,17 +150,38 @@ export function TimelineChart({
       if (drag.current) drag.current.scroll += target - el.scrollLeft;
       el.scrollLeft = target;
     }
-  }, [origin, range.startAt]);
+  }, [origin, range.startAt, showEmptyState]);
+  useLayoutEffect(() => {
+    if (scroller.current && !showEmptyState) {
+      syncChartTabStops(scroller.current, clippedButtons.current);
+    }
+  });
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
     const observer = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width;
-      if (width) onWidth(width);
+      if (!width) return;
+      if (!showEmptyState) syncChartTabStops(el, clippedButtons.current);
+      onWidth(width);
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [onWidth]);
+  }, [onWidth, showEmptyState]);
+  useLayoutEffect(() => {
+    const root = scroller.current;
+    if (!root || showEmptyState) return;
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        entry.target.toggleAttribute("data-axis-label-visible", entry.intersectionRatio === 1);
+      }
+    }, { root, threshold: 1 });
+    root.querySelectorAll("[data-axis-label], [data-current-time-label]").forEach((label) => observer.observe(label));
+    return () => observer.disconnect();
+  }, [origin, range.timeZone, showEmptyState, markCurrentTime]);
+  if (showEmptyState) {
+    return <div ref={scroller} className={styles.scroller} data-testid="favorites-empty-state">{emptyState}</div>;
+  }
   const formatHour = new Intl.DateTimeFormat(undefined, {
     timeZone: range.timeZone,
     hour: "numeric",
@@ -96,18 +195,30 @@ export function TimelineChart({
     hour: "numeric",
     minute: "2-digit",
   });
+  const formatRangeEndpoint = new Intl.DateTimeFormat(undefined, {
+    timeZone: range.timeZone,
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
   return (
       <div
         ref={scroller}
         className={styles.scroller}
         role="region"
         aria-label="Timeline chart"
+        aria-describedby={rangeDescriptionId}
         tabIndex={0}
         onScroll={(event) => {
           const anchor = origin + (event.currentTarget.scrollLeft / 100) * HOUR;
           if (Math.abs(anchor - range.startAt) > HOUR / 200) onPan(anchor);
         }}
         onKeyDown={(event) => {
+          if (event.key === "Tab") {
+            syncChartTabStops(event.currentTarget, clippedButtons.current);
+          }
           if (event.target !== event.currentTarget) return;
           if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
             event.preventDefault();
@@ -149,7 +260,7 @@ export function TimelineChart({
         }}
       >
         <div className={styles.canvas} style={{ width: 14400 }}>
-          <div className={styles.dayAxis}>
+          <div className={styles.dayAxis} aria-hidden="true">
             {localDayBands(canvasRange).map((day) => (
               <div
                 key={day.startAt}
@@ -162,13 +273,13 @@ export function TimelineChart({
                   width: ((day.endAt - day.startAt) / HOUR) * 100,
                 }}
               >
-                <span>{day.label}</span>
+                <span data-axis-label>{day.label}</span>
               </div>
             ))}
           </div>
-          <div className={styles.hourAxis}>
+          <div className={styles.hourAxis} aria-hidden="true">
             {Array.from({ length: 144 }, (_, i) => (
-              <span key={i} style={{ left: i * 100 }}>
+              <span key={i} data-axis-label style={{ left: i * 100 }}>
                 {Number(formatMinute.format(origin + i * HOUR)) === 0
                   ? formatHour.format(origin + i * HOUR)
                   : formatHourMinute.format(origin + i * HOUR)}
@@ -180,6 +291,7 @@ export function TimelineChart({
               saved={visibleSaved}
               range={range}
               origin={origin}
+              hour12={hour12}
               onNext={onNext}
               records={records}
               slotCoverage={slotCoverage}
@@ -187,8 +299,15 @@ export function TimelineChart({
               {...actions}
             />
           )}
-          <div data-testid="public-timeline-lanes" className={styles.lanes} style={{ height }}>
-            {lanes.map((lane) => {
+          <div
+            data-testid="public-timeline-lanes"
+            data-loading-placeholder={loadingStatus ? true : undefined}
+            data-viewport-loading={viewportLoading || undefined}
+            className={compactQuietPlot ? `${styles.lanes} max-[360px]:max-h-10` : styles.lanes}
+            style={{ height }}
+          >
+            {loadingStatus}
+            {publicLanes.map((lane) => {
               const event = records.find((e) => e.id === lane.eventId);
               return event ? (
                 <TimelineEventBar
@@ -203,7 +322,7 @@ export function TimelineChart({
             })}
           </div>
           <TimelineDateMarkers records={records} range={range} origin={origin} {...actions} />
-          {now >= origin && now < canvasRange.endAt && (
+          {markCurrentTime && (
             <div
               className={styles.now}
               aria-label="Current time"
@@ -211,7 +330,7 @@ export function TimelineChart({
                 left: timeToX({ instant: now, origin, pixelsPerHour: 100 }),
               }}
             >
-              <span>
+              <span data-current-time-label>
                 {new Intl.DateTimeFormat(undefined, {
                   timeZone: range.timeZone,
                   hour: "numeric",
@@ -221,6 +340,9 @@ export function TimelineChart({
             </div>
           )}
         </div>
+        <span id={rangeDescriptionId} hidden>
+          {formatRangeEndpoint.format(range.startAt)} to {formatRangeEndpoint.format(range.endAt)}
+        </span>
       </div>
   );
 }

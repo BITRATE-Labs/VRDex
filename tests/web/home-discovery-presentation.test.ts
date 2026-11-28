@@ -30,7 +30,12 @@ test("static discovery cards preserve attribution, sparse evidence and canonical
     const props = { event, matchingPeople, preferences, timeZone: 'Pacific/Honolulu', hour12: true, onSelect() {}, onSave() {} };
     const markup = renderToStaticMarkup(React.createElement(DiscoveryEventCard, props));
     assert.match(markup, /href="\\/club\\/events\\/event"/);
-    assert.match(markup, /2026-12-05/);
+    assert.ok(markup.includes('dateTime="2026-12-05">Dec 5, 2026</time>'));
+    const invalidDate = { ...event, schedule: { ...event.schedule, eventDate: '2026-02-30' } };
+    const invalidMarkup = renderToStaticMarkup(React.createElement(DiscoveryEventCard, { ...props, event: invalidDate }));
+    assert.ok(invalidMarkup.includes('<a class="host" href="/club">Prism</a>'));
+    assert.doesNotMatch(invalidMarkup, /<time\b/);
+    assert.doesNotMatch(invalidMarkup, /2026-02-30/);
     for (let i = 0; i < 12; i++) assert.ok(markup.includes('>Favorite ' + i + '<'));
     assert.ok(!/First|Third|Fourth|Deep liquid|Liquid DnB|Manual/.test(markup));
     assert.doesNotMatch(markup, /Full lineup/);
@@ -44,7 +49,7 @@ test("static discovery cards preserve attribution, sparse evidence and canonical
     assert.ok(!clubMarkup.includes('Liquid DnB'));
     assert.ok(!/upcoming|next event/i.test(clubMarkup));
     const fallback = renderToStaticMarkup(React.createElement(DiscoveryClubCard, { club: { ...club, logoImageUrl: undefined, displayName: 'Long / punctuation-heavy: Club Collective' }, preferences, onFavorite() {} }));
-    assert.ok(fallback.includes('clubTypography')); assert.ok(fallback.includes('>Long / punctuation-heavy: Club Collective<'));
+    assert.ok(fallback.includes('clubArtworkFallback')); assert.ok(fallback.includes('>Long / punctuation-heavy: Club Collective<'));
     const customClub = renderToStaticMarkup(React.createElement(DiscoveryClubCard, { club: { ...club, genres: [genre] }, preferences, onFavorite() {} }));
     assert.match(customClub, /Deep liquid/);
     assert.ok(!customClub.includes('Liquid DnB'));

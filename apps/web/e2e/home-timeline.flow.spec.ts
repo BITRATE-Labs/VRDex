@@ -4,13 +4,16 @@ import {
   TIMELINE_NOW,
   changeTimelineFixture,
   loadCompleteSchedule,
+  activateTimelineEventPreference,
 } from "./home-timeline-fixture";
 import { waitForPublicSearchHydration } from "./public-search-fixture";
 async function saveInInspector(page: Page, title: string, performer?: string) {
-  await page.locator("[data-home-schedule]").getByRole("button", { name: `Open ${title}`, exact: true }).first().click();
-  const panel = page.getByLabel("Event details", { exact: true });
-  await panel.getByRole("button", { name: `Interested: ${performer ?? title}`, exact: true }).click();
-  await panel.getByRole("button", { name: "Close", exact: true }).click();
+  const opener = page.locator("[data-home-schedule]").getByRole("button", { name: `Open ${title}`, exact: true }).first();
+  await activateTimelineEventPreference(
+    page,
+    opener,
+    `Interested: ${performer ?? title}`,
+  );
 }
 async function toggleAuroraFavorite(page: Page, selected: boolean) {
   await page.locator("[data-home-schedule]").getByRole("button", { name: "Open ORBIT: Interstellar Bassline Orchestra", exact: true }).first().click();
@@ -56,15 +59,20 @@ test.describe("continuous schedule @flow @fixture", () => {
   });
 
   test("a just-ended event deliberately saved this visit stays removable outside My night", async ({ page, timelineFixture }) => {
-    const past = page.getByTestId(`event-${timelineFixture.eventIds[0]}`);
-    await past.getByRole("button", { name: "Interested: Soft Focus", exact: true }).click();
+    const openPast = page.getByTestId(`event-${timelineFixture.eventIds[0]}`)
+      .getByRole("button", { name: "Open Soft Focus", exact: true });
+    await activateTimelineEventPreference(page, openPast, "Interested: Soft Focus");
     await page.getByLabel("Schedule date", { exact: true }).fill("2026-11-02");
     await loadCompleteSchedule(page);
     await page.getByRole("button", { name: "Now", exact: true }).click();
     await loadCompleteSchedule(page);
-    await expect(past.getByRole("button", { name: "Remove interest: Soft Focus", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "My night", exact: true })).toHaveCount(0);
-    await past.getByRole("button", { name: "Remove interest: Soft Focus", exact: true }).click();
+    await openPast.click();
+    const details = page.getByLabel("Event details", { exact: true });
+    const interest = details.getByRole("button", { name: "Interested: Soft Focus", exact: true });
+    await expect(interest).toHaveAttribute("aria-pressed", "true");
+    await interest.click();
+    await expect(interest).toHaveAttribute("aria-pressed", "false");
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("vrdex.timeline.preferences.v1")!).plan)).toEqual([]);
   });
 
@@ -96,6 +104,7 @@ test.describe("continuous schedule @flow @fixture", () => {
     await marker.getByRole("button", { name: "Open Day Gathering, Time TBA", exact: true }).click();
     const panel = page.getByLabel("Event details", { exact: true });
     await expect(panel.getByRole("heading", { name: "Day Gathering", exact: true })).toBeVisible();
+    await expect(panel.locator("time").first()).toHaveText("Oct 26, 2026 · Time TBA");
     await panel.getByRole("button", { name: "Close", exact: true }).click();
     await page.getByRole("button", { name: "Later", exact: true }).click();
     const query = new URL(page.url()).searchParams;
@@ -150,12 +159,196 @@ test.describe("continuous schedule @flow @fixture", () => {
     const quietAnchor = Date.UTC(2026, 9, 26) - (4 + width / 100) * 3600000;
     await page.goto(`/?at=${quietAnchor}&tz=America%2FNew_York&favorites=1&tag=keep`);
     await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready");
+    await expect(page.getByText("No events from favorite communities or performers", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("public-timeline-lanes")).toHaveCount(0);
     await page.getByRole("button", { name: "Next event", exact: true }).click();
     const params = new URL(page.url()).searchParams;
     expect(params.get("at")).toBe(String(TIMELINE_NOW - 9000000));
     expect(params.get("favorites")).toBe("1");
     expect(params.get("tz")).toBe("America/New_York");
     expect(params.get("tag")).toBe("keep");
+  });
+  test("mobile Favorites follows visual keyboard order and clears the filter", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.goto(`/?at=${TIMELINE_NOW}&tz=UTC&favorites=1&tag=keep`);
+    const schedule = page.locator("[data-home-schedule]");
+    const heading = schedule.getByRole("heading", { name: "Schedule", exact: true });
+    const date = schedule.getByLabel("Schedule date", { exact: true });
+    const earlier = schedule.getByRole("button", { name: "Earlier", exact: true });
+    const now = schedule.getByRole("button", { name: "Now", exact: true });
+    const later = schedule.getByRole("button", { name: "Later", exact: true });
+    const favorites = schedule.getByRole("button", { name: "Favorites only", exact: true });
+    const star = favorites.locator("svg");
+    const empty = schedule.getByText("No events from favorite communities or performers", { exact: true });
+    const clear = schedule.getByRole("button", { name: "Clear filter", exact: true });
+    const chart = schedule.getByRole("region", { name: "Timeline chart", exact: true });
+    await expect(empty).toBeVisible();
+    await expect(clear).toBeVisible();
+    await expect(chart).toHaveCount(0);
+    const summaryBounds = (await empty.boundingBox())!;
+    const recoveryBounds = (await clear.boundingBox())!;
+    expect(recoveryBounds.y).toBeGreaterThan(summaryBounds.y + summaryBounds.height);
+    const filteredWidth = await schedule.getByTestId("favorites-empty-state").evaluate((element) => element.clientWidth);
+    await expect(favorites).toHaveAttribute("aria-pressed", "true");
+    await expect(star).not.toHaveCSS("fill", "none");
+    await expect(earlier.getByText("Earlier", { exact: true })).toBeVisible();
+    await expect(later.getByText("Later", { exact: true })).toBeVisible();
+
+    const dateBounds = (await date.boundingBox())!;
+    const earlierBounds = (await earlier.boundingBox())!;
+    const laterBounds = (await later.boundingBox())!;
+    const favoriteBounds = (await favorites.boundingBox())!;
+    expect(dateBounds.y + dateBounds.height).toBeLessThan(earlierBounds.y);
+    expect(earlierBounds.y).toBe(laterBounds.y);
+    expect(laterBounds.y).toBe(favoriteBounds.y);
+    expect(laterBounds.x + laterBounds.width).toBeLessThan(favoriteBounds.x);
+    for (const control of [date, earlier, now, later, favorites, clear]) {
+      const bounds = (await control.boundingBox())!;
+      expect(bounds.width).toBeGreaterThanOrEqual(44);
+      expect(bounds.height).toBeGreaterThanOrEqual(44);
+    }
+    await heading.focus();
+    await page.keyboard.press("Tab");
+    await expect(date).toBeFocused();
+    // Chromium can visit several date segments before leaving the native field.
+    for (let index = 0; index < 6 && await date.evaluate((el) => el === document.activeElement); index += 1) {
+      await page.keyboard.press("Tab");
+    }
+    await expect(earlier).toBeFocused();
+    for (const next of [now, later, favorites]) {
+      await page.keyboard.press("Tab");
+      await expect(next).toBeFocused();
+    }
+    await page.keyboard.press("Tab");
+    await expect(clear).toBeFocused();
+    for (const previous of [favorites, later, now, earlier, date]) {
+      await page.keyboard.press("Shift+Tab");
+      await expect(previous).toBeFocused();
+    }
+
+    await clear.focus();
+    await page.keyboard.press("Space");
+    await expect(favorites).toBeFocused();
+    await expect(favorites).toHaveAttribute("aria-pressed", "false");
+    await expect(star).toHaveCSS("fill", "none");
+    const query = new URL(page.url()).searchParams;
+    expect(query.has("favorites")).toBe(false);
+    expect(query.get("at")).toBe(String(TIMELINE_NOW));
+    expect(query.get("tz")).toBe("UTC");
+    expect(query.get("tag")).toBe("keep");
+    await expect(empty).toHaveCount(0);
+    await expect(chart).toBeVisible();
+    expect(await chart.evaluate((element) => element.clientWidth)).toBe(filteredWidth);
+
+    await page.goBack();
+    await expect(favorites).toHaveAttribute("aria-pressed", "true");
+    await expect(clear).toBeVisible();
+    await expect(chart).toHaveCount(0);
+    await clear.focus();
+    await page.goForward();
+    await expect(clear).toHaveCount(0);
+    await expect(favorites).toBeFocused();
+
+    await page.goBack();
+    await expect(clear).toBeVisible();
+    await later.focus();
+    await page.goForward();
+    await expect(clear).toHaveCount(0);
+    await expect(later).toBeFocused();
+
+    await page.goBack();
+    await expect(clear).toBeVisible();
+    await favorites.press("Space");
+    await expect(favorites).toBeFocused();
+    await expect(favorites).toHaveAttribute("aria-pressed", "false");
+    await expect(chart).toBeVisible();
+  });
+  test("empty Favorites can be cleared while keeping a saved event in My night", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/?at=${TIMELINE_NOW - 3600000}&tz=America%2FNew_York&tag=keep`);
+    const title = "Low Tide";
+    await saveInInspector(page, title);
+    await page.goto(`/?at=${TIMELINE_NOW + 60000}&tz=America%2FNew_York&tag=keep`);
+    await loadCompleteSchedule(page);
+    const schedule = page.locator("[data-home-schedule]");
+    const favorites = schedule.getByRole("button", { name: "Favorites only", exact: true });
+    const clear = schedule.getByRole("button", { name: "Clear filter", exact: true });
+    const chart = schedule.getByRole("region", { name: "Timeline chart", exact: true });
+    const lanes = chart.getByTestId("public-timeline-lanes");
+    const night = chart.getByTestId("night-lanes");
+    const saved = night.getByRole("button", { name: `Open ${title}`, exact: true });
+
+    await expect(saved).toBeVisible();
+    await expect(saved.locator("time")).toHaveText("5:30 PM");
+    await expect(saved).toHaveAccessibleDescription(/5:30 PM/);
+    const originalLanesHeight = await lanes.evaluate((el) => el.clientHeight);
+    await favorites.press("Space");
+    await expect(favorites).toHaveAttribute("aria-pressed", "true");
+    await expect(schedule.getByText("No events from favorite communities or performers", { exact: true })).toBeVisible();
+    await expect(clear).toHaveCount(1);
+    await expect(clear).toBeVisible();
+    const clearedParams = new URL(page.url()).searchParams;
+    clearedParams.delete("favorites");
+    await expect(saved).toBeVisible();
+    expect(await lanes.evaluate((el) => el.clientHeight)).toBeLessThan(originalLanesHeight);
+    await favorites.press("Tab");
+    await expect(clear).toBeFocused();
+    await clear.press("Enter");
+    await expect(favorites).toBeFocused();
+    await expect(favorites).toHaveAttribute("aria-pressed", "false");
+    await expect(clear).toHaveCount(0);
+    await expect(saved).toBeVisible();
+    await expect.poll(() => lanes.evaluate((el) => el.clientHeight)).toBe(originalLanesHeight);
+    expect(new URL(page.url()).searchParams.toString()).toBe(clearedParams.toString());
+
+    await page.goBack();
+    await expect(clear).toBeVisible();
+    await clear.focus();
+    await page.goForward();
+    await expect(clear).toHaveCount(0);
+    await expect(favorites).toBeFocused();
+    await expect(saved).toBeVisible();
+  });
+  test("empty Favorites keeps its focused recovery action through refresh", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    let hold = false;
+    const buffered: (() => void)[] = [];
+    await page.routeWebSocket("**/api/**/sync", (socket) => {
+      const server = socket.connectToServer();
+      server.onMessage((message) => {
+        if (hold) buffered.push(() => socket.send(message));
+        else socket.send(message);
+      });
+    });
+    await page.goto(`/?at=${TIMELINE_NOW}&tz=UTC&favorites=1`);
+    const status = page.getByRole("status", { name: "Schedule data state" });
+    const clear = page.getByRole("button", { name: "Clear filter", exact: true });
+    await expect(status).toHaveAttribute("data-state", "ready");
+    await expect(clear).toBeVisible();
+    const refresh = page.getByRole("status", { name: "Schedule refresh" });
+    const discover = page.getByRole("heading", { name: "Discover", exact: true });
+    await expect(discover).toBeVisible();
+    await clear.focus();
+    const discoverTop = () => discover.evaluate((heading) => heading.getBoundingClientRect().top + window.scrollY);
+    const initialDiscoverTop = await discoverTop();
+    hold = true;
+    try {
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await expect(status).toHaveAttribute("data-state", "loading");
+      await expect(status.getByText("Loading events", { exact: true })).toHaveCount(0);
+      await expect(refresh).toHaveText("Loading events");
+      await expect(page.locator("[data-home-schedule] [data-loading-placeholder]")).toHaveCount(0);
+      expect(await discoverTop()).toBe(initialDiscoverTop);
+      await expect(clear).toBeFocused();
+      await expect(page.getByText("No events from favorite communities or performers", { exact: true })).toBeVisible();
+    } finally {
+      hold = false;
+      buffered.splice(0).forEach((send) => send());
+    }
+    await expect(status).toHaveAttribute("data-state", "ready");
+    await expect(refresh).toBeEmpty();
+    expect(await discoverTop()).toBe(initialDiscoverTop);
+    await expect(clear).toBeFocused();
   });
   test("defaultHomeGeometry", async ({ page, isMobile }, info) => {
     const sizes = isMobile ? [page.viewportSize()!] : [{ width: 1280, height: 800 }, { width: 1440, height: 900 }];
@@ -170,13 +363,83 @@ test.describe("continuous schedule @flow @fixture", () => {
       await page.screenshot({ path: info.outputPath(`default-${size.width}.png`), fullPage: true });
     }
   });
-  test("fourPublicRowsRemainAtQuietStartup", async ({ page }, info) => {
+  test("Timeline exposes the visible range and hides clipped axis labels", async ({ page, timelineFixture }) => {
+    await page.setViewportSize({ width: 320, height: 760 });
+    await page.goto(`/?at=${Date.UTC(2026, 9, 26, 20, 15)}&tz=Asia%2FKolkata`);
+    await loadCompleteSchedule(page);
+    const chart = page.getByRole("region", { name: "Timeline chart", exact: true });
+    await expect(chart).toHaveAccessibleDescription(/Oct 27, 1:45 AM GMT\+5:30 to Oct 27,/);
+    const boundaryLabels = () => chart.evaluate((viewport) => {
+      const { left, right } = viewport.getBoundingClientRect();
+      const labels = [...viewport.querySelectorAll("[data-axis-label]")].map((label) => {
+        const bounds = label.getBoundingClientRect();
+        return { left: bounds.left, right: bounds.right, visible: getComputedStyle(label).visibility === "visible" };
+      });
+      return {
+        hasInteriorLabel: labels.some((label) => label.visible),
+        clipsLeft: labels.some((label) => !label.visible && label.left < left && label.right > left),
+        clipsRight: labels.some((label) => !label.visible && label.left < right && label.right > right),
+        visibleLabelsFit: labels.every((label) => !label.visible || (label.left >= left && label.right <= right)),
+      };
+    });
+    const expectedLabels = { hasInteriorLabel: true, clipsLeft: true, clipsRight: true, visibleLabelsFit: true };
+    await expect.poll(boundaryLabels).toEqual(expectedLabels);
+    const snapshot = await chart.ariaSnapshot();
+    expect(snapshot).not.toContain('text: 3:30 AM');
+    await expect(chart.getByTestId(`event-${timelineFixture.eventIds[0]}`).getByRole("button", { name: "Open Soft Focus", exact: true })).toBeVisible();
+    await chart.focus();
+    await chart.press("ArrowRight");
+    await expect(chart).toBeFocused();
+    await expect(chart).toHaveAccessibleDescription(/Oct 27, 2:45 AM GMT\+5:30 to Oct 27,/);
+    await expect.poll(boundaryLabels).toEqual(expectedLabels);
+  });
+  test("Timeline keeps hour labels separate from the current time", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 760 });
+    const now = Date.UTC(2026, 9, 26, 21, 5);
+    await page.clock.setFixedTime(now);
+    await page.goto(`/?at=${now - 3600000}&tz=Asia%2FKolkata`);
+    await loadCompleteSchedule(page);
+    const chart = page.getByRole("region", { name: "Timeline chart", exact: true });
+    const badge = chart.locator('[aria-label="Current time"] > span');
+    await expect(badge).toBeVisible();
+    const badgeTop = (await badge.boundingBox())!.y;
+    const ticks = chart.locator('[aria-hidden="true"] > [data-axis-label-visible]');
+    await expect.poll(() => ticks.count()).toBeGreaterThan(1);
+    for (const tick of await ticks.all()) {
+      const bottom = await tick.evaluate((label) => {
+        const range = document.createRange();
+        range.selectNodeContents(label);
+        return range.getBoundingClientRect().bottom;
+      });
+      expect(bottom).toBeLessThan(badgeTop);
+    }
+    const markerOffset = () => chart.evaluate((viewport) => {
+      const marker = viewport.querySelector('[aria-label="Current time"]')!;
+      return marker.getBoundingClientRect().left - viewport.getBoundingClientRect().left;
+    });
+    const width = await chart.evaluate((viewport) => viewport.clientWidth);
+    for (const offset of [8, width - 8, width + 8, width / 2]) {
+      await chart.evaluate((viewport, delta) => { viewport.scrollLeft += delta; }, await markerOffset() - offset);
+      await expect.poll(async () => Math.abs(await markerOffset() - offset)).toBeLessThan(2);
+      if (offset === width / 2) {
+        await expect(badge).toBeVisible();
+      } else {
+        await expect(badge).toBeHidden();
+      }
+    }
+  });
+  test("settled quiet date shows a single public row", async ({ page }, info) => {
     await page.getByLabel("Schedule date", { exact: true }).fill("2026-11-05");
+    await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready");
     const lanes = page.getByTestId("public-timeline-lanes");
-    await expect(lanes).toHaveCount(1);
-    expect((await lanes.boundingBox())?.height).toBeGreaterThanOrEqual(376);
+    await expect(lanes).toHaveCSS("height", "94px");
     await info.attach("quiet-lanes.json", { body: JSON.stringify(await lanes.boundingBox()), contentType: "application/json" });
-    await page.screenshot({ path: info.outputPath("quiet-four-rows.png"), fullPage: true });
+    await page.screenshot({ path: info.outputPath("quiet-one-row.png"), fullPage: true });
+    const chart = page.getByRole("region", { name: "Timeline chart", exact: true });
+    const scrollLeft = await chart.evaluate((element) => element.scrollLeft);
+    await chart.press("ArrowRight");
+    await expect.poll(() => chart.evaluate((element) => element.scrollLeft)).toBe(scrollLeft + 100);
+    await expect(lanes).toHaveCSS("height", "94px");
   });
   test("favorites synchronize across tabs and saves survive reload without public snapshots", async ({
     page,
@@ -194,10 +457,12 @@ test.describe("continuous schedule @flow @fixture", () => {
         "data-state",
         "ready",
       );
-      await page
-        .getByRole("button", { name: "Favorite: Prism Collective", exact: true })
-        .first()
-        .click();
+      const orbit = page.getByTestId(`event-${timelineFixture.eventIds[3]}`).getByRole("button", { name: /^Open ORBIT:/ });
+      await activateTimelineEventPreference(
+        page,
+        orbit,
+        "Favorite: Prism Collective",
+      );
       await expect(
         other
           .getByRole("button", {
@@ -206,13 +471,8 @@ test.describe("continuous schedule @flow @fixture", () => {
           })
           .first(),
       ).toBeVisible();
-      await other
-        .getByRole("button", {
-          name: "Remove favorite: Prism Collective",
-          exact: true,
-        })
-        .first()
-        .click();
+      const otherOrbit = other.getByTestId(`event-${timelineFixture.eventIds[3]}`).getByRole("button", { name: /^Open ORBIT:/ });
+      await activateTimelineEventPreference(other, otherOrbit, "Remove favorite: Prism Collective");
       await expect(
         page
           .getByRole("button", {
@@ -244,9 +504,7 @@ test.describe("continuous schedule @flow @fixture", () => {
         .getByRole("button", { name: "Favorites only", exact: true })
         .click();
       await toggleAuroraFavorite(page, true);
-      await page
-        .getByRole("button", { name: "Interested: Low Tide", exact: true })
-        .click();
+      await saveInInspector(page, "Low Tide");
       await page.reload();
       await expect(
         page
@@ -291,9 +549,7 @@ test.describe("continuous schedule @flow @fixture", () => {
       "ready",
     );
 
-    await page
-      .getByRole("button", { name: "Interested: Low Tide", exact: true })
-      .click();
+    await saveInInspector(page, "Low Tide");
     await expect(page.getByText("Not saved", { exact: true })).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "My night", exact: true }),
@@ -506,7 +762,7 @@ test.describe("continuous schedule @flow @fixture", () => {
     await panel.getByRole("button", { name: "Close", exact: true }).click();
     await expect(trigger).toBeFocused();
   });
-  test("fullEventLinksPreserveNativeActivation", async ({
+  test("fullEventLinkPreservesNativeActivation", async ({
     page,
     context,
     timelineFixture,
@@ -520,26 +776,41 @@ test.describe("continuous schedule @flow @fixture", () => {
       .click();
     const panel = page.getByLabel("Event details", { exact: true });
     const href = `/${timelineFixture.runId}-community/events/${timelineFixture.runId}-3`;
-    const links = [
-      panel.getByRole("link", {
-        name: "ORBIT: Interstellar Bassline Orchestra",
-        exact: true,
-      }),
-      panel.getByRole("link", { name: "Open full event page", exact: true }),
-    ];
-    for (const link of links) {
-      await expect(link).toHaveAttribute("href", href);
-      const opened = context.waitForEvent("page");
-      await link.click({ modifiers: ["ControlOrMeta"] });
-      const tab = await opened;
-      await expect(tab).toHaveURL(new RegExp(href + "$"));
-      await tab.close();
-      await expect(panel).toBeVisible();
-    }
+    const link = panel.getByRole("link", { name: "Open full event page", exact: true });
+    await expect(link).toHaveAttribute("href", href);
+    await expect(link).toHaveText("Event page");
+    await expect(panel.locator(`a[href="${href}"]`)).toHaveCount(1);
+    const opened = context.waitForEvent("page");
+    await link.click({ modifiers: ["ControlOrMeta"] });
+    const tab = await opened;
+    await expect(tab).toHaveURL(new RegExp(href + "$"));
+    await tab.close();
+    await expect(panel).toBeVisible();
     await expect(
       panel.getByRole("link", { name: "Open event", exact: true }),
     ).toHaveCount(0);
   });
+  test("phone Schedule keeps Later separate from Favorites when text is enlarged", async ({ page, isMobile }) => {
+    test.skip(!isMobile);
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+    const schedule = page.getByRole("region", { name: "Schedule", exact: true });
+    const chart = schedule.getByRole("region", { name: "Timeline chart", exact: true });
+    const later = schedule.getByRole("button", { name: "Later", exact: true });
+    const favorites = schedule.getByRole("button", { name: "Favorites only", exact: true });
+
+    await expect.poll(async () => {
+      const pan = await later.boundingBox();
+      const filter = await favorites.boundingBox();
+      return !!pan && !!filter && filter.y >= pan.y + pan.height;
+    }).toBe(true);
+
+    const before = await chart.evaluate((node) => node.scrollLeft);
+    await later.tap();
+    await expect(favorites).toHaveAttribute("aria-pressed", "false");
+    await expect.poll(() => chart.evaluate((node) => node.scrollLeft)).toBeGreaterThan(before);
+  });
+
   test("phone details contain keyboard focus and close restores the invoker", async ({ page, timelineFixture, isMobile }) => {
     const invoker = page.getByTestId(`event-${timelineFixture.eventIds[3]}`).getByRole("button", {
       name: "Open ORBIT: Interstellar Bassline Orchestra", exact: true,
@@ -565,6 +836,35 @@ test.describe("continuous schedule @flow @fixture", () => {
     await page.keyboard.press("Escape");
     await expect(panel).toHaveCount(0);
     await expect(invoker).toBeFocused();
+  });
+  test("phone details restore the Schedule button activated without focus", async ({
+    page,
+    timelineFixture,
+    isMobile,
+  }) => {
+    test.skip(!isMobile);
+    const chart = page.getByRole("region", { name: "Timeline chart", exact: true });
+    const invoker = chart.getByTestId(`event-${timelineFixture.eventIds[3]}`).getByRole("button", {
+      name: "Open ORBIT: Interstellar Bassline Orchestra",
+      exact: true,
+    });
+    const panel = page.getByRole("dialog", { name: "Event details", exact: true });
+    const close = panel.getByRole("button", { name: "Close", exact: true });
+    const scrollPosition = () => chart.evaluate((node) => [window.scrollY, node.scrollLeft]);
+
+    await invoker.scrollIntoViewIfNeeded();
+    for (const dismiss of [() => close.tap(), () => page.keyboard.press("Escape")]) {
+      await chart.focus();
+      await expect(chart).toBeFocused();
+      const before = await scrollPosition();
+      // A WebKit tap can dispatch a click without moving focus to the button.
+      await invoker.dispatchEvent("click");
+      await expect(close).toBeFocused();
+      await dismiss();
+      await expect(panel).toHaveCount(0);
+      await expect(invoker).toBeFocused();
+      await expect.poll(scrollPosition).toEqual(before);
+    }
   });
   test("panelUsesCompactPerformerControls", async ({
     page,
@@ -604,6 +904,7 @@ test.describe("continuous schedule @flow @fixture", () => {
         exact: true,
       }),
     ).toBeVisible();
+    await expect(panel.getByRole("list", { name: "Lineup", exact: true }).getByRole("listitem")).toHaveCount(2);
     const poster = panel.getByRole("img", {
       name: "ORBIT: Interstellar Bassline Orchestra poster",
     });
@@ -646,22 +947,29 @@ test.describe("continuous schedule @flow @fixture", () => {
     ).toHaveCount(0);
     await expect(panel.getByText("DJ", { exact: true })).toHaveCount(0);
     await expect(
-        panel.getByText(/ (12|24)h$/, { exact: true }),
-    ).toHaveText("UTC · 12h");
+      panel.getByText(/ (12|24)h$/, { exact: true }),
+    ).toHaveCount(0);
+    await expect(panel.locator("time").first()).toHaveText(/\b2026,.*\s(?:AM|PM)\sUTC$/);
+    await expect(panel.getByRole("heading", { name: "Lineup", exact: true })).toBeVisible();
+    await expect(panel.getByRole("list", { name: "Lineup", exact: true })).toBeVisible();
     if (isMobile) {
       expect((await panel.boundingBox())?.height).toBeCloseTo(page.viewportSize()?.height ?? 0, 0);
     }
-    await panel
-      .getByRole("button", {
-        name: "Interested: ORBIT: Interstellar Bassline Orchestra",
-        exact: true,
-      })
-      .click();
+    const eventInterest = panel.getByRole("button", {
+      name: "Interested: ORBIT: Interstellar Bassline Orchestra",
+      exact: true,
+    });
+    await expect(eventInterest).toHaveAttribute("aria-pressed", "false");
+    await eventInterest.click();
+    await expect(eventInterest).toHaveText("Interested");
+    await expect(eventInterest).toHaveAttribute("aria-pressed", "true");
+    await expect(eventInterest).toHaveAttribute("title", "Remove interest");
     const included = panel.getByRole("button", {
       name: "Included with event: Aurora",
       exact: true,
     });
     await expect(included).toBeDisabled();
+    await expect(included).toHaveText("Included with event");
     await panel
       .getByRole("button", { name: "Favorite: Aurora", exact: true })
       .first()
@@ -671,21 +979,19 @@ test.describe("continuous schedule @flow @fixture", () => {
         .getByRole("button", { name: "Remove favorite: Aurora", exact: true })
         .first(),
     ).toBeVisible();
-    await panel
-      .getByRole("button", {
-        name: "Remove interest: ORBIT: Interstellar Bassline Orchestra",
-        exact: true,
-      })
-      .click();
+    await eventInterest.click();
+    await expect(eventInterest).toHaveAttribute("aria-pressed", "false");
     await expect(
       panel.getByRole("button", {
         name: "Interested: Aurora",
         exact: true,
       }),
     ).toBeEnabled();
-    await panel
-      .getByRole("button", { name: "Interested: Aurora", exact: true })
-      .click();
+    const setInterest = panel.getByRole("button", { name: "Interested: Aurora", exact: true });
+    await setInterest.click();
+    await expect(setInterest).toHaveText("Interested");
+    await expect(setInterest).toHaveAttribute("aria-pressed", "true");
+    await expect(setInterest).toHaveAttribute("title", "Remove interest");
     expect(
       await page.evaluate(
         () =>
@@ -711,12 +1017,13 @@ test.describe("continuous schedule @flow @fixture", () => {
       path: info.outputPath("detail-compact-lineup.png"),
     });
     const scroll = panel.getByTestId("event-detail-scroll");
+    const maxScroll = await scroll.evaluate((el) => el.scrollHeight - el.clientHeight);
     await scroll.evaluate((el) => {
       el.scrollTop = el.scrollHeight;
     });
     await expect
       .poll(() => scroll.evaluate((el) => el.scrollTop))
-      .toBeGreaterThan(0);
+      .toBe(maxScroll);
     await scroll.evaluate((el) => {
       el.scrollTop = 0;
     });
@@ -756,12 +1063,7 @@ test.describe("continuous schedule @flow @fixture", () => {
         exact: true,
       }),
     ).toBeVisible();
-    await page
-      .getByRole("button", {
-        name: "Interested: ORBIT: Interstellar Bassline Orchestra",
-        exact: true,
-      })
-      .click();
+    await saveInInspector(page, "ORBIT: Interstellar Bassline Orchestra");
     await expect(
       page.getByRole("heading", { name: "My night", exact: true }),
     ).toBeVisible();
@@ -773,10 +1075,11 @@ test.describe("continuous schedule @flow @fixture", () => {
       fullPage: true,
     });
 
-    await page
-      .getByRole("button", { name: "Favorite: Prism Collective", exact: true })
-      .first()
-      .click();
+    await activateTimelineEventPreference(
+      page,
+      bar.getByRole("button", { name: /^Open ORBIT:/ }),
+      "Favorite: Prism Collective",
+    );
     await page
       .getByRole("button", { name: "Favorites only", exact: true })
       .click();
@@ -864,12 +1167,14 @@ test.describe("continuous schedule @flow @fixture", () => {
       await expect(open).toHaveAttribute("aria-pressed", "true");
     } else {
 
-      await page
-        .getByRole("button", {
-          name: "Interested: ORBIT: Interstellar Bassline Orchestra",
-          exact: true,
-        })
-        .tap();
+      const inlineInterest = bar.getByRole("button", { name: "Interested: ORBIT: Interstellar Bassline Orchestra", exact: true });
+      await expect(inlineInterest).toHaveCSS("opacity", "0");
+      await open.tap();
+      const panel = page.getByLabel("Event details", { exact: true });
+      await panel.getByRole("button", { name: "Interested: ORBIT: Interstellar Bassline Orchestra", exact: true }).tap();
+      await panel.getByRole("button", { name: "Close", exact: true }).tap();
+      await expect(open).toBeFocused();
+      await expect(bar.getByRole("button", { name: "Remove interest: ORBIT: Interstellar Bassline Orchestra", exact: true })).toHaveCSS("opacity", "0");
       await expect(
         page.getByTestId("night-lanes").getByRole("heading", { name: "My night", exact: true }),
       ).toBeVisible();
@@ -884,11 +1189,14 @@ test.describe("continuous schedule @flow @fixture", () => {
     for (const title of [
       "ORBIT: Interstellar Bassline Orchestra",
       "Low Tide",
-      "Day Gathering",
     ])
-      await page
-        .getByRole("button", { name: `Interested: ${title}`, exact: true })
-        .click();
+      await saveInInspector(page, title);
+    const dayMarker = page.getByTestId(`date-marker-${timelineFixture.eventIds[7]}`);
+    await activateTimelineEventPreference(
+      page,
+      dayMarker.getByRole("button", { name: "Open Day Gathering, Time TBA", exact: true }),
+      "Interested: Day Gathering",
+    );
     const night = page.getByRole("region", { name: "My night", exact: true });
     const overlappingBars = page.getByTestId("night-lanes").locator("[data-night-reference]");
     await expect(overlappingBars).toHaveCount(2);
@@ -896,7 +1204,7 @@ test.describe("continuous schedule @flow @fixture", () => {
       await expect(bar.getByRole("button", { name: /^Open/ }).first()).toHaveAccessibleDescription(/Overlap/);
     }
     await expect(
-      page.getByTestId(`date-marker-${timelineFixture.eventIds[7]}`).getByText("Time TBA", { exact: true }),
+      dayMarker.getByText("Time TBA", { exact: true }),
     ).toBeVisible();
 
     await page.getByLabel("Schedule date", { exact: true }).fill("2026-11-02");
@@ -988,8 +1296,10 @@ test.describe("continuous schedule @flow @fixture", () => {
     await included.dispatchEvent("click");
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("vrdex.timeline.preferences.v1") ?? "null").plan)).toEqual([{ kind: "event", eventId: timelineFixture.eventIds[3] }]);
     await page.screenshot({ path: info.outputPath("schedule-included.png"), fullPage: true });
-    const remove = panel.getByRole("button", { name: `Remove interest: ${title}`, exact: true });
-    if (isMobile) await remove.tap(); else await remove.click();
+    const eventInterest = panel.getByRole("button", { name: `Interested: ${title}`, exact: true });
+    await expect(eventInterest).toHaveAttribute("aria-pressed", "true");
+    if (isMobile) await eventInterest.tap(); else await eventInterest.click();
+    await expect(eventInterest).toHaveAttribute("aria-pressed", "false");
     await expect(panel.getByRole("button", { name: "Interested: Aurora", exact: true })).toBeEnabled();
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("vrdex.timeline.preferences.v1") ?? "null").plan)).toEqual([]);
     await panel.getByRole("button", { name: "Close", exact: true }).click();
@@ -1323,6 +1633,29 @@ test.describe("continuous schedule @flow @fixture", () => {
   });
   test.describe("prefetch row stability", () => {
     test.use({ timelineScenario: "prefetch" });
+    test("Tab skips a completely clipped prefetched event", async ({ page, timelineFixture }) => {
+      const selectedTime = Date.UTC(2026, 9, 26, 3);
+      await page.goto(`/?at=${selectedTime}&tz=UTC`);
+      await loadCompleteSchedule(page);
+
+      const chart = page.getByRole("region", { name: "Timeline chart" });
+      const earlier = chart.getByTestId(`event-${timelineFixture.eventIds[0]}`)
+        .getByRole("button", { name: "Open Soft Focus", exact: true });
+      const ongoing = chart.getByTestId(`event-${timelineFixture.eventIds[1]}`)
+        .getByRole("button", { name: "Open Afterimage", exact: true });
+      await expect(earlier).toHaveAttribute("tabindex", "-1");
+      await chart.focus();
+      const initialScroll = await chart.evaluate((element) => element.scrollLeft);
+      await page.keyboard.press("Tab");
+      await expect(ongoing).toBeFocused();
+      await expect.poll(() => chart.evaluate((element) => element.scrollLeft)).toBe(initialScroll);
+      expect(new URL(page.url()).searchParams.get("at")).toBe(String(selectedTime));
+
+      await page.keyboard.press("Shift+Tab");
+      await expect(chart).toBeFocused();
+      await page.keyboard.press("ArrowRight");
+      await expect.poll(() => chart.evaluate((element) => element.scrollLeft)).toBe(initialScroll + 100);
+    });
     test("ordinary panning across the six-hour threshold preserves an unchanged ongoing row", async ({
       page,
       timelineFixture,

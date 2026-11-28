@@ -20,35 +20,43 @@ export default async function EventSeriesPage({ params }: EventSeriesPageProps) 
     return <EventBackendNotice kind={result.kind} />;
   }
 
-  const { series } = result;
+  const { series, yearReferenceAt } = result;
 
   if (series === null || series.communitySlug !== slug) {
     notFound();
   }
 
+  const hasUpcomingNights = series.nights.length > 0;
+
   return (
     <PageShell className="py-5 sm:py-6 lg:py-7" tone="event">
-      <PageContainer className="gap-5">
+      <PageContainer className="gap-5" max={hasUpcomingNights ? undefined : "3xl"}>
 
         <header>
           <h1 className="text-5xl leading-none font-semibold tracking-[-0.05em] sm:text-7xl">{series.title}</h1>
-          {series.summary ? <p className="mt-4 max-w-2xl text-base leading-7 text-muted sm:text-lg">{series.summary}</p> : null}
+          <a
+            className="mt-1 inline-block min-h-11 min-w-11 max-w-full rounded-control py-2.5 font-medium text-accent-strong underline decoration-accent/65 underline-offset-4 [overflow-wrap:anywhere] hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
+            href={`/${series.communitySlug}`}
+          >
+            {series.communityName}
+          </a>
+          {series.summary ? <p className="mt-1 max-w-2xl text-base leading-7 text-muted sm:text-lg">{series.summary}</p> : null}
         </header>
 
         <Card surface="white">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-semibold tracking-tight">Upcoming nights</h2>
-            <a className={buttonVariants({ size: "sm", variant: "secondary" })} href={`/${slug}/series/${series.id}/calendar.ics`}>
+            {hasUpcomingNights ? <a className={buttonVariants({ size: "sm", variant: "secondary" })} href={`/${slug}/series/${series.id}/calendar.ics`}>
               Add to calendar
-            </a>
+            </a> : null}
           </div>
-          {series.nights.length > 0 ? (
-            <div className="mt-5 grid gap-3 lg:grid-cols-2">
+          {hasUpcomingNights ? (
+            <div className="mt-5 grid items-start gap-3 lg:grid-cols-2">
               {series.nights.map((night) => (
-                <EventPreviewCard event={night} key={night.id} />
+                <EventPreviewCard event={night} key={night.id} seriesSummary={series.summary} variant="series" yearReferenceAt={yearReferenceAt} />
               ))}
             </div>
-          ) : null}
+          ) : <p className="mt-3 text-sm font-medium text-foreground">None scheduled</p>}
         </Card>
       </PageContainer>
     </PageShell>

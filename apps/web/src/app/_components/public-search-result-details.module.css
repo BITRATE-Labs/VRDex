@@ -1,0 +1,213 @@
+/* Keep native disclosures while laying their open panels below the summary row. */
+@supports selector(::details-content) {
+  .disclosure {
+    display: contents;
+  }
+
+  .disclosure[open]::details-content {
+    display: contents;
+  }
+
+  .disclosure:not([open])::details-content {
+    display: none;
+  }
+}
+
+.linksPanel :global(.lookup-vrcdn-group) {
+  gap: 0.125rem;
+  margin-block-start: 0.375rem;
+  padding: 0.375rem 0.5rem;
+}
+
+.linksPanel :global(.lookup-vrcdn-group[data-community-submitted]) {
+  background: var(--surface-strong);
+  border-color: var(--border-strong);
+}
+
+.linksPanel :global(.lookup-vrcdn-group__heading) {
+  column-gap: 0.375rem;
+}
+
+.linksPanel :global(.lookup-vrcdn-group__heading > span) {
+  flex: 1 1 min-content;
+}
+
+.linksPanel :global(.lookup-vrcdn-group__heading > span > .text-muted) {
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+.linksPanel :global(.lookup-vrcdn-group[data-community-submitted] .lookup-feature-link) {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.linksPanel :global(.lookup-vrcdn-group[data-community-submitted] .lookup-feature-link:hover) {
+  background: var(--surface-elevated);
+}
+
+.linksPanel :global(.lookup-vrcdn-group .lookup-primary-url-card) {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+.linksPanel :global(.lookup-vrcdn-group .lookup-primary-url-card + .lookup-primary-url-card) {
+  border-block-start: 1px solid var(--border);
+}
+
+.linksPanel :global(.lookup-vrcdn-group .lookup-primary-url-copy),
+.linksPanel :global(.lookup-vrcdn-group .lookup-feature-link) {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+}
+
+@media (width > 40rem) {
+  .linksPanel :global(.lookup-vrcdn-group .lookup-copy-list) {
+    column-gap: 0.75rem;
+    grid-template-columns: max-content minmax(0, max-content) max-content;
+    width: fit-content;
+  }
+
+  .linksPanel :global(.lookup-vrcdn-group .lookup-primary-url-card) {
+    column-gap: normal;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+  }
+}
+
+@media (width < 40rem) {
+  .linksPanel :global(.lookup-vrcdn-group .lookup-primary-url-value) {
+    color: var(--muted);
+  }
+}
+
+@media (width <= 40rem) {
+  .linksPanel :global(.lookup-vrcdn-group) {
+    padding-inline: 0.375rem;
+  }
+
+  .linksPanel :global(.lookup-vrcdn-group .lookup-primary-url-card) {
+    gap: 0.25rem 0.375rem;
+    grid-template-areas: "label copy" "value copy";
+    grid-template-columns: minmax(0, 1fr) 2.75rem;
+    grid-template-rows: auto auto;
+    padding: 0.375rem 0;
+  }
+
+  .linksPanel :global(.lookup-vrcdn-group .lookup-primary-url-label) {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  .linksPanel :global(.lookup-vrcdn-group .lookup-primary-url-value) {
+    align-self: start;
+    grid-area: value;
+  }
+
+  .linksPanel :global(.lookup-primary-url-value--wrapped > span) {
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: top;
+  }
+
+  .linksPanel :global(.lookup-vrcdn-group .lookup-primary-url-copy) {
+    grid-area: copy;
+    width: 100%;
+  }
+
+  .linksPanel :global(.lookup-link-board > .lookup-copy-list .lookup-primary-url-card) {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .linksPanel :global(.lookup-link-board > .lookup-copy-list .lookup-primary-url-label) {
+    grid-column: auto;
+  }
+
+  .linksPanel :global(.lookup-link-board > .lookup-copy-list .lookup-primary-url-copy),
+  .linksPanel :global(.lookup-icon-actions > .lookup-brand-circle),
+  .linksPanel :global(.lookup-icon-actions > .lookup-commission-action) {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+  }
+
+  .linksPanel :global(.lookup-icon-actions) {
+    gap: 0.375rem;
+  }
+
+  .linksPanel :global(.lookup-icon-actions > .lookup-commission-action) {
+    font-size: 0.75rem;
+    padding-inline: 0.5rem;
+  }
+}
+
+@container standard-results (width < 12rem) {
+  .resultDetails {
+    padding-inline-start: 0.75rem;
+  }
+
+  .linksPanel {
+    margin-inline-start: 0;
+  }
+
+  .linksPanel :global(.lookup-link-board),
+  .linksPanel :global(.lookup-link-actions),
+  .linksPanel :global(.lookup-copy-list) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .linksPanel :global(.lookup-icon-actions) {
+    width: 100%;
+  }
+
+  .linksPanel :global(.lookup-link-actions .lookup-feature-link) {
+    grid-column: 1;
+  }
+
+  .linksPanel :global(.lookup-destination-action) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.375rem;
+    width: 100%;
+    padding-inline: 0.5rem;
+  }
+
+  .linksPanel :global(.lookup-destination-action > span:nth-child(2)) {
+    grid-area: 2 / 1 / auto / -1;
+  }
+
+  .linksPanel :global(.lookup-destination-action > svg) {
+    grid-area: 1 / 2;
+  }
+
+  .linksPanel :global(.lookup-vrcdn-group .lookup-primary-url-card),
+  .linksPanel :global(.lookup-link-board > .lookup-copy-list .lookup-primary-url-card) {
+    grid-template-areas: none;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+  }
+
+  .linksPanel :global(.lookup-primary-url-card > *) {
+    grid-area: auto / 1;
+    min-width: 0;
+  }
+
+  .linksPanel :global(.lookup-primary-url-value) {
+    width: 100%;
+  }
+
+  .linksPanel :global(code.lookup-primary-url-value) {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .linksPanel :global(.lookup-primary-url-copy) {
+    justify-self: start;
+    width: auto;
+  }
+}

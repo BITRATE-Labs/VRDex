@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { test, TIMELINE_NOW } from "./home-timeline-fixture";
+import { test, TIMELINE_NOW, activateTimelineEventPreference } from "./home-timeline-fixture";
 
 const HOUR = 3_600_000;
 
@@ -95,6 +95,28 @@ test.describe("timeline review regressions @flow @fixture", () => {
     await page.screenshot({ path: info.outputPath("ongoing-identity.png") });
   });
 
+  test("a panned short header keeps clipped actions out of Tab order", async ({
+    page,
+    timelineFixture,
+    timelineStartAt,
+  }) => {
+    await page.goto(`/?at=${timelineStartAt + 3.25 * HOUR}`);
+    await expect(page.getByLabel("Schedule data state")).toHaveAttribute("data-state", "ready");
+    const bar = page.getByTestId(`event-${timelineFixture.eventIds[3]}`);
+    const opener = bar.getByRole("button", { name: /^Open ORBIT:/ });
+    const inline = opener.locator("..").locator("button:not(:first-child)");
+    await expect(inline).toHaveCount(2);
+    expect((await opener.boundingBox())?.width).toBeLessThanOrEqual(100);
+    await opener.focus();
+    for (const action of await inline.all()) await expect(action).toHaveCSS("display", "none");
+    await page.keyboard.press("Tab");
+    for (const action of await inline.all()) await expect(action).not.toBeFocused();
+    await opener.press("Enter");
+    const panel = page.getByLabel("Event details", { exact: true });
+    await expect(panel.getByRole("button", { name: "Favorite: Prism Collective", exact: true })).toBeVisible();
+    await expect(panel.getByRole("button", { name: /^Interested: ORBIT:/ })).toBeVisible();
+  });
+
   for (const action of ["Later", "Favorites only", "date"]) {
     test(`Back restores the pending pan before ${action}`, async ({ page }) => {
       const initial = TIMELINE_NOW - HOUR;
@@ -147,11 +169,11 @@ test.describe("compact personal planning @flow @fixture", () => {
     );
     await expect(page.getByTestId("night-lanes")).toHaveCount(0);
     for (const i of [2, 3])
-      await page
-        .getByTestId(`event-${timelineFixture.eventIds[i]}`)
-        .getByRole("button", { name: /^(Interested:|Add .*to My night)/ })
-        .first()
-        .click();
+      await activateTimelineEventPreference(
+        page,
+        page.getByTestId(`event-${timelineFixture.eventIds[i]}`).getByRole("button", { name: /^Open / }).first(),
+        /^Interested:/,
+      );
     const bars = page
       .getByTestId("night-lanes")
       .locator("[data-night-reference]");
@@ -236,10 +258,11 @@ test.describe("compact personal planning @flow @fixture", () => {
       "ready",
     );
     const event = page.getByTestId(`event-${timelineFixture.eventIds[3]}`);
-    await event
-      .getByRole("button", { name: /^(Interested:|Add .*to My night)/ })
-      .first()
-      .click();
+    await activateTimelineEventPreference(
+      page,
+      event.getByRole("button", { name: /^Open ORBIT:/ }),
+      /^Interested:/,
+    );
     const night = page.getByTestId("night-lanes");
     await expect(night.locator("[data-favorite-mark]")).toHaveCount(0);
     const compactBar = night.locator("[data-night-reference]");
@@ -268,9 +291,11 @@ test.describe("compact personal planning @flow @fixture", () => {
           );
       });
     });
-    await event
-      .getByRole("button", { name: "Favorite: Prism Collective", exact: true })
-      .click();
+    await activateTimelineEventPreference(
+      page,
+      event.getByRole("button", { name: /^Open ORBIT:/ }),
+      "Favorite: Prism Collective",
+    );
     await expect(
       night.getByTitle("Favorite club: Prism Collective"),
     ).toHaveCount(1);
@@ -436,10 +461,11 @@ test.describe("compact personal planning @flow @fixture", () => {
       path: info.outputPath("compact-saved-set-reduced-motion.png"),
       fullPage: true,
     });
-    await event
-      .getByRole("button", { name: /^(Interested:|Add .*to My night)/ })
-      .first()
-      .click();
+    await activateTimelineEventPreference(
+      page,
+      event.getByRole("button", { name: /^Open ORBIT:/ }),
+      /^Interested:/,
+    );
     if (isMobile) {
       await event.getByRole("button", { name: /^Open ORBIT:/ }).tap();
       const panel = page.getByLabel("Event details", { exact: true });
@@ -600,11 +626,11 @@ test.describe("compact personal planning @flow @fixture", () => {
         "data-state",
         "error",
       );
-      await page
-        .getByTestId(`event-${timelineFixture.eventIds[3]}`)
-        .getByRole("button", { name: /^(Interested:|Add .*to My night)/ })
-        .first()
-        .click();
+      await activateTimelineEventPreference(
+        page,
+        page.getByTestId(`event-${timelineFixture.eventIds[3]}`).getByRole("button", { name: /^Open ORBIT:/ }),
+        /^Interested:/,
+      );
       const night = page.getByTestId("night-lanes");
       await expect(night.locator("[data-slot-id]")).not.toHaveCount(0);
       await expect(

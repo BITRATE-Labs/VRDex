@@ -4,7 +4,7 @@ import { IBM_Plex_Mono, Space_Grotesk } from "next/font/google";
 import { ConvexClientProvider } from "./ConvexClientProvider";
 import { EventPlaybackProvider } from "./_components/event-playback-provider";
 import { PostHogProvider } from "./PostHogProvider";
-import { AnalyticsPreferencesProvider } from "./_components/analytics-preferences";
+import { AnalyticsFirstVisitOffer, AnalyticsPreferencesProvider } from "./_components/analytics-preferences";
 import { SiteHeader } from "@/components/ui/site-header";
 import { SiteFooter } from "@/components/ui/site-footer";
 import { publicSiteUrl } from "@/lib/public-site-url";
@@ -54,6 +54,7 @@ export default async function RootLayout({
         <AnalyticsPreferencesProvider>
         <PostHogProvider>
             <SiteHeader />
+            <AnalyticsFirstVisitOffer />
             {children}
             {/* Outside the page's `<main>`, and here rather than in `PageShell`,
                 so a route that renders its own shell still gets a way out. */}
