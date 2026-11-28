@@ -12,6 +12,63 @@ import { TimelineEventBar, type TimelineActions } from "./timeline-event-bar";
 import { TimelineDateMarkers } from "./timeline-date-markers";
 import { TimelineNight, nightLayout } from "./timeline-night";
 import styles from "./timeline.module.css";
+
+const minTabTargetWidth = 44;
+
+function syncChartTabStops(root: HTMLDivElement, clipped: WeakSet<HTMLButtonElement>) {
+  const left = root.getBoundingClientRect().left + root.clientLeft;
+  const right = left + root.clientWidth;
+  const clips = new Map<Element, { left: number; right: number; top: number; bottom: number }>();
+  const clipBounds = (element: Element) => {
+    let bounds = clips.get(element);
+    if (!bounds) {
+      const box = element.getBoundingClientRect();
+      const left = box.left + element.clientLeft;
+      const top = box.top + element.clientTop;
+      bounds = { left, right: left + element.clientWidth, top, bottom: top + element.clientHeight };
+      clips.set(element, bounds);
+    }
+    return bounds;
+  };
+  const buttons = Array.from(root.querySelectorAll("button"), (button) => {
+    const bounds = button.getBoundingClientRect();
+    let paintedLeft = bounds.left;
+    let paintedRight = bounds.right;
+    let paintedTop = bounds.top;
+    let paintedBottom = bounds.bottom;
+    const card = button.closest(`.${styles.event}, .${styles.nightBar}`);
+    // A button can extend beyond its card or a clipped loading lane.
+    for (const clip of [card, button.closest(`.${styles.lanes}[data-viewport-loading]`)]) {
+      if (!clip) continue;
+      const box = clipBounds(clip);
+      paintedLeft = Math.max(paintedLeft, box.left);
+      paintedRight = Math.min(paintedRight, box.right);
+      paintedTop = Math.max(paintedTop, box.top);
+      paintedBottom = Math.min(paintedBottom, box.bottom);
+    }
+    const paintedWidth = paintedRight - paintedLeft;
+    const visibleWidth = Math.min(paintedRight, right) - Math.max(paintedLeft, left);
+    const buttonOverlap = Math.min(bounds.right, right) - Math.max(bounds.left, left);
+    const cardBounds = card && clipBounds(card);
+    const cardFits = cardBounds && cardBounds.left >= left && cardBounds.right <= right;
+    // WebKit scrolls the entire control into view when focus hits only a sliver.
+    // A fully contained short card can expose a smaller target by design.
+    const visible = paintedWidth > 0 && paintedBottom > paintedTop
+      && visibleWidth >= Math.min(minTabTargetWidth, cardFits ? paintedWidth : bounds.width)
+      && buttonOverlap >= Math.min(minTabTargetWidth, bounds.width);
+    return { button, visible };
+  });
+
+  for (const { button, visible } of buttons) {
+    if (visible && clipped.delete(button)) {
+      button.removeAttribute("tabindex");
+    } else if (!visible && button.tabIndex === 0) {
+      button.tabIndex = -1;
+      clipped.add(button);
+    }
+  }
+}
+
 export function TimelineChart({
   records,
   lanes,
@@ -45,6 +102,7 @@ export function TimelineChart({
   onNext: () => void;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
+  const clippedButtons = useRef(new WeakSet<HTMLButtonElement>());
   const rangeDescriptionId = useId();
   const drag = useRef<{ x: number; scroll: number; moved: boolean } | null>(
     null,
@@ -93,15 +151,22 @@ export function TimelineChart({
     }
   }, [origin, range.startAt, showEmptyState]);
   useLayoutEffect(() => {
+    if (scroller.current && !showEmptyState) {
+      syncChartTabStops(scroller.current, clippedButtons.current);
+    }
+  });
+  useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
     const observer = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width;
-      if (width) onWidth(width);
+      if (!width) return;
+      if (!showEmptyState) syncChartTabStops(el, clippedButtons.current);
+      onWidth(width);
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [onWidth]);
+  }, [onWidth, showEmptyState]);
   useLayoutEffect(() => {
     const root = scroller.current;
     if (!root || showEmptyState) return;
@@ -150,6 +215,9 @@ export function TimelineChart({
           if (Math.abs(anchor - range.startAt) > HOUR / 200) onPan(anchor);
         }}
         onKeyDown={(event) => {
+          if (event.key === "Tab") {
+            syncChartTabStops(event.currentTarget, clippedButtons.current);
+          }
           if (event.target !== event.currentTarget) return;
           if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
             event.preventDefault();

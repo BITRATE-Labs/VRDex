@@ -1631,6 +1631,29 @@ test.describe("continuous schedule @flow @fixture", () => {
   });
   test.describe("prefetch row stability", () => {
     test.use({ timelineScenario: "prefetch" });
+    test("Tab skips a completely clipped prefetched event", async ({ page, timelineFixture }) => {
+      const selectedTime = Date.UTC(2026, 9, 26, 3);
+      await page.goto(`/?at=${selectedTime}&tz=UTC`);
+      await loadCompleteSchedule(page);
+
+      const chart = page.getByRole("region", { name: "Timeline chart" });
+      const earlier = chart.getByTestId(`event-${timelineFixture.eventIds[0]}`)
+        .getByRole("button", { name: "Open Soft Focus", exact: true });
+      const ongoing = chart.getByTestId(`event-${timelineFixture.eventIds[1]}`)
+        .getByRole("button", { name: "Open Afterimage", exact: true });
+      await expect(earlier).toHaveAttribute("tabindex", "-1");
+      await chart.focus();
+      const initialScroll = await chart.evaluate((element) => element.scrollLeft);
+      await page.keyboard.press("Tab");
+      await expect(ongoing).toBeFocused();
+      await expect.poll(() => chart.evaluate((element) => element.scrollLeft)).toBe(initialScroll);
+      expect(new URL(page.url()).searchParams.get("at")).toBe(String(selectedTime));
+
+      await page.keyboard.press("Shift+Tab");
+      await expect(chart).toBeFocused();
+      await page.keyboard.press("ArrowRight");
+      await expect.poll(() => chart.evaluate((element) => element.scrollLeft)).toBe(initialScroll + 100);
+    });
     test("ordinary panning across the six-hour threshold preserves an unchanged ongoing row", async ({
       page,
       timelineFixture,
