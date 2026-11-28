@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowDown, ArrowRight, ChevronLeft, ChevronRight, LoaderCircle } from "lucide-react";
-import { readHomeClubPosition, type HomeClubPosition } from "../home-club-history";
+import { clearHomeRailPosition, isHomeRailNavigation, readHomeRailPosition, saveHomeRailPosition } from "../home-rail-history";
 import {
   Children,
   useEffect,
@@ -41,7 +41,7 @@ export type HomeDiscoveryViewProps = Pick<
     sectionRef?: Ref<HTMLElement>;
     favoriteLineup?: FavoriteLineupSnapshot;
     liveFavoriteLineup?: boolean;
-    restoreClubPosition?: boolean;
+    restoreRailPosition?: boolean;
     onFocusedEventChange?(eventId: string | null): void;
     onFocusedClubChange?(profileId: string | null): void;
   };
@@ -66,19 +66,20 @@ function CardRail({
   children,
   title,
   placeholder = false,
-  restoreClubPosition = false,
+  restoreRailPosition = false,
 }: {
   children: ReactNode;
   title: "Events" | "Clubs";
   placeholder?: boolean;
-  restoreClubPosition?: boolean;
+  restoreRailPosition?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const controlsRef = useRef<HTMLDivElement>(null);
-  const restoredClubPosition = useRef(false);
+  const restoredRailPosition = useRef(false);
+  const userPanFrom = useRef<number | null>(null);
   const count = Children.count(children);
   const [edges, setEdges] = useState<{ left: boolean; right: boolean }>();
-  const group = title.toLowerCase();
+  const group = title === "Clubs" ? "clubs" : "events";
   const headingId = `discovery-${group}-heading`;
   const railId = `discovery-${group}-rail`;
   function updateEdges(rail: HTMLDivElement) {
@@ -113,24 +114,32 @@ function CardRail({
 
   useLayoutEffect(() => {
     const rail = ref.current;
-    const saved = readHomeClubPosition();
-    if (!restoreClubPosition || !rail || !saved || restoredClubPosition.current) return;
+    if (!restoreRailPosition || !rail || restoredRailPosition.current) return;
+    const saved = readHomeRailPosition();
+    if (saved?.rail !== group) return;
 
     const cards = Array.from(rail.children);
-    const index = cards.findIndex((card) => card.getAttribute("data-rail-club") === saved.clubId);
+    const index = cards.findIndex((card) => card.getAttribute("data-home-rail-item") === saved.itemId);
     const card = cards[index];
     if (!card) return;
 
-    restoredClubPosition.current = true;
+    restoredRailPosition.current = true;
     const left = index === saved.index && rail.clientWidth === saved.width
       ? saved.left
       : card.getBoundingClientRect().left - cards[0].getBoundingClientRect().left;
     rail.scrollTo({ left, behavior: "instant" });
-  }, [count, restoreClubPosition]);
+  }, [children, group, restoreRailPosition]);
+
+  function beginUserPan(rail: HTMLDivElement) {
+    if (restoreRailPosition && userPanFrom.current === null && readHomeRailPosition()?.rail === group) {
+      userPanFrom.current = rail.scrollLeft;
+    }
+  }
 
   function move(direction: -1 | 1) {
     const rail = ref.current;
     if (!rail || !edges?.[direction === -1 ? "left" : "right"]) return;
+    beginUserPan(rail);
     rail.scrollBy({ left: direction * rail.clientWidth });
   }
 
@@ -198,30 +207,32 @@ function CardRail({
         data-scroll-left={edges?.left ? "" : undefined}
         data-scroll-right={(edges?.right ?? count > 1) ? "" : undefined}
         ref={ref}
-        onClickCapture={restoreClubPosition ? (event) => {
-          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-          const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
-          const club = link?.closest("[data-rail-club]");
-          const clubId = club?.getAttribute("data-rail-club");
-          if (!club || !clubId || window.location.pathname !== "/") return;
-
-          // Save on the Home history entry before the native link leaves it.
-          const rail = event.currentTarget;
-          window.history.replaceState({
-            ...window.history.state,
-            vrdexHomeClubPosition: {
-              clubId,
-              index: Array.from(rail.children).indexOf(club),
-              left: rail.scrollLeft,
-              width: rail.clientWidth,
-              top: window.scrollY,
-              viewportWidth: window.innerWidth,
-              viewportHeight: window.innerHeight,
-            } satisfies HomeClubPosition,
-          }, "");
+        data-home-rail={restoreRailPosition ? group : undefined}
+        onClick={restoreRailPosition ? (event) => {
+          // Event titles and artwork can open Quick View instead of following the link.
+          if (isHomeRailNavigation(event) && event.target instanceof Element) {
+            saveHomeRailPosition(event.target);
+          }
         } : undefined}
-        onScroll={(event) => updateEdges(event.currentTarget)}
-        onScrollEnd={(event) => settleClubRail(event.currentTarget)}
+        onScroll={(event) => {
+          const rail = event.currentTarget;
+          if (userPanFrom.current !== null && Math.abs(userPanFrom.current - rail.scrollLeft) > 4) {
+            userPanFrom.current = null;
+            clearHomeRailPosition(group);
+          }
+          updateEdges(rail);
+        }}
+        onScrollEnd={(event) => {
+          userPanFrom.current = null;
+          settleClubRail(event.currentTarget);
+        }}
+        onTouchMove={(event) => beginUserPan(event.currentTarget)}
+        onWheel={(event) => {
+          if (event.deltaX !== 0 || (event.shiftKey && event.deltaY !== 0)) beginUserPan(event.currentTarget);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowLeft" || event.key === "ArrowRight") beginUserPan(event.currentTarget);
+        }}
         onTouchEnd={(event) => {
           if (title !== "Clubs" || event.touches.length > 0) return;
           const rail = event.currentTarget;
@@ -248,6 +259,7 @@ type EventCardsProps = Pick<
   | "favoriteLineup"
 > & {
   events: Available["events"];
+  restoreRailPosition?: boolean;
   onFocus(item: Available["events"][number], index: number): void;
   onBlur: FocusEventHandler<HTMLDivElement>;
 };
@@ -256,13 +268,15 @@ function EventCards({
   favoriteLineup,
   onFocus,
   onBlur,
+  restoreRailPosition,
   ...props
 }: EventCardsProps) {
   return (
-    <CardRail title="Events">
+    <CardRail title="Events" restoreRailPosition={restoreRailPosition}>
       {events.map((event, index) => (
         <div
           key={event.id}
+          data-home-rail-item={event.id}
           onFocusCapture={() => onFocus(event, index)}
           onBlurCapture={onBlur}
         >
@@ -379,12 +393,12 @@ function AvailableDiscovery({
           ))}
       </div>
       <div role="group" aria-labelledby="discovery-clubs-heading">
-        <CardRail title="Clubs" restoreClubPosition={props.restoreClubPosition}>
+        <CardRail title="Clubs" restoreRailPosition={props.restoreRailPosition}>
           {clubs.map((club, index) =>
             club.profileType === "community" ? (
               <div
                 key={club.id}
-                data-rail-club={club.id}
+                data-home-rail-item={club.id}
                 onFocusCapture={() => {
                   setFocused({ kind: "club", item: club, index });
                   onFocusedEventChange?.(null);
@@ -510,7 +524,7 @@ export function HomeDiscovery() {
       sectionRef={discovery.sectionRef}
       retry={discovery.retry}
       liveFavoriteLineup
-      restoreClubPosition
+      restoreRailPosition
       onFocusedEventChange={discovery.setFocusedEvent}
       onFocusedClubChange={discovery.setFocusedClub}
       timeZone={browse.timeZone ?? "UTC"}

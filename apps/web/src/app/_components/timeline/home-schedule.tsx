@@ -29,7 +29,7 @@ import { TimelineNight } from "./timeline-night";
 import { type TimelineActions } from "./timeline-event-bar";
 import styles from "./timeline.module.css";
 import { HomeBrowseProvider, useHomeBrowse, useOptionalHomeBrowse, type TimelineSelection } from "../home-browse-provider";
-import { readHomeClubPosition } from "../home-club-history";
+import { readHomeRailPosition } from "../home-rail-history";
 export type { TimelineSelection } from "../home-browse-provider";
 type Runtime = {
   now: number;
@@ -64,7 +64,7 @@ function HomeScheduleContent({
   const releaseReturnScroll = useRef<(() => void) | null>(null);
   useLayoutEffect(() => {
     const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
-    const saved = readHomeClubPosition();
+    const saved = readHomeRailPosition();
     if (navigation?.type !== "back_forward" || !saved) return;
 
     const root = document.documentElement;
@@ -101,10 +101,10 @@ function HomeScheduleContent({
         return;
       }
 
-      const rail = document.getElementById("discovery-clubs-rail");
-      const club = Array.from(rail?.children ?? []).find(card => card.getAttribute("data-rail-club") === saved.clubId);
+      const rail = document.getElementById(`discovery-${saved.rail}-rail`);
+      const card = Array.from(rail?.children ?? []).find(item => item.getAttribute("data-home-rail-item") === saved.itemId);
       const maxTop = (document.scrollingElement?.scrollHeight ?? 0) - root.clientHeight;
-      if (club && top <= maxTop) window.scrollTo({ top, behavior: "instant" });
+      if (card && top <= maxTop) window.scrollTo({ top, behavior: "instant" });
       release();
     }
     for (const event of ["wheel", "touchstart", "pointerdown", "keydown"]) {
@@ -228,9 +228,9 @@ function ScheduleContent({
       searchParams: new URLSearchParams(window.location.search),
       state,
     });
-    const clubPosition = push ? undefined : readHomeClubPosition();
+    const railPosition = push ? undefined : readHomeRailPosition();
     window.history[push ? "pushState" : "replaceState"](
-      clubPosition ? { vrdexHomeClubPosition: clubPosition } : null, "", href,
+      railPosition ? { vrdexHomeRailPosition: railPosition } : null, "", href,
     );
   }, []);
   const flushReplace = useCallback(() => {
