@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ChevronLeft, ChevronRight, Clock3, Globe2, Star } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Clock3, Globe2, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { TimelineNavigation } from "@/lib/timeline/navigation";
 import styles from "./timeline.module.css";
@@ -26,8 +26,11 @@ export function TimelineToolbar({
         {disabled ? (
           <span className={styles.pendingDate} aria-hidden="true" />
         ) : (
-          <input aria-label="Schedule date" type="date" min="0002-01-01" max="9998-12-31"
-            value={date} onChange={(event) => onDate(event.target.value)} />
+          <span className={styles.dateControl}>
+            <input aria-label="Schedule date" type="date" min="0002-01-01" max="9998-12-31"
+              value={date} onChange={(event) => onDate(event.target.value)} />
+            <Calendar aria-hidden="true" size={16} />
+          </span>
         )}
         <div>
           <Button disabled={disabled} size="sm" aria-label="Earlier" onClick={() => onPan(-3)}><ChevronLeft size={14} /><span>Earlier</span></Button>
