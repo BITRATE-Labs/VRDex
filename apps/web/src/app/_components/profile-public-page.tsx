@@ -518,7 +518,11 @@ export function ProfilePublicPage({
   function visitorHeading(section: "events" | "media_kit" | "worlds") {
     const { id, label } = visitorDestinations[section];
     return isRichPublicPerson ? (
-      <SectionTitle className="scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent" id={id} tabIndex={-1}>
+      <SectionTitle
+        className={cn("scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent", section === "worlds" && "[@media(scripting:none)]:scroll-mt-32")}
+        id={id}
+        tabIndex={-1}
+      >
         {label}
       </SectionTitle>
     ) : <SectionHeading>{label}</SectionHeading>;
@@ -620,6 +624,7 @@ export function ProfilePublicPage({
             <Link
               className="group grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-card border border-border bg-surface-strong p-4 text-sm transition hover:border-border-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:items-start sm:gap-x-4 sm:gap-y-3"
               href={`/${world.slug}`}
+              data-profile-world={isRichPublicPerson || undefined}
               key={world.slug}
             >
               <EntityImage
@@ -865,16 +870,17 @@ export function ProfilePublicPage({
                     {visitorLinks.map(({ id, label }) => {
                       const streamShortcut = id === visitorDestinations.streams.id && vrcdnStreams[0]?.item.link.source !== "community_submitted";
                       const link = (
-                        <a
+                        <Link
                           className={cn(
                             "inline-flex min-h-11 items-center rounded-control px-2 text-sm font-medium text-white underline decoration-white/50 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-white max-sm:min-w-11 max-sm:justify-center max-sm:px-1",
                             streamShortcut && streamStyles.streamShortcut,
                           )}
                           href={"#" + id}
+                          data-managed-fragment
                           key={id}
                         >
                           {label}
-                        </a>
+                        </Link>
                       );
 
                       return streamShortcut ? (

@@ -14,7 +14,9 @@ function sameEntry(saved: FragmentEntry | undefined, current: FragmentEntry) {
   return saved?.href === current.href && saved.key === current.key;
 }
 
-export function useFragmentBackFocus<T extends HTMLElement>() {
+export function useFragmentBackFocus<T extends HTMLElement>({ focusAfterNativeHash = false }: {
+  focusAfterNativeHash?: boolean;
+} = {}) {
   const scope = useRef<T>(null);
 
   useEffect(() => {
@@ -26,6 +28,7 @@ export function useFragmentBackFocus<T extends HTMLElement>() {
     let historyLength = window.history.length;
     let pending: { href: string; managed: boolean; returnFocus?: ReturnFocus } | undefined;
     let frame = 0;
+    let landingFrame = 0;
 
     const recordJump = (entry: FragmentEntry) => {
       entries = [...entries.slice(0, index + 1), { ...entry, returnFocus: pending?.returnFocus }];
@@ -49,13 +52,37 @@ export function useFragmentBackFocus<T extends HTMLElement>() {
         index = 0;
       }
 
-      pending = {
+      const jump = {
         href: link.href,
         managed,
         returnFocus: event.isTrusted && event.detail === 0 && container.contains(link)
           ? { link, scrollY: window.scrollY }
           : undefined,
       };
+      pending = jump;
+
+      if (focusAfterNativeHash && managed && event.isTrusted && location.hash
+        && history.state === null && container.contains(link)) {
+        // A native hash (such as Skip to content) doesn't update the router's canonical URL.
+        // Returning to its last known hash can push the URL without scrolling or focusing.
+        const deadline = performance.now() + 750;
+        const land = () => {
+          if (pending !== jump || !link.isConnected) return;
+          if (location.href === jump.href) {
+            const target = document.getElementById(link.hash.slice(1));
+            target?.scrollIntoView();
+            target?.focus({ preventScroll: true });
+            if (pending === jump) {
+              historyLength = window.history.length;
+              recordJump(currentEntry());
+            }
+          } else if (sameEntry(entry, currentEntry()) && performance.now() < deadline) {
+            landingFrame = requestAnimationFrame(land);
+          }
+        };
+        cancelAnimationFrame(landingFrame);
+        landingFrame = requestAnimationFrame(land);
+      }
     };
 
     const onManagedClick = (event: MouseEvent) => onClick(event, true);
@@ -70,6 +97,7 @@ export function useFragmentBackFocus<T extends HTMLElement>() {
 
     function onPopState() {
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(landingFrame);
       const entry = currentEntry();
       const newEntry = window.history.length > historyLength;
       historyLength = window.history.length;
@@ -112,12 +140,13 @@ export function useFragmentBackFocus<T extends HTMLElement>() {
     window.addEventListener("popstate", onPopState);
     return () => {
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(landingFrame);
       document.removeEventListener("click", onManagedClick, true);
       document.removeEventListener("click", onNativeClick);
       document.removeEventListener("focusin", onFocusIn);
       window.removeEventListener("popstate", onPopState);
     };
-  }, []);
+  }, [focusAfterNativeHash]);
 
   return scope;
 }

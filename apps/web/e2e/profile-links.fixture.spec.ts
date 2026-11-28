@@ -306,6 +306,71 @@ test("keyboard Back returns to the public profile section shortcut @fixture", as
   await expect(links).toBeFocused();
 });
 
+test("a profile section shortcut still works after native Skip to content @fixture", async ({ page }) => {
+  await page.goto("/playwright-dj-aurora", { waitUntil: "networkidle" });
+  const worlds = page.getByRole("navigation", { name: "Profile sections" }).getByRole("link", { name: "Worlds", exact: true });
+  const heading = page.locator("#profile-worlds");
+  const skip = page.getByRole("link", { name: "Skip to content", exact: true });
+  const main = page.getByRole("main");
+  const origin = page.url();
+
+  await worlds.press("Enter");
+  await expect(heading).toBeFocused();
+
+  await skip.press("Enter");
+  await expect(page).toHaveURL(origin + "#main-content");
+  await expect(main).toBeFocused();
+
+  await worlds.press("Enter");
+  await expect(page).toHaveURL(origin + "#profile-worlds");
+  await expect(heading).toBeFocused();
+  await expect(heading).toBeInViewport();
+
+  await page.goBack();
+  await expect(page).toHaveURL(origin + "#main-content");
+  await expect(worlds).toBeFocused();
+});
+
+test("Back from a linked World restores the public Person World card @fixture", async ({ page, isMobile }) => {
+  await page.setViewportSize({ width: isMobile ? 320 : 390, height: 750 });
+  const person = page.getByRole("heading", { name: "DJ Aurora", exact: true, level: 1 });
+  const world = page.getByRole("heading", { name: "Neon Harbor", exact: true, level: 1 });
+  const shortcut = page.getByRole("navigation", { name: "Profile sections" }).getByRole("link", { name: "Worlds", exact: true });
+  const heading = page.locator("#profile-worlds");
+  const card = page.locator('a[data-profile-world][href="/playwright-neon-harbor"]');
+
+  for (const keyboard of [false, true]) {
+    await page.goto("/playwright-dj-aurora", { waitUntil: "networkidle" });
+    const origin = page.url();
+    if (keyboard) await shortcut.press("Enter");
+    else if (isMobile) await shortcut.tap();
+    else await shortcut.click();
+    await expect(page).toHaveURL(origin + "#profile-worlds");
+    if (keyboard) await expect(heading).toBeFocused();
+
+    await card.evaluate((element) => element.scrollIntoView({ block: "center", behavior: "instant" }));
+    const top = await card.evaluate((element) => element.getBoundingClientRect().top);
+    if (keyboard) await card.press("Enter");
+    else if (isMobile) await card.tap();
+    else await card.click();
+    await expect(world).toBeVisible();
+
+    for (let visit = 0; visit < 2; visit++) {
+      await page.goBack();
+      await expect(page).toHaveURL(origin + "#profile-worlds");
+      await expect(person).toBeVisible();
+      await expect(card).toBeInViewport({ ratio: 1 });
+      await expect.poll(() => card.evaluate((element, expected) =>
+        Math.abs(element.getBoundingClientRect().top - expected), top)).toBeLessThan(3);
+      if (keyboard && visit === 0) await expect(card).toBeFocused();
+      if (visit === 0) {
+        await page.goForward();
+        await expect(world).toBeVisible();
+      }
+    }
+  }
+});
+
 test("profile events identify the authored current window @fixture", async ({ page }) => {
   await page.clock.setFixedTime(Date.UTC(2026, 0, 2, 12));
   await page.route("**/api/profile-live/**/vrcdn*", route => route.fulfill({ json: { states: {} } }));
