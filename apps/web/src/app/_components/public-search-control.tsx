@@ -15,6 +15,7 @@ import { restoreInitialInlineSearch } from "@/lib/initial-inline-search";
 import { captureProductEvent } from "@/lib/posthog";
 import { type SearchSuggestion, useSearchSuggestions } from "./use-search-suggestions";
 import { searchHref, type SearchResultFilter } from "./search-view-state";
+import styles from "./public-search-control.module.css";
 
 type PublicSearchControlProps = {
   action?: string;
@@ -143,7 +144,7 @@ function SearchControl({
   return (
     <form
       action={action}
-      className={cn("relative flex flex-col gap-3 sm:flex-row", compact && "flex-row gap-2 sm:gap-3", className)}
+      className={cn("relative flex flex-col gap-3 sm:flex-row", compact && "flex-row gap-2 sm:gap-3", styles.searchForm, compact === "mobile" && styles.homeSearch, className)}
       data-search-draft={hasQueryDraft ? "" : undefined}
       method="get"
       onSubmit={onSubmit}

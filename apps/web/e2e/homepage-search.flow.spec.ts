@@ -74,6 +74,67 @@ test("new Home submissions and old root bookmarks retain distinct destinations @
   await expect(page.getByRole("link", { name: "Website: basicbit.net", exact: true })).toBeVisible();
 });
 
+test("Home search keeps the hint and query readable at enlarged phone text size @flow @fixture", async ({ page, isMobile }) => {
+  test.skip(!isMobile);
+  await page.setViewportSize({ width: 320, height: 568 });
+
+  for (const scale of [150, 200]) {
+    await page.goto("/");
+    await page.addStyleTag({ content: `html { font-size: ${scale}%; }` });
+    await waitForPublicSearchHydration(page);
+    await page.evaluate(() => document.fonts.ready);
+
+    const main = page.getByRole("main");
+    const input = main.getByRole("combobox", { name: "Search VRDex", exact: true });
+    const submit = main.getByRole("button", { name: "Search VRDex", exact: true });
+    const textFits = () => input.evaluate((element: HTMLInputElement) => {
+      const css = getComputedStyle(element);
+      const available = element.clientWidth - parseFloat(css.paddingInlineStart) - parseFloat(css.paddingInlineEnd);
+      const context = document.createElement("canvas").getContext("2d");
+      if (!context) return false;
+      context.font = css.font;
+      return available >= context.measureText(element.value || element.placeholder).width;
+    });
+
+    await expect.poll(textFits).toBe(true);
+    await input.fill("District One");
+    await expect.poll(textFits).toBe(true);
+    const clear = main.getByRole("button", { name: "Clear search", exact: true });
+    const clearBounds = (await clear.boundingBox())!;
+    expect(Math.min(clearBounds.width, clearBounds.height)).toBeGreaterThanOrEqual(44);
+    await clear.tap();
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue("");
+    await expect.poll(textFits).toBe(true);
+
+    const suggestion = main.getByRole("option", { name: /Afterglow Social/ }).first();
+    const viewAll = main.getByRole("link", { name: "View all results", exact: true });
+    await expect(async () => {
+      await input.fill("");
+      await input.pressSequentially("Afterglow");
+      await expect(suggestion).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 10_000 });
+    const [option, button] = await Promise.all([suggestion.boundingBox(), submit.boundingBox()]);
+    expect(option!.y).toBeGreaterThanOrEqual(button!.y + button!.height);
+    expect(Math.min(button!.width, button!.height)).toBeGreaterThanOrEqual(44);
+    const [trust, type] = await Promise.all([
+      suggestion.getByText("Community submitted", { exact: true }).boundingBox(),
+      suggestion.getByText("Community", { exact: true }).boundingBox(),
+    ]);
+    expect(type!.y).toBeGreaterThanOrEqual(trust!.y + trust!.height);
+    await suggestion.tap({ trial: true });
+    await input.press("Tab");
+    await expect(clear).toBeFocused();
+    await clear.press("Tab");
+    await expect(viewAll).toBeFocused();
+    await viewAll.tap({ trial: true });
+    if (scale === 150) await submit.tap();
+    else await viewAll.tap();
+    await expect(page).toHaveURL((url) => url.pathname === "/search" && url.searchParams.get("q") === "Afterglow");
+    await expect(publicResultRow(page, "/playwright-afterglow-social")).toBeVisible();
+  }
+});
+
 test("whitespace root query keeps Home and discovery reachable @flow @fixture", async ({ page }) => {
   await page.goto("/?q=%20%20%20");
   await expectHomePage(page);
