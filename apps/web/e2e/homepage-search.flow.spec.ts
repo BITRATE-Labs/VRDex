@@ -335,6 +335,7 @@ test("Search distinguishes known timed event states and preserves historical lin
   await results.locator(`a[href="${historicalPath}"]`).click();
   await expect(page).toHaveURL(historicalPath);
   await expect(page.getByRole("heading", { level: 1, name: "Afterglow Harbor Sessions" })).toBeVisible();
+  await expect(page.getByText("Ended", { exact: true })).toBeVisible();
 });
 
 test("mobile Search keeps event initials visible until artwork loads @flow @fixture", async ({ page }) => {

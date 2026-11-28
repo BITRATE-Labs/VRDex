@@ -9,7 +9,7 @@ import styles from "./event-public-page.module.css";
 import { useCurrentTimestamp } from "./event-watch-surface";
 import { ViewerLocalEventDateTime } from "./viewer-local-event-times";
 
-function WatchEndLabel({ endAt }: { endAt: number }) {
+function EventEndLabel({ endAt }: { endAt: number }) {
   const now = useCurrentTimestamp([endAt + 1]);
   return now !== null && now > endAt ? "Ended" : "End";
 }
@@ -43,8 +43,11 @@ export function EventPublicHero({
 
   const seriesTitleId = seriesPath ? "public-event-title" : undefined;
   const detailTextClassName = bannerStyle ? "text-white/80" : "text-muted";
-  const showWatchEndStatus = Boolean(linksLabel || seriesPath) && event.watchSurfaceEnabled && event.status !== "cancelled"
-    && event.startAt !== undefined && Number.isFinite(event.endAt);
+  const { startAt, endAt } = event;
+  const hasTimedRange = startAt !== undefined && Number.isFinite(startAt)
+    && endAt !== undefined && Number.isFinite(endAt) && endAt > startAt;
+  const showEndStatus = event.status !== "cancelled" && Number.isFinite(endAt)
+    && (hasTimedRange || (Boolean(linksLabel || seriesPath) && event.watchSurfaceEnabled && startAt !== undefined));
   const startTime = (
     <ViewerLocalEventDateTime className={cn(
       "block text-base leading-snug font-semibold tabular-nums sm:text-lg",
@@ -81,7 +84,7 @@ export function EventPublicHero({
             ) : startTime}
             {event.scheduleKind !== "date_only" && (event.doorsOpenAt !== undefined || event.endAt !== undefined) ? <div className={cn("mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-sm tabular-nums sm:mt-2 sm:gap-x-5", detailTextClassName)}>
               {event.doorsOpenAt !== undefined ? <span><span>Doors open</span>{" "}<ViewerLocalEventDateTime timestamp={event.doorsOpenAt} compactRelativeTo={event.startAt} /></span> : null}
-              {event.endAt !== undefined ? <span><span>{showWatchEndStatus ? <WatchEndLabel endAt={event.endAt} /> : "End"}</span>{" "}<ViewerLocalEventDateTime timestamp={event.endAt} compactRelativeTo={event.startAt} /></span> : null}
+              {event.endAt !== undefined ? <span><span>{showEndStatus ? <EventEndLabel endAt={event.endAt} /> : "End"}</span>{" "}<ViewerLocalEventDateTime timestamp={event.endAt} compactRelativeTo={event.startAt} /></span> : null}
             </div> : null}
             {seriesPath ? (
               <Link
