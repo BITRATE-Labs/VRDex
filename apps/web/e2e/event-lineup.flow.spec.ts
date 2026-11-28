@@ -16,9 +16,20 @@ for (const timeZone of ["UTC", "America/Los_Angeles"]) test.describe(`standalone
     for (const [label, timestamp] of [["Doors open", doors], ["End", end]] as const) {
       const row = main.getByText(label, { exact: true }).locator("..");
       await expect(row.locator("time")).toHaveAttribute("datetime", new Date(timestamp).toISOString());
-      await expect(row.locator("time")).toHaveText(new Intl.DateTimeFormat("en", {
+      const time = row.locator("time");
+      const date = new Intl.DateTimeFormat("en", { timeZone, year: "numeric", month: "numeric", day: "numeric" });
+      const fullTime = new Intl.DateTimeFormat("en", {
         timeZone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short",
-      }).format(timestamp));
+      }).format(timestamp);
+      if (date.format(timestamp) === date.format(start)) {
+        const clockTime = new Intl.DateTimeFormat("en", {
+          timeZone, hour: "numeric", minute: "2-digit",
+        }).format(timestamp);
+        await expect(time.locator('[aria-hidden="true"]')).toHaveText(clockTime);
+        await expect(time.locator(".sr-only")).toHaveText(fullTime);
+      } else {
+        await expect(time).toHaveText(fullTime);
+      }
     }
     await expect(main.getByRole("heading", { name: "Lineup", exact: true })).toHaveCount(0);
     await expect(main.locator("img")).toHaveCount(0);
