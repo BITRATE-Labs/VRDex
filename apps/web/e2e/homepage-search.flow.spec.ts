@@ -1022,6 +1022,82 @@ test("Discovery Back restores the keyboard-activated result @flow @fixture", asy
   }
 });
 
+test("Back from a Discovery category result restores the category @flow @fixture", async ({ page, isMobile }) => {
+  await page.setViewportSize({ width: isMobile ? 320 : 390, height: 750 });
+  const category = page.getByRole("navigation", { name: "Discovery categories" }).getByRole("link", { name: "People", exact: true });
+  const people = page.getByRole("heading", { name: "People", exact: true });
+  const discovery = page.getByRole("heading", { name: "Discover VR", exact: true });
+  const profile = page.getByRole("heading", { name: "DJ Aurora", exact: true, level: 1 });
+  const result = page.locator('a[data-discovery-result="home:/playwright-dj-aurora"]');
+
+  for (const keyboard of [false, true]) {
+    await page.goto("/discovery", { waitUntil: "networkidle" });
+    await waitForPublicSearchHydration(page);
+
+    if (keyboard) await category.press("Enter");
+    else if (isMobile) await category.tap();
+    else await category.click();
+    await expect(page).toHaveURL(/\/discovery#people$/);
+    await expect(people).toBeInViewport();
+    if (keyboard) await expect(people).toBeFocused();
+
+    await result.scrollIntoViewIfNeeded();
+    const position = await page.evaluate(() => window.scrollY);
+    if (keyboard) await result.press("Enter");
+    else if (isMobile) await result.tap();
+    else await result.click();
+    await expect(profile).toBeVisible();
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/discovery#people$/);
+    await expect(discovery).toBeVisible();
+    await expect(result).toBeInViewport();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(position);
+    if (keyboard) await expect(result).toBeFocused();
+
+    await page.goForward();
+    await expect(profile).toBeVisible();
+    await page.goBack();
+    await expect(discovery).toBeVisible();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(position);
+  }
+});
+
+test("Discovery Back preserves an adjusted scroll position beyond the category anchor @flow @fixture", async ({ page, isMobile }) => {
+  await page.setViewportSize({ width: 390, height: 750 });
+  await page.goto("/discovery", { waitUntil: "networkidle" });
+  await waitForPublicSearchHydration(page);
+  const category = page.getByRole("navigation", { name: "Discovery categories" }).getByRole("link", { name: "People", exact: true });
+  if (isMobile) await category.tap();
+  else await category.click();
+  await expect(page).toHaveURL(/\/discovery#people$/);
+
+  // Place the World result in view at an intermediate offset rather than the anchor or page end.
+  const position = 932;
+  await page.evaluate((top) => window.scrollTo({ top, behavior: "instant" }), position);
+  const world = page.locator('a[data-discovery-result="home:/playwright-neon-harbor"]');
+  await expect(world).toBeInViewport();
+  if (isMobile) await world.tap();
+  else await world.click();
+  const destination = page.getByRole("heading", { name: "Neon Harbor", exact: true, level: 1 });
+  const discovery = page.getByRole("heading", { name: "Discover VR", exact: true, level: 1 });
+  await expect(destination).toBeVisible();
+
+  for (let visit = 0; visit < 2; visit++) {
+    await page.goBack();
+    await expect(page).toHaveURL(/\/discovery#people$/);
+    await expect(discovery).toBeVisible();
+    const settledScroll = await page.evaluate(() => new Promise<number>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => resolve(window.scrollY))));
+    }));
+    expect(settledScroll).toBe(position);
+    if (visit === 0) {
+      await page.goForward();
+      await expect(destination).toBeVisible();
+    }
+  }
+});
+
 test("public preview caps real eight-result responses without shifting layout @flow @fixture", async ({ page, createSearchProfiles }, info) => {
   const { query, profiles } = await createSearchProfiles(8);
   await page.addInitScript(() => localStorage.setItem("vrdex-theme", "dark"));
