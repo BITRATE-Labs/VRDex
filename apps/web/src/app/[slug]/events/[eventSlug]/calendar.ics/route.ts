@@ -1,5 +1,5 @@
 import { fetchPublicEventBySlug } from "@/convex/server";
-import { createPublicEventIcs, publicEventIcsFilename } from "@/lib/calendar/ics";
+import { createPublicEventIcs, publicEventIcsAttachment } from "@/lib/calendar/ics";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +24,7 @@ export async function GET(
   return new Response(body, {
     headers: {
       "Cache-Control": "public, max-age=60",
-      "Content-Disposition": `attachment; filename="${publicEventIcsFilename(result.event.slug)}"`,
+      "Content-Disposition": publicEventIcsAttachment(result.event.title, result.event.slug),
       "Content-Type": "text/calendar; charset=utf-8",
     },
   });
