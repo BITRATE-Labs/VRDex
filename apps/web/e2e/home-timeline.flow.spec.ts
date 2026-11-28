@@ -789,6 +789,27 @@ test.describe("continuous schedule @flow @fixture", () => {
       panel.getByRole("link", { name: "Open event", exact: true }),
     ).toHaveCount(0);
   });
+  test("phone Schedule keeps Later separate from Favorites when text is enlarged", async ({ page, isMobile }) => {
+    test.skip(!isMobile);
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
+    const schedule = page.getByRole("region", { name: "Schedule", exact: true });
+    const chart = schedule.getByRole("region", { name: "Timeline chart", exact: true });
+    const later = schedule.getByRole("button", { name: "Later", exact: true });
+    const favorites = schedule.getByRole("button", { name: "Favorites only", exact: true });
+
+    await expect.poll(async () => {
+      const pan = await later.boundingBox();
+      const filter = await favorites.boundingBox();
+      return !!pan && !!filter && filter.y >= pan.y + pan.height;
+    }).toBe(true);
+
+    const before = await chart.evaluate((node) => node.scrollLeft);
+    await later.tap();
+    await expect(favorites).toHaveAttribute("aria-pressed", "false");
+    await expect.poll(() => chart.evaluate((node) => node.scrollLeft)).toBeGreaterThan(before);
+  });
+
   test("phone details contain keyboard focus and close restores the invoker", async ({ page, timelineFixture, isMobile }) => {
     const invoker = page.getByTestId(`event-${timelineFixture.eventIds[3]}`).getByRole("button", {
       name: "Open ORBIT: Interstellar Bassline Orchestra", exact: true,
