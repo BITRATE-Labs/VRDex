@@ -145,3 +145,69 @@
     padding-inline: 0.5rem;
   }
 }
+
+@container standard-results (width < 12rem) {
+  .resultDetails {
+    padding-inline-start: 0.75rem;
+  }
+
+  .linksPanel {
+    margin-inline-start: 0;
+  }
+
+  .linksPanel :global(.lookup-link-board),
+  .linksPanel :global(.lookup-link-actions),
+  .linksPanel :global(.lookup-copy-list) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .linksPanel :global(.lookup-icon-actions) {
+    width: 100%;
+  }
+
+  .linksPanel :global(.lookup-link-actions .lookup-feature-link) {
+    grid-column: 1;
+  }
+
+  .linksPanel :global(.lookup-destination-action) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.375rem;
+    width: 100%;
+    padding-inline: 0.5rem;
+  }
+
+  .linksPanel :global(.lookup-destination-action > span:nth-child(2)) {
+    grid-area: 2 / 1 / auto / -1;
+  }
+
+  .linksPanel :global(.lookup-destination-action > svg) {
+    grid-area: 1 / 2;
+  }
+
+  .linksPanel :global(.lookup-vrcdn-group .lookup-primary-url-card),
+  .linksPanel :global(.lookup-link-board > .lookup-copy-list .lookup-primary-url-card) {
+    grid-template-areas: none;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+  }
+
+  .linksPanel :global(.lookup-primary-url-card > *) {
+    grid-area: auto / 1;
+    min-width: 0;
+  }
+
+  .linksPanel :global(.lookup-primary-url-value) {
+    width: 100%;
+  }
+
+  .linksPanel :global(code.lookup-primary-url-value) {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .linksPanel :global(.lookup-primary-url-copy) {
+    justify-self: start;
+    width: auto;
+  }
+}
