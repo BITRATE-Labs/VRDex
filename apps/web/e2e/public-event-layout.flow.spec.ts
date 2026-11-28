@@ -37,6 +37,66 @@ async function renderedTimeLines(time: Locator) {
 
 test.skip(Boolean(process.env.PLAYWRIGHT_BASE_URL), "Public event layout fixtures run locally.");
 
+test("keyboard Back resumes the event shortcut tab order @flow @fixture", async ({ page }) => {
+  await page.clock.setFixedTime(watchTime);
+  await page.goto(path + guestWatchSlug, { waitUntil: "networkidle" });
+  const origin = page.url();
+  const main = page.getByRole("main");
+  const lineup = main.getByRole("link", { name: "Lineup", exact: true });
+  const watch = main.getByRole("link", { name: "Watch", exact: true });
+  const media = main.getByRole("link", { name: "Media links", exact: true });
+  const calendar = main.getByRole("link", { name: "Add to calendar", exact: true });
+  const report = main.getByRole("button", { name: "Report event", exact: true });
+  const expectFocusOutline = async (control: Locator) => {
+    await expect(control).toBeFocused();
+    await expect(control).toHaveCSS("outline-style", "solid");
+    await expect(control).toHaveCSS("outline-width", "2px");
+    await expect(control).toHaveCSS("outline-offset", "2px");
+  };
+  const initialHistoryLength = await page.evaluate(() => history.length);
+
+  await lineup.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(origin + "#event-lineup");
+  await expect(page.locator("#event-lineup")).toBeFocused();
+  expect(await page.evaluate(() => history.length)).toBe(initialHistoryLength + 1);
+  await page.keyboard.press("Tab");
+  await expect(watch).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(origin + "#event-watch");
+  await expect(main.getByRole("region", { name: "Watch", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(main.getByRole("button", { name: /^Play / })).toBeFocused();
+  await expect(main.locator("video, iframe")).toHaveCount(0);
+
+  await page.goBack();
+  await expect(page).toHaveURL(origin + "#event-lineup");
+  await expectFocusOutline(watch);
+  await page.keyboard.press("Tab");
+  await expect(main.getByRole("link", { name: "DJ Aurora", exact: true })).toBeFocused();
+
+  await page.goBack();
+  await expect(page).toHaveURL(origin);
+  await expect(lineup).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expectFocusOutline(calendar);
+
+  await media.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(origin + "#event-links");
+  await expect(page.locator("#event-links")).toBeFocused();
+  await page.goBack();
+  await expect(page).toHaveURL(origin);
+  await expectFocusOutline(media);
+  await page.keyboard.press("Tab");
+  await expectFocusOutline(report);
+
+  await page.goForward();
+  await expect(page).toHaveURL(origin + "#event-links");
+  await page.goBack();
+  await expect(media).toBeFocused();
+});
+
 test("published lineups are directly reachable from the event hero @flow @fixture", async ({ page }) => {
   await page.clock.setFixedTime(watchTime);
 

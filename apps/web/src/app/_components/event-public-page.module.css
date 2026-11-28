@@ -19,16 +19,22 @@
 
 .watchReturn {
   display: none;
+  outline-color: var(--accent-strong);
 }
 
 .eventBody:has(.watch > :not([data-event-watch-external-only])) .watchReturn {
   display: inline-flex;
 }
 
+.watchReturn:focus-visible {
+  outline-style: solid;
+  outline-width: 2px;
+  outline-offset: 2px;
+}
+
 @media (forced-colors: active) {
   .watchReturn:focus-visible {
-    outline: 2px solid Highlight;
-    outline-offset: 2px;
+    outline-color: Highlight;
   }
 }
 
