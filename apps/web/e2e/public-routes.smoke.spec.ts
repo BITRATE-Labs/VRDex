@@ -70,6 +70,20 @@ for (const route of routes) {
   });
 }
 
+test("public world artwork loads without JavaScript", async ({ browser, baseURL }) => {
+  test.skip(isHostedRun, "The world artwork uses a local fixture.");
+  const context = await browser.newContext({ baseURL, javaScriptEnabled: false });
+  try {
+    const page = await context.newPage();
+    await page.goto("/playwright-neon-harbor");
+    const artwork = page.locator('img[src="/api/e2e/fixture-assets/fixture-neon-harbor-world-image"]').first();
+    await expect.poll(() => artwork.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+    await expect(artwork).toHaveCSS("opacity", "1");
+  } finally {
+    await context.close();
+  }
+});
+
 test("featured world fits the narrow discovery viewport", async ({ page }) => {
   test.skip(isHostedRun, "The featured world card uses a local fixture.");
 

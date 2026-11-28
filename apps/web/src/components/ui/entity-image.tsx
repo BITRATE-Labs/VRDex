@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, type ComponentPropsWithoutRef, type ReactNode } from "react";
+import { useState, useSyncExternalStore, type ComponentPropsWithoutRef, type ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
 import { safeImageUrl } from "@/lib/safe-image";
@@ -17,6 +17,10 @@ function initialsFor(label: string): string {
   );
 }
 
+const subscribeToHydration = () => () => {};
+const clientSnapshot = () => true;
+const serverSnapshot = () => false;
+
 function EntityImageContent({
   alt,
   fallback,
@@ -26,15 +30,18 @@ function EntityImageContent({
 }) {
   const [status, setStatus] = useState<"loading" | "loaded" | "failed">("loading");
 
+  const hydrated = useSyncExternalStore(subscribeToHydration, clientSnapshot, serverSnapshot);
+  const showFallback = hydrated && status === "loading";
+
   if (status === "failed") return fallback;
 
   return (
     <>
-      {status === "loading" ? <span aria-hidden="true">{fallback}</span> : null}
+      {showFallback ? <span aria-hidden="true">{fallback}</span> : null}
       <Image
         {...imageProps}
         alt={alt}
-        className={cn(imageProps.className, status === "loading" && "opacity-0")}
+        className={cn(imageProps.className, showFallback && "opacity-0")}
         fill
         unoptimized
         onError={() => setStatus("failed")}
