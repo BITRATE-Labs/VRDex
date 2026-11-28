@@ -482,7 +482,9 @@ test("a compact community keeps its name and group link readable at 200% text @f
   expect((await page.goto("/playwright-sparse-community"))?.status()).toBe(200);
   await page.evaluate(() => document.fonts.ready);
   const title = page.getByRole("heading", { name: "Sparse Community", level: 1 });
+  const initials = page.getByRole("img", { name: "Sparse Community display image", includeHidden: true });
   const group = page.getByRole("link", { name: "VRChat group", exact: true });
+  await expect(initials).toBeVisible();
   const groupLabel = group.getByText("VRChat group", { exact: true });
   const fontSize = (label: Locator) => label.evaluate(element => Number.parseFloat(getComputedStyle(element).fontSize));
   const [normalTitleSize, normalGroupSize] = await Promise.all([fontSize(title), fontSize(groupLabel)]);
@@ -512,7 +514,12 @@ test("a compact community keeps its name and group link readable at 200% text @f
       return label.getClientRects().length;
     })).toBe(1);
     expect(await unbrokenWords(title)).toContain("Sparse");
-    if (width === 390) expect(await unbrokenWords(title)).toContain("Community");
+    if (width === 320) {
+      await expect(initials).toBeHidden();
+    } else {
+      expect(await unbrokenWords(title)).toContain("Community");
+      await expect(initials).toBeVisible();
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
   }
 });

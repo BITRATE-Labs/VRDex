@@ -809,10 +809,13 @@ export function ProfilePublicPage({
                 <div className={cn(
                   "flex min-w-0",
                   useCompactIdentity ? "items-center gap-3 sm:gap-4" : "flex-col gap-6 sm:flex-row sm:items-center",
-                  useCompactCommunity && "max-sm:flex-wrap max-sm:gap-[12px]",
+                  useCompactCommunity && "max-sm:@container/compact-community max-sm:flex-wrap max-sm:gap-[12px]",
                   useSideBySideMobileIdentity && "max-sm:grid max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:items-center max-sm:gap-x-3 max-sm:gap-y-0",
                 )}>
-                  <div className="relative w-fit shrink-0">
+                  <div className={cn(
+                    "relative w-fit shrink-0",
+                    useCompactCommunity && "@max-[12rem]/compact-community:self-start @max-[9rem]/compact-community:hidden",
+                  )}>
                     <div
                       className={cn(
                         "relative flex items-center justify-center overflow-hidden font-semibold",
