@@ -742,6 +742,6 @@
 }
 
 .clubCard { --club-artwork-ratio: 4 / 3; }
-.clubArtwork { aspect-ratio: var(--club-artwork-ratio); background: var(--surface); }
+.clubArtwork { aspect-ratio: var(--club-artwork-ratio, 4 / 3); background: var(--surface); }
 .clubArtwork::after { display: none; }
 .clubLogo:has(img) { width: 76%; height: 68%; }

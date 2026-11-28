@@ -67,6 +67,12 @@ test("club rail controls follow overflow and keep keyboard focus at the ends @st
     await expect(page.getByRole("heading", { name: "Discover", exact: true })).toBeVisible();
     await expect(next).toHaveCount(0);
     await expect(previous).toHaveCount(0);
+    if (story === "loading") {
+      const artwork = page.locator('#discovery-clubs-rail [class*="clubArtwork_"]').first();
+      await expect(artwork).toBeVisible();
+      const bounds = (await artwork.boundingBox())!;
+      expect(bounds.height).toBeCloseTo(bounds.width * 3 / 4, 0);
+    }
   }
 });
 
