@@ -45,7 +45,7 @@
   }
 
   .menuToggle[aria-expanded="true"] {
-    background: var(--surface-elevated);
+    background: color-mix(in srgb, var(--accent) 22%, var(--surface-elevated));
   }
 
   .mobilePanel {
