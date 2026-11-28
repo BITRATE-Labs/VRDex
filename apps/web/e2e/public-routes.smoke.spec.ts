@@ -76,15 +76,15 @@ test("featured world fits the narrow discovery viewport", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 760 });
   await page.goto("/discovery");
 
-  const card = page.getByRole("link").filter({
+  const card = page.getByRole("article").filter({
     has: page.getByRole("heading", { name: "Neon Harbor", exact: true }),
   });
-  await expect(card).toHaveAttribute("href", "/playwright-neon-harbor");
+  await expect(card.getByRole("link", { name: "Neon Harbor", exact: true })).toHaveAttribute("href", "/playwright-neon-harbor");
   await expect(card.getByText("Next event", { exact: true })).toBeVisible();
-  await expect(card.getByText("Afterglow Harbor Sessions", { exact: true })).toBeVisible();
+  const nextEvent = card.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true });
+  await expect(nextEvent).toHaveAttribute("href", "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions");
+  await expect.poll(async () => (await nextEvent.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   await expect(card.locator("time")).toBeHidden();
-  await expect(page.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true }))
-    .toHaveAttribute("href", "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions");
   expect(await card.evaluate((link) => link.getBoundingClientRect().right)).toBeLessThanOrEqual(320);
   const synopsis = card.locator("p").first();
   await expect(synopsis).toBeInViewport();
@@ -96,6 +96,13 @@ test("featured world fits the narrow discovery viewport", async ({ page }) => {
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
     .toBe(320);
+
+  await nextEvent.click();
+  await expect(page).toHaveURL("/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions");
+  await page.goBack();
+  await card.click({ position: { x: 8, y: 8 } });
+  await expect(page).toHaveURL("/playwright-neon-harbor");
+  await page.goBack();
 
   await page.setViewportSize({ width: 1280, height: 900 });
   const search = page.getByRole("main").getByRole("button", { name: "Search VRDex", exact: true });
@@ -204,11 +211,15 @@ test("discovery puts a single event and featured world beside each other at xl",
   const event = events.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true });
   const performer = events.getByRole("link", { name: "DJ Aurora", exact: true });
   const world = worlds.getByRole("link", { name: "Neon Harbor", exact: true });
+  const nextEvent = worlds.getByRole("link", { name: "Afterglow Harbor Sessions", exact: true });
   await expect(event).toHaveAttribute("href", "/playwright-afterglow-social/events/playwright-afterglow-harbor-sessions");
   await expect(performer).toHaveAttribute("href", "/playwright-dj-aurora");
   await expect(world).toHaveAttribute("href", "/playwright-neon-harbor");
   await expect(performer).toHaveCSS("text-decoration-line", "underline");
-  await expect(world.getByRole("heading")).toHaveCSS("text-decoration-line", "underline");
+  await expect(world.getByText("Neon Harbor", { exact: true })).toHaveCSS("text-decoration-line", "underline");
+  await world.focus();
+  await page.keyboard.press("Tab");
+  await expect(nextEvent).toBeFocused();
 
   const [eventSection, worldSection] = await Promise.all([events.boundingBox(), worlds.boundingBox()]);
   if (!eventSection || !worldSection) throw new Error("Missing Discovery section bounds");
