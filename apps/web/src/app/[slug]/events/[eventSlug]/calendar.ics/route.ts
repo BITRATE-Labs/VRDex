@@ -24,7 +24,11 @@ export async function GET(
   return new Response(body, {
     headers: {
       "Cache-Control": "public, max-age=60",
-      "Content-Disposition": publicEventIcsAttachment(result.event.title, result.event.slug),
+      "Content-Disposition": publicEventIcsAttachment(
+        result.event.title,
+        result.event.slug,
+        result.event.seriesId === undefined ? undefined : result.event,
+      ),
       "Content-Type": "text/calendar; charset=utf-8",
     },
   });
