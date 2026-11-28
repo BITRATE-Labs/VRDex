@@ -121,7 +121,7 @@ test("listed events order visitor links on mobile and group context beside the p
 
   const main = page.getByRole("main");
   const world = main.getByRole("link", { name: "Neon Harbor World", exact: true });
-  const reference = main.getByRole("link", { name: "Afterglow event listing Reference link", exact: true });
+  const reference = main.getByRole("link", { name: "example.invalid Afterglow event listing · Reference link", exact: true });
   const poster = main.getByRole("link", { name: "Afterglow Harbor Sessions poster", exact: true });
   const host = main.getByRole("link", { name: "Afterglow Social Host", exact: true });
   await expect(world).toHaveAttribute("href", "/playwright-neon-harbor");
