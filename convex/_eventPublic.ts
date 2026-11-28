@@ -191,6 +191,7 @@ export type PublicEventLineupEntry = {
   roleLabel?: string;
   startAt?: number;
   endAt?: number;
+  authoredEndAt?: number;
   performer?: NonNullable<PublicEvent["slots"][number]["performer"]>;
 };
 
@@ -220,11 +221,13 @@ function publicLineup(record: PublicEventRecord, inferEnds = true): PublicEventL
       ...optionalField("avatarAppearance", row.avatarAppearance),
     } };
   }
+  const authoredEnds = new Map(record.slots.map(({ slot }) => [slot._id, slot.endAt]));
   const rows: PublicEventLineupEntry[] = [
     ...effectivePublicSlots(record, inferEnds).map(row => ({
       key: row.slot._id, position: row.slot.position, displayLabel: /^Session \d+$/.test(row.slot.displayLabel) ? row.profile?.displayName ?? `Slot ${row.slot.position + 1}` : row.slot.displayLabel,
       ...optionalField("roleLabel", row.slot.roleLabel || undefined),
-      startAt: row.slot.startAt, ...optionalField("endAt", row.slot.endAt), ...performer(row),
+      startAt: row.slot.startAt, ...optionalField("endAt", row.slot.endAt),
+      ...optionalField("authoredEndAt", authoredEnds.get(row.slot._id)), ...performer(row),
     })),
     ...(record.lineupEntries ?? []).map(row => ({
       key: row.entry._id, position: row.entry.position, displayLabel: row.entry.performerLabel,
