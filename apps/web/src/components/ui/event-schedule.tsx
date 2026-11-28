@@ -61,16 +61,14 @@ export function EventScheduleRow({
 
   return (
     <article className={cn(scheduleItemVariants({ status }), className)} {...props}>
-      <span className="font-mono text-metadata text-muted sm:pt-0.5">{time}</span>
+      <div className={cn("font-mono text-metadata text-muted sm:pt-0.5", statusLabel && "flex flex-wrap items-baseline gap-x-2 gap-y-0.5")}>
+        {statusLabel ? <span className="font-sans text-sm font-semibold text-foreground">{statusLabel}</span> : null}
+        {time}
+      </div>
       <div className="min-w-0">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
             {titleContent}
-            {statusLabel ? (
-              <span className="rounded-control border border-border bg-surface-strong px-2 py-0.5 text-caption text-muted">
-                {statusLabel}
-              </span>
-            ) : null}
           </div>
           {action ? <div className="shrink-0">{action}</div> : null}
         </div>
