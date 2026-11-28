@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ChevronRight, MapPin } from "lucide-react";
-import { publicScheduleStatus } from "../../../../../convex/_eventRuntime";
+import { authoredEventSchedule, publicScheduleStatus } from "../../../../../convex/_eventRuntime";
 
 import { DiscoveryFeatureGate, DiscoverySearchForm, TrackedDiscoveryLink } from "./discovery-analytics";
 import { HomeActiveWorldsSection, type PublicActiveWorld } from "./home-active-worlds";
@@ -9,6 +9,7 @@ import { searchHref, type SearchResultFilter } from "./search-view-state";
 import { SearchViewShell } from "./search-view-shell";
 import { PublicSearchResultDetails } from "./public-search-result-details";
 import { DiscoveryResultFocus } from "./discovery-result-focus";
+import { DiscoveryScheduleRefresh } from "./discovery-schedule-refresh";
 import { SearchResultsHistory } from "./search-results-history";
 import styles from "./discovery-public-page.module.css";
 import type { PublicEventPreview } from "./event-public-page";
@@ -157,7 +158,7 @@ function ResultImage({ result, quietFallback = false }: { result: PublicSearchRe
   );
 }
 
-function DiscoveryUpcomingEventsHeading({ title }: { title: string }) {
+function DiscoveryEventsHeading({ title }: { title: string }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <SectionTitle className="max-sm:text-xl">{title}</SectionTitle>
@@ -175,11 +176,28 @@ function DiscoveryUpcomingEventsHeading({ title }: { title: string }) {
 }
 
 function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[]; now: number }) {
+  const rows = events.map((event) => {
+    const { startAt } = event;
+    const hasStart = event.scheduleKind !== "date_only" && event.status !== "cancelled"
+      && startAt !== undefined && Number.isFinite(startAt);
+    const { scheduledNow, nextTransition } = authoredEventSchedule(event, now);
+    const status = publicScheduleStatus(event, now);
+
+    return {
+      event,
+      scheduledNow,
+      status: status === "now" && !scheduledNow ? "later" as const : status,
+      hasStarted: hasStart && startAt <= now,
+      nextTransition: nextTransition ?? (hasStart && startAt > now ? startAt : undefined),
+    };
+  });
+  const nextTransition = Math.min(...rows.map((row) => row.nextTransition ?? Infinity));
   return (
     <section className="min-w-0 border-t border-border pt-3 sm:pt-6">
-      <DiscoveryUpcomingEventsHeading title="Upcoming events" />
+      {Number.isFinite(nextTransition) ? <DiscoveryScheduleRefresh nextTransition={nextTransition} serverNow={now} /> : null}
+      <DiscoveryEventsHeading title={rows.some((row) => row.hasStarted) ? "Events" : "Upcoming events"} />
       <EventSchedule className="mt-2 sm:mt-5" empty="No events">
-        {events.map((event) => (
+        {rows.map(({ event, scheduledNow, status }) => (
           <EventScheduleRow
             className="[overflow-wrap:anywhere] max-sm:gap-1 max-sm:p-3 sm:grid-cols-[minmax(var(--spacing-schedule-gutter),max-content)_minmax(0,1fr)]"
             details={event.communityName || event.worlds[0] ? (
@@ -218,7 +236,8 @@ function DiscoveryEventSchedule({ events, now }: { events: PublicEventPreview[];
                 ) : null}
               </div>
             ) : undefined}
-            status={publicScheduleStatus(event, now)}
+            status={status}
+            statusLabel={scheduledNow ? "Now" : undefined}
             time={<ViewerLocalEventDateTime className="text-xs font-medium text-foreground" groupTime timestamp={event.startAt} eventDate={event.eventDate} scheduleKind={event.scheduleKind} />}
             title={publicEventPath(event) ? (
               <TrackedDiscoveryLink
@@ -502,7 +521,7 @@ function DiscoverySection({
   return (
     <section className="min-w-0 border-t border-border pt-4 sm:pt-6">
       {surface === "upcoming_events" ? (
-        <DiscoveryUpcomingEventsHeading title={title} />
+        <DiscoveryEventsHeading title={title} />
       ) : (
         <SectionTitle
           className={headingId ? "scroll-mt-24 focus-visible:rounded-control focus-visible:outline-2 focus-visible:outline-accent" : undefined}

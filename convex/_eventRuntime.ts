@@ -11,6 +11,23 @@ export function timedEventRuntimeEndAt(event: { startAt: number; endAt?: number 
   return event.endAt ?? event.startAt + UNKNOWN_EVENT_END_WINDOW_MS;
 }
 
+export function authoredEventSchedule(event: {
+  scheduleKind?: "timed" | "date_only";
+  startAt?: number;
+  endAt?: number;
+  status?: "scheduled" | "cancelled";
+}, now: number): { scheduledNow: boolean; nextTransition?: number } {
+  const { startAt, endAt } = event;
+  if (event.scheduleKind === "date_only" || event.status === "cancelled"
+    || startAt === undefined || !Number.isFinite(startAt)
+    || endAt === undefined || !Number.isFinite(endAt) || endAt <= startAt) {
+    return { scheduledNow: false };
+  }
+  if (now < startAt) return { scheduledNow: false, nextTransition: startAt };
+  if (now <= endAt) return { scheduledNow: true, nextTransition: endAt + 1 };
+  return { scheduledNow: false };
+}
+
 export function publicScheduleStatus(event: {
   scheduleKind?: "timed" | "date_only";
   startAt?: number;
