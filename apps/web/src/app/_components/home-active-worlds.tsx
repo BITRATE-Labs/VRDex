@@ -39,20 +39,18 @@ export type PublicActiveWorld = {
 };
 
 function ActiveWorldCard({ world, compactNextEvent }: { world: PublicActiveWorld; compactNextEvent: boolean }) {
-  const titleId = `featured-world-${world.slug}`;
   const imageUrl = safeImageUrl(world.heroImageUrl);
   const secondaryText = imageUrl ? "text-white/72" : "text-muted";
+  const eventPath = publicEventPath(world.nextEvent);
 
   return (
-    <Link
-      aria-labelledby={titleId}
+    <article
       className={cn(
-        "group relative grid w-full min-w-0 grid-cols-1 overflow-hidden rounded-panel border transition hover:-translate-y-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong",
+        "relative isolate grid w-full min-w-0 grid-cols-1 overflow-hidden rounded-panel border outline-accent-strong transition hover:-translate-y-1 has-[h3>a:focus-visible]:outline-2 has-[h3>a:focus-visible]:outline-offset-2",
         imageUrl
           ? "min-h-72 border-border bg-media !text-white shadow-panel before:col-start-1 before:row-start-1 before:aspect-[4/3]"
           : "self-start border-border-strong bg-surface !text-foreground",
       )}
-      href={`/${world.slug}`}
     >
       {imageUrl ? (
         <>
@@ -62,31 +60,43 @@ function ActiveWorldCard({ world, compactNextEvent }: { world: PublicActiveWorld
       ) : null}
 
       <div className="relative col-start-1 row-start-1 p-4 [overflow-wrap:anywhere] sm:p-5">
-        <div className="flex items-start justify-between gap-3">
-          <h3
-            id={titleId}
-            className={cn(
-              "min-w-0 text-xl font-semibold underline underline-offset-4 group-hover:decoration-current sm:text-3xl",
-              imageUrl ? "decoration-white/55" : "decoration-border-strong",
-            )}
+        <h3 className="text-xl font-semibold sm:text-3xl">
+          <Link
+            className="group/world flex items-start justify-between gap-3 focus-visible:outline-none after:absolute after:inset-0 after:z-10 after:rounded-panel"
+            href={`/${world.slug}`}
           >
-            {world.displayName}
-          </h3>
-          <ChevronRight aria-hidden="true" className={cn("mt-2 size-4 shrink-0", imageUrl ? "text-white/75 group-hover:text-white" : "text-muted group-hover:text-foreground")} />
-        </div>
+            <span className={cn(
+              "min-w-0 underline underline-offset-4 group-hover/world:decoration-current",
+              imageUrl ? "decoration-white/55" : "decoration-border-strong",
+            )}>{world.displayName}</span>
+            <ChevronRight aria-hidden="true" className={cn("mt-2 size-4 shrink-0", imageUrl ? "text-white/75 group-hover/world:text-white" : "text-muted group-hover/world:text-foreground")} />
+          </Link>
+        </h3>
         <p className={cn("mt-2 line-clamp-2 text-sm leading-6 sm:mt-3", imageUrl ? "text-white/76" : "text-muted")}>
           {world.summary ?? "Upcoming public events are linked here."}
         </p>
         <div className={cn("mt-4 border-t pt-3", imageUrl ? "border-white/20" : "border-border")}>
           <p className={cn("text-xs font-medium", secondaryText)}>Next event</p>
-          <p className="mt-1 text-sm font-medium">{world.nextEvent.title}</p>
+          {eventPath ? (
+            <Link
+              className={cn(
+                "relative z-20 inline-flex min-h-11 min-w-11 max-w-full items-center rounded-control text-sm font-medium underline underline-offset-4 hover:decoration-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current",
+                imageUrl ? "text-white focus-visible:bg-media" : "text-accent-strong",
+              )}
+              href={eventPath}
+            >
+              {world.nextEvent.title}
+            </Link>
+          ) : (
+            <p className="mt-1 text-sm font-medium">{world.nextEvent.title}</p>
+          )}
           <p className={cn("mt-1 text-sm", secondaryText, compactNextEvent && "hidden sm:block")}>
             <ViewerLocalEventDateTime timestamp={world.nextEvent.startAt} eventDate={world.nextEvent.eventDate} scheduleKind={world.nextEvent.scheduleKind} />
             {world.nextEvent.communityName ? ` by ${world.nextEvent.communityName}` : ""}
           </p>
         </div>
       </div>
-    </Link>
+    </article>
   );
 }
 
